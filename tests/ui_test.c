@@ -8293,8 +8293,8 @@ static int test_large(void)
     /* HOME: tall cards (rows 28..132) and the strip (136..198); the footer as it was */
     frame();
     ok = ui.home && large_kind() == LK_TALL && card_h() == LG_CARD_H && graph_y() == LG_Y_GRAPH && strip_kind() == SK_SCOPE;
-    ok &= lg_px(30, Y_SEP_END + 1) == T_SURF && off[(Y_SEP_END + 1) * 240 + 30] == swap16(T_BG);     /* a card where the gap was */
-    ok &= lg_px(30, LG_Y_GRAPH - 2) == T_BG && off[(LG_Y_GRAPH - 2) * 240 + 30] == swap16(T_SURF);   /* a gap in the panel */
+    ok &= lg_px(30, Y_SEP_END + 3) == T_SURF && off[(Y_SEP_END + 3) * 240 + 30] == swap16(T_BG);     /* a card where the gap was */
+    ok &= lg_px(30, LG_Y_GRAPH - 1) == T_BG && off[(LG_Y_GRAPH - 1) * 240 + 30] == swap16(T_SURF);   /* a gap in the panel */
     ok &= lg_px(30, LG_Y_GRAPH + 1) == T_SURF;
     for (c = 0; c < 4u; c++)                                      /* each column's K pill, over its knob */
         ok &= lg_px(CARD_X(c) + 8, Y_LABEL + LG_MY + LG_MH / 2) == T_KEY;
@@ -8334,7 +8334,7 @@ static int test_large(void)
     btn_down(B_GLO); frames(800);
     ok &= ui.layer && large_kind() == LK_LABEL && card_h() == CARD_H;
     btn_up(B_GLO); frame(); frame();
-    ok &= !ui.layer && large_kind() == LK_TALL && lg_px(30, LG_Y_GRAPH - 2) == T_BG;
+    ok &= !ui.layer && large_kind() == LK_TALL && lg_px(30, LG_Y_GRAPH - 1) == T_BG;
     bad += check("#15 LARGE: PRESETS and the roll keep the layout (labels in M), the layers too; MIXER tall, its tracks in the strip", ok);
 
     {   /* saved with the settings; settings from before it: OFF (and so again: idempotent) */
@@ -8350,7 +8350,7 @@ static int test_large(void)
         q = p;
         ok &= settings_import(&q, (int)sizeof q) == 1 && !ui_prefs;
         ui.force = 1; frame();
-        ok &= large_kind() == LK_OFF && lg_px(30, Y_SEP_END + 1) == T_BG;
+        ok &= large_kind() == LK_OFF && lg_px(30, Y_SEP_END + 3) == T_BG;
         bad += check("#15 LARGE saved with the settings; settings from before it: OFF (idempotent)", ok);
     }
     ui_prefs = 0;
@@ -8452,7 +8452,7 @@ static int test_style(void)
     frame();
     ok = ui_style == ST_FLAT && ux.style == ST_FLAT && ux.surf != ux.bg;
     ui.force = 1; frame();
-    ok &= host_screen[rule] == swap16(T_BG);
+    ok &= host_screen[rule] == swap16(T_THEME);        /* (FLAT: the card row's frame is there, no rule) */
     hold(B_HOME); ui.menu_sel = MI_STYLE;
     ok &= ui.menu == 1u && str_eq(MI_NAME[MI_STYLE], "STYLE");
     turn(EN_K1, 1); ok &= ui_style == ST_LINE && ux.style == ST_LINE && ux.surf == ux.bg;

@@ -26,7 +26,7 @@ unless it says so; host tests and simulations are not hardware measurements.
   the FX pages. The active group is framed and marked EDIT K1-4, SELECT steps through the groups, and the footer shows a numbered view
   ("LFO TOP 1/4"; a pair counts as one view). A small pictogram shows the selected LFO wave and the ENV shape. A tag in every group's
   header says whether it is for **ALL** tracks (the global effects) or for the selected track (T1 to T4). INSERT shows the chosen type's
-  curve; the SLICER page shows its step pattern and what it does to a tone, SCL its scale on the keys and CHORD the chord on each scale note (DIA3, DIA7) and the last chord's notes. The SEQ pages (STEP, DETAIL, AUTOMATION) frame their card row.
+  curve; the SLICER page shows its step pattern and what it does to a tone, SCL its scale on the keys and CHORD the chord on each scale note (DIA3, DIA7) and the last chord's notes. Every other page frames its card row in the theme colour, so the cards KNOB 1-4 edit look the same everywhere (not in the LINE style).
 - **In the settings menu, SELECT walks the rows** and continues into the next tab (with SELECT on PAGE).
 - **CLEAR STEP: hold SEQ and press F5** clears the cursor step and its locks and moves on; one undo (SAVE held).
 - **MORE page** (EDIT family): SPREAD, MORPH and PHS FB on one page; slots the engine lacks are empty. It replaces the single-parameter

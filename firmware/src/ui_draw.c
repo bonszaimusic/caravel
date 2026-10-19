@@ -436,48 +436,67 @@ static void gap_rows(uint32_t y0, uint32_t y1)
     lcd_fill(RULE_X0 + RULE_W, r, 240u - RULE_X0 - RULE_W, 1, T_BG);
     lcd_fill(0, r + 1u, 240, y1 - r - 1u, T_BG);
 }
+/* a 2 px frame in the theme colour round the card row, drawn in the gaps themselves (the rows above and below it, the columns beside it:
+ * every page's sign of what KNOB 1-4 edit; the two-group pages draw their own). gap_fr: the gaps being filled belong to a framed row.
+ * Corners notched; the BG outside the frame one px wide. fy: the frame line's first row inside the gap rows y0 .. y1 - 1 */
+static uint8_t gap_fr;
+static void gap_rows_card(uint32_t y0, uint32_t y1, uint32_t fy)
+{
+    lcd_fill(0, y0, 240, fy - y0, T_BG);
+    lcd_fill(0, fy, 3, 2, T_BG);
+    lcd_fill(3, fy, 234, 2, T_THEME);
+    lcd_fill(237, fy, 3, 2, T_BG);
+    lcd_fill(0, fy + 2u, 240, y1 - fy - 2u, T_BG);
+}
 /* the BG beside the four columns (the cards; MIXER's strips) over rows y .. y + h - 1; LINE: the dividers */
 static void draw_gaps(uint32_t y, uint32_t h)
 {
     uint32_t i;
-    lcd_fill(0, y, (uint32_t)CARD_X(0), h, T_BG);
+    if (gap_fr) {
+        lcd_fill(0, y, 1, h, T_BG);
+        lcd_fill(1, y, (uint32_t)CARD_X(0) - 1u, h, T_THEME);
+    } else {
+        lcd_fill(0, y, (uint32_t)CARD_X(0), h, T_BG);
+    }
     for (i = 0; i < 4u; i++) {                          /* right of each column */
         uint32_t x = (uint32_t)(CARD_X(i) + CARD_W), w = i < 3u ? (uint32_t)CARD_X(i + 1u) - x : 240u - x;
         if (ux.style && i < 3u) {
             lcd_rule(x, y, 1, h);
             lcd_fill(x + 1u, y, w - 1u, h, T_BG);
+        } else if (gap_fr && i == 3u) {
+            lcd_fill(x, y, 2, h, T_THEME);
+            lcd_fill(x + 2u, y, w - 2u, h, T_BG);
         } else {
             lcd_fill(x, y, w, h, T_BG);
         }
     }
 }
-/* a 2 px frame in the theme colour round the card row, in the BG beside and between the cards and the panel (corners notched):
- * the SEQ pages' sign of what KNOB 1-4 edit, with every pixel of the cards and the panel as before */
-static void draw_card_frame(uint32_t ch)
-{
-    uint32_t y0 = Y_LABEL - 3u, y1 = Y_LABEL + ch + 1u;           /* the upper line's top row, the lower line's top row */
-    lcd_fill(3, y0, 234, 2, T_THEME);
-    lcd_fill(3, y1, 234, 2, T_THEME);
-    lcd_fill(1, y0 + 2u, 2, y1 - y0 - 2u, T_THEME);
-    lcd_fill(237, y0 + 2u, 2, y1 - y0 - 2u, T_THEME);
-}
+static uint8_t ux_frame_cards = 1;                     /* 0: a screen with no card row of its own (the layers' maps, NAME) */
 static int dual_page(const page_t *pg);                 /* ui_lfo2.c: the two-group pages */
 static const char *dual_foot(const page_t *pg);
 /* full redraw: the strips (header, cards, panel, footer) cover the rest; only the BG between them is filled */
 static void draw_frame(void)
 {
     uint32_t ch = card_h(), gy = graph_y(), gh = graph_h();   /* (MENU > LARGE: tall cards, a strip) */
-    gap_rows(H_HEAD, Y_LABEL);
-    if (!ui.home && dual_page(cur_page())) {            /* the two-group blits cover cards and panel: no BG fill under
+    int dual = !ui.home && dual_page(cur_page());
+    int fr = ux_frame_cards && !dual && !ux.style;     /* (LINE: its rules are the frame) */
+    if (fr)
+        gap_rows_card(H_HEAD, Y_LABEL, Y_LABEL - 3u);
+    else
+        gap_rows(H_HEAD, Y_LABEL);
+    if (dual) {                                         /* the two-group blits cover cards and panel: no BG fill under
                                                          * them (it would flash on a full redraw, #181) */
         gap_rows(gy + gh, Y_FOOT);
         return;
     }
-    gap_rows(Y_LABEL + ch, gy);
+    if (fr)
+        gap_rows_card(Y_LABEL + ch, gy, Y_LABEL + ch + 1u);
+    else
+        gap_rows(Y_LABEL + ch, gy);
     gap_rows(gy + gh, Y_FOOT);
+    gap_fr = (uint8_t)fr;
     draw_gaps(Y_LABEL, ch);
-    if (!ui.home && cur_page()->fam == FAM_SEQ)         /* the cards K1-4 edit, framed as the active group of a two-group page is */
-        draw_card_frame(ch);
+    gap_fr = 0;
 }
 
 #ifndef CARD_HOOK
@@ -1644,8 +1663,11 @@ static void ui_draw_page(uint32_t counting)
         return;
     }
     if (ui.layer) {                                     /* a layer's map over the page (ui_layer.c) */
-        if (ui.force)
+        if (ui.force) {
+            ux_frame_cards = 0;
             draw_frame();
+            ux_frame_cards = 1;
+        }
         draw_head();
         draw_layer();
         if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {

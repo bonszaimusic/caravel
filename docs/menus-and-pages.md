@@ -44,8 +44,10 @@ the ALL groups stay as they are.
 **SCL, CHORD and SLICER** are one group above and a picture of the settings below (the scale on the keys, the last chord played, the step
 pattern).
 
-**SEQ pages** (STEP with the piano roll or the DRUM grid, DETAIL, AUTOMATION) keep their small card row and their full-height panel; the card row is framed
-in the theme colour, as the active group of a two-group page is, to say that KNOB 1-4 edit it.
+**Every other page with a card row** (HOME, MIXER, CLOCK, SEQ with the piano roll, the DRUM grid, DETAIL and AUTOMATION, the sound and project pages, the engine pages
+with a picture) keeps its small cards and its full-height panel; the card row is framed in the theme colour, as the active group of a two-group
+page is, to say that KNOB 1-4 edit it. The LINE style (MENU > STYLE) has no frame: its rules do that job. The layers' maps and the name entry have no card row
+and no frame.
 
 **INSERT** shows TYPE and MIX in the upper group, with the curve of the chosen type beside them (a drive's transfer curve, the folder, the
 bit staircase, the swept effects' sweep); the type's own A, B and C are the lower group. **SLICER** keeps its four controls in the upper
