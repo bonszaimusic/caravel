@@ -54,3 +54,9 @@ step's locks. On the DETAIL page EDIT still resets the step's fields.
 **CLEAR STEP:** hold **SEQ** and press **F5**. It clears the cursor step and its locks and moves the cursor on, so repeated presses sweep
 through the pattern; an empty step is passed with "STEP IS EMPTY". One undo (SAVE held). The SEQ TOOLS map shows a **CLR STEP** cell on melodic
 tracks and a small **CLR** cell at the end of the lane row on DRUM tracks. F3 still clears the whole sequence.
+
+## LATCH on the CHORD page
+
+The CHORD page (SCL family, after SCL) has a third parameter, **LATCH** (OFF, NEW, STACK), KNOB 3. It keeps the notes of the keys and of MIDI
+IN sounding after they are released; see [LATCH](latch.md). **OCT- and OCT+ pressed together** still reset the octave to 0, and now also let
+go of everything the selected track has latched ("LATCH RELEASED").

@@ -172,11 +172,114 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 
 #include "chord.c"
 
+/* ----------------------------------------------------------- latch --- */
+/* LATCH (P_LATCH, CHORD page; Caravel): the notes the keys and MIDI IN play go on sounding after their release, per track.
+ * OFF; NEW: a press with nothing held ends the latched notes and starts a new set (as ARP HOLD does for the arp);
+ * STACK: new notes join the latched ones, and a press whose notes all sound latched ends them (the key or chord again).
+ * Without ARP the released notes are kept in lat_stay (the note-off is not given); with ARP the held list the arp plays is
+ * kept (arp_hold). The recording sees the key down and up as ever (rec_release), MIDI OUT too. Ends: LATCH OFF, ARP turned
+ * on, a panic (preset / engine / voice mode change, CC120 / 123), STOP, OCT- + OCT+ together (latch_req). A kit (DRUM, slices)
+ * takes no latch. Runtime state, never stored; the audio ISR only */
+enum { LT_OFF, LT_NEW, LT_STACK };
+static uint32_t lat_stay[NTRK][4];       /* bit n: note n was let go and sounds on */
+static uint32_t lat_eat[NTRK][4];        /* bit n: the press of note n ended it (STACK): its release does nothing */
+static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
+
+static uint32_t latch_mode(const track_t *t)
+{
+    uint32_t v = (uint32_t)t->p[P_LATCH];
+    return (v == LT_NEW || v == LT_STACK) && !chord_kit(t) ? v : LT_OFF;
+}
+static int lat_get(const uint32_t *a, uint32_t n) { return (int)((a[n >> 5] >> (n & 31u)) & 1u); }
+static void lat_put(uint32_t *a, uint32_t n, uint32_t on)
+{
+    a[n >> 5] = on ? a[n >> 5] | 1u << (n & 31u) : a[n >> 5] & ~(1u << (n & 31u));
+}
+static int lat_any(const uint32_t *a) { return (a[0] | a[1] | a[2] | a[3]) != 0u; }
+
+/* the keys' and MIDI IN's holding of the ARP's chord: ARP HOLD, or any LATCH */
+static int arp_hold(const track_t *t) { return t->p[P_AHOLD] || latch_mode(t) != LT_OFF; }
+/* a press with no key down starts a new chord (HOLD, NEW); STACK adds to it */
+static int arp_replace(const track_t *t)
+{
+    uint32_t m = latch_mode(t);
+    return m == LT_NEW || (t->p[P_AHOLD] && m != LT_STACK);
+}
+
+/* the latched notes end (LATCH off, ARP on, a new set, the release gesture; the notes a key holds are not among them) */
+static __attribute__((noinline)) void latch_free(track_t *t)
+{
+    uint32_t k = trk_index(t), n;
+    for (n = 0; n < 128u; n++)
+        if (lat_get(lat_stay[k], n))
+            trk_note_off(t, n);
+    memset(lat_stay[k], 0, sizeof lat_stay[k]);
+}
+/* the track's latch state is gone (a panic ended every note; trk_all_off) */
+static void latch_forget(uint32_t k)
+{
+    memset(lat_stay[k], 0, sizeof lat_stay[k]);
+    memset(lat_eat[k], 0, sizeof lat_eat[k]);
+}
+
+static int midi_any_held(const track_t *t);
+static void arp_drop(track_t *t, uint32_t note);
+/* a note of track t sounds now because LATCH keeps it (without ARP: a voice or the mono stack plays it) */
+static int lat_sounds(const track_t *t, uint32_t n)
+{
+    uint32_t i;
+    if (trk_vmode(t) == V_POLY) {
+        for (i = 0; i < NVOICE; i++)
+            if (t->v[i].active && t->v[i].gate && t->v[i].note == n)
+                return 1;
+        return 0;
+    }
+    for (i = 0; i < t->nmono; i++)
+        if (t->mono_stack[i] == n)
+            return 1;
+    return 0;
+}
+
+/* a press (key, chord, MIDI note) of the n notes nn on track t, before they start: STACK and every one of them latched
+ * (the ARP's list: held) ends them, and the press starts nothing (1; the release of each is eaten); NEW without ARP and no
+ * key or note held ends the latched set. 0: the press goes on as always */
+static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, uint32_t n)
+{
+    uint32_t k = trk_index(t), mode = latch_mode(t), i, j;
+    if (mode == LT_OFF || !n)
+        return 0;
+    if (mode == LT_NEW) {
+        if (!t->p[P_AMODE] && !midi_any_held(t))
+            latch_free(t);
+        return 0;
+    }
+    for (i = 0; i < n; i++) {
+        if (t->p[P_AMODE]) {
+            for (j = 0; j < t->nheld && t->held[j] != nn[i]; j++)
+                ;
+            if (j == t->nheld)
+                return 0;
+        } else if (!lat_get(lat_stay[k], nn[i]) || !lat_sounds(t, nn[i])) {
+            return 0;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        if (t->p[P_AMODE]) {
+            arp_drop(t, nn[i]);
+        } else {
+            lat_put(lat_stay[k], nn[i], 0);
+            trk_note_off(t, nn[i]);
+        }
+        lat_put(lat_eat[k], nn[i], 1);
+    }
+    return 1;
+}
+
 /* ------------------------------------------------------------- arp --- */
 static void arp_add(track_t *t, uint32_t note)
 {
     uint32_t i, k = in_key - 1u;
-    if (t->p[P_AHOLD] && t->arp_phys == 0u)
+    if (arp_replace(t) && t->arp_phys == 0u)
         t->nheld = 0;                               /* new chord replaces the latched one */
     t->arp_phys++;                                  /* every key-down: arp_remove counts every key-up */
     for (i = 0; i < t->nheld; i++)
@@ -198,15 +301,12 @@ static void arp_add(track_t *t, uint32_t note)
     }
 }
 
-static void arp_remove(track_t *t, uint32_t note)
+/* the note leaves the held list */
+static void arp_drop(track_t *t, uint32_t note)
 {
     uint32_t i, k = 0;
     uint8_t *hk = held_key[trk_index(t)];
     int8_t *dt = held_dt[trk_index(t)];
-    if (t->arp_phys)
-        t->arp_phys--;
-    if (t->p[P_AHOLD])
-        return;
     for (i = 0; i < t->nheld; i++)
         if (t->held[i] != note) {
             hk[k] = hk[i];
@@ -214,6 +314,15 @@ static void arp_remove(track_t *t, uint32_t note)
             t->held[k++] = t->held[i];
         }
     t->nheld = (uint8_t)k;
+}
+
+static void arp_remove(track_t *t, uint32_t note)
+{
+    if (t->arp_phys)
+        t->arp_phys--;
+    if (arp_hold(t))
+        return;
+    arp_drop(t, note);
 }
 
 #define ND_NONE 0u                      /* track_t nd_late / nd_early: nothing latched (seq_tick; else its seq_pos + 1) */
@@ -674,6 +783,8 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
     last_note = (uint8_t)note;
+    lat_put(lat_stay[trk_index(t)], note, 0);       /* (LATCH: a latched note pressed again is held by the key again) */
+    lat_put(lat_eat[trk_index(t)], note, 0);
     if (cin_left)
         cin_keep(t, note, vel);
     if (rec_on(t) && !t->p[P_AMODE])               /* (ARP on: arp_tick records its notes) */
@@ -690,6 +801,10 @@ static void input_off(track_t *t, uint32_t note)
 {
     if (midi_note_held(t, note))
         return;
+    if (lat_get(lat_eat[trk_index(t)], note)) {    /* (LATCH STACK: this press ended the note, nothing began) */
+        lat_put(lat_eat[trk_index(t)], note, 0);
+        return;
+    }
     if (cin_left) {                                 /* a kept note let go before step 1: recorded, then let go */
         uint32_t i = trk_index(t), k;
         for (k = 0; k < cin_n[i]; k++)
@@ -698,6 +813,10 @@ static void input_off(track_t *t, uint32_t note)
     }
     rec_release(t, note);
     arp_remove(t, note);                            /* both: the note may have started in the */
+    if (!t->p[P_AMODE] && latch_mode(t) != LT_OFF) {
+        lat_put(lat_stay[trk_index(t)], note, 1);   /* LATCH: the note sounds on, let go of by latch_free */
+        return;
+    }
     trk_note_off(t, note);                          /* other mode (ARP switched while held) */
 }
 
@@ -763,14 +882,16 @@ static __attribute__((noinline)) void perf_key_remap(void)
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
-    uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel;
+    uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
     kb_chn[k] = 0;
+    eat = (uint32_t)latch_press(t, kb_chord[k], n);   /* LATCH STACK: the key again ends its latched notes */
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
         if (midi_local_held(t, x))
             continue;
-        input_on(t, x, vel);
+        if (!eat)
+            input_on(t, x, vel);
         midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
     }
     in_key = 0;
@@ -941,6 +1062,14 @@ static __attribute__((noinline)) void seq_stop(void)
             if (trk[i].arp_note)
                 arp_off(&trk[i]);
     for (i = 0; i < NTRK; i++) {
+        if (latch_mode(&trk[i]) != LT_OFF) {       /* STOP ends the latch: the latched notes and the arp's chord */
+            latch_free(&trk[i]);
+            if (trk[i].nheld && !trk[i].arp_phys) {
+                trk[i].nheld = 0;
+                if (trk[i].arp_note)
+                    arp_silence(&trk[i]);
+            }
+        }
         seq_release(&trk[i]);
         trk[i].rh_n = 0;                           /* a recorded note held over the stop: as far as it got */
         trk[i].rat_left = 0;
@@ -1427,6 +1556,7 @@ static __attribute__((noinline)) void project_sound_apply(void)
         midi_forget_track(k);
         arp_silence(t);
         trk_all_off(t);
+        latch_forget(k);
         for (uint32_t i = 0; i < NVOICE; i++) active |= t->v[i].active;
         t->nheld = t->arp_phys = 0;
         arp_forget(t);
@@ -1501,7 +1631,7 @@ static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
 
 static void events_block(uint32_t n)
 {
-    uint32_t i, pr, seq_n = n;
+    uint32_t i, pr, lr, seq_n = n;
     voice_policy_sync();
     uint32_t clock_mode = (uint32_t)song.g[G_CLOCK];
     if (midi_clock.mode != clock_mode) {
@@ -1545,6 +1675,8 @@ static void events_block(uint32_t n)
     }
     pr = panic_req;
     panic_req = 0;
+    lr = latch_req;
+    latch_req = 0;
     if (midi_in_overflow) {                            /* a lost note-off must never leave a held note */
         midi_resync_cancel();
         midi_clock.bar_valid = 0;                    /* lost clocks also lose the counted bar */
@@ -1570,18 +1702,29 @@ static void events_block(uint32_t n)
             t->nheld = 0;
             t->arp_phys = 0;
             arp_forget(t);
+            latch_forget(i);
         }
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
-        /* ARP turned off, or HOLD released with no key down: drop the latched chord */
-        if ((t->armp && !t->p[P_AMODE]) || (t->aholdp && !t->p[P_AHOLD] && !t->arp_phys)) {
+        if ((lr >> i) & 1u) {                         /* OCT- + OCT+: let go of everything latched */
+            latch_free(t);
+            if (arp_hold(t) && t->nheld) {
+                t->nheld = 0;
+                if (t->arp_note)
+                    arp_silence(t);
+            }
+        }
+        /* ARP turned off, or HOLD / LATCH released with no key down: drop the latched chord */
+        if ((t->armp && !t->p[P_AMODE]) || (t->aholdp && !arp_hold(t) && !t->arp_phys)) {
             t->nheld = 0;
             if (!t->p[P_AMODE])
                 t->arp_phys = 0;
             if (t->arp_note)
                 arp_silence(t);
         }
+        if (lat_any(lat_stay[i]) && (t->p[P_AMODE] || latch_mode(t) == LT_OFF))
+            latch_free(t);                            /* LATCH turned off, or ARP on: the latched notes end */
         t->armp = t->p[P_AMODE];
-        t->aholdp = t->p[P_AHOLD];
+        t->aholdp = arp_hold(t);
     }
     keyboard_block();
     motion_fx_sync();

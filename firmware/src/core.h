@@ -58,7 +58,8 @@
 enum {                          /* per-track parameters */
     P_LEVEL,
     P_ATK, P_DEC, P_SUS, P_REL,
-    P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ED_FX,     /* P_ED_FX: unused, kept for the formats / protocol */
+    P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ED_FX,     /* P_ED_FX: no sound parameter any more (nothing reads it); Caravel keeps the
+                                                * track's LATCH in it (P_LATCH below) */
     P_LRATE, P_LWAVE, P_LPHASE, P_LFADE,
     P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP,
     P_AMODE, P_ARATE, P_AOCT, P_AGATE,
@@ -89,6 +90,10 @@ enum {                          /* per-track parameters */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
+
+/* Caravel: LATCH (seq.c, CHORD page): 0 OFF, 1 NEW, 2 STACK; any other stored value counts as OFF. It lives in the
+ * retired P_ED_FX slot (stored by every format and the editor protocol already, so no layout change) */
+#define P_LATCH P_ED_FX
 
 #define FELUCCA_DRUMX 1
 #define DX_KIT_ID 12u
