@@ -1262,7 +1262,8 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
  * cursor moves by KNOB 1 (STEP) or PRESETS only, as it always could (EDIT opens the EDIT pages; SEQ held + F5 clears the step and moves on) */
 /* A key pressed a few ms BEFORE a layer button (SEQ + F5 "together") reaches the main loop as a plain note, and step entry has already
  * written it into the cursor step; then the layer opens. The write is taken back here, the key becomes the layer's (silenced, and a combo
- * key: the tool fires), so SEQ + F5 never leaves an F in the step. ENT_RACE_MS: how long after its write a layer button still counts. */
+ * key: the tool fires), so SEQ + F5 never leaves an F in the step. Only for a key still HELD when the button comes (a step written and its key
+ * let go stays); ENT_RACE_MS: how long after its write a layer button still counts. */
 #define ENT_RACE_MS 100u
 static struct { step_t step; uint32_t cursor, ms, keys; uint8_t valid; } ent_prev;   /* the cursor step as it was before the last key press wrote */
 static void entry_rollback(void)
@@ -1628,7 +1629,7 @@ static void ui_input(void)
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
     layer_lock_input(pressed);                          /* (#83: a button closes a locked layer) */
     layer_arm(pressed, now);
-    if (ent_prev.valid && ui.ly && (pressed & layer_bits()) && fm1_ms - ent_prev.ms <= ENT_RACE_MS)
+    if (ent_prev.valid && ui.ly && (pressed & layer_bits()) && (ent_prev.keys & fm1_in.notes) && fm1_ms - ent_prev.ms <= ENT_RACE_MS)
         entry_rollback();                               /* (a key just before the button: the button's combo, not a note) */
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
