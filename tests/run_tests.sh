@@ -115,6 +115,13 @@
 #                   bit (POLY, SPREAD), each TYPE at its corners on 3 and 8 voices (no DC, bounded, MIX 50 % halfway
 #                   to the wet), the MIX glide and TYPE changes, MIX / TYPE as automation and locks, FUN10 and user
 #                   presets of 109 and 104, the pages' labels, the cost per type; demos in build/insert_demo/.
+# TRACK FILTER (tests/trackfilter_test.c, Caravel 0.3.0): P_FILT (INSERT 2's fourth card; src/fx.c track_filter): the descriptor and its card text,
+#                   0 = nothing runs and the track bit for bit as before (a block, a phrase, SPREAD), LP / HP responses of 18
+#                   settings against the analytic 12 dB/oct ones, the cutoff glide and wet glide (no click, no zipper), the way
+#                   back to 0 and across the sign, block-size independence, SPREAD's side, all 127 settings on loud signals
+#                   against a 64-bit shadow (no overflow, bounded, no DC, silent after a burst), the filter after the INSERT and
+#                   before the sends, the state run out with the part, FUN10 / user presets of 0.2.0 (113) loading with it OFF,
+#                   automation, locks, FX HOLD, MIDI LEARN, the cost; demo in build/trackfilter_demo/.
 # SOUND 1.5 (tests/sound15_test.c; #104 #175): ANALOG's filter TYPE (LP bit for bit, every other engine ignores it, BP / HP
 #                   responses around the cutoff, RES, bounded at the corners), ENV SYNC (OFF bit for bit, the note values
 #                   on the knob, attack / decay / release times at 60 / 120 / 173 BPM and on the external clock), the cost;
@@ -417,6 +424,13 @@ if [ -f build/gen/felucca_tables.h ]; then
     mkdir -p build/insert_demo
     run "INSERT (1.5): OFF / MIX 0 bit for bit, each TYPE (no DC, bounded, dry / wet), MIX glide, automation, stored, cost, demos" \
         "$OUT/insert_test" build/insert_demo
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/trackfilter_test" tests/trackfilter_test.c -lm
+    mkdir -p build/trackfilter_demo
+    run "track FILTER (0.3.0): the parameter and its card, OFF bit for bit, LP / HP responses, smoothing, extremes (64-bit shadow), chain order, stored (FUN10 / user presets of 0.2.0), cost, demo" \
+        "$OUT/trackfilter_test" build/trackfilter_demo
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/menu_dual_preview" tests/menu_dual_preview.c -lm
+    mkdir -p build/menu_dual
+    run "two-group views: focus, navigation, independent knob targets, INSERT's FX HOLD and FILTER cards; captures in build/menu_dual" "$OUT/menu_dual_preview" build/menu_dual
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/sound15_test" tests/sound15_test.c -lm
     mkdir -p build/sound15_demo
     run "1.5 sound items: ANALOG filter TYPE LP / BP / HP (responses, LP and other engines bit for bit), ENV SYNC (times at several tempi), cost, demos" \
