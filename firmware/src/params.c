@@ -498,7 +498,6 @@ static const page_t PAGES[] = {
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, 0xFF, 0xFF}},   /* SCL again: the chord keys (chord.c) */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
-    {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E4, P_E5, P_E7}},   /* ANALOG only (1.5, #104): TYPE CUT RES KTR */
     {"SEM MODE", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_LD_SHP, P_SPRD, 0xFF}},
     {"X KIT", FAM_EDIT, SC_TRACK, GR_DXKIT, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"X-MOD", FAM_EDIT, SC_TRACK, GR_DXMOT, {0xFF, 0xFF, 0xFF, 0xFF}},
@@ -519,6 +518,7 @@ static const page_t PAGES[] = {
     {"OP LEVEL", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM1_LEVEL, P_FM2_LEVEL, P_FM3_LEVEL, P_FM4_LEVEL}},
     {"VOICE", FAM_EDIT, SC_TRACK, GR_NONE, {P_VOICE, P_GLIDE, P_GLMODE, P_PRIO}},
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_ALLOC, P_DETUNE, P_PAN, P_MUTE}},
+    {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E4, P_E5, P_E7}},   /* ANALOG only (1.5, #104): TYPE CUT RES KTR; beside MORE (the two-group layout) */
     /* Custom: MORE gathers the single parameters that had a page each (VOICE 3's SPREAD #148, MORPH, FEEDBACK); a slot the
      * track's engine does not have is empty (more_slot_ok), so KNOB 1 is always SPREAD */
     {"MORE", FAM_EDIT, SC_TRACK, GR_NONE, {P_SPRD, P_MORPH, P_PD_FB, 0xFF}},

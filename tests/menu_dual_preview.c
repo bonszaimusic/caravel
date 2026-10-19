@@ -185,6 +185,24 @@ int main(int argc, char **argv)
             assert(!strcmp(sa, sb) && sa[0] + 1 == sc[0] && sa[1] == '/' && sc[1] == '/' && !strcmp(sa + 2, sc + 2));
         }
     }
+    {   /* ANALOG: FILTER above MORE (one view); SEM: MORE is not offered (SEM MODE has its SPREAD); other engines: MORE alone */
+        char path[320], ti[20];
+        ui_power_on();
+        TSEL->eng_req = 0; frame();
+        go_title("FILTER"); frame();
+        assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+        page_title(ti); assert(!strncmp(ti, "FILTER ", 7));
+        snprintf(path, sizeof path, "%s/analog-filter-more-palette-%02u.ppm", argv[1], settings.palette);
+        save_screen(path);
+        go_title("MORE"); frame();
+        assert(dual_bottom(cur_page()));
+        TSEL->eng_req = ENGI_SEM; frame();
+        go_title("EDIT 1");
+        for (uint32_t i = 0; i < 12; i++) { assert(!str_eq(cur_page()->title, "MORE")); turn(EN_SELECT, 1); frame(); }
+        TSEL->eng_req = ENGI_FM6; frame();
+        go_title("MORE"); frame();
+        assert(!dual_page(cur_page()));
+    }
     {   /* MORE: SPREAD, MORPH, PHS FB on one page; a slot the engine lacks is empty and its knob does nothing */
         static const struct { uint16_t eng; int morph, fb; } E[] = {{0, 1, 0}, {2, 1, 1}, {3, 1, 0}, {4, 0, 0}, {12, 0, 0}};
         for (uint32_t i = 0; i < sizeof E / sizeof E[0]; i++) {

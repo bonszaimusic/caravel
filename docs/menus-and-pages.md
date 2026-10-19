@@ -58,6 +58,9 @@ The EDIT family has one **MORE** page after VOICE 2 with the single parameters t
 engine), KNOB 2 **MORPH** (ANALOG, PHASE, LOFI and the DRUM-X kit), KNOB 3 **PHS FB** (PHASE). A parameter the engine does not have leaves its
 card empty and its knob does nothing.
 
+On **ANALOG**, MORE is the lower group of a view with **FILTER** above it (TYPE, CUT, RES, KTR), marked FILTER 3/3 in the footer. On **SEM** the
+page is not offered: SEM MODE already has SPREAD and the other two parameters do not exist there.
+
 ## EDIT and CLEAR STEP on the STEP page
 
 **EDIT opens the EDIT pages** from the STEP page, like on every other page. With a note key held (the step being entered), EDIT clears that

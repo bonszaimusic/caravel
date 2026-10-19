@@ -52,6 +52,7 @@ static const dual_t DUALS[] = {
     {"LFO2", "LFO2 SYNC", "LFO2 SHAPE / RATE", "LFO2 SYNC / TRIGGER", "LFO2 TOP", "LFO2 BOTTOM", DK_LFO2},
     {"ENV", "ENV DEST", "ENV", "ENV DEST / SYNC", "ENV TOP", "ENV BOTTOM", DK_ENV},
     {"EDIT 1", "EDIT 2", "EDIT 1", "EDIT 2", "EDIT TOP", "EDIT BOTTOM", DK_EDIT},
+    {"FILTER", "MORE", "FILTER", "MORE", "FILTER", "MORE", DK_PLAIN},        /* ANALOG only: FILTER beside MORE */
     {"LANES", "LANES 2", "LANES 1-4", "LANES 5-8", "LANES TOP", "LANES BOTTOM", DK_PLAIN},
     {"FX", "DLY", "FX SENDS", "DELAY", "FX SENDS", "DELAY", DK_PLAIN},
     {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
@@ -72,6 +73,8 @@ static const dual_t *dual_of(const page_t *pg, uint32_t *bottom)
     for (uint32_t i = 0; i < sizeof DUALS / sizeof DUALS[0]; i++) {
         if (DUALS[i].kind == DK_EDIT && edit_has_picture())
             continue;
+        if (str_eq(DUALS[i].top, "FILTER") && ENGINES[TSEL->eng_req % NENGINES] != &ENG_ANALOG)
+            continue;                                   /* (FILTER is ANALOG's: MORE stands alone on the others) */
         if (str_eq(pg->title, DUALS[i].top)) { if (bottom) *bottom = 0; return &DUALS[i]; }
         if (DUALS[i].bot[0] && str_eq(pg->title, DUALS[i].bot)) { if (bottom) *bottom = 1; return &DUALS[i]; }
     }

@@ -30,7 +30,7 @@ unless it says so; host tests and simulations are not hardware measurements.
 - **In the settings menu, SELECT walks the rows** and continues into the next tab (with SELECT on PAGE).
 - **CLEAR STEP: hold SEQ and press F5** clears the cursor step and its locks and moves on; one undo (SAVE held).
 - **MORE page** (EDIT family): SPREAD, MORPH and PHS FB on one page; slots the engine lacks are empty. It replaces the single-parameter
-  pages MORPH, FEEDBACK and VOICE 3.
+  pages MORPH, FEEDBACK and VOICE 3. On ANALOG it shares a view with FILTER; on SEM it is not shown (SEM MODE has SPREAD).
 - **Per-track voice reservations** (HOME held, ALGORITHM to VOICES): AUTO or FIXED, 1..5 voices per track, at most eight; also in the
   editor.
 

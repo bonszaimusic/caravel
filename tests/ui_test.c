@@ -3615,7 +3615,7 @@ static int engine_cycle(const char *const *want, uint32_t n)   /* EDIT tapped fr
 static int test_edit_cycle(void)
 {
     static const char *const CYC_A[] = {"EDIT 1", "EDIT 2",
-        "FILTER", "VOICE", "VOICE 2", "MORE", "EDIT 1"};   /* (1.5: FILTER; Custom: MORE has SPREAD, MORPH, PHS FB) */
+        "VOICE", "VOICE 2", "FILTER", "MORE", "EDIT 1"};   /* (FILTER: ANALOG's, beside MORE: SPREAD, MORPH, PHS FB) */
     static const char *const CYC_D[] = {"EDIT 1", "EDIT 2", "OP1 ENV", "OP2 ENV", "OP3 ENV", "OP4 ENV",
                                         "OP LEVEL", "VOICE", "VOICE 2", "MORE", "EDIT 1"};
     int bad = 0, ok;

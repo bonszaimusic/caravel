@@ -442,6 +442,7 @@ static int more_slot_ok(uint32_t id)
 static int page_visible(uint32_t i)
 {
     if (str_eq(PAGES[i].title, "SEM MODE")) return TSEL->eng_req == ENGI_SEM;
+    if (str_eq(PAGES[i].title, "MORE")) return TSEL->eng_req != ENGI_SEM;          /* SEM MODE has its SPREAD: nothing else is left */
     if (PAGES[i].graph >= GR_DXKIT && PAGES[i].graph <= GR_DXLAYER) return dx_track(TSEL);
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
