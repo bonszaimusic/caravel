@@ -415,7 +415,7 @@ static void test_stored(void)
             if (str_eq(PAGES[p].title, "DLY")) pd = p;
         }
         ok = pd == pf + 1u && pi2 == pi + 1u && ps == pi2 + 1u && pi > pd && PAGES[pi].fam == FAM_FX && PAGES[pi].id[0] == P_ITYPE &&
-             PAGES[pi2].id[0] == P_IMIX;
+             PAGES[pi].id[1] == P_IMIX && PAGES[pi2].id[0] == P_IA;
         set_ins(t, IT_CRUSH, 64, 96, 96, 127);
         ok &= str_eq(track_desc(t, P_IA)->label, "BITS") && str_eq(track_desc(t, P_IB)->label, "RATE") &&
               str_eq(track_desc(t, P_IC)->label, "LPF");

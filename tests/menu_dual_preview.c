@@ -85,7 +85,7 @@ int main(int argc, char **argv)
                 {"ARP", "ARP 2", "arp", P_AMODE, P_ASWING, 0, 0}, {"VOICE", "VOICE 2", "voice", P_VOICE, P_ALLOC, 0, 0},
                 {"ENV", "ENV DEST", "env", P_ATK, P_ED_FLT, 0, 0}, {"EDIT 1", "EDIT 2", "edit", P_E0, P_E4, 0, 0},
                 {"LANES", "LANES 2", "lanes", P_LN0, P_LN4, 0, 0}, {"FX", "DLY", "fx-delay", P_DIST, G_DTIME, 0, 1},
-                {"REVERB", "CHORUS", "reverb-chorus", G_RTYPE, G_CRATE, 1, 1}, {"INSERT", "INSERT 2", "insert", P_ITYPE, P_IMIX, 0, 0}};
+                {"REVERB", "CHORUS", "reverb-chorus", G_RTYPE, G_CRATE, 1, 1}, {"INSERT", "INSERT 2", "insert", P_ITYPE, P_IA, 0, 0}};
             #define PV(k, ab) (PAIRS[k].g##ab ? &song.g[PAIRS[k].ab] : &TSEL->p[PAIRS[k].ab])
             for (uint32_t k = 0; k < sizeof PAIRS / sizeof PAIRS[0]; k++) {
                 char path[320];
@@ -111,6 +111,16 @@ int main(int argc, char **argv)
                 turn(EN_SELECT, -1);
                 assert(str_eq(cur_page()->title, PAIRS[k].top));
                 TSEL->eng_req = keep_eng; frame();
+            }
+            {   /* INSERT: the type's curve beside TYPE and MIX (a drive, a folder, a phaser); not asserted, captured */
+                static const struct { const char *name; uint32_t type; } IT[] = {{"soft", IT_SOFT}, {"fold", IT_FOLD}, {"crush", IT_CRUSH}, {"phaser", IT_PHASER}};
+                for (uint32_t k = 0; k < sizeof IT / sizeof IT[0]; k++) {
+                    TSEL->p[P_ITYPE] = (int16_t)IT[k].type; TSEL->p[P_IMIX] = 100;
+                    go_title("INSERT"); frame();
+                    snprintf(path0, sizeof path0, "%s/insert-%s-palette-%02u-%s.ppm", argv[1], IT[k].name, palette, large ? "large" : "normal");
+                    save_screen(path0);
+                }
+                TSEL->p[P_ITYPE] = 0;
             }
             {   /* SLICER: one page, its graph in the lower block; SELECT leaves it for the next view */
                 go_title("SLICER"); frame();
@@ -155,7 +165,7 @@ int main(int argc, char **argv)
             {"LFO", "LFO TOP 1/4"}, {"LFO SYNC", "LFO BOTTOM 1/4"}, {"LFO DEST", "LFO DEST 2/4"},
             {"LFO2", "LFO2 TOP 3/4"}, {"LFO2 SYNC", "LFO2 BOTTOM 3/4"}, {"MOD", "MOD 4/4"},
             {"FX", "FX SENDS 1/4"}, {"DLY", "DELAY 1/4"}, {"REVERB", "REVERB 2/4"}, {"CHORUS", "CHORUS 2/4"},
-            {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT MIX 3/4"}, {"SLICER", "SLICER 4/4"},
+            {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT A-C 3/4"}, {"SLICER", "SLICER 4/4"},
             {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};
         ui_power_on();
         for (uint32_t i = 0; i < sizeof T / sizeof T[0]; i++) {

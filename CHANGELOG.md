@@ -15,15 +15,18 @@ unless it says so; host tests and simulations are not hardware measurements.
   editor and emulator texts, package names (`caravel-X.Y.fwsc`), ABOUT / CREDITS, and the legal texts ([NOTICE](NOTICE),
   [LICENSING.md](LICENSING.md), [CREDITS.md](CREDITS.md)). Data formats and package markers are unchanged, and the editor, installer
   and `tools/fm1_install.py` accept devices named Caravel and Felucca.
-- **The FX family order** is FX, INSERT, INSERT 2, SLICER, DLY, REVERB, CHORUS (Felucca: FX, SLICER, INSERT, INSERT 2, ...).
+- **The FX family** is four views: FX SENDS | DELAY, REVERB | CHORUS, INSERT TYPE / MIX | INSERT A / B / C and SLICER (Felucca: FX, SLICER,
+  INSERT, INSERT 2, DLY, REVERB, CHORUS as separate pages). INSERT's TYPE and MIX are together with the type's curve, A / B / C on their own.
 - **SELECT starts on PAGE** on a device without saved settings (saved settings, including BPM, are kept).
 - **EDIT on the STEP page opens the EDIT pages** like on every other page; it no longer clears the cursor step.
 - **DOUBLE** (Felucca 1.6) also copies locks, automation and fine FX edges, up to 64 steps.
 
 ### Added: usability
 - **Two parameter groups on one screen** for LFO, LFO2, ENV, ARP, VOICE, EDIT 1 / 2 (engines without a sound picture), LANES and
-  FX / INSERT. The active group is framed and marked EDIT K1-4, SELECT steps through the groups, and the footer shows a numbered view
-  ("LFO TOP 1/4"; a pair counts as one view). A small pictogram shows the selected LFO wave and the ENV shape.
+  the FX pages. The active group is framed and marked EDIT K1-4, SELECT steps through the groups, and the footer shows a numbered view
+  ("LFO TOP 1/4"; a pair counts as one view). A small pictogram shows the selected LFO wave and the ENV shape. A tag in every group's
+  header says whether it is for **ALL** tracks (the global effects) or for the selected track (T1 to T4). INSERT shows the chosen type's
+  curve; the SLICER page shows its step pattern and what it does to a tone.
 - **In the settings menu, SELECT walks the rows** and continues into the next tab (with SELECT on PAGE).
 - **CLEAR STEP: hold SEQ and press F5** clears the cursor step and its locks and moves on; one undo (SAVE held).
 - **MORE page** (EDIT family): SPREAD, MORPH and PHS FB on one page; slots the engine lacks are empty. It replaces the single-parameter

@@ -44,7 +44,8 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 }
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
-enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH };   /* DK_GRAPH: one page above, its graph in the lower block */
+enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS };   /* DK_GRAPH: one page above, its graph in the lower block;
+                                                                          * DK_INS: the upper group's free cards hold the type's curve */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
     {"LFO", "LFO SYNC", "LFO SHAPE / RATE", "LFO SYNC / TRIGGER", "LFO TOP", "LFO BOTTOM", DK_LFO},
@@ -52,10 +53,10 @@ static const dual_t DUALS[] = {
     {"ENV", "ENV DEST", "ENV", "ENV DEST / SYNC", "ENV TOP", "ENV BOTTOM", DK_ENV},
     {"EDIT 1", "EDIT 2", "EDIT 1", "EDIT 2", "EDIT TOP", "EDIT BOTTOM", DK_EDIT},
     {"LANES", "LANES 2", "LANES 1-4", "LANES 5-8", "LANES TOP", "LANES BOTTOM", DK_PLAIN},
-    {"FX", "DLY", "FX SENDS (THIS TRACK)", "DELAY (ALL TRACKS)", "FX SENDS", "DELAY", DK_PLAIN},
-    {"REVERB", "CHORUS", "REVERB (ALL TRACKS)", "CHORUS (ALL TRACKS)", "REVERB", "CHORUS", DK_PLAIN},
-    {"INSERT", "INSERT 2", "INSERT TYPE / A B C", "INSERT MIX", "INSERT", "INSERT MIX", DK_PLAIN},
-    {"SLICER", "", "SLICER", "STEP PATTERN", "SLICER", "", DK_GRAPH},
+    {"FX", "DLY", "FX SENDS", "DELAY", "FX SENDS", "DELAY", DK_PLAIN},
+    {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
+    {"INSERT", "INSERT 2", "INSERT TYPE / MIX", "INSERT A / B / C", "INSERT", "INSERT A-C", DK_INS},
+    {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
 };
@@ -109,34 +110,57 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         *v = *vp;
     return d;
 }
-/* DK_GRAPH's lower block: the SLICER's 16-step pattern in a frame like the groups' (graph_slicer's bars, half the height):
- * an open step a full bar, a closed GATE step what DEPTH leaves open, a closed STUT step a dashed bar, the playing step marked */
-static void slicer_block(const track_t *t, const char *title)
+/* DK_GRAPH's lower block, the SLICER's: two lanes in a frame like the groups'. Above, the 16 steps of the pattern in four
+ * groups of four (an open step a lit bar, a closed GATE step what DEPTH leaves open, a closed STUT step a dashed bar), the
+ * playing step in the accent colour on a light column. Below, what that does to a held tone: GATE chops it (a closed step as
+ * loud as DEPTH leaves it), STUT repeats the last open step's piece at DEPTH. A picture of the settings, not the audio. */
+static void slicer_block(const track_t *t, uint32_t pat_no)
 {
     uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
     static const char *const MODE[] = {"OFF", "GATE", "STUT"};
-    int32_t top = 28, hb = 40, open = hb - t->p[P_SLDEPTH] * hb / 127;       /* px a closed GATE step keeps */
-    uint16_t col = mode == SL_OFF ? T_DIM : T_MID;
+    int32_t top = 26, hb = 18, open = hb - t->p[P_SLDEPTH] * hb / 127, cy = 63, amp = 11, px, py = cy;
+    uint16_t lit = mode == SL_OFF ? T_RAISE : T_THEME, dim = mode == SL_OFF ? T_DIM : T_MID;
+    char ti[16], rate[8];
+    const char *unit;
     cv_begin(240, 80, T_BG);
     cv_rrect(3, 0, 234, 80, 5, T_RAISE, T_BG);
     cv_rrect(5, 2, 230, 76, 3, T_SURF, T_RAISE);
     cv_rect(5, 5, 230, 16, T_SURF);
-    cv_text_on(10, 6, &AF_S, title, T_TEXT, T_SURF);
-    cv_text_r(230, 6, &AF_S, MODE[mode % 3u], mode == SL_OFF ? T_DIM : T_MID, T_SURF);
+    str_cpy(ti, "PATTERN ", 12);
+    fmt_int(ti + str_len(ti), (int32_t)pat_no);
+    param_format(&TP[P_SLRATE], t->p[P_SLRATE], rate, &unit);
+    cv_text_on(10, 6, &AF_S, ti, T_TEXT, T_SURF);
+    cv_text_r(230, 6, &AF_S, MODE[mode % 3u], mode == SL_OFF ? T_DIM : T_THEME, T_SURF);
+    cv_text_r(188, 6, &AF_S, rate, T_MID, T_SURF);
+    if (mode != SL_OFF)
+        cv_rect(bar_x(cur) - 2, top - 2, 13, 51, T_RAISE);                        /* the playing step's column */
     for (i = 0; i < 16u; i++) {
         int32_t x = bar_x(i);
+        uint16_t col = mode != SL_OFF && i == cur ? T_ACCENT : lit;
         if ((pat >> i) & 1u) {
-            cv_rrect(x, top, 9, hb, 2, mode == SL_OFF ? T_RAISE : col, T_SURF);
+            cv_rrect(x, top, 9, hb, 2, col, T_SURF);
         } else if (mode == SL_STUT) {
-            for (int32_t y = top; y < top + hb; y += 4)
-                cv_rect(x, y, 9, 1, col);
+            for (int32_t y = top; y < top + hb; y += 3)
+                cv_rect(x, y, 9, 1, mode != SL_OFF && i == cur ? T_ACCENT : dim);
         } else {
-            cv_rrect(x, top + hb - 3, 9, 3, 1, T_RAISE, T_SURF);
-            if (open > 3)
-                cv_rrect(x, top + hb - open, 9, open, 2, T_RAISE, T_SURF);
+            cv_rrect(x, top + hb - 2, 9, 2, 1, mode != SL_OFF && i == cur ? T_ACCENT : T_RAISE, T_SURF);
+            if (open > 2)
+                cv_rrect(x, top + hb - open, 9, open, 2, mode != SL_OFF && i == cur ? T_ACCENT : T_RAISE, T_SURF);
         }
-        if (mode != SL_OFF && i == cur)
-            cv_rect(x, top + hb + 3, 9, 2, T_ACCENT);
+    }
+    cv_rect(bar_x(0), cy, bar_x(15) + 9 - bar_x(0), 1, T_RAISE);                  /* the tone, chopped */
+    for (px = bar_x(0); px < bar_x(15) + 9; px++) {
+        uint32_t k = 0, ph = (uint32_t)(px - bar_x(0)) * (0xFFFFFFFFu / 7u);
+        int32_t g = 127, y;
+        for (i = 0; i < 16u; i++)
+            if (bar_x(i) <= px)
+                k = i;
+        if (mode != SL_OFF && !((pat >> k) & 1u))
+            g = mode == SL_GATE ? 127 - t->p[P_SLDEPTH] : t->p[P_SLDEPTH];
+        y = cy - osc_sine(ph) * g / 127 * amp / 32768;
+        if (px > bar_x(0))
+            cv_line(px - 1, py, px, y, mode == SL_OFF ? T_DIM : mode != SL_OFF && k == cur ? T_ACCENT : (g == 127 ? T_THEME : T_MID));
+        py = y;
     }
     cv_blit(0, Y_LABEL + 90u);
 }
@@ -154,9 +178,11 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
-    if (dd->kind == DK_GRAPH)                              /* the graph: the pattern, the mode, the depth, the playing step */
+    if (dd->kind == DK_GRAPH)                              /* the graph: the pattern, the mode, the rate, the depth, the playing step */
         sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
-              sl[TSEL - trk].idx * 977u;
+              (uint32_t)TSEL->p[P_SLRATE] * 7919u + (uint32_t)TSEL->p[P_SLPAT] * 31337u + sl[TSEL - trk].idx * 977u;
+    if (dd->kind == DK_INS)                                /* the curve: TYPE and MIX are cards, A B C are not on this page */
+        sig = sig * 33u + (uint32_t)TSEL->p[P_IA] * 97u + (uint32_t)TSEL->p[P_IB] * 8191u + (uint32_t)TSEL->p[P_IC] * 524287u;
     if (!ui.force && ui.graph_sig == sig)
         return;
     ui.graph_sig = sig;
@@ -164,7 +190,7 @@ static void lfo_cards(const page_t *pg)
         int active = row == bottom;
         int32_t y = 0;
         if (dd->kind == DK_GRAPH && row) {
-            slicer_block(TSEL, dd->hb);
+            slicer_block(TSEL, (uint32_t)TSEL->p[P_SLPAT]);
             continue;
         }
         /* Two small blits reuse the existing canvas instead of increasing pool RAM. */
@@ -176,6 +202,13 @@ static void lfo_cards(const page_t *pg)
         cv_rect(5, y + 5, 230, 16, head);
         cv_text_on(10, y + 6, &AF_S, row ? dd->hb : dd->ht, active ? T_INK : T_TEXT, head);
         cv_text_r(230, y + 6, &AF_S, active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+        if (rps[row] || dd->kind == DK_LFO2) {            /* who the group is for: this track, or every track (a global page) */
+            char tag[4];
+            int global = rps[row] && rps[row]->scope == SC_GLOBAL;
+            tag[0] = global ? 'A' : 'T'; tag[1] = global ? 'L' : (char)('1' + song.sel % NTRK); tag[2] = global ? 'L' : 0; tag[3] = 0;
+            cv_rrect(144, y + 7, 28, 12, 3, global ? T_ACCENT : active ? T_INK : T_RAISE, head);
+            cv_text_in(144, y + 6, 28, &AF_S, tag, global ? T_INK : active ? T_THEME : T_MID, global ? T_ACCENT : active ? T_INK : T_RAISE);
+        }
         if (dd->kind == DK_ENV && !row)                     /* the envelope's shape beside its title */
             env_icon(76, y + 7, 70, 12, TSEL->p[rps[0]->id[0]], TSEL->p[rps[0]->id[1]], TSEL->p[rps[0]->id[2]],
                      TSEL->p[rps[0]->id[3]], active ? T_INK : T_MID);
@@ -185,6 +218,11 @@ static void lfo_cards(const page_t *pg)
             int32_t x = 6 + (int32_t)col * 58;
             if (col)
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
+            if (dd->kind == DK_INS && !row && col >= 2u) {     /* the two free cards: the type's curve */
+                if (col == 2u)
+                    insert_curve(TSEL, active ? T_THEME : T_MID, x + 6, 100, y + 49, 20);
+                continue;
+            }
             if (!d || !d->label || d->label[0] == '-') {
                 cv_text_in(x, y + 43, 56, &AF_M, "--", T_DIM, T_SURF);
                 continue;

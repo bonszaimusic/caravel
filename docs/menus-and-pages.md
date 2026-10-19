@@ -17,7 +17,10 @@ These pages show two groups of four parameters at once instead of one page and a
 | VOICE | VOICE 2 | VOICE MODE / GLIDE · VOICE ALLOC / PAN |
 | EDIT 1 | EDIT 2 | EDIT 1 · EDIT 2 |
 | LANES (DRUM only) | LANES 2 | LANES 1-4 · LANES 5-8 |
-| FX | INSERT | FX SENDS · INSERT TYPE / A B C |
+| FX | DLY | FX SENDS · DELAY |
+| REVERB | CHORUS | REVERB · CHORUS |
+| INSERT | INSERT 2 | INSERT TYPE / MIX (with the type's curve) · INSERT A / B / C |
+| SLICER | (its graph) | SLICER · the step pattern and what it does to a tone |
 
 The active group is framed in the theme colour and marked **EDIT K1-4**; KNOB 1..4 edit it. The other group stays readable and is marked
 VIEW. A page's graph (the LFO scope, the ADSR graph, the effect pictures) is not drawn on these pages; instead a small pictogram under the
@@ -29,7 +32,16 @@ and FM6 (the algorithm chart); on every other engine they use the two-group layo
 
 **The footer** shows the view and its number in its family: **LFO TOP 1/4**, **LFO BOTTOM 1/4**, **LFO DEST 2/4**, **LFO2 TOP 3/4**,
 **MOD 4/4**. The two groups of a pair count as one view; a family with one view shows no number (ENV TOP, ARP TOP). The FX family order is
-FX, INSERT, INSERT 2, SLICER, DLY, REVERB, CHORUS, so FX and INSERT are neighbours.
+FX, DLY, REVERB, CHORUS, INSERT, INSERT 2, SLICER, so each pair is one view: FX SENDS 1/4, REVERB 2/4, INSERT 3/4, SLICER 4/4.
+
+**Who a group is for:** every group's header carries a small tag: **ALL** (accent colour) for the global pages (DELAY, REVERB, CHORUS), **T1** to
+**T4** for a page of the selected track (the FX sends, INSERT, SLICER, the LFOs, ENV, EDIT, ...). Changing the track changes the T groups;
+the ALL groups stay as they are.
+
+**INSERT** shows TYPE and MIX in the upper group, with the curve of the chosen type beside them (a drive's transfer curve, the folder, the
+bit staircase, the swept effects' sweep); the type's own A, B and C are the lower group. **SLICER** keeps its four controls in the upper
+group; the lower block is a picture of the settings, not audio: the 16 steps of the pattern in groups of four with the playing step marked,
+and below them a tone as the SLICER shapes it (GATE: a closed step as loud as DEPTH leaves it; STUT: the repeated piece at DEPTH).
 
 ## SELECT
 
