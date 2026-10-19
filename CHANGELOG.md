@@ -39,6 +39,7 @@ unless it says so; host tests and simulations are not hardware measurements.
   everywhere (not in the LINE style, the layers and the name entry).
 - **The splash** shows the name, the version, the maker and the licence; the origin from Felucca stays in ABOUT and the credits. A development build says
   `-dev` after its version (a release build does not).
+- **MOD's DST** (in the LFO DEST | MOD view) shows the engine's own parameter names (DRONE: SPREAD, DETUNE, ...) instead of E1 .. E8.
 - Menu id 41 is FX HOLD.
 
 ## [0.1.0] — 2026-10-19 (first version under the name Caravel)
