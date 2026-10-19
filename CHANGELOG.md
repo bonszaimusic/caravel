@@ -41,6 +41,9 @@ unless it says so; host tests and simulations are not hardware measurements.
   `-dev` after its version (a release build does not).
 - Menu id 41 is FX HOLD.
 
+### Fixed
+- **SEQ held + F5 (CLEAR STEP) with step entry armed** no longer leaves an F in the step: when the key reaches the device a few milliseconds before the SEQ button, step entry had already written it. The layer now takes that write back, silences the key and clears the step as intended.
+
 ## [0.1.0] — 2026-10-19 (first version under the name Caravel)
 
 ### Changed
