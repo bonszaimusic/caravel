@@ -100,7 +100,7 @@ int main(void)
     ui_power_on();
     track_t *t = TSEL;
     set_engine_of(t, 3);
-    bad += check("LOFI: append-only waves/presets and unchanged parameter layout", P_COUNT == 113 && P_E0 == 105 && P_MORPH == 103 && P_PD_FB == 104 &&
+    bad += check("LOFI: append-only waves/presets and unchanged parameter layout", P_COUNT == 114 && P_E0 == 106 && P_FILT == 105 && P_MORPH == 103 && P_PD_FB == 104 &&
         RW_BYTE == 5 && RW_FLOAT == 6 && ENG_LOFI.edit[1].max == 6 && ENG_LOFI.npresets == 7 &&
         !strcmp(ENG_LOFI.presets[0].name, "PULSE LD") && !strcmp(ENG_LOFI.presets[4].name, "STEP LEAD"));
     for (uint32_t wave = 0; wave < 5; wave++) for (uint32_t chip = 0; chip < 5; chip++)

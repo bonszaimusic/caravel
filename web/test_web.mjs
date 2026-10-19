@@ -194,7 +194,7 @@ async function editorMock() {
   const rq = async (r, o) => link.request(r, o);
   const info = E.parse[E.CMD.INFO](await rq(E.req.info()));
   ok(info.nengines === 17 && info.engines[16] === "DRONE" && info.engines[1] === "-" && info.engines[12] === "FM6" && info.engines[13] === "SLICE"
- && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "GRAIN" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "NOISE" && info.pcount === 113 && info.pe0 === 105 && info.engines[4] === "SAMPLE",
+ && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "GRAIN" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "NOISE" && info.pcount === 114 && info.pe0 === 106 && info.engines[4] === "SAMPLE",
     "editor: INFO");
   let descs = 0;
   for (let i = 0; i < info.pcount; i++) if (E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))).label) descs++;
@@ -643,6 +643,14 @@ function mockTables() {
   ok(swg.length === 3 && swg.every((d) => E.fmtValue(d, 100)[0] === "100" && E.fmtValue(d, 50)[0] === "50") &&
      E.fmtValue({ fmt: swg[0].fmt, min: 0, max: 127 }, 127)[0] === "100" && E.fmtValue({ fmt: swg[0].fmt, min: 0, max: 127 }, 64)[0] === "50",
      "editor: SWG 100 shows 100 % (not 79), 0..127 percents unchanged");
+  /* Caravel 0.3.0: the track's FILTER, P_FILT 105 (P_COUNT 114, P_E0 106): bipolar, OFF at 0, else the share with LP / HP as its unit
+     (the device card's text); the other bipolar percentages keep their signed text */
+  const fl = T.TP[105], pan = T.TP.find((d) => d.label === "PAN");
+  ok(T.TP.length === 106 && fl.label === "FILT" && fl.fmt === E.F.BIPCT && fl.min === -64 && fl.max === 63 && fl.def === 0 &&
+     T.TP[104].label === "PHS FB" && E.fmtValue(fl, 0).join("|") === "OFF|" && E.fmtValue(fl, -64).join("|") === "100|LP" &&
+     E.fmtValue(fl, -32).join("|") === "50|LP" && E.fmtValue(fl, 1).join("|") === "1|HP" && E.fmtValue(fl, 63).join("|") === "100|HP" &&
+     E.fmtValue(pan, -64).join("|") === "-100|%" && E.fmtValue(pan, 63).join("|") === "+100|%",
+     "editor: FILT (105, bipolar, -64..63): OFF, 1..100 with LP / HP; PAN and the other bipolar ones signed");
 }
 
 /* ------------------------------------------------------------------ DIGITAL retired --- */

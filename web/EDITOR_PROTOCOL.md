@@ -67,6 +67,10 @@ insert effect with a dry / wet mix, Discussions #78 #177), then `TYPE` (101, ANA
 P_COUNT and P_E0 from `INFO` keeps working. Projects stay FUN10 (3840 bytes, 111 at byte 66; 16 bytes to spare). See
 "1.5: the INSERT" and "1.5: filter TYPE, ENV SYNC" below.
 
+**Caravel 0.3.0 (114 parameters, FUN10 as it was):** one more track parameter before the engine parameters, which moved from 105..112 to 106..113:
+P_COUNT 114, P_E0 106: `FILT` (105), the track's FILTER. No command or INFO tag changed; an editor that takes P_COUNT and P_E0 from `INFO` keeps
+working (Caravel 0.2.0's web editor knows only 113 / 105). See "0.3.0: the track's FILTER" below.
+
 ## Framing
 
 A request is `F0 7D 46 4C <cmd> <args...> F7`:
@@ -800,6 +804,29 @@ more). A FUN10 of 104 (1.2 .. 1.4) loads by count (the INSERT OFF, TYPE LP, ESYN
 moved up by seven). Firmware 1.2 .. 1.4 refuses a FUN10 of 111 (more parameters than it has: its slot shows EMPTY, a
 backup PUT of one answers rc 1); user presets of 111 load there by count (the seven left out). Library files of 104 map
 by label: the INSERT, TYPE and ESYNC unset.
+
+## 0.3.0: the track's FILTER
+
+One track parameter before the engine parameters (P_COUNT 114, P_E0 106; take both from `INFO` as always):
+
+| id | label | values |
+| --- | --- | --- |
+| 105 | `FILT` | -64 .. 63, default 0; `DESC` says BIPCT (fmt 2). Negative: a low-pass, positive: a high-pass, 0: OFF (the track as before, nothing runs). The device shows OFF, or the share (-64 -> 100, 63 -> 100; 1..100) with LP / HP as its unit |
+
+It is the **last stage of the track's own chain** (voices -> DIST -> INSERT -> SLICER -> FILTER -> LEVEL / PAN / sends): the sends take the
+filtered sound; every engine has it. The device's cutoffs: LP -64 .. -1 from 120 Hz to 14 kHz, HP +1 .. +63 from 32 Hz to 3.8 kHz (12 dB / octave, no
+resonance); the cutoff glides (the range in 48 ms) and the filter fades in and out. On the device it is the fourth card of INSERT 2 (INS A, INS B, INS C,
+FILT); the web editor lists it as a `FILTER` page in the FX group.
+
+It is the sound's like the INSERT: a factory preset load sets 0 (unless FX HOLD is ON: it keeps it), a user preset (and a library patch) stores it. It can
+be recorded as automation and locks (`MOTION` 3 / 5: rc 0) and a CC can be learned to it (`LEARN_SET` with id 105; the device's own map keeps the code
+`id + 1` = 106). It is **not** a modulation destination (the matrix's DST list is unchanged).
+
+Older stores load by count (FILT 0, engine values and their motion one higher): a FUN10 of 113 (0.1.0 / 0.2.0), a user preset record of 113, FUN9 and older,
+library files by label. **Firmware 0.1.0 / 0.2.0 refuse a FUN10 of 114 parameters** (more than their own: the slot reads EMPTY, its flash copy stays; a
+backup `PUT` of one answers rc 1); a user preset record of 114 loads there by count (the filter left out). FUN10 is the same format (3840 bytes); the data
+ends 4 bytes before the FM6 patches and MIDI IN TRACK's 3 bytes (`PROJ_MIDI_OFF`) take the end of that gap: 1 byte to spare. P_COUNT 114 is the most the
+motion format has ids for (114 .. 127 are the FX layer's edges).
 
 ## v7: full backup (65-67)
 

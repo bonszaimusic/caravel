@@ -45,7 +45,7 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
 enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS };   /* DK_GRAPH: one page above, its graph in the lower block;
-                                                                          * DK_INS: the upper group's free cards hold the type's curve */
+                                                                          * DK_INS: the upper group's fourth card is the type's curve (its third FX HOLD) */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
     {"LFO", "LFO SYNC", "LFO SHAPE / RATE", "LFO SYNC / TRIGGER", "LFO TOP", "LFO BOTTOM", DK_LFO},
@@ -57,7 +57,7 @@ static const dual_t DUALS[] = {
     {"LANES", "LANES 2", "LANES 1-4", "LANES 5-8", "LANES TOP", "LANES BOTTOM", DK_PLAIN},
     {"FX", "DLY", "FX SENDS", "DELAY", "FX SENDS", "DELAY", DK_PLAIN},
     {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
-    {"INSERT", "INSERT 2", "INSERT TYPE / MIX", "INSERT A / B / C", "INSERT", "INSERT A-C", DK_INS},
+    {"INSERT", "INSERT 2", "INSERT TYPE MIX HOLD", "INSERT A B C FILTER", "INSERT", "INSERT A-C FILT", DK_INS},
     {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
     {"SCL", "", "SCALE", "", "SCL", "", DK_GRAPH},
     {"CHORD", "", "CHORD KEYS", "", "CHORD", "", DK_GRAPH},
@@ -113,7 +113,7 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
             *v = lfo2_get(song.sel, id);
         return d;
     }
-    if (rp && rp->graph == GR_INS && col == 3u && rp->id[0] == P_IA) {   /* INSERT 2: FX HOLD, the device setting, as its fourth card */
+    if (rp && rp->graph == GR_INS && col == 2u && rp->id[0] == P_ITYPE) {   /* INSERT: FX HOLD, the device setting, as its third card (0.3.0; the fourth of INSERT 2 up to 0.2.0) */
         static const char *const ONOFF[] = {"OFF", "ON"};
         static const param_desc_t HOLD = {"FX HOLD", F_ENUM, 0, 1, 0, ONOFF, 0};
         *v = menu_get(MI_FXHOLD) ? 1 : 0;
@@ -308,7 +308,7 @@ static void lfo_cards(const page_t *pg)
     if (rps[1] && rps[1]->graph == GR_MOD)                 /* the slot pips: every slot's SRC, DST and AMT */
         for (uint32_t k = 0; k < NMSLOT * 3u; k++)
             sig = sig * 33u + (uint32_t)TSEL->p[P_M1SRC + k];
-    if (dd->kind == DK_INS)                                /* the curve: TYPE and MIX are cards, A B C are not on this page */
+    if (dd->kind == DK_INS)                                /* the curve: TYPE and MIX are cards, A B C are not on this group */
         sig = sig * 33u + (uint32_t)TSEL->p[P_IA] * 97u + (uint32_t)TSEL->p[P_IB] * 8191u + (uint32_t)TSEL->p[P_IC] * 524287u;
     if (!ui.force && ui.graph_sig == sig)
         return;
@@ -362,9 +362,8 @@ static void lfo_cards(const page_t *pg)
             int32_t x = 6 + (int32_t)col * 58;
             if (col)
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
-            if (dd->kind == DK_INS && !row && col >= 2u) {     /* the two free cards: the type's curve */
-                if (col == 2u)
-                    insert_curve(TSEL, active ? T_THEME : T_MID, x + 6, 100, y + 49, 20);
+            if (dd->kind == DK_INS && !row && col == 3u) {     /* the fourth card: the type's curve, one card wide */
+                insert_curve(TSEL, active ? T_THEME : T_MID, x + 3, 50, y + 49, 20);
                 continue;
             }
             if (!d || !d->label || d->label[0] == '-') {

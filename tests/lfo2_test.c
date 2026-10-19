@@ -114,7 +114,7 @@ int main(void)
     mod_selection_order();
     mod_source_equivalence();
     ui_power_on();
-    assert(P_COUNT == 113 && MS_LFO2 == 11 && MS_SH2 == 12 && MS_SLEW2 == 13);
+    assert(P_COUNT == 114 && MS_LFO2 == 11 && MS_SH2 == 12 && MS_SLEW2 == 13);
     track_t *t = &trk[0];
     lfo2_set(0, L2_FIRST + L2_RATE, 40);
     lfo2_set(1, L2_FIRST + L2_RATE, 100);

@@ -63,6 +63,11 @@ track_insert 3
 ins_drive 277
 ins_swept 230
 
+# Caravel 0.3.0: the per-track FILTER (fx.c track_filter), a new entry, measured with pi32v2: the sample loop of b (and, with SPREAD, d) with
+# both poles inlined, 141 loop instructions. mix_part grew 876 -> 909 instructions (641 -> 659 in loops, 2 calls more: the two calls and the tail test)
+# inside its existing budget (OPTIONAL 2800 in target_budget.py).
+track_filter 141
+
 # BYTE/FLOAT pi32v2 baseline: weighted renderer loop; full formula code footprints.
 lofi_formula_render 183
 lofi_byte 324

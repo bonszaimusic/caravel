@@ -86,8 +86,8 @@ static int sem_corners(void)
 static int sem_integration(void)
 {
     int bad = 0, ok = 1; sem_setup(); track_t *t = &trk[0];
-    bad += check("SEM appended at 14, existing sound ids and 113-parameter layout retained",
-        ENGI_SEM == 14u && P_COUNT == 113 && ENGINES[0] == &ENG_ANALOG &&
+    bad += check("SEM appended at 14, existing sound ids and 114-parameter layout retained",
+        ENGI_SEM == 14u && P_COUNT == 114 && ENGINES[0] == &ENG_ANALOG &&
         ENGINES[12] == &ENG_FM6 && ENGINES[ENGI_SEM] == &ENG_SEM && eng_ok(ENGI_SEM));
     for (uint32_t k = 0; k < 8u; k++) {
         uint32_t id = P_E0 + k, cc = 20u + k;

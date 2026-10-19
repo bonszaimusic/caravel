@@ -26,7 +26,7 @@ static uint32_t legacy_fun10(project_store_t *wire, const project_t *q)
     for (i = 0; i < motion.count; i++) {
         uint32_t id = MOTION_ID(&motion.event[i]);
         if (id >= P_E0 && id < P_COUNT)
-            motion.event[i].param = (motion.event[i].param & MOTION_LOCK) | (id - 2u);
+            motion.event[i].param = (motion.event[i].param & MOTION_LOCK) | (id - (P_E0 - 103u));
     }
     memcpy(b + pos, &motion, sizeof motion); pos += sizeof motion;
     memset(b + pos, 0, PROJ_MIDI_OFF - pos);
@@ -39,7 +39,7 @@ int main(void)
     int bad = 0, ok = 1;
     ui_power_on();
     track_t *t = TSEL;
-    bad += check("sound slots: 113 values, separate from FM and PHASE FOLD", P_COUNT == 113 && P_E0 == 105 &&
+    bad += check("sound slots: 114 values (0.3.0: FILT after them), separate from FM and PHASE FOLD", P_COUNT == 114 && P_E0 == 106 && P_FILT == 105 &&
         P_MORPH == 103 && P_PD_FB == 104 && P_ESYNC == 102 &&
         TP[P_MORPH].def == 0 && TP[P_PD_FB].def == 0 &&
         !strcmp(ENG_PHASE.edit[7].label, "FOLD") && ENG_PHASE.npresets == 6);
@@ -164,7 +164,7 @@ int main(void)
         b.t[0].p[P_E7] == 93 && b.mch[0] == 16 && MOTION_ID(&b.motion.event[0]) == P_E7;
     bad += check("new project: MORPH/feedback/FOLD, engine lock and MIDI channel round trip", ok);
     ok = legacy_fun10(&wire, &a) && proj_import(&b, &wire, sizeof wire) &&
-        b.t[0].p[P_MORPH] == 0 && b.t[0].p[P_PD_FB] == 0 &&
+        b.t[0].p[P_MORPH] == 0 && b.t[0].p[P_PD_FB] == 0 && b.t[0].p[P_FILT] == 0 &&
         b.t[0].p[P_E7] == 93 && MOTION_ID(&b.motion.event[0]) == P_E7 && b.mch[0] == 16;
     bad += check("old 111-value FUN10: new values zero, FOLD/engine locks/MIDI preserved", ok);
 #ifdef MOTION_FX_FIRST

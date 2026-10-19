@@ -631,7 +631,7 @@ static __attribute__((noinline)) void rev_side_mix(int32_t *l, int32_t *r, uint3
  * as before (nothing runs). MIX glides (2.9 ms, SL_SLOPE); a TYPE change fades the old one out, clears the state,
  * fades the new one in; so does a start from MIX 0 (no stale line or filter). With SPREAD (mix_spread) the insert
  * takes the mono sum b, as DIST does; the side passes it by.
- * Order: DIST -> INSERT -> SLICER: the insert colours the sound as DIST does; the SLICER's gate (and its STUT
+ * Order: DIST -> INSERT -> SLICER (-> the FILTER, 0.3.0: track_filter): the insert colours the sound as DIST does; the SLICER's gate (and its STUT
  * recordings) comes after, so its edges stay sharp (no flanger feedback or phaser ringing smears them) and a STUT
  * repeats the processed sound. State in the pool, per track (ins[], 580 B each); noinline, its own loops: the audio
  * ISR's inlined path gains one test per part (track_t ins_run) */
@@ -803,8 +803,120 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
     t->ins_run = s->w != 0;                             /* (mix_part calls again while it fades) */
 }
 
+/* The track's FILTER (Caravel 0.3.0; P_FILT, the INSERT 2 page's fourth card): one bipolar knob, -64 .. 63: negative a low-pass, positive a
+ * high-pass, 0 OFF. The last stage of the track's chain (engine voices -> DIST -> INSERT -> SLICER -> FILTER -> level, pan and sends), so the sends
+ * to the chorus, delay and reverb take the filtered sound; on every engine, those without a filter of their own too. The knob works as the FX
+ * layer's FILTER does (perform.c): the LP from 14.2 kHz (-1) down to 120 Hz (-64), the HP from 32 Hz (+1) up to 3.8 kHz (+63), an octave every 7
+ * rows of 30 Hz * 2^(row / 7). 12 dB/oct: two identical trapezoidal one-poles in a row (the HP: each one's input less its low-pass), their
+ * cutoff set so the filter is -3 dB at the row's frequency (TF_G: G = g / (1 + g), g = tan(pi f / FS) / 0.6436, Q16). No resonance, so it cannot ring or
+ * oscillate, and it is stable at every setting (each pole is a weighted mean of its input and its state). The states carry 8 fractional bits, which
+ * keeps the low cutoffs exact (no dead band: a pole whose G is 0.003 would otherwise hold an offset of a few hundred).
+ * Smooth: the cutoff glides to the knob's place at most 192 / 256 of a row each 32-sample block (the whole range in 47 ms, as the layer's), G blended
+ * between two rows; the wet share (Q15) glides 2.9 ms (SL_SLOPE) in and out. Starting, the states are the input's (no transient). Turning to 0 (or over
+ * to the other side) first opens the cutoff, then fades the filter out, clears it and switches: no click, nothing left running. 0 with the filter
+ * faded out: nothing runs and the track is bit for bit as before (mix_part calls it only while P_FILT is set or track_t tf_run says it still runs).
+ * State: tfilt_t per track (a few words, no pool). With SPREAD (mix_spread) the side signal d (left - right) takes the same filter in a second pair
+ * of states. DRUM-X's per-lane image and lane sends (drumx_mix) are added after the strip, as they pass DIST, the INSERT and the SLICER by */
+#define TF_TAIL 32u                     /* blocks of the filter's state to run out after the last voice (23 ms: the LP at 120 Hz rings 12 ms) */
+#define TF_STEP 192                     /* the cutoff's glide a block, Q8 rows (perform.c) */
+#define TF_ROWS 63                      /* the last row */
+#define TF_IN 524287                    /* the input is held to +-2^19 (8 loud voices are 192000): with 8 fractional bits every product fits 32 bits */
+static const uint16_t TF_G[64] = {      /* G of the row, Q16 (the formula above; tests/trackfilter_test.c checks it) */
+    217, 239, 264, 292, 322, 355, 392, 432,
+    477, 526, 581, 640, 706, 779, 859, 947,
+    1044, 1151, 1269, 1398, 1540, 1696, 1868, 2056,
+    2263, 2489, 2738, 3010, 3307, 3633, 3989, 4376,
+    4799, 5260, 5760, 6304, 6893, 7531, 8220, 8964,
+    9764, 10624, 11546, 12532, 13585, 14706, 15896, 17157,
+    18491, 19897, 21377, 22931, 24560, 26266, 28050, 29915,
+    31867, 33911, 36058, 38324, 40731, 43309, 46106, 49191,
+};
+typedef struct {
+    int32_t z[4];                       /* the two poles' states (Q8) for b, then for the side d */
+    int32_t cut;                        /* the cutoff now: a row, Q8 (30 Hz * 2^(row / 7)) */
+    int32_t w;                          /* the wet share now, Q15 */
+    uint32_t g;                         /* G of cut, Q16 */
+    uint8_t mode;                       /* running: 0 none, 1 LP, 2 HP */
+} tfilt_t;
+static tfilt_t tf[NTRK];
+
+/* one trapezoidal pole on x (Q8): its low-pass, the state moved on */
+static inline int32_t tf_pole(int32_t x, int32_t *z, uint32_t g)
+{
+    int32_t d = mulq16(x - *z, g), y = *z + d;
+    *z = y + d;
+    return y;
+}
+/* a sample of the 12 dB/oct filter (x as b, Q0): LP the two poles in a row, HP each one's input less its low-pass */
+static inline int32_t tf_sample(int32_t x, int32_t *z, uint32_t g, uint32_t hp)
+{
+    int32_t u = clamp(x, -TF_IN, TF_IN) << 8, y = tf_pole(u, z, g);
+    if (hp) {
+        u -= y;
+        y = u - tf_pole(u, z + 1, g);
+    } else {
+        y = tf_pole(y, z + 1, g);
+    }
+    return (y + 128) >> 8;
+}
+/* the filter at rest at once (nothing sounds: P_FILT turned to 0 while the part was silent, its fade never ran) */
+static __attribute__((noinline)) void tf_rest(track_t *t)
+{
+    memset(&tf[(uint32_t)(t - trk) % NTRK], 0, sizeof(tfilt_t));
+    t->tf_run = 0;
+}
+/* the track's FILTER on its block b and, with SPREAD, the side d (else 0) */
+static __attribute__((noinline)) void track_filter(track_t *t, int32_t *b, int32_t *d, uint32_t n)
+{
+    tfilt_t *s = &tf[(uint32_t)(t - trk) % NTRK];
+    int32_t v = clamp(t->p[P_FILT], -64, 63), want = v < 0 ? 1 : v > 0 ? 2 : 0, tgt, tw, i, f;
+    uint32_t hp;
+    if (!s->mode) {
+        if (!want) {
+            t->tf_run = 0;
+            return;                                     /* off: bit for bit */
+        }
+        memset(s, 0, sizeof *s);                        /* starting: open, the poles at the input (no transient), the wet share from 0 */
+        s->mode = (uint8_t)want;
+        s->cut = want == 1 ? PF_TOP : 0;
+        if (want == 1) {
+            s->z[0] = s->z[1] = clamp(b[0], -TF_IN, TF_IN) << 8;
+            if (d)
+                s->z[2] = s->z[3] = clamp(d[0], -TF_IN, TF_IN) << 8;
+        } else {
+            s->z[0] = clamp(b[0], -TF_IN, TF_IN) << 8;
+            if (d)
+                s->z[2] = clamp(d[0], -TF_IN, TF_IN) << 8;
+        }
+    }
+    hp = s->mode == 2u;
+    if (want == s->mode) {                              /* the knob's place: LP from the top down, HP from the bottom up */
+        tgt = hp ? v * (PF_TOP - PF_LOW) / 63 : PF_TOP + v * ((PF_TOP - PF_LOW) / 64);
+        tw = 32768;
+    } else {                                            /* off or the other side: open the cutoff, then fade out */
+        tgt = hp ? 0 : PF_TOP;
+        tw = s->cut == tgt ? 0 : 32768;
+    }
+    s->cut += clamp(tgt - s->cut, -TF_STEP, TF_STEP);
+    i = s->cut >> 8;
+    f = s->cut & 255;
+    s->g = (uint32_t)((int32_t)TF_G[i] + (((int32_t)TF_G[i < TF_ROWS ? i + 1 : TF_ROWS] - (int32_t)TF_G[i]) * f >> 8));   /* between two rows */
+    for (uint32_t j = 0; j < n; j++) {
+        int32_t x = b[j];
+        s->w += clamp(tw - s->w, -SL_SLOPE, SL_SLOPE);
+        b[j] = pf_mix(x, tf_sample(x, s->z, s->g, hp), s->w);
+        if (d) {
+            x = d[j];
+            d[j] = pf_mix(x, tf_sample(x, s->z + 2, s->g, hp), s->w);
+        }
+    }
+    if (!s->w && !tw)                                   /* faded out: at rest (the other side starts with the next block) */
+        memset(s, 0, sizeof *s);
+    t->tf_run = s->mode != 0;
+}
+
 /* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)
- * -> dist -> INSERT -> SLICER -> level / pan / sends -> buses -> master; out: stereo Q15 */
+ * -> dist -> INSERT -> SLICER -> FILTER -> level / pan / sends -> buses -> master; out: stereo Q15 */
 static void events_block(uint32_t n);                    /* seq.c */
 #if FELUCCA_CPU2
 static int32_t wet[CTL];                                 /* (the dry mix and the sends: mx[0], above) */
@@ -818,7 +930,8 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * ones (spread_buf); here d = left - right, the side signal, so for a pair of pans L = b (gla + glb) / 2 + d (gla - glb)
  * / 2 (R alike): the mono sum is b's, the level of a centre pan less by SPRD / 256 at most. b goes through DIST, the
  * SLICER and the FX layer's mute key as always; d gets the SLICER's gate and the mute's ramp (slicer_track_sd,
- * perf_mute_sd) and passes DIST by (the spread of a distorted chord is its voices' clean difference). The sends
+ * perf_mute_sd) and passes DIST by (the spread of a distorted chord is its voices' clean difference); the FILTER (0.3.0)
+ * takes b and d alike, the last stage before the mute key. The sends
  * take b, mono, as before. SPRD 0, MONO or LEGATO: mix_part's own loop, bit for bit as before. The cost: a block's
  * clear and sum of spread_buf, the side and a wider mix loop, per part; per voice none (it picks its buffer) */
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
@@ -839,6 +952,8 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     if (t->p[P_ITYPE] | t->ins_run)
         track_insert(t, b, n);                          /* (the mono sum, as DIST) */
     slicer_track_sd(t, b, d, n);
+    if (t->p[P_FILT] | t->tf_run)
+        track_filter(t, b, d, n);                       /* the FILTER (0.3.0): the sum and the side */
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
     for (i = 0; i < n; i++) {
@@ -903,12 +1018,14 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #else
     if (track_render(t, b, n))
 #endif
-        t->tail = t->p[P_ITYPE] ? 64 : 16;              /* blocks of DIST / INSERT state to run out after the last
-                                                         * voice (the INSERT's: 46 ms, a flanger's feedback) */
-    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE]) || !--t->tail) && !slicer_busy(t)) {
+        t->tail = t->p[P_ITYPE] ? 64 : t->p[P_FILT] ? TF_TAIL : 16;   /* blocks of DIST / INSERT / FILTER state to run out after
+                                                         * the last voice (the INSERT's: 46 ms, a flanger's feedback) */
+    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | t->p[P_FILT]) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])
             ins_rest(t);                                /* TYPE OFF while silent: no fade-out left for the next note */
+        if (t->tf_run && !t->p[P_FILT])
+            tf_rest(t);                                 /* FILT 0 while silent: likewise */
         if (MOD(t).on)
             mod_end(t);
         return;
@@ -920,6 +1037,8 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         if (t->p[P_ITYPE] | t->ins_run)
             track_insert(t, b, n);                      /* the INSERT (1.5): off, nothing */
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
+        if (t->p[P_FILT] | t->tf_run)
+            track_filter(t, b, 0, n);                   /* the FILTER (0.3.0): the last stage of the track's chain */
         if ((pf.mute >> (t - trk)) & 1u)
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
     }

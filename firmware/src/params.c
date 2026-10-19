@@ -81,6 +81,10 @@ static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-",
                                              "SEM", "HADES", "DRONE",
 };
 
+/* the track's FILTER (Caravel 0.3.0, fx.c track_filter; P_FILT): -64 .. 63, negative a low-pass, positive a high-pass, 0 OFF. Not an enum: its
+ * names only mark the format (param_format shows OFF, or the share with LP / HP as its unit, as the FX layer's FILTER card does) */
+static const char *const FILT_NAMES[] = {"LP", "HP"};
+
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
 #define PE(l, n, df) {l, F_ENUM, 0, (int16_t)(sizeof(n) / sizeof(n[0]) - 1), df, n, 0}
 
@@ -171,6 +175,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_IMIX] = PD("MIX", F_PCT, 0, 127, 127),
     [P_FTYPE] = PE("TYPE", N_FTYPE, 0),           /* 1.5 (#104): ANALOG's filter, LP = as before (eng_analog.c) */
     [P_ESYNC] = PE("ESYNC", N_ONOFF, 0),          /* 1.5 (#175): OFF = ATK DEC REL in ms, as before (voice.c esync) */
+    [P_FILT] = {"FILT", F_BIPCT, -64, 63, 0, FILT_NAMES, 0},   /* 0.3.0: OFF = nothing runs, as before */
 };
 
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
@@ -367,6 +372,15 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         break;
     case F_BIPCT:                                   /* -64..63 as -100..+100 % (1.5.5, #199: each side over its own
                                                      * range; up to 1.5.1 / 64 both ways, the top read +98) */
+        if (d->names == FILT_NAMES) {               /* the track's FILTER: OFF, or 1 .. 100 with LP / HP as its unit */
+            if (!v) {
+                str_cpy(val, "OFF", 6);
+            } else {
+                fmt_int(val, v < 0 ? -v * 100 / 64 : v * 100 / 63);
+                *unit = FILT_NAMES[v > 0];
+            }
+            break;
+        }
         fmt_int(val, v * 100 / 64);
         if (v > 0) {
             char t[8];
@@ -492,8 +506,8 @@ static const page_t PAGES[] = {
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
-    {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IMIX, 0xFF, 0xFF}},   /* 1.5: the track's INSERT (fx.c): TYPE and dry / wet, the type's curve beside them */
-    {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IA, P_IB, P_IC, 0xFF}},      /* .. the type's A B C (its own labels) */
+    {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IMIX, 0xFF, 0xFF}},   /* 1.5: the track's INSERT (fx.c): TYPE and dry / wet; 0.3.0: FX HOLD is KNOB 3 (no parameter), the type's curve the fourth card */
+    {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IA, P_IB, P_IC, P_FILT}},    /* .. the type's A B C (its own labels) and the track's FILTER (0.3.0) */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* (the FX family's order is the two-group layout's: FX|DLY, REVERB|CHORUS, INSERT|INSERT 2, SLICER with its graph) */
     {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, P_LATCH, 0xFF}},   /* SCL again: the chord keys (chord.c) */
