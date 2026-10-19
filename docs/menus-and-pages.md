@@ -65,7 +65,7 @@ What a sound load does:
 | | factory preset (PRESETS, EDIT KNOB 2, engine change, MIDI program change, editor) | user preset |
 | --- | --- | --- |
 | Sends DST CHO DLY REV | FX HOLD OFF (default): the preset's, or the usual 0 / 24 / 28 / 36 if it has none. FX HOLD ON: stay as they are | the saved ones |
-| INSERT (TYPE, A B C, MIX) | stays (no factory preset has one) | the saved one |
+| INSERT (TYPE, A B C, MIX) | FX HOLD OFF (default): OFF (no factory preset has one). FX HOLD ON: stays as it is | the saved one |
 | SLICER, ARP, SCL, LEN / DIV / SWG / GATE, LEVEL / PAN / MUTE | stay | stay |
 | Global DLY / REVERB / CHORUS, tempo, tuning | never touched | never touched |
 | Everything else (engine values, ENV, LFOs, matrix, ...) | the preset's or default | the saved |
@@ -75,7 +75,7 @@ both switch the same setting. It is a device setting kept with the other setting
 although the group's tag says T1 to T4. **SOUND INIT**, a new project (INIT) and power-on start from scratch whatever FX HOLD says: the engine's
 first preset with its sends, INSERT OFF. **CLEAN INIT** clears the sends and the INSERT. Loading a **project** (or LIVE LOAD FULL) restores
 the FX it saved. SAVE held (undo) after a load gives back the sound as it was. Automation and locks on the sends are not touched.
-Before the FX HOLD change a factory preset load switched the INSERT OFF.
+FX HOLD covers exactly the track's own FX that a factory preset load sets: the four sends and the INSERT. The SLICER stays whatever FX HOLD says.
 
 ## SELECT
 

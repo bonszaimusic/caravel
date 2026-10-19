@@ -1319,7 +1319,7 @@ static int param_insert(uint32_t i) { return i >= P_ITYPE && i <= P_IMIX; }
 static int fx_hold(void) { return (ui_prefs3 & (PREF_FX_HOLD >> 24)) != 0u && !fx_fresh; }
 static int load_kept(uint32_t i)
 {
-    return param_kept(i) || (!fx_fresh && param_insert(i)) || (fx_hold() && param_send(i));
+    return param_kept(i) || (fx_hold() && (param_send(i) || param_insert(i)));
 }
 
 /* a retired preset kept as an alias, so stored preset numbers stay valid: SAMPLE 1, once TRANH, is PIANO

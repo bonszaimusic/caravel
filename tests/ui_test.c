@@ -9910,9 +9910,8 @@ static int test_fx_hold(void)
     song.g[G_DTIME] = 33; song.g[G_DMIX] = 41; song.g[G_RSIZE] = 55; song.g[G_CRATE] = 66; song.g[G_CDEPTH] = 77;
     for (i = 0; i < G_COUNT; i++) g[i] = (uint32_t)song.g[i];
     apply_preset_to(t, 2);
-    bad += check("FX HOLD off: a preset load sets the preset's sends; the INSERT stays (no factory preset has one), as the SLICER",
-                 fx_preset_sends(t, e, 2) && t->p[P_ITYPE] == IT_FLANGER && t->p[P_IA] == 11 && t->p[P_IB] == 22 &&
-                 t->p[P_IC] == 33 && t->p[P_IMIX] == 44 && t->p[P_SLCR] == SL_GATE && t->p[P_GLIDE] == TP[P_GLIDE].def);
+    bad += check("FX HOLD off: a preset load sets the preset's sends and the INSERT OFF (no factory preset has one); the SLICER stays",
+                 fx_preset_sends(t, e, 2) && fx_insert_off(t) && t->p[P_SLCR] == SL_GATE && t->p[P_GLIDE] == TP[P_GLIDE].def);
     menu_put(MI_FXHOLD, 1);
     bad += check("FX HOLD: ON is bit 2 of ui_prefs3 (a setting, kept by an export / import)", menu_get(MI_FXHOLD) == 1u && (ui_prefs3 & 4u));
     {
