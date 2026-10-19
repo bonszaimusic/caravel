@@ -486,7 +486,7 @@ static int up_rename_cat(uint32_t k, const char *name, uint32_t cat)
 static int up_rename(uint32_t k, const char *name) { return up_rename_cat(k, name, 0); }
 
 /* slot k -> the selected part's sound: engine and every parameter except the track's own (param_kept:
- * the mix, ARP, SCL, the pattern parameters, the SLICER). The steps stay: the record's pattern is
+ * the mix, ARP, SCL, the pattern parameters, the SLICER; with FX HOLD also the sends and the INSERT, ui.c load_kept). The steps stay: the record's pattern is
  * loaded only from SAVE > PHRASES (up_pat_load). 0 ok, 1 empty */
 static int up_load(uint32_t k)
 {
@@ -504,7 +504,7 @@ static int up_load(uint32_t k)
     if (r->engine == ENGI_DIGITAL) {                    /* a DIGITAL sound (kept as it was stored): FM6 */
         int16_t p[P_COUNT];
         for (i = 0; i < P_COUNT; i++)
-            p[i] = param_kept(i) ? t->p[i] : v[i];
+            p[i] = load_kept(i) ? t->p[i] : v[i];
         fm4_apply(t, p);
     } else
 #endif
@@ -512,7 +512,7 @@ static int up_load(uint32_t k)
         fm1_irq_off();                                  /* the audio ISR must not see half a sound */
         t->eng_req = r->engine;
         for (i = 0; i < P_COUNT; i++)
-            if (!param_kept(i))
+            if (!load_kept(i))
                 t->p[i] = v[i];
         t->preset = 0;
         fm1_irq_on();

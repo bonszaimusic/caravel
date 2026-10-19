@@ -202,6 +202,9 @@ static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_S
 #define MK_Y 224                                       /* the key hints */
 static int menu_large(void) { return (ui_prefs & PREF_LARGE) != 0u; }
 static uint32_t menu_tab(void) { return MI_TAB[ui.menu_sel % MI_COUNT]; }
+/* the VOICES tab's own keys (OCT+ / OCT- MODE, a knob its track's voices) belong to its voice rows; FX HOLD, the tab's last row, is
+ * an ordinary two-valued row */
+static int menu_voice_row(void) { return menu_tab() == MTAB_VOICES && ui.menu_sel != MI_FXHOLD; }
 /* the shown tab's rows: 24 px (LARGE 28, a tab of up to 5 rows), 2 px apart (a tab of 6: 1 px, its panel then ends
  * 6 px above the key hints as the others do; the rule between two rows is that gap row; 1.2, a tab of 7: 21 px rows
  * 1 px apart, its panel then ends 4 px lower, LARGE too; 1.3, a tab of 8: 18 px rows 1 px apart, the same end) */
@@ -478,7 +481,7 @@ static void draw_menu(void)
             if (mr_y(k) + mr_h() > top_y && mr_y(k) - 1 < top_y + (int32_t)cv_h)
                 menu_row(k, first + k);
         if (pass)
-            cv_key_row(8, 232, MK_Y, menu_tab() == MTAB_VOICES ? VOICE_KEYS :
+            cv_key_row(8, 232, MK_Y, menu_voice_row() ? VOICE_KEYS :
                        KEYS[ui.menu_sel == MI_LCLEAR ? 2 : !menu_valued(ui.menu_sel)], 3, 7u, T_BG);
         cv_oy = 0;
         cv_blit(0, (uint32_t)top_y);
@@ -553,13 +556,13 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         menu_tab_go(s);
     if ((s = panel_enc(EN_SELECT)) != 0 && sel_mode() == SEL_PAGE)
         menu_walk(s);                                  /* (other SELECT modes: nothing here, as before) */
-    if (menu_tab() == MTAB_VOICES && (up || dn)) {
+    if (menu_voice_row() && (up || dn)) {
         menu_put(MI_VMODE, up ? 1u : 0u);              /* OCT+ FIXED, OCT- AUTO; knobs stay assigned to tracks */
         up = dn = 0;
     }
     for (s = 0, k = 0; k < 4u; k++) {
         int32_t d = panel_enc(EN_K1 + k);
-        if (menu_tab() == MTAB_VOICES) {
+        if (menu_voice_row()) {
             if (d) {                                 /* each knob always edits its own track */
                 ui.menu_sel = (uint8_t)(MI_V1 + k);
                 menu_put(ui.menu_sel, menu_step(ui.menu_sel, d));

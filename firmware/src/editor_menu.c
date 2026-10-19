@@ -43,6 +43,7 @@ static const uint8_t ED_MENU[][2] = {
 #endif
     {MI_EXTSTART, 35},
     {MI_VMODE, 36}, {MI_V1, 37}, {MI_V2, 38}, {MI_V3, 39}, {MI_V4, 40},
+    {MI_FXHOLD, 41},                                   /* Caravel: FX HOLD OFF / ON, VOICES tab (5), a setting */
 };
 #define ED_MENU_N NELEM(ED_MENU)
 

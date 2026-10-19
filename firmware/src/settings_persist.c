@@ -11,7 +11,8 @@
  * [15][24]: MENU's 1.2 flags SCOPE MIX, STEP PREVIEW ON, CHORD ENTRY ADD (bits 0-2, ui.c ui_prefs2; 0 = the defaults),
  *   1.5 HELP ON (bit 3), 1.5.5 SELECT PAGE (bit 4; 0 = BPM, as before), 1.5.5 SCREEN WAKE PANEL (bit 5; 0 = +MIDI);
  *   1.6.1 2ND CORE ON (bit 7; 0 = OFF, one core, as before);
- * [15][13]: Custom flags: bit 0 CPU2 ON (default OFF), bit 1 EXT START BAR (default PULSE);
+ * [15][13]: Custom flags: bit 0 CPU2 ON (default OFF), bit 1 EXT START BAR (default PULSE), bit 2 FX HOLD ON (default OFF: a sound
+ *   load keeps the track's sends and INSERT, ui.c load_kept);
  *   Custom keeps LIVE LOAD FULL in [15][24] bit 7, independently of upstream 1.6.1 CPU2 storage.
  * [15][10]: MENU > ANIM IDLE (1.2, Discussion #135, ui.c ui_idle: bit 0; 0 = off, ANIM as its bit in MENU's flags says);
  * [15][11]: PRESETS > LIST's category (1.2, Discussion #90, ui.c ui_lcat: 0 none = ALL / FAV as favorites.filter says);

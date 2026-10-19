@@ -16,7 +16,7 @@
 enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_SCOPE, MI_HOME, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_SCLLED,
        MI_PREVIEW, MI_CHADD, MI_SELECT, MI_LOWCUT, MI_USB,
        MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_FXTRACK, MI_LIVELOAD, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR,
-       MI_VMODE, MI_V1, MI_V2, MI_V3, MI_V4, MI_SERIAL, MI_RESTORE, MI_HELP,
+       MI_VMODE, MI_V1, MI_V2, MI_V3, MI_V4, MI_FXHOLD, MI_SERIAL, MI_RESTORE, MI_HELP,
 #if FELUCCA_CPU2
        MI_CPU2,
 #endif
@@ -44,7 +44,7 @@ static const char *const MI_NAME[MI_COUNT] = {"COLOR", "STYLE", "LARGE", "ANIM",
                                               "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE", "FX TRACK", "LIVE LOAD",
                                               "MIDI IN", "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL",
                                               "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR",
-                                              "MODE", "T1 VOICES", "T2 VOICES", "T3 VOICES", "T4 VOICES", "USB SERIAL", "RESTORE LAST", "HELP",
+                                              "MODE", "T1 VOICES", "T2 VOICES", "T3 VOICES", "T4 VOICES", "FX HOLD", "USB SERIAL", "RESTORE LAST", "HELP",
 #if FELUCCA_CPU2
                                               "2ND CORE",
 #endif
@@ -79,6 +79,7 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_MIDI,                                                              /* SCREEN WAKE (1.5.5: DISPLAY is full) */
     MTAB_MIDI,                                                              /* LEARN CLEAR (1.5) */
     MTAB_VOICES, MTAB_VOICES, MTAB_VOICES, MTAB_VOICES, MTAB_VOICES,          /* MODE, T1..T4 VOICES */
+    MTAB_VOICES,                                                            /* FX HOLD: how a loaded sound sets up the track */
     MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* USB SERIAL, RESTORE LAST, HELP (1.5) */
 #if FELUCCA_CPU2
     MTAB_SYSTEM,                                                            /* 2ND CORE (1.6.1) */
@@ -115,6 +116,7 @@ static const char *const STYLE_N[2] = {"FLAT", "LINE"};
 typedef struct { uint8_t row; uint32_t bit; const char *name[2]; } menu_flag_t;
 static const menu_flag_t MENU_FLAGS[] = {
     {MI_EXTSTART, PREF_START_BAR, {"PULSE", "BAR"}},
+    {MI_FXHOLD, PREF_FX_HOLD, {"OFF", "ON"}},          /* ON, a sound load keeps the track's sends and INSERT (ui.c load_kept) */
     {MI_LIVELOAD, PREF_FULL_LOAD, {"PATTERN", "FULL"}},
     {MI_LARGE, PREF_LARGE, {"OFF", "ON"}},            /* #15 / Discussion #80: ON, big knob labels and values (ui.c large_kind) */
     {MI_ACCEL, PREF_ACCEL, {"OFF", "ON"}},            /* #52: ui_input.c accel */
