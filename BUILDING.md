@@ -164,6 +164,10 @@ Emscripten compiles it to WebAssembly (`build/emu/felucca.wasm`, with `index.htm
 keeps the flash's storage sectors (projects, user presets, settings) in the browser. Not emulated: USB (audio,
 MIDI out, the editor, updates), TRS MIDI and the user sample slots. Build it as above and serve `build/emu/` (no hosted copy under the Caravel name yet).
 
+Every CI run on `main` and on pull requests also builds the emulator of that commit and keeps it as the artifact
+`caravel-emulator-unverified-<commit>` for 14 days (GitHub account needed to download). Unzip it and serve the folder as above
+(`python3 -m http.server -d <folder> 8790`). It is an unverified preview of that commit, not a release.
+
 ## Tests
 
 ```
