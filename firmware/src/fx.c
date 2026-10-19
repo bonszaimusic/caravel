@@ -806,7 +806,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
 /* The track's FILTER (Caravel 0.3.0; P_FILT, the INSERT 2 page's fourth card): one bipolar knob, -64 .. 63: negative a low-pass, positive a
  * high-pass, 0 OFF. The last stage of the track's chain (engine voices -> DIST -> INSERT -> SLICER -> FILTER -> level, pan and sends), so the sends
  * to the chorus, delay and reverb take the filtered sound; on every engine, those without a filter of their own too. The knob works as the FX
- * layer's FILTER does (perform.c): the LP from 14.7 kHz (-1) down to 120 Hz (-64), the HP from 32 Hz (+1) up to 3.8 kHz (+63), an octave every 7
+ * layer's FILTER does (perform.c): the LP from 14.2 kHz (-1) down to 120 Hz (-64), the HP from 32 Hz (+1) up to 3.8 kHz (+63), an octave every 7
  * rows of 30 Hz * 2^(row / 7). 12 dB/oct: two identical trapezoidal one-poles in a row (the HP: each one's input less its low-pass), their
  * cutoff set so the filter is -3 dB at the row's frequency (TF_G: G = g / (1 + g), g = tan(pi f / FS) / 0.6436, Q16). No resonance, so it cannot ring or
  * oscillate, and it is stable at every setting (each pole is a weighted mean of its input and its state). The states carry 8 fractional bits, which
