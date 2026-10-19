@@ -511,8 +511,8 @@ static void test_spread(void)
     char msg[200];
 
     check("SPRD: a track parameter 0..127, default 0 (as before), id 95 (1.5: the INSERT, TYPE and ESYNC after it, P_E0 103, P_COUNT 111)",
-          TP[P_SPRD].min == 0 && TP[P_SPRD].max == 127 && TP[P_SPRD].def == 0 && P_SPRD == 95 && P_SPRD + 8 == P_MORPH && P_PD_FB + 1 == P_E0 &&
-          P_E0 == 105 && P_COUNT == 113 && str_eq(TP[P_SPRD].label, "SPRD") && motion_param(P_SPRD));
+          TP[P_SPRD].min == 0 && TP[P_SPRD].max == 127 && TP[P_SPRD].def == 0 && P_SPRD == 95 && P_SPRD + 8 == P_MORPH && P_PD_FB + 1 == P_FILT && P_FILT + 1 == P_E0 &&
+          P_E0 == 106 && P_COUNT == 114 && str_eq(TP[P_SPRD].label, "SPRD") && motion_param(P_SPRD));
     h1 = phrase_child(0, 1, sp_mono0);
     h2 = phrase_child(0, 1, sp_mono127);
     check("MONO: SPRD 127 plays bit for bit as SPRD 0 (one voice: on PAN)", h1 && h1 == h2);

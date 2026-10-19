@@ -72,6 +72,13 @@
  * flash copy stays until that slot is saved over), a backup PUT of one is refused (rc 1), the retained RAM copy of
  * one fails its checks.
  *
+ * Caravel 0.3.0 took one more (the track's FILTER, P_FILT 105: -64 .. 63, LP / OFF / HP; fx.c track_filter), before the engine values: P_COUNT 114,
+ * P_E0 106, no format change (FUN10, 3840 bytes). The data now ends 4 bytes before the patches and MIDI IN TRACK's 3 bytes (PROJ_MIDI_OFF) take
+ * the end of them: 1 spare byte, and P_COUNT 114 is core.h MOTION_FX_FIRST: there is no room for another common parameter in this format. A FUN10 of
+ * 0.1.0 / 0.2.0 (113) loads by count: FILT 0 (OFF), the engine values and their motion one higher. 0.1.0 / 0.2.0 refuse a FUN10 of more parameters
+ * than their own (np > P_COUNT, proj_unpack), as the firmware before 1.5 did a 1.5 one: a project saved by 0.3.0 shows EMPTY there (the flash copy
+ * stays until that slot is saved over). Checked once with 0.2.0's own sources: its proj_import of a 0.3.0 FUN10 returns 0.
+ *
  * Parameter locks (1.1, core.h MOTION_LOCK) are motion records with bit 7 of their id byte set (P_COUNT 99 < 128:
  * the bit is free): no byte moved for them, and every project before 1.1 has none. FUN9 holds them. A FUN8 / FUN7
  * record of a 1.1 development build may hold some: on load their ids move to today's positions as the others do,
