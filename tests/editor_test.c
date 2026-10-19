@@ -11,7 +11,7 @@ static unsigned char host_samples[3][0x14000];
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
-#define MENU_N (40u + FELUCCA_CPU2)                  /* Custom VOICES appends ids 36..40 */
+#define MENU_N (41u + FELUCCA_CPU2)                  /* Custom VOICES appends ids 36..40, FX HOLD 41 */
 
 static uint32_t host_progress = 1, host_erases, host_writes;
 static uint8_t host_wire[4096];
@@ -916,17 +916,18 @@ static int menu_protocol(void)
         {"2ND CORE", "OFF,ON (BETA)"},
 #endif
         {"EXT START", "PULSE,BAR"}, {"MODE", "AUTO,FIXED"},
-        {"T1 VOICES", "1,2,3,4,5"}, {"T2 VOICES", "1,2,3,4,5"}, {"T3 VOICES", "1,2,3,4,5"}, {"T4 VOICES", "1,2,3,4,5"}};
+        {"T1 VOICES", "1,2,3,4,5"}, {"T2 VOICES", "1,2,3,4,5"}, {"T3 VOICES", "1,2,3,4,5"}, {"T4 VOICES", "1,2,3,4,5"},
+        {"FX HOLD", "OFF,ON"}};
     static const int32_t DEF[] = {-1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 2, 3, 0, 0, 0, 0,
 #if FELUCCA_CPU2
 0,
 #endif
-0, 0, 1, 1, 1, 1};   /* (COLOR: the default palette) */
+0, 0, 1, 1, 1, 1, 0};   /* (COLOR: the default palette) */
     static const uint8_t TAB[] = {0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 4, 2, 2, 2, 4, 1, 0, 0, 1, 1, 3, 2, 0, 4, 1, 3, 3, 3, 3, 3, 3, 2, 2,
 #if FELUCCA_CPU2
 4,
 #endif
-4, 5, 5, 5, 5, 5};   /* DISPLAY CONTROL AUDIO
+4, 5, 5, 5, 5, 5, 5};   /* DISPLAY CONTROL AUDIO
                                                                                                          * MIDI SYSTEM (1.2) */
     static const char *const TABN[6] = {"DISPLAY", "CONTROL", "AUDIO", "MIDI", "SYSTEM", "VOICES"};
     int bad = 0, ok = 1;
@@ -1027,12 +1028,13 @@ static int menu_protocol(void)
     ok &= menu_set(34, 1) == 3 && ui_prefs3 == 1u && menu_get(MI_LIVELOAD) == 1u;
 #endif
     ok &= menu_set(35, 1) == 3 && (ui_prefs3 & 2u);
+    ok &= menu_set(41, 1) == 3 && (ui_prefs3 & 4u) && menu_get(MI_FXHOLD) == 1u;    /* FX HOLD: bit 2 of ui_prefs3 */
     for (i = 0; i < MENU_N; i++) {                         /* MENU_DESC reads them back */
         static const int32_t SET[] = {2, 1, 1, 1, 1, 3, 1, 1, 1, 2, 1, 0, 2, 0, 2, 1, 1, 2, 1, 1, 1, 2, -13, 1, 1, 1, 9, 16, 17, 0, 1, 1, 0, 1,
 #if FELUCCA_CPU2
 1,
 #endif
-1, 0, 1, 1, 1, 1};
+1, 0, 1, 1, 1, 1, 1};
         menu_desc(i, &it);
         ok &= it.value == SET[i];
     }
@@ -1070,7 +1072,7 @@ static int menu_protocol(void)
         static uint8_t fav0[sizeof favorites], set0[sizeof settings];
         uint8_t hold0 = settings_hold, leds0 = settings_leds;
         memcpy(fav0, &favorites, sizeof favorites); memcpy(set0, &settings, sizeof settings);
-        ok = menu_set(41, 1) == 1 && host_wire[6] == 41 && ed_rv(host_wire + 7) == 1;
+        ok = menu_set(42, 1) == 1 && host_wire[6] == 42 && ed_rv(host_wire + 7) == 1;
         ok &= menu_set(126, -3) == 1 && host_wire[6] == 126 && ed_rv(host_wire + 7) == -3;
         ok &= menu_set(127, 0) == 1 && host_wire[6] == 127;
         ok &= !memcmp(fav0, &favorites, sizeof favorites) && !memcmp(set0, &settings, sizeof settings) &&

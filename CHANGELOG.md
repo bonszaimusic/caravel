@@ -6,6 +6,22 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [Unreleased]
+
+### Added
+- **FX HOLD** (MENU > VOICES, last row; OFF by default): with ON, loading a factory preset (PRESETS, an engine change, MIDI program
+  change, the editor) keeps the track's four sends (DST CHO DLY REV) instead of setting the preset's. The rest of the sound is still the
+  preset's; the SLICER, ARP, SCL and the mix stay as they always did. A user preset still loads its own sends and INSERT. SOUND INIT,
+  project INIT and power-on always start from the preset's sends; CLEAN INIT clears them. The global DLY, REVERB and CHORUS are never
+  touched by a sound load. See [Loading sounds and the track's FX](docs/menus-and-pages.md#loading-sounds-and-the-tracks-fx).
+  Editor menu id 41 (OFF / ON, VOICES tab); a device setting stored in the settings byte that already holds 2ND CORE and EXT START
+  (bit 2), so user presets, projects and settings formats are unchanged. Host tests only, nothing tried on a real FM-1.
+
+### Changed
+- **A factory preset load keeps the track's INSERT** (TYPE, A B C, MIX) instead of switching it OFF: no factory preset has an INSERT, so
+  loading one no longer takes the track's away, like the SLICER. A user preset still loads the INSERT it was saved with; SOUND INIT,
+  CLEAN INIT, project INIT and power-on still start with the INSERT OFF.
+
 ## [0.1.0] — 2026-10-19 (first version under the name Caravel, not yet released)
 
 ### Changed
@@ -75,4 +91,4 @@ unless it says so; host tests and simulations are not hardware measurements.
 - Settings grew append-only (PER5 to PER7: DRUM-X assignments, voice reservations, favorites of the new engines). Older settings import;
   older firmware cannot read PER6 or PER7 records, so back up before going back to Felucca.
 - Sounds and projects with LFO2, DRONE cells, DRUM-X, MORPH or PHS FB need Caravel; existing Felucca projects and sounds load unchanged.
-- Menu ids 32 and up are Caravel's (FX TRACK, LIVE LOAD, 2ND CORE, EXT START, voice reservations); 0..31 follow Felucca 1.6.
+- Menu ids 32 and up are Caravel's (FX TRACK, LIVE LOAD, 2ND CORE, EXT START, voice reservations, and later FX HOLD); 0..31 follow Felucca 1.6.

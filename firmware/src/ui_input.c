@@ -138,7 +138,7 @@ static uint32_t oct_leds(void)
         return 1u;
     if (ui.menu && !ui.confirm)
         return ui.menu >= 2u ? 1u :                    /* (INFO, ABOUT: OCT- back, lit) */
-               menu_tab() == MTAB_VOICES ? (menu_get(MI_VMODE) ? OCT_BREATH_DN : OCT_BREATH) :
+               menu_voice_row() ? (menu_get(MI_VMODE) ? OCT_BREATH_DN : OCT_BREATH) :
                ui.menu_sel == MI_LCLEAR ? (ml_count() ? OCT_BREATH : 0u) :   /* LEARN CLEAR: while CCs are learned */
                ui.menu_sel >= MI_VALUES ? OCT_BREATH :  /* CALIBRATION / INFO / ABOUT: OCT+ opens */
                (menu_step(ui.menu_sel, -1) != menu_get(ui.menu_sel) ? OCT_BREATH_DN : 0u) |   /* a value: each */
@@ -1183,7 +1183,7 @@ static void act_do(void)
         confirm_open(CF_CLEAR_SEQ, song.sel);
         break;
     default:                                              /* G_INITSND */
-        set_engine(TSEL->eng_req);                        /* engine defaults + its first preset (the steps stay) */
+        sound_init();                                     /* engine defaults + its first preset (the steps stay) */
         ui_message("SOUND INIT");
         ui.force = 1;
         break;
@@ -1725,7 +1725,7 @@ static void ui_input(void)
             } else if (kind == CF_INIT_PROJECT) {
                 project_init_runtime();
             } else if (kind == CF_INIT_SOUND) {
-                if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
+                if (!chain_busy()) { sound_init(); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
                 if (!chain_busy()) { clean_engine(); ui_message("CLEAN INIT"); }
             } else {

@@ -33,6 +33,9 @@
 # UI (tests/ui_test.c): the UI sources against stub display / buttons / knobs: sound loads keep the steps and
 #                   the track's ARP / SCL / SLICER, the SAVE > PHRASES loader and its REPLACE? dialog, the
 #                   one-step undo of both (SAVE held), REC on TRACKS / SEQ / ARP, STEP and ARP while recording,
+#                   FX HOLD (MENU > VOICES): a factory preset load keeps the INSERT and, on, the sends (PRESETS, MIDI program change,
+#                   engine change); a user preset loads its own; SOUND / CLEAN / project INIT and a project load do not; the global FX
+#                   untouched; undo; a settings round trip,
 #                   MIDI IN ROUT, saves refused while playing and the OVERWRITE? dialog, MUTE on TRACKS KNOB 1, FM6's operator
 #                   pages (each byte alone, SLOT OWN, the sound, undo, the macros, projects / user presets),
 #                   the DRUM grid (keys, knobs, LEDs, pages, live recording into it, BEAT from PATTERNS).
