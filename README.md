@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.1.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.2.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -82,7 +82,7 @@ The full list is in [CHANGELOG.md](CHANGELOG.md); how the features work is in [d
 
 ## Compatibility with Felucca
 
-Caravel 0.1.0 changes names and text, not storage: settings, projects, presets, the `.fwsc` package markers and the editor's
+Caravel 0.1.0 changed names and text, not storage, and 0.2.0 keeps all formats too (LATCH and FX HOLD use unused slots): settings, projects, presets, the `.fwsc` package markers and the editor's
 file formats are the ones of Felucca 1.6.1 and its Custom additions, so Felucca data opens in Caravel. Projects that use
 Caravel-only parameters need Caravel or newer. The web editor and installer accept devices named Felucca as well as Caravel.
 Identifiers in the source (`FELUCCA_*`, `felucca.c`, the `firmware/engines/` submodule) keep their names.
