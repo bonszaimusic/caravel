@@ -38,6 +38,10 @@ LOADER_MARK = b"FELUCCA-LOADER-1"
 STOCK_V15_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
 PORT_RE = re.compile(r"fm-1|felucca|caravel|ota|composite|sinco|usb-midi", re.I)   # never probe other gear
 
+RISK_NOTICE = ("Installing custom firmware is at your own risk. A failed or interrupted update can leave the FM-1 unusable and\n"
+               "need an FM-1 Transporter to recover it. This tool makes no backup: save your projects and settings first.\n"
+               "More: docs/installing.md in the Caravel repository.")
+
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0, "retry": 1.0,
          "poll": 1.0, "hs": 1.0, "idle_check": 8.0, "idle_write": 180.0,
@@ -436,6 +440,7 @@ def run(a, backend, out, ask):
         raise not_found(up)
     print(f"device:  {dev.id.text}  ({dev.name})" + ("  in update mode: the write will be finished" if dev.id.loader else ""),
           file=out)
+    print(RISK_NOTICE, file=out)
     if not a.yes and not ask("Install? Do not unplug the FM-1 while writing. [y/N] "):
         dev.link.close()
         print("cancelled", file=out)

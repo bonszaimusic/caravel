@@ -4,7 +4,20 @@
 
 Two ways to put a Caravel package (`.fwsc`) on an FM-1: the **web installer** in a browser, or `tools/fm1_install.py` from a terminal.
 Both run the same update over USB-MIDI and check the installed identity afterwards. Hardware acceptance of Caravel on a real FM-1 is
-still pending: read the notes at the end first.
+still pending: read the notes below first.
+
+## Read this first
+
+- Installing custom firmware is at your own risk, without warranty to the extent permitted by law. A failed update can leave the FM-1
+  unusable or need a Transporter for attempted recovery: [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
+- Returning to the official V15 attempts an official reinstall; it does not guarantee factory condition, data restoration, warranty
+  coverage or recoverability. Keep the official package and backups of your projects and settings.
+- The firmware's USB IDs are test IDs; see the note under *Installing* in the [README](../README.md) and [NOTICE](../NOTICE).
+- Projects and settings that use Caravel-only features need Caravel or newer; see the compatibility notes in the README.
+- Hardware acceptance on a real FM-1 is pending; host tests and the emulator are not hardware measurements.
+- The web installer shows these warnings on its page and, for the way back to V15, saves a complete backup first. The command-line
+  installer prints a short notice, asks for confirmation (unless `--yes`) and makes **no** backup: save your projects and settings
+  yourself before you use it.
 
 ## Which release
 
@@ -73,13 +86,3 @@ python3 web/make_site.py build/caravel.fwsc dev /tmp/caravel-site
 cd /tmp/caravel-site && python3 -m http.server 8000
 # open http://localhost:8000/webapp/installer/
 ```
-
-## Before you install
-
-- Installing custom firmware is at your own risk, without warranty to the extent permitted by law. A failed update can leave the FM-1
-  unusable or need a Transporter for attempted recovery: [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
-- Returning to the official V15 attempts an official reinstall; it does not guarantee factory condition, data restoration, warranty
-  coverage or recoverability. Keep the official package and backups of your projects and settings.
-- The firmware's USB IDs are test IDs; see the note under *Installing* in the [README](../README.md) and [NOTICE](../NOTICE).
-- Projects and settings that use Caravel-only features need Caravel or newer; see the compatibility notes in the README.
-- Hardware acceptance on a real FM-1 is pending; host tests and the emulator are not hardware measurements.
