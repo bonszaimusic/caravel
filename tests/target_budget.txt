@@ -78,8 +78,9 @@ dx_run 1426
 dx_layer 105
 drumx_mix 34
 
-# FULL live-load boundary helpers, measured with pi32v2; existing budgets retained.
-project_sound_apply 123
+# FULL live-load boundary helpers, measured with pi32v2; existing budgets retained, except project_sound_apply: 123 -> 161 with FX HOLD
+# (a sound load decides per parameter what stays; main loop, not the audio path).
+project_sound_apply 161
 project_pattern_engines_ok 7
 
 # SEM renderer, measured pi32v2; both oscillators inlined into the counted loop.

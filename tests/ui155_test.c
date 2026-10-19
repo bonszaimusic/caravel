@@ -177,9 +177,9 @@ static int select_page(void)
     ok &= title_is("ENV DEST");
     go_title("LFO"); frame();
     turn(EN_SELECT, 2);
-    ok &= title_is("LFO DEST");
+    ok &= title_is("LFO2");
     turn(EN_SELECT, -3);
-    ok &= title_is("MOD");                              /* LFO > LFO SYNC > LFO DEST > LFO2 > LFO2 SYNC > MOD, round */
+    ok &= title_is("MOD");                              /* LFO > LFO SYNC > LFO2 > LFO2 SYNC > LFO DEST > MOD, round */
     ok &= song.g[G_BPM] == b0;
     bad += check("  PAGE: SELECT steps the family's pages, a detent each, round both ways; the tempo stays", ok);
 

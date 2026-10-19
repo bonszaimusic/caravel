@@ -158,7 +158,7 @@ static int lfo(void)
     bad += check("LFO 2 is no automation (motion_param), its page SYNC TRIG POL after LFO (LFO's family)",
                  !motion_param(P_LSYNC) && !motion_param(P_LTRIG) && !motion_param(P_LPOL) && !motion_param(P_SQNT) &&
                  motion_param(P_LN7) && motion_param(P_E0) && PAGES[3].id[0] == P_LSYNC && !strcmp(PAGES[3].title, "LFO SYNC") &&
-                 PAGES[3].fam == FAM_LFO && PAGES[2].graph == GR_LFO && !strcmp(PAGES[4].title, "LFO DEST"));
+                 PAGES[3].fam == FAM_LFO && PAGES[2].graph == GR_LFO && !strcmp(PAGES[4].title, "LFO2"));
     go_page(GR_LFO);
     ui.page++;                                       /* LFO 2 */
     page_entered();
