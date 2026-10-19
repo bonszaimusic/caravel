@@ -4,6 +4,10 @@
 
 Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.1.0**.
 
+**[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
+
+These links become available after the first successful GitHub Pages deployment.
+
 Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
 [Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
 has ended. 0.1.0 is the first version under this name. Caravel is **not affiliated with, endorsed or supported by Hügelton
@@ -93,8 +97,9 @@ Installing custom firmware is at your own risk, without warranty to the extent p
 FM-1 unusable or need a Transporter for attempted recovery. M-VAVE's updater or the installer's **Return to official V15** can
 attempt an official firmware reinstall, not guarantee factory condition, data restoration, warranty coverage or recoverability.
 Keep the official package and backups of your data. Non-excludable statutory rights and liability are unaffected.
-The web installer and editor are in `web/` and are built into the site by `web/make_site.py` ([BUILDING.md](BUILDING.md));
-`tools/fm1_install.py` installs a package from a terminal. A public site under the Caravel name is not set up yet.
+Use the [web installer](https://bonszaimusic.github.io/caravel/webapp/installer/) for browser-based updates, or
+`tools/fm1_install.py` to install a package from a terminal. The web tools are in `web/` and are built into the site by
+`web/make_site.py` ([BUILDING.md](BUILDING.md)).
 
 - Build: [BUILDING.md](BUILDING.md); clone with the engines' submodule: `git clone --recurse-submodules https://github.com/bonszaimusic/caravel.git`
 - Documentation of what Caravel adds: [docs/](docs/README.md); engines: [docs/engines](docs/engines/README.md)
