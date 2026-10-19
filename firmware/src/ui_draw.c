@@ -451,6 +451,16 @@ static void draw_gaps(uint32_t y, uint32_t h)
         }
     }
 }
+/* a 2 px frame in the theme colour round the card row, in the BG beside and between the cards and the panel (corners notched):
+ * the SEQ pages' sign of what KNOB 1-4 edit, with every pixel of the cards and the panel as before */
+static void draw_card_frame(uint32_t ch)
+{
+    uint32_t y0 = Y_LABEL - 3u, y1 = Y_LABEL + ch + 1u;           /* the upper line's top row, the lower line's top row */
+    lcd_fill(3, y0, 234, 2, T_THEME);
+    lcd_fill(3, y1, 234, 2, T_THEME);
+    lcd_fill(1, y0 + 2u, 2, y1 - y0 - 2u, T_THEME);
+    lcd_fill(237, y0 + 2u, 2, y1 - y0 - 2u, T_THEME);
+}
 static int dual_page(const page_t *pg);                 /* ui_lfo2.c: the two-group pages */
 static const char *dual_foot(const page_t *pg);
 /* full redraw: the strips (header, cards, panel, footer) cover the rest; only the BG between them is filled */
@@ -466,6 +476,8 @@ static void draw_frame(void)
     gap_rows(Y_LABEL + ch, gy);
     gap_rows(gy + gh, Y_FOOT);
     draw_gaps(Y_LABEL, ch);
+    if (!ui.home && cur_page()->fam == FAM_SEQ)         /* the cards K1-4 edit, framed as the active group of a two-group page is */
+        draw_card_frame(ch);
 }
 
 #ifndef CARD_HOOK

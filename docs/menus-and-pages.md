@@ -44,6 +44,9 @@ the ALL groups stay as they are.
 **SCL, CHORD and SLICER** are one group above and a picture of the settings below (the scale on the keys, the last chord played, the step
 pattern).
 
+**SEQ pages** (STEP with the piano roll or the DRUM grid, DETAIL, AUTOMATION) keep their small card row and their full-height panel; the card row is framed
+in the theme colour, as the active group of a two-group page is, to say that KNOB 1-4 edit it.
+
 **INSERT** shows TYPE and MIX in the upper group, with the curve of the chosen type beside them (a drive's transfer curve, the folder, the
 bit staircase, the swept effects' sweep); the type's own A, B and C are the lower group. **SLICER** keeps its four controls in the upper
 group; the lower block is a picture of the settings, not audio: the 16 steps of the pattern in groups of four with the playing step marked,
