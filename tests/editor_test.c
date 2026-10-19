@@ -1395,12 +1395,63 @@ static int drumx_protocol(void)
     return bad;
 }
 
+/* Caravel 0.3.0: the track's FILTER (P_FILT 105, just before P_E0 106; P_COUNT 114): INFO says the layout, DESC describes it (FILT, bipolar
+ * percentage -64 .. 63, default 0), SET / GET / TRACK_DUMP carry it, the engine values sit one higher than in 0.2.0, LEARN_SET takes it */
+static int track_filter_protocol(void)
+{
+    int bad = 0, ok;
+    uint8_t a[8];
+    uint32_t n, i;
+    reset();
+    n = request(ED_INFO, a, 0);
+    for (i = 5; i < n && host_wire[i]; i++) {}                  /* (the version string, then NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0) */
+    bad += check("INFO: P_COUNT 114 and P_E0 106 (0.2.0: 113 and 105; the web editor keys its layouts on them)",
+                 host_wire[i + 2] == P_COUNT && host_wire[i + 2] == 114 && host_wire[i + 3] == G_COUNT && host_wire[i + 5] == P_E0 && host_wire[i + 5] == 106);
+    a[0] = 0; a[1] = P_FILT;
+    request(ED_DESC, a, 2);
+    {   /* scope, id, fmt, min, max, def (v14: value + 8192), "FILT" */
+        int32_t mn = (host_wire[8] | host_wire[9] << 7) - 8192, mx = (host_wire[10] | host_wire[11] << 7) - 8192, df = (host_wire[12] | host_wire[13] << 7) - 8192;
+        ok = host_wire[5] == 0 && host_wire[6] == P_FILT && host_wire[7] == F_BIPCT && mn == -64 && mx == 63 && df == 0 &&
+             !strcmp((const char *)host_wire + 14, "FILT");
+    }
+    bad += check("DESC of id 105: FILT, a bipolar percentage (fmt 2), -64 .. 63, default 0", ok);
+    for (i = 0; i < 3u; i++) {
+        static const int V[3] = {-30, 63, 100};              /* (100 is past the range: held at 63) */
+        uint32_t u = (uint32_t)(V[i] + 8192);
+        a[0] = 0; a[1] = P_FILT; a[2] = u & 127u; a[3] = u >> 7;
+        request(ED_SET, a, 4);
+        ok = TSEL->p[P_FILT] == (V[i] > 63 ? 63 : V[i]) &&
+             (int32_t)(host_wire[7] | host_wire[8] << 7) - 8192 == TSEL->p[P_FILT];
+        a[0] = 0; a[1] = P_FILT;
+        request(ED_GET, a, 2);
+        ok &= (int32_t)(host_wire[7] | host_wire[8] << 7) - 8192 == TSEL->p[P_FILT];
+        bad += check(V[i] == 100 ? "SET 100: held at 63, replied and read back" : "SET and GET of FILT carry the value", ok);
+    }
+    TSEL->p[P_FILT] = -17;
+    TSEL->p[P_E0] = 9;
+    a[0] = (uint8_t)song.sel;
+    n = request(ED_TRACK_DUMP, a, 1);
+    {   /* track, engine, preset, P_COUNT x v14 */
+        const uint8_t *d = host_wire + 5 + 3;
+        ok = n > 8u + 2u * P_COUNT && (int32_t)(d[2u * P_FILT] | d[2u * P_FILT + 1u] << 7) - 8192 == -17 &&
+             (int32_t)(d[2u * P_E0] | d[2u * P_E0 + 1u] << 7) - 8192 == 9;
+    }
+    bad += check("TRACK_DUMP: FILT at 105, the engine values from 106", ok);
+    memset(favorites.factory[14], 0, 32);
+    a[0] = 0; a[1] = 41; a[2] = (uint8_t)song.sel; a[3] = P_FILT;
+    request(ED_LEARN_SET, a, 4);
+    ok = host_wire[5] == 0u || host_wire[5] == 3u;
+    request(ED_LEARN_GET, 0, 0);
+    bad += check("LEARN_SET takes FILT (a CC to it)", ok && learn_entry(0, 1, 41, (uint32_t)song.sel, P_FILT));
+    return bad;
+}
+
 #ifndef EDITOR_TEST_NO_MAIN                              /* (robust_test.c, fuzz_*.c: this file is their base) */
 int main(void)
 {
     int bad = preferences() + motion_locks() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
               fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired() +
-              learn_protocol() + custom_palette() + drumx_protocol();
+              learn_protocol() + custom_palette() + drumx_protocol() + track_filter_protocol();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
     return bad != 0;
 }
