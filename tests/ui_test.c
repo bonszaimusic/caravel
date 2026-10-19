@@ -8509,13 +8509,13 @@ static int test_style(void)
 static int32_t hel[HEAD_EL][4], nhel;                  /* x0 x1 (last inked column) top bot */
 static int head_centres(const char *what, int print)
 {
-    uint16_t bg = swap16(T_BG);
+    uint16_t bg = swap16(T_BG), sh = swap16(ux.surf != ux.bg ? T_SURF : T_RAISE);   /* (the caravel watermark's tint is no ink) */
     int32_t x = 0, ok = 1;
     nhel = 0;
     while (x < 240) {
         int32_t x0, x1, top = 99, bot = -1, gap = 0, y, ink;
         for (; x < 240; x++) {                        /* the next inked column */
-            for (y = 0, ink = 0; y < H_HEAD; y++) ink |= host_screen[(Y_HEAD + y) * 240 + x] != bg;
+            for (y = 0, ink = 0; y < H_HEAD; y++) ink |= host_screen[(Y_HEAD + y) * 240 + x] != bg && host_screen[(Y_HEAD + y) * 240 + x] != sh;
             if (ink) break;
         }
         if (x >= 240) break;
@@ -8523,7 +8523,7 @@ static int head_centres(const char *what, int print)
         for (; x < 240 && gap < 2; x++) {
             if (x == HEAD_BAT_X && x != x0) break;     /* the battery's cell ends the element */
             for (y = 0, ink = 0; y < H_HEAD; y++)
-                if (host_screen[(Y_HEAD + y) * 240 + x] != bg) {
+                if (host_screen[(Y_HEAD + y) * 240 + x] != bg && host_screen[(Y_HEAD + y) * 240 + x] != sh) {
                     ink = 1;
                     if (y < top) top = y;
                     if (y > bot) bot = y;

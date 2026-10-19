@@ -399,6 +399,10 @@ def main():
         name = f"caravel-{version}.fwsc"
         if a.release:
             (OUT / f"release-{version}.build.json").unlink(missing_ok=True)
+    if version is None:             # a development build says so on the device (the splash, ABOUT): the source's version and "-dev"
+        m = re.search(r'^#define FELUCCA_VERSION "([^"]+)"', (FW / "src" / "felucca.c").read_text(encoding="utf-8"), re.M)
+        if m and not m[1].endswith("-dev"):
+            VERSION = m[1] + "-dev"
     if not (FW / "engines" / "src" / "felucca_engine.h").exists():
         raise SystemExit("firmware/engines is empty: the Felucca-Engines submodule "
                          "(git submodule update --init, or clone with --recurse-submodules)")

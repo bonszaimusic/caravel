@@ -565,6 +565,20 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.assertIn('-DFELUCCA_VERSION="v0.1.0"', commands[1][-1])
         self.assertEqual(packages[0], packages[1])
 
+    def test_plain_build_says_dev_on_the_device_and_a_release_does_not(self):
+        with self.build_context(release=False):
+            self.assertEqual(B.main(), 0)
+            self.assertEqual(B.PRODUCT, "FM-1_900")
+            self.assertEqual(B.VERSION, "v0.1.0-dev")           # the source's v0.1.0 and "-dev"
+        with self.build_context(release=False, binary_version=VERSION):
+            self.assertEqual(B.main(), 0)
+            self.assertEqual(B.VERSION, "v0.1.0")                # a versioned build: no suffix
+        put(self.root, "firmware/src/felucca.c", b'#define FELUCCA_VERSION "v0.1.0-dev"\n')
+        with self.build_context(release=False):
+            self.assertEqual(B.main(), 0)
+            self.assertIsNone(B.VERSION)                         # (an already marked source: its own macro, not twice)
+        put(self.root, "firmware/src/felucca.c", b'#define FELUCCA_VERSION "v0.1.0"\n')
+
     def test_binary_version_suffix_uses_release_identity_and_filename(self):
         with self.build_context(binary_version="1.2.3-RC1"), \
                 mock.patch.object(R, "source_snapshot") as snapshot, \
@@ -645,7 +659,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
                 mock.patch.object(R, "record_build") as record, mock.patch.object(R, "release") as release:
             self.assertEqual(B.main(), 0)
             self.assertEqual(B.PRODUCT, "FM-1_900")
-            self.assertIsNone(B.VERSION)
+            self.assertEqual(B.VERSION, "v0.1.0-dev")            # (the default identity; the version says dev)
             for function in (snapshot, record, release):
                 function.assert_not_called()
         package = (self.root / "build/caravel.fwsc").read_bytes()
