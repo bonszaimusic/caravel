@@ -22,6 +22,8 @@ These pages show two groups of four parameters at once instead of one page and a
 | REVERB | CHORUS | REVERB · CHORUS |
 | INSERT | INSERT 2 | INSERT TYPE / MIX (with the type's curve) · INSERT A / B / C |
 | SLICER | (its graph) | SLICER · the step pattern and what it does to a tone |
+| SCL | (its keys) | SCALE · the 12 keys: the scale lit, the root in the accent colour |
+| CHORD | (its keys) | CHORD KEYS · the chord's name and notes on the keys |
 
 The active group is framed in the theme colour and marked **EDIT K1-4**; KNOB 1..4 edit it. The other group stays readable and is marked
 VIEW. A page's graph (the LFO scope, the ADSR graph, the effect pictures) is not drawn on these pages; instead a small pictogram under the
@@ -38,6 +40,9 @@ FX, DLY, REVERB, CHORUS, INSERT, INSERT 2, SLICER, so each pair is one view: FX 
 **Who a group is for:** every group's header carries a small tag: **ALL** (accent colour) for the global pages (DELAY, REVERB, CHORUS), **T1** to
 **T4** for a page of the selected track (the FX sends, INSERT, SLICER, the LFOs, ENV, EDIT, ...). Changing the track changes the T groups;
 the ALL groups stay as they are.
+
+**SCL, CHORD and SLICER** are one group above and a picture of the settings below (the scale on the keys, the last chord played, the step
+pattern).
 
 **INSERT** shows TYPE and MIX in the upper group, with the curve of the chosen type beside them (a drive's transfer curve, the folder, the
 bit staircase, the swept effects' sweep); the type's own A, B and C are the lower group. **SLICER** keeps its four controls in the upper

@@ -3024,7 +3024,7 @@ static int test_product_ux(void)
     for (p = 0; p < NPALETTES; p++) for (b = 0; b < 1u; b++) {
         uint16_t graph[240 * H_GRAPH], columns[240 * (Y_SEP_END - Y_LABEL)];
         ui_power_on(); palette_set(p); settings.zoom = 1;
-        open_family(FAM_SCL); frame();                     /* (ENV and FX are two-group pages in the dual-block layout) */
+        go_title("CLOCK"); frame();                         /* (a one-group page with its graph: most others are two-group or group + picture) */
         memcpy(graph, host_screen + Y_GRAPH * 240, sizeof graph);
         memcpy(columns, host_screen + Y_LABEL * 240, sizeof columns);
         ui.hot_col = 1; ui.hot_t = 40; ui.force = 1; ui_draw();
@@ -8330,7 +8330,7 @@ static int test_large(void)
     ok &= large_kind() == LK_LABEL;
     go_page(GR_TRK); frame();
     ok &= large_kind() == LK_TALL && strip_kind() == SK_TRK && lg_px(CARD_X(0) + 8, LG_Y_GRAPH + 56) == T_SURF;
-    go_title("SCL"); frame();                                     /* (a one-group page: ENV and FX are two-group) */
+    go_title("CLOCK"); frame();                                   /* (a one-group page: most others are two-group or group + picture) */
     btn_down(B_GLO); frames(800);
     ok &= ui.layer && large_kind() == LK_LABEL && card_h() == CARD_H;
     btn_up(B_GLO); frame(); frame();

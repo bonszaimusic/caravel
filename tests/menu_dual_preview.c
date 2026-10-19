@@ -137,6 +137,19 @@ int main(int argc, char **argv)
                 assert(TSEL->p[P_M1SRC + 3u * mod_ui_slot] != m0 && TSEL->p[P_LD_PIT] == d0);
                 mod_ui_slot = 0;
             }
+            {   /* SCL and CHORD: one page above, the keys in the lower block (captured; the chord for a C minor 7 on the root) */
+                static const char *const T2[] = {"SCL", "CHORD"};
+                TSEL->p[P_ROOT] = 3; TSEL->p[P_SCALE] = 2;
+                for (uint32_t k = 0; k < 2; k++) {
+                    char p2[320];
+                    if (k) TSEL->p[P_CHRD] = CH_DIA3;
+                    go_title(T2[k]); frame();
+                    assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+                    snprintf(p2, sizeof p2, "%s/%s-palette-%02u-%s.ppm", argv[1], k ? "chord" : "scl", palette, large ? "large" : "normal");
+                    save_screen(p2);
+                }
+                TSEL->p[P_CHRD] = 0;
+            }
             {   /* INSERT: the type's curve beside TYPE and MIX (a drive, a folder, a phaser); not asserted, captured */
                 static const struct { const char *name; uint32_t type; } IT[] = {{"soft", IT_SOFT}, {"fold", IT_FOLD}, {"crush", IT_CRUSH}, {"phaser", IT_PHASER}};
                 for (uint32_t k = 0; k < sizeof IT / sizeof IT[0]; k++) {

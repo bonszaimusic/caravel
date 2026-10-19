@@ -59,6 +59,8 @@ static const dual_t DUALS[] = {
     {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
     {"INSERT", "INSERT 2", "INSERT TYPE / MIX", "INSERT A / B / C", "INSERT", "INSERT A-C", DK_INS},
     {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
+    {"SCL", "", "SCALE", "", "SCL", "", DK_GRAPH},
+    {"CHORD", "", "CHORD KEYS", "", "CHORD", "", DK_GRAPH},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
 };
@@ -71,6 +73,8 @@ static int edit_has_picture(void)
 }
 static const dual_t *dual_of(const page_t *pg, uint32_t *bottom)
 {
+    if (pg < PAGES || pg >= PAGES + NPAGES)             /* (a layer's own page, LY_SCL: not one of the family's) */
+        return 0;
     for (uint32_t i = 0; i < sizeof DUALS / sizeof DUALS[0]; i++) {
         if (DUALS[i].kind == DK_EDIT && edit_has_picture())
             continue;
@@ -119,11 +123,23 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         *v = *vp;
     return d;
 }
-/* DK_GRAPH's lower block, the SLICER's: two lanes in a frame like the groups'. Above, the 16 steps of the pattern in four
- * groups of four (an open step a lit bar, a closed GATE step what DEPTH leaves open, a closed STUT step a dashed bar), the
- * playing step in the accent colour on a light column. Below, what that does to a held tone: GATE chops it (a closed step as
- * loud as DEPTH leaves it), STUT repeats the last open step's piece at DEPTH. A picture of the settings, not the audio. */
-static void slicer_block(const track_t *t, uint32_t pat_no)
+/* DK_GRAPH's lower block: a picture of the page's settings in a frame like the groups' (inner area y 22 .. 77), headed by a
+ * title and a caption. The SLICER's, SCL's and CHORD's. */
+static void block_begin(const char *title, const char *right, uint16_t rcol)
+{
+    cv_begin(240, 80, T_BG);
+    cv_rrect(3, 0, 234, 80, 5, T_RAISE, T_BG);
+    cv_rrect(5, 2, 230, 76, 3, T_SURF, T_RAISE);
+    cv_rect(5, 5, 230, 16, T_SURF);
+    cv_text_on(10, 6, &AF_S, title, T_TEXT, T_SURF);
+    if (right)
+        cv_text_r(230, 6, &AF_S, right, rcol, T_SURF);
+}
+/* the SLICER: two lanes. Above, the 16 steps of the pattern in four groups of four (an open step a lit bar, a closed GATE
+ * step what DEPTH leaves open, a closed STUT step a dashed bar), the playing step in the accent colour on a light column.
+ * Below, what that does to a held tone: GATE chops it (a closed step as loud as DEPTH leaves it), STUT repeats the last open
+ * step's piece at DEPTH. A picture of the settings, not the audio. */
+static void slicer_block(const track_t *t)
 {
     uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
     static const char *const MODE[] = {"OFF", "GATE", "STUT"};
@@ -131,15 +147,10 @@ static void slicer_block(const track_t *t, uint32_t pat_no)
     uint16_t lit = mode == SL_OFF ? T_RAISE : T_THEME, dim = mode == SL_OFF ? T_DIM : T_MID;
     char ti[16], rate[8];
     const char *unit;
-    cv_begin(240, 80, T_BG);
-    cv_rrect(3, 0, 234, 80, 5, T_RAISE, T_BG);
-    cv_rrect(5, 2, 230, 76, 3, T_SURF, T_RAISE);
-    cv_rect(5, 5, 230, 16, T_SURF);
     str_cpy(ti, "PATTERN ", 12);
-    fmt_int(ti + str_len(ti), (int32_t)pat_no);
+    fmt_int(ti + str_len(ti), (int32_t)t->p[P_SLPAT]);
     param_format(&TP[P_SLRATE], t->p[P_SLRATE], rate, &unit);
-    cv_text_on(10, 6, &AF_S, ti, T_TEXT, T_SURF);
-    cv_text_r(230, 6, &AF_S, MODE[mode % 3u], mode == SL_OFF ? T_DIM : T_THEME, T_SURF);
+    block_begin(ti, MODE[mode % 3u], mode == SL_OFF ? T_DIM : T_THEME);
     cv_text_r(188, 6, &AF_S, rate, T_MID, T_SURF);
     if (mode != SL_OFF)
         cv_rect(bar_x(cur) - 2, top - 2, 13, 51, T_RAISE);                        /* the playing step's column */
@@ -173,6 +184,69 @@ static void slicer_block(const track_t *t, uint32_t pat_no)
     }
     cv_blit(0, Y_LABEL + 90u);
 }
+/* SCL: the 12 keys (black keys high, white keys low): in the scale THEME, the root the accent, out of the scale RAISE */
+static void scale_block(const track_t *t)
+{
+    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+    uint32_t i, mask = scale_mask(t);
+    char ti[16];
+    str_cpy(ti, N_NOTE[(uint32_t)t->p[P_ROOT] % 12u], 4);
+    str_cpy(ti + str_len(ti), " ", 4);
+    str_cpy(ti + str_len(ti), N_SCALE[clamp(t->p[P_SCALE], 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1)], 8);
+    block_begin(ti, 0, T_MID);
+    for (i = 0; i < 12u; i++) {
+        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
+        int32_t x = 13 + (int32_t)i * 18;
+        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : T_THEME) : T_RAISE;
+        cv_rrect(x + 3, BLACK[i] ? 26 : 44, 10, BLACK[i] ? 26 : 31, 3, col, T_SURF);
+    }
+    cv_blit(0, Y_LABEL + 90u);
+}
+/* CHORD: its name ("Cm7": the last one the track played, else the one on its ROOT from C4) as the title, the keys from the C below
+ * its lowest note (two octaves, three for a wide chord): its notes THEME, its root the accent, the others RAISE */
+static void chord_block(const track_t *t)
+{
+    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+    uint8_t nn[CHORD_MAX];
+    uint32_t n, i, j, k = trk_index(t), lo, cnt, w;
+    int32_t r;
+    uint16_t mask;
+    char b[12];
+    const char *cap = "LAST";
+    if (!t->p[P_CHRD] || chord_kit(t)) {
+        block_begin(t->p[P_CHRD] ? "NO CHORDS ON KITS" : "CHORD KEYS OFF", 0, T_MID);
+        if (!t->p[P_CHRD])
+            cv_text_in(5, 40, 230, &AF_S, "K1: DIA3 PLAYS IN-KEY CHORDS", T_MID, T_SURF);
+        cv_blit(0, Y_LABEL + 90u);
+        return;
+    }
+    if (chord_last[k].n) {
+        r = chord_last[k].root;
+        mask = chord_last[k].mask;
+        n = chord_last[k].n;
+        for (i = 0; i < n; i++)
+            nn[i] = chord_last[k].note[i];
+    } else {
+        n = chord_make(t, (uint32_t)(60 + t->p[P_ROOT]), nn, &r, &mask);
+        cap = "ON ROOT";
+    }
+    if (trk_vmode(t) != V_POLY)
+        cap = "ROOT ONLY";                              /* MONO / LEGATO / UNISON */
+    chord_name(b, (uint32_t)r, mask);
+    block_begin(b, cap, T_MID);
+    lo = nn[0] - nn[0] % 12u;
+    cnt = nn[n - 1u] - lo < 24u ? 24u : 36u;
+    w = 216u / cnt;
+    for (i = 0; i < cnt; i++) {
+        uint32_t note = lo + i, on = 0;
+        int32_t x = 13 + (int32_t)(i * w);
+        for (j = 0; j < n; j++)
+            on |= nn[j] == note;
+        cv_rrect(x, BLACK[note % 12u] ? 26 : 44, (int32_t)w - 2, BLACK[note % 12u] ? 26 : 31, w > 6u ? 3 : 2,
+                 !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : T_THEME, T_SURF);
+    }
+    cv_blit(0, Y_LABEL + 90u);
+}
 static void lfo_cards(const page_t *pg)
 {
     uint32_t bottom;
@@ -187,7 +261,14 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
-    if (dd->kind == DK_GRAPH)                              /* the graph: the pattern, the mode, the rate, the depth, the playing step */
+    if (dd->kind == DK_GRAPH && str_eq(dd->top, "CHORD")) {      /* the chord's notes: the last one played */
+        uint32_t k = trk_index(TSEL);
+        sig = sig * 33u + chord_last[k].n * 131u + chord_last[k].mask * 7u + (uint32_t)chord_last[k].root + trk_vmode(TSEL) * 977u +
+              (uint32_t)TSEL->p[P_ROOT] * 31u;
+    }
+    if (dd->kind == DK_GRAPH && str_eq(dd->top, "SCL"))
+        sig = sig * 33u + scale_mask(TSEL) + (uint32_t)TSEL->p[P_ROOT] * 31u;
+    if (dd->kind == DK_GRAPH && str_eq(dd->top, "SLICER"))   /* the graph: the pattern, the mode, the rate, the depth, the playing step */
         sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
               (uint32_t)TSEL->p[P_SLRATE] * 7919u + (uint32_t)TSEL->p[P_SLPAT] * 31337u + sl[TSEL - trk].idx * 977u;
     if (rps[1] && rps[1]->graph == GR_MOD)                 /* the slot pips: every slot's SRC, DST and AMT */
@@ -202,7 +283,12 @@ static void lfo_cards(const page_t *pg)
         int active = row == bottom;
         int32_t y = 0;
         if (dd->kind == DK_GRAPH && row) {
-            slicer_block(TSEL, (uint32_t)TSEL->p[P_SLPAT]);
+            if (str_eq(dd->top, "SLICER"))
+                slicer_block(TSEL);
+            else if (str_eq(dd->top, "SCL"))
+                scale_block(TSEL);
+            else
+                chord_block(TSEL);
             continue;
         }
         /* Two small blits reuse the existing canvas instead of increasing pool RAM. */
