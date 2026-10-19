@@ -66,9 +66,12 @@ DRONE: [Tips and tricks](docs/engines/tips.md).
 
 The focus is usability and the sound experience:
 
-- **Two parameter groups on one screen** (LFO, LFO2, ENV, ARP, VOICE, EDIT 1/2, LANES, FX/INSERT): the active group is framed
-  and marked EDIT K1-4, SELECT steps through the groups, and the footer shows a numbered view ("LFO TOP 1/4"). SELECT starts on
-  PAGE; in the menu it walks the rows.
+- **Two parameter groups on one screen** (LFO, LFO2, ENV, ARP, VOICE, EDIT 1/2, LANES, the FX pages): the active group is framed
+  and marked EDIT K1-4, a tag says whether a group is for ALL tracks or the track (T1..T4), SELECT steps through the groups, and the footer
+  shows a numbered view ("LFO TOP 1/3"). SLICER, SCL and CHORD put a picture of their settings below their group, and every page frames the
+  cards KNOB 1-4 edit. SELECT starts on PAGE; in the menu it walks the rows.
+- **LATCH** (CHORD page): notes of the keys, the chord keys and MIDI IN keep sounding after release, per track ([docs/latch.md](docs/latch.md)).
+  **FX HOLD**: a factory preset load keeps the track's sends and INSERT instead of replacing them.
 - **Clearer sequencing:** EDIT opens the EDIT pages everywhere; the cursor step is cleared with SEQ held + F5 (CLEAR STEP,
   one undo). Euclid, DOUBLE/HALF, conditional steps and external-clock start and resync are inherited and extended.
 - **Deeper modulation:** an independent LFO2 and the MOD matrix (SLEW, S&H sources, MORPH and PHS FB destinations).

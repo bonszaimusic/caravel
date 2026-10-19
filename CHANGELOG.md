@@ -28,6 +28,12 @@ unless it says so; host tests and simulations are not hardware measurements.
   and `tools/fm1_install.py` accept devices named Caravel and Felucca.
 - **The FX family** is four views: FX SENDS | DELAY, REVERB | CHORUS, INSERT TYPE / MIX | INSERT A / B / C and SLICER (Felucca: FX, SLICER,
   INSERT, INSERT 2, DLY, REVERB, CHORUS as separate pages). INSERT's TYPE and MIX are together with the type's curve, A / B / C on their own.
+- **The LFO family** is three views: LFO | LFO SYNC, LFO2 | LFO2 SYNC and LFO DEST | MOD (Felucca: LFO, LFO 2, LFO DEST, MOD as separate pages). The MOD
+  group shows SLOT, SRC, DST and AMT of the slot being edited, and four small pips in its header show which of the four slots are in use.
+- **SCL and CHORD** keep their group above and show their keys below: the scale lit on the keys, and for CHORD the chord on each scale note
+  (DIA3, DIA7) and the last chord's notes. **ANALOG's FILTER** shares a view with MORE.
+- **Every page with a card row frames it** in the theme colour (as the active group of a two-group page is), so the cards KNOB 1-4 edit look
+  the same everywhere (not in the LINE style, the layers and the name entry).
 - **SELECT starts on PAGE** on a device without saved settings (saved settings, including BPM, are kept).
 - **EDIT on the STEP page opens the EDIT pages** like on every other page; it no longer clears the cursor step.
 - **DOUBLE** (Felucca 1.6) also copies locks, automation and fine FX edges, up to 64 steps.
