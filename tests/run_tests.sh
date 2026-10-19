@@ -53,6 +53,11 @@
 # CHORD (tests/chord_test.c): the chord keys (src/chord.c): diatonic triads / sevenths of several scales and roots,
 #                   the fixed shapes and voicings (at most 4 notes), names, MONO plays the root, a release ends
 #                   exactly what its key / MIDI note started, recording, the ARP, MIDI IN, kits ignore CHRD.
+# LATCH (tests/latch_test.c, Caravel): P_LATCH (CHORD page): OFF plays as before, NEW replaces the latched set with a press when
+#                   nothing is held, STACK adds and a press of notes that all sound latched ends them, chord keys, MIDI IN,
+#                   ARP (the held list), MONO's stack, LATCH OFF / ARP on / panic / STOP / CC120 / CC123 / the OCT- + OCT+
+#                   gesture end it, recording sees the key only, kits take no latch, legacy values count as OFF, the
+#                   parameter layout is unchanged and a sound load keeps LATCH.
 # FUN10 (tests/fun10_test.c, 1.2): LFO 2 (SYNC one cycle per note value at several tempi and on the external clock, OFF bit
 #                   for bit as before; TRIG NOTE / FREE; POL UNI 0..+1, the matrix's AMP), NUDGE (live recording keeps a
 #                   note's time, QUANTIZE ON plays as before, OFF plays the nudges late and early once a pass, never twice
@@ -266,6 +271,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "scales: white-key mapping and note lifecycle" "$OUT/scale_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/chord_test" tests/chord_test.c -lm
     run "chord keys: diatonic and fixed chords, voicings, MONO root, releases, recording, ARP, MIDI IN, kits" "$OUT/chord_test"
+    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/latch_test" tests/latch_test.c -lm
+    run "LATCH: NEW / STACK on keys, chords, MIDI IN and the arp; the ways it ends; recording, kits, layout" "$OUT/latch_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/speaker_test" tests/speaker_test.c -lm
     run "SPEAKER EQ: FLAT / LOWCUT / BASS+ responses, BASS+ harmonics of the bass, the sub cut, no offset after, headroom on a full-scale kick (#180)" "$OUT/speaker_test"
     run "DSP render (ANALOG preset 0)" "$OUT/hostsim" 0 0 1 "$OUT/render.wav"

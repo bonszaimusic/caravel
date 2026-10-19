@@ -1789,9 +1789,13 @@ static void ui_input(void)
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
                 break;                                  /* MIDI LEARN: clear / done (below) */
-            if ((fm1_in.buttons & both) == both)
+            if ((fm1_in.buttons & both) == both) {
                 song.octave = 0;
-            else
+                if (TSEL->p[P_LATCH] || TSEL->p[P_AHOLD]) {   /* LATCH / ARP HOLD: let go of what they keep */
+                    latch_req |= (uint8_t)(1u << trk_index(TSEL));
+                    ui_message("LATCH RELEASED");
+                }
+            } else
                 song.octave += b == B_OCTDN ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
             break;
         }

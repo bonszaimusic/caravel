@@ -55,8 +55,8 @@ DRONE turns one note into four coupled sine generators. The four performance kno
 DETUNE, TOPO and RATE are on the EDIT pages.
 
 - **Start low and quiet:** select a preset such as STILL AIR, hold a low note (the guide suggests C3) and raise COUPLE slowly.
-- **Give it time:** the presets use long envelopes with high sustain. Hold the note, or use sequencer ties; a preset does not latch
-  by itself. Movement takes seconds to develop.
+- **Give it time:** the presets use long envelopes with high sustain. Hold the note, use sequencer ties, or set the track's **LATCH** (CHORD page, [latch.md](../latch.md)) so the notes stay on after
+  you let go; a preset does not latch by itself. Movement takes seconds to develop.
 - **Topology changes the character:** PAIRS, CHAIN and RING route the generators differently; changing TOPO crossfades, so it can
   be turned while a note holds. TOPO 3 to 5 (CELLPAIR, CELLCHN, CELLRING) are the cell modes below.
 - **Intervals:** SPREAD opens the four generators from unison up to 1 : 5/4 : 3/2 : 2 (a just fifth and an octave); the in-between

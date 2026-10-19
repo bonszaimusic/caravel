@@ -34,6 +34,13 @@ unless it says so; host tests and simulations are not hardware measurements.
 - **Per-track voice reservations** (HOME held, ALGORITHM to VOICES): AUTO or FIXED, 1..5 voices per track, at most eight; also in the
   editor.
 
+### Added: LATCH
+- **LATCH** (CHORD page, KNOB 3): OFF, NEW or STACK per track keeps the notes of the keys, the chord keys and MIDI IN sounding after release.
+  NEW replaces the latched set with the next press, STACK adds notes and ends them with the same key or chord again; with ARP the arp keeps the list.
+  Ends with LATCH OFF, ARP on, STOP, a panic, or **OCT- + OCT+ together** (which also still resets the octave). See [docs/latch.md](docs/latch.md).
+  It uses the unused track parameter 8 (the retired FX slot), so no project, preset or protocol format changes. In the web editor the
+  inert FX slot is gone from ENV DEST and LATCH is on the CHORD page. Host tests only (`tests/latch_test.c`); not tried on a real FM-1.
+
 ### Added: live performance and sequencer
 - **Live part switching A–D** at track 1's loop boundary, **saving parts while playing** (RAM ONLY until STOP commits them to flash),
   and **LIVE LOAD FULL** (MENU > AUDIO), which also restores sounds, engines, track FX, FM6 patches, DRUM-X kits and the global FX.
