@@ -7,13 +7,17 @@
  * cannot change the clock's accumulated musical phase. */
 static struct {
     uint32_t pos, rendered, last_ms, start_ms, interval_ms;
-    uint32_t pulse_units, interp_q8, tempo_ms;
+    uint32_t pulse_units, interp_q8, tempo_hist[5];     /* tempo_hist: stamps of the last quarter-beat marks, newest first */
     uint32_t resync_after;
-    uint8_t mode, have_pulse, tempo_valid, tempo_n;
+    uint8_t mode, have_pulse, tempo_valid, tempo_n, tempo_k;
     uint8_t bar_tick;
     volatile uint8_t bar_valid, resync;             /* 1 bar, 2 next pulse; audio owns the state */
     uint8_t resync_start;                          /* armed while stopped: remain silent until the pulse */
 } midi_clock;
+/* CDC diagnostics (console.c, cleared when printed): the shortest and longest gap between two Clock stamps and the
+ * gaps more than a quarter off the measured pulse period, to see on the device what the wire and the poll deliver */
+static volatile uint32_t midi_clk_min, midi_clk_max, midi_clk_odd;
+static uint32_t midi_clk_last;
 enum { RS_NONE, RS_BAR, RS_PULSE, RS_CANCEL, RS_WAIT, RS_STOP, RS_REC, RS_SONG, RS_DONE, RS_START_BAR, RS_START_PULSE };
 static volatile uint8_t midi_resync_notice;
 
@@ -109,6 +113,16 @@ static uint32_t midi_clock_scale_phase(uint32_t value, uint32_t new_period, uint
 
 static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
 {
+    uint32_t gap = ms - midi_clk_last;
+    midi_clk_last = ms;
+    if (gap <= 500u) {
+        if (!midi_clk_min || gap < midi_clk_min)
+            midi_clk_min = gap;
+        if (gap > midi_clk_max)
+            midi_clk_max = gap;
+        if (midi_clock.tempo_k > 1u && (gap * 4u < midi_clock.interval_ms * 3u || gap * 4u > midi_clock.interval_ms * 5u))
+            midi_clk_odd++;
+    }
     if (midi_clock.tempo_valid && ms - midi_clock.last_ms > 500u) {
         midi_clock.bar_valid = 0;
         midi_resync_cancel();
@@ -118,15 +132,31 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
     }
     if (!midi_clock.tempo_valid) {
         midi_clock.tempo_valid = 1;
-        midi_clock.tempo_ms = ms;
+        midi_clock.tempo_hist[0] = ms;
         midi_clock.tempo_n = 0;
+        midi_clock.tempo_k = 1;
     } else if (++midi_clock.tempo_n == 6u) {
-        uint32_t dt = ms - midi_clock.tempo_ms;
-        midi_clock.tempo_ms = ms;
+        uint32_t *h = midi_clock.tempo_hist, k = midi_clock.tempo_k, dt = ms - h[0], j;
         midi_clock.tempo_n = 0;
-        /* Six clocks are a quarter of a beat. Reject gaps and corrupt bursts. */
-        if (dt >= 62u && dt <= 375u) {
-            uint32_t old_beat = beat_samples(), new_beat = (uint32_t)FS * dt / 250u;
+        /* Six clocks are a quarter of a beat. Reject gaps and corrupt bursts. A stamp has 1 ms and a controller
+         * byte ahead of a Clock on the wire delays it by up to 1 ms more, so six clocks alone read +-1..2 BPM:
+         * the tempo is taken over the last four quarter-beats (24 clocks). A quarter-beat that departs from the
+         * window's mean (a tempo step, a gap) starts the window again. */
+        if (dt < 62u || dt > 375u)
+            k = 0;
+        else if (k > 1u) {
+            uint32_t mean = (h[0] - h[k - 1u]) / (k - 1u);
+            if (dt > mean + mean / 4u + 1u || dt + mean / 4u + 1u < mean)
+                k = 1u;
+        }
+        for (j = 4u; j; j--)
+            h[j] = h[j - 1u];
+        h[0] = ms;
+        midi_clock.tempo_k = (uint8_t)(k < 5u ? k + 1u : 5u);
+        if (k) {
+            uint32_t periods = midi_clock.tempo_k - 1u, dtn = ms - h[periods];
+            uint32_t old_beat = beat_samples(), new_beat = (uint32_t)FS * 4u * dtn / (periods * 1000u);
+            uint32_t bpm10 = (150000u * periods + dtn / 2u) / dtn, shown = (uint32_t)song.g[G_BPM] * 10u;
             if (song.playing && new_beat != old_beat) {
                 uint32_t i;
                 /* Preserve each track's fractional step phase when the master
@@ -154,7 +184,8 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
                 beat_pos = midi_clock_scale_phase(beat_pos, new_beat, old_beat, &midi_beat_grid);
             }
             midi_beat_samples = new_beat;
-            song.g[G_BPM] = (int16_t)clamp((int32_t)((15000u + dt / 2u) / dt), 40, 240);
+            if (periods == 1u || bpm10 >= shown + 10u || bpm10 + 10u <= shown)   /* the display moves at a whole BPM off */
+                song.g[G_BPM] = (int16_t)clamp((int32_t)((bpm10 + 5u) / 10u), 40, 240);
         }
     }
     if (song.playing) {
@@ -178,6 +209,10 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
     if (!midi_clock.interval_ms)
         midi_clock.interval_ms = beat_samples() * 1000u / ((uint32_t)FS * 24u);
     midi_clock.interp_q8 = midi_clock.pulse_units * 256u / midi_clock.interval_ms;
+    if (midi_clock.tempo_k > 1u && midi_beat_samples) {  /* the windowed tempo is the pulse period, free of 1 ms steps */
+        midi_clock.interval_ms = (midi_beat_samples * 1000u + FS * 24u - 1u) / (FS * 24u);
+        midi_clock.interp_q8 = (MIDI_CLOCK_GRID * 256u / 1000u * (uint32_t)FS) / midi_beat_samples;
+    }
     midi_clock.last_ms = ms;
     if (midi_clock.resync && (int32_t)(ms - midi_clock.resync_after) > 0 && (midi_clock.resync == 2u ||
         (midi_clock.bar_valid && !midi_clock.bar_tick))) {

@@ -6,6 +6,22 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.2.1] — unreleased
+
+### Fixed
+- **TRS MIDI clock with a controller on the same line: the BPM no longer jumps and the sequence holds its time better.** The tempo was
+  measured over six Clock pulses with 1 ms stamps, so a steady 120..174 BPM read ±1..4 BPM, and every CC ahead of a Clock on the wire (up to
+  3 bytes, ~1 ms) added to that; each such reading also re-scaled every track's phase and the gate/FX times. The tempo is now taken over the
+  last 24 pulses (a tempo step or gap starts the window again), the BPM display moves only when the measured tempo is a whole BPM off, and the
+  clock's in-pulse interpolation runs at the measured tempo instead of the last single (1 ms rounded) pulse gap. Host model (20 s, 60..174 BPM,
+  CC every 5..12 ms or bursts): displayed BPM 172..176 → 174, sequencer position jitter up to 4.8 ms → 2.8 ms peak to peak. See
+  [external clock](docs/sequencer/external-clock.md). Host-tested only; the cause of a swing larger than this on the device is not established
+  (the new CDC counters below measure it).
+
+### Added
+- CDC status: `clk_gap_min_ms` / `clk_gap_max_ms` / `clk_gap_odd` (the spread of the gaps between Clock stamps, cleared when printed) and
+  `uart_events` / `uart_noevent` (UART takes with and without a receive event pending) to capture real numbers from a device.
+
 ## [0.2.0] — 2026-10-19
 
 ### Added

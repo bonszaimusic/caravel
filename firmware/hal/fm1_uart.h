@@ -51,10 +51,21 @@ FM1_INLINE void fm1_uart1_midi_init(volatile uint8_t *ring, uint32_t len)
     FM1_UT1_CON0 |= 1u;                                /* UTEN last */
 }
 
+/* CDC diagnostics (console.c): takes that came with a receive / overtime event pending (CON0 bits 14 / 11) and takes
+ * that returned a count with none: HRXCNT outside an event is not documented as a fresh batch, a retained count would
+ * replay old bytes as new ones (docs/sequencer/external-clock.md) */
+static volatile uint32_t fm1_uart1_events, fm1_uart1_noevent;
+
 FM1_INLINE uint32_t fm1_uart1_rx_take(void)
 {
+    uint32_t event = FM1_UT1_CON0 & 0x4800u, n;
     FM1_UT1_CON0 |= 0x80u;                             /* RDC: latch the count */
     __asm__ volatile("csync" ::: "memory");
     FM1_UT1_CON0 |= 0x1400u;                           /* clear RPND / OTPND */
-    return FM1_UT1_HRXCNT & 0xFFFFu;
+    n = FM1_UT1_HRXCNT & 0xFFFFu;
+    if (event)
+        fm1_uart1_events++;
+    else if (n)
+        fm1_uart1_noevent++;
+    return n;
 }
