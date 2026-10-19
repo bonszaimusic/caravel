@@ -1071,7 +1071,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         fop_knob(slot, steps);
         return;
     }
-    if (pg->graph == GR_INS && slot == 3u && pg->id[0] == P_IA) {   /* INSERT 2: KNOB 4 is FX HOLD, a device setting (ui.c load_kept) */
+    if (pg->graph == GR_INS && slot == 2u && pg->id[0] == P_ITYPE) {   /* INSERT: KNOB 3 is FX HOLD, a device setting (ui.c load_kept) */
         menu_put(MI_FXHOLD, steps > 0 ? 1u : 0u);
         settings_later();                                /* (saved when the page is left or after a pause) */
         return;

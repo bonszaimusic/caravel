@@ -154,14 +154,38 @@ int main(int argc, char **argv)
                 snprintf(path0, sizeof path0, "%s/mod-drone-palette-%02u-%s.ppm", argv[1], palette, large ? "large" : "normal");
                 save_screen(path0);
             }
-            {   /* INSERT 2: KNOB 4 is FX HOLD, the device setting that MENU > VOICES has as well */
-                go_title("INSERT 2"); frame();
+            {   /* INSERT: KNOB 3 is FX HOLD, the device setting that MENU > VOICES has as well; INSERT 2: KNOB 4 is the track's FILTER (a parameter) */
+                go_title("INSERT"); frame();
                 uint32_t h0 = menu_get(MI_FXHOLD) ? 1u : 0u;
-                int16_t ia = TSEL->p[P_IA];
-                turn(EN_K4, h0 ? -1 : 1);
-                assert((menu_get(MI_FXHOLD) ? 1u : 0u) != h0 && TSEL->p[P_IA] == ia);
-                turn(EN_K4, h0 ? 1 : -1);
+                int16_t ia = TSEL->p[P_IA], ty = TSEL->p[P_ITYPE], mix = TSEL->p[P_IMIX], fl = TSEL->p[P_FILT];
+                turn(EN_K3, h0 ? -1 : 1);
+                assert((menu_get(MI_FXHOLD) ? 1u : 0u) != h0 && TSEL->p[P_IA] == ia && TSEL->p[P_ITYPE] == ty && TSEL->p[P_IMIX] == mix &&
+                       TSEL->p[P_FILT] == fl);
+                turn(EN_K3, h0 ? 1 : -1);
                 assert((menu_get(MI_FXHOLD) ? 1u : 0u) == h0);
+                {   /* the cards: TYPE MIX FX HOLD, the curve beside them (no parameter); INSERT 2: A B C FILT */
+                    const dual_t *dd = dual_of(cur_page(), 0);
+                    int32_t v;
+                    const param_desc_t *d;
+                    assert(dd && dd->kind == DK_INS && str_eq(dd->hb, "INSERT A B C FILTER"));
+                    d = dual_card(dd, dual_row_page(dd, 0), 0, 2, &v);
+                    assert(d && str_eq(d->label, "FX HOLD") && v == (int32_t)h0);
+                    assert(!dual_card(dd, dual_row_page(dd, 0), 0, 3, &v));
+                    d = dual_card(dd, dual_row_page(dd, 1), 1, 3, &v);
+                    assert(d && str_eq(d->label, "FILT") && v == fl);
+                    d = dual_card(dd, dual_row_page(dd, 1), 1, 2, &v);
+                    assert(d && str_eq(d->label, "INS C"));
+                }
+                go_title("INSERT 2"); frame();
+                turn(EN_K4, -2);
+                assert(TSEL->p[P_FILT] == fl - 2 && (menu_get(MI_FXHOLD) ? 1u : 0u) == h0);
+                turn(EN_K4, 5);
+                assert(TSEL->p[P_FILT] == fl + 3 && (menu_get(MI_FXHOLD) ? 1u : 0u) == h0 && TSEL->p[P_IA] == ia);
+                turn(EN_K4, -3);
+                assert(TSEL->p[P_FILT] == fl);
+                turn(EN_K3, 1);
+                assert(TSEL->p[P_IC] != 0 && (menu_get(MI_FXHOLD) ? 1u : 0u) == h0);   /* (KNOB 3 of INSERT 2 is INS C) */
+                turn(EN_K3, -1);
             }
             {   /* SCL and CHORD: one page above, the keys in the lower block (captured; the chord for a C minor 7 on the root) */
                 static const char *const T2[] = {"SCL", "CHORD"};
@@ -233,7 +257,7 @@ int main(int argc, char **argv)
             {"LFO", "LFO TOP 1/3"}, {"LFO SYNC", "LFO BOTTOM 1/3"}, {"LFO2", "LFO2 TOP 2/3"}, {"LFO2 SYNC", "LFO2 BOTTOM 2/3"},
             {"LFO DEST", "LFO DEST 3/3"}, {"MOD", "MOD 3/3"},
             {"FX", "FX SENDS 1/4"}, {"DLY", "DELAY 1/4"}, {"REVERB", "REVERB 2/4"}, {"CHORUS", "CHORUS 2/4"},
-            {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT A-C 3/4"}, {"SLICER", "SLICER 4/4"},
+            {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT A-C FILT 3/4"}, {"SLICER", "SLICER 4/4"},
             {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};
         ui_power_on();
         for (uint32_t i = 0; i < sizeof T / sizeof T[0]; i++) {
