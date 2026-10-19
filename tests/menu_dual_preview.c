@@ -137,6 +137,15 @@ int main(int argc, char **argv)
                 assert(TSEL->p[P_M1SRC + 3u * mod_ui_slot] != m0 && TSEL->p[P_LD_PIT] == d0);
                 mod_ui_slot = 0;
             }
+            {   /* INSERT 2: KNOB 4 is FX HOLD, the device setting that MENU > VOICES has as well */
+                go_title("INSERT 2"); frame();
+                uint32_t h0 = menu_get(MI_FXHOLD) ? 1u : 0u;
+                int16_t ia = TSEL->p[P_IA];
+                turn(EN_K4, h0 ? -1 : 1);
+                assert((menu_get(MI_FXHOLD) ? 1u : 0u) != h0 && TSEL->p[P_IA] == ia);
+                turn(EN_K4, h0 ? 1 : -1);
+                assert((menu_get(MI_FXHOLD) ? 1u : 0u) == h0);
+            }
             {   /* SCL and CHORD: one page above, the keys in the lower block (captured; the chord for a C minor 7 on the root) */
                 static const char *const T2[] = {"SCL", "CHORD"};
                 TSEL->p[P_ROOT] = 3; TSEL->p[P_SCALE] = 2;

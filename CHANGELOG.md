@@ -9,7 +9,7 @@ unless it says so; host tests and simulations are not hardware measurements.
 ## [Unreleased]
 
 ### Added
-- **FX HOLD** (MENU > VOICES, last row; OFF by default): with ON, loading a factory preset (PRESETS, an engine change, MIDI program
+- **FX HOLD** (the fourth card of INSERT A / B / C, and MENU > VOICES, last row; OFF by default): with ON, loading a factory preset (PRESETS, an engine change, MIDI program
   change, the editor) keeps the track's four sends (DST CHO DLY REV) instead of setting the preset's. The rest of the sound is still the
   preset's; the SLICER, ARP, SCL and the mix stay as they always did. A user preset still loads its own sends and INSERT. SOUND INIT,
   project INIT and power-on always start from the preset's sends; CLEAN INIT clears them. The global DLY, REVERB and CHORUS are never

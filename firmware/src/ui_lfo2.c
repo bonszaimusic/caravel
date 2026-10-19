@@ -113,6 +113,12 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
             *v = lfo2_get(song.sel, id);
         return d;
     }
+    if (rp && rp->graph == GR_INS && col == 3u && rp->id[0] == P_IA) {   /* INSERT 2: FX HOLD, the device setting, as its fourth card */
+        static const char *const ONOFF[] = {"OFF", "ON"};
+        static const param_desc_t HOLD = {"FX HOLD", F_ENUM, 0, 1, 0, ONOFF, 0};
+        *v = menu_get(MI_FXHOLD) ? 1 : 0;
+        return &HOLD;
+    }
     if (rp && rp->graph == GR_MOD && !col) {                  /* MOD: KNOB 1 picks the slot (ui_input.c), as on its own page */
         static const param_desc_t SLOT = {"SLOT", F_INT, 1, 4, 1, 0, "/4"};
         *v = (int32_t)mod_ui_slot + 1;

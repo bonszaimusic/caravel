@@ -70,8 +70,9 @@ What a sound load does:
 | Global DLY / REVERB / CHORUS, tempo, tuning | never touched | never touched |
 | Everything else (engine values, ENV, LFOs, matrix, ...) | the preset's or default | the saved |
 
-**MENU > VOICES > FX HOLD** (HOME held, ALGORITHM to VOICES, the last row) switches it; it is a device setting kept with the other
-settings, not part of a project. **SOUND INIT**, a new project (INIT) and power-on start from scratch whatever FX HOLD says: the engine's
+**FX HOLD** is the fourth card (KNOB 4) of the INSERT A / B / C group in the FX family, and the last row of MENU > VOICES (HOME held, ALGORITHM to VOICES):
+both switch the same setting. It is a device setting kept with the other settings, not part of a project and not of the track the group belongs to,
+although the group's tag says T1 to T4. **SOUND INIT**, a new project (INIT) and power-on start from scratch whatever FX HOLD says: the engine's
 first preset with its sends, INSERT OFF. **CLEAN INIT** clears the sends and the INSERT. Loading a **project** (or LIVE LOAD FULL) restores
 the FX it saved. SAVE held (undo) after a load gives back the sound as it was. Automation and locks on the sends are not touched.
 Before the FX HOLD change a factory preset load switched the INSERT OFF.
