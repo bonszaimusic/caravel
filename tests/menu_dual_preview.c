@@ -51,13 +51,17 @@ int main(int argc, char **argv)
             assert(lfo2_get(0, L2_FIRST + L2_SYNC) == sync + 1);
             assert(lfo2_get(0, L2_FIRST + L2_RATE) == rate + 1);
             turn(EN_SELECT, 1);
+            assert(str_eq(cur_page()->title, "LFO DEST"));
+            turn(EN_SELECT, 1);
             assert(cur_page()->graph == GR_MOD);
+            turn(EN_SELECT, -1);
+            assert(str_eq(cur_page()->title, "LFO DEST"));
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFO2SYNC);
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFO2);
             turn(EN_SELECT, -1);
-            assert(str_eq(cur_page()->title, "LFO DEST"));
+            assert(str_eq(cur_page()->title, "LFO SYNC"));
             /* LFO (1) uses the same two groups; its K1-4 edit the track's own parameters */
             for (uint32_t b1 = 0; b1 < 2; b1++) {
                 char path[320];
@@ -75,7 +79,7 @@ int main(int argc, char **argv)
             turn(EN_K1, 1);
             assert(TSEL->p[P_LSYNC] == s1 + 1 && TSEL->p[P_LRATE] == r1 + 1);
             turn(EN_SELECT, 1);
-            assert(str_eq(cur_page()->title, "LFO DEST"));
+            assert(cur_page()->graph == GR_LFO2);
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFOSYNC);
             turn(EN_SELECT, -1);
@@ -111,6 +115,27 @@ int main(int argc, char **argv)
                 turn(EN_SELECT, -1);
                 assert(str_eq(cur_page()->title, PAIRS[k].top));
                 TSEL->eng_req = keep_eng; frame();
+            }
+            {   /* LFO DEST above MOD: KNOB 1 of the lower group picks the slot, 2..4 edit its SRC DST AMT */
+                char p1[320];
+                TSEL->p[P_M1SRC] = 1; TSEL->p[P_M1DST] = 2; TSEL->p[P_M1AMT] = 90;          /* slots 1 and 3 in use */
+                TSEL->p[P_M1SRC + 6] = 2; TSEL->p[P_M1DST + 6] = 3; TSEL->p[P_M1AMT + 6] = 40;
+                mod_ui_slot = 2;
+                for (uint32_t b3 = 0; b3 < 2; b3++) {
+                    go_title(b3 ? "MOD" : "LFO DEST"); frame();
+                    snprintf(p1, sizeof p1, "%s/lfodest-mod-palette-%02u-%s-%s.ppm", argv[1], palette, large ? "large" : "normal", b3 ? "bottom" : "top");
+                    save_screen(p1);
+                }
+                go_title("MOD"); frame();
+                assert(dual_bottom(cur_page()));
+                uint32_t slot0 = mod_ui_slot;
+                int16_t d0 = TSEL->p[P_LD_PIT];
+                turn(EN_K1, 1);
+                assert(mod_ui_slot == slot0 + 1u && TSEL->p[P_LD_PIT] == d0);
+                int16_t m0 = TSEL->p[P_M1SRC + 3u * mod_ui_slot];
+                turn(EN_K2, 1);
+                assert(TSEL->p[P_M1SRC + 3u * mod_ui_slot] != m0 && TSEL->p[P_LD_PIT] == d0);
+                mod_ui_slot = 0;
             }
             {   /* INSERT: the type's curve beside TYPE and MIX (a drive, a folder, a phaser); not asserted, captured */
                 static const struct { const char *name; uint32_t type; } IT[] = {{"soft", IT_SOFT}, {"fold", IT_FOLD}, {"crush", IT_CRUSH}, {"phaser", IT_PHASER}};
@@ -162,8 +187,8 @@ int main(int argc, char **argv)
     }
     {   /* the footer's numbering: a two-group view counts once and shows its number on both halves */
         static const struct { const char *page, *want; } T[] = {
-            {"LFO", "LFO TOP 1/4"}, {"LFO SYNC", "LFO BOTTOM 1/4"}, {"LFO DEST", "LFO DEST 2/4"},
-            {"LFO2", "LFO2 TOP 3/4"}, {"LFO2 SYNC", "LFO2 BOTTOM 3/4"}, {"MOD", "MOD 4/4"},
+            {"LFO", "LFO TOP 1/3"}, {"LFO SYNC", "LFO BOTTOM 1/3"}, {"LFO2", "LFO2 TOP 2/3"}, {"LFO2 SYNC", "LFO2 BOTTOM 2/3"},
+            {"LFO DEST", "LFO DEST 3/3"}, {"MOD", "MOD 3/3"},
             {"FX", "FX SENDS 1/4"}, {"DLY", "DELAY 1/4"}, {"REVERB", "REVERB 2/4"}, {"CHORUS", "CHORUS 2/4"},
             {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT A-C 3/4"}, {"SLICER", "SLICER 4/4"},
             {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};

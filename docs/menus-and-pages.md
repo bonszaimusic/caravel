@@ -12,6 +12,7 @@ These pages show two groups of four parameters at once instead of one page and a
 | --- | --- | --- |
 | LFO | LFO SYNC | LFO SHAPE / RATE · LFO SYNC / TRIGGER |
 | LFO2 | LFO2 SYNC | LFO2 SHAPE / RATE · LFO2 SYNC / TRIGGER |
+| LFO DEST | MOD | LFO AMOUNTS · MOD MATRIX (SLOT, SRC, DST, AMT; four pips in the header show which slots are in use) |
 | ENV | ENV DEST | ENV · ENV DEST / SYNC |
 | ARP | ARP 2 | ARP MODE / RATE · ARP SWING / ORDER |
 | VOICE | VOICE 2 | VOICE MODE / GLIDE · VOICE ALLOC / PAN |
@@ -30,8 +31,8 @@ Both work in normal and LARGE text sizes (the WAVE value stays in the medium fac
 **EDIT 1 / 2 keep their normal layout** for the engines whose page is a picture of the sound: SAMPLE (the waveform), WHEEL (the drawbars)
 and FM6 (the algorithm chart); on every other engine they use the two-group layout and lose only the oscilloscope.
 
-**The footer** shows the view and its number in its family: **LFO TOP 1/4**, **LFO BOTTOM 1/4**, **LFO DEST 2/4**, **LFO2 TOP 3/4**,
-**MOD 4/4**. The two groups of a pair count as one view; a family with one view shows no number (ENV TOP, ARP TOP). The FX family order is
+**The footer** shows the view and its number in its family: **LFO TOP 1/3**, **LFO BOTTOM 1/3**, **LFO2 TOP 2/3**, **LFO DEST 3/3**,
+**MOD 3/3**. The two groups of a pair count as one view; a family with one view shows no number (ENV TOP, ARP TOP). The FX family order is
 FX, DLY, REVERB, CHORUS, INSERT, INSERT 2, SLICER, so each pair is one view: FX SENDS 1/4, REVERB 2/4, INSERT 3/4, SLICER 4/4.
 
 **Who a group is for:** every group's header carries a small tag: **ALL** (accent colour) for the global pages (DELAY, REVERB, CHORUS), **T1** to

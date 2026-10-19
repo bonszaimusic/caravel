@@ -50,6 +50,7 @@ typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual
 static const dual_t DUALS[] = {
     {"LFO", "LFO SYNC", "LFO SHAPE / RATE", "LFO SYNC / TRIGGER", "LFO TOP", "LFO BOTTOM", DK_LFO},
     {"LFO2", "LFO2 SYNC", "LFO2 SHAPE / RATE", "LFO2 SYNC / TRIGGER", "LFO2 TOP", "LFO2 BOTTOM", DK_LFO2},
+    {"LFO DEST", "MOD", "LFO AMOUNTS", "MOD MATRIX", "LFO DEST", "MOD", DK_PLAIN},
     {"ENV", "ENV DEST", "ENV", "ENV DEST / SYNC", "ENV TOP", "ENV BOTTOM", DK_ENV},
     {"EDIT 1", "EDIT 2", "EDIT 1", "EDIT 2", "EDIT TOP", "EDIT BOTTOM", DK_EDIT},
     {"FILTER", "MORE", "FILTER", "MORE", "FILTER", "MORE", DK_PLAIN},        /* ANALOG only: FILTER beside MORE */
@@ -107,6 +108,11 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         if (d)
             *v = lfo2_get(song.sel, id);
         return d;
+    }
+    if (rp && rp->graph == GR_MOD && !col) {                  /* MOD: KNOB 1 picks the slot (ui_input.c), as on its own page */
+        static const param_desc_t SLOT = {"SLOT", F_INT, 1, 4, 1, 0, "/4"};
+        *v = (int32_t)mod_ui_slot + 1;
+        return &SLOT;
     }
     d = rp ? page_desc(rp, col, &vp) : 0;
     if (d && vp)
@@ -184,6 +190,9 @@ static void lfo_cards(const page_t *pg)
     if (dd->kind == DK_GRAPH)                              /* the graph: the pattern, the mode, the rate, the depth, the playing step */
         sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
               (uint32_t)TSEL->p[P_SLRATE] * 7919u + (uint32_t)TSEL->p[P_SLPAT] * 31337u + sl[TSEL - trk].idx * 977u;
+    if (rps[1] && rps[1]->graph == GR_MOD)                 /* the slot pips: every slot's SRC, DST and AMT */
+        for (uint32_t k = 0; k < NMSLOT * 3u; k++)
+            sig = sig * 33u + (uint32_t)TSEL->p[P_M1SRC + k];
     if (dd->kind == DK_INS)                                /* the curve: TYPE and MIX are cards, A B C are not on this page */
         sig = sig * 33u + (uint32_t)TSEL->p[P_IA] * 97u + (uint32_t)TSEL->p[P_IB] * 8191u + (uint32_t)TSEL->p[P_IC] * 524287u;
     if (!ui.force && ui.graph_sig == sig)
@@ -205,6 +214,18 @@ static void lfo_cards(const page_t *pg)
         cv_rect(5, y + 5, 230, 16, head);
         cv_text_on(10, y + 6, &AF_S, row ? dd->hb : dd->ht, active ? T_INK : T_TEXT, head);
         cv_text_r(230, y + 6, &AF_S, active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+        if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
+            for (uint32_t k = 0; k < NMSLOT; k++) {
+                const int16_t *mp = &TSEL->p[P_M1SRC + 3u * k];
+                int on = mp[0] && mp[1] && mp[2];
+                int32_t px = 90 + (int32_t)k * 11;
+                cv_rrect(px, y + 8, 8, 8, 2, on ? (active ? T_INK : T_MID) : T_RAISE, head);
+                if (!on)
+                    cv_rrect(px + 1, y + 9, 6, 6, 1, head, T_RAISE);
+                if (k == mod_ui_slot)
+                    cv_rect(px, y + 18, 8, 1, active ? T_INK : T_MID);
+            }
+        }
         if (rps[row] || dd->kind == DK_LFO2) {            /* who the group is for: this track, or every track (a global page) */
             char tag[4];
             int global = rps[row] && rps[row]->scope == SC_GLOBAL;
