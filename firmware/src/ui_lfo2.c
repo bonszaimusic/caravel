@@ -44,7 +44,7 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 }
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
-enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT };
+enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH };   /* DK_GRAPH: one page above, its graph in the lower block */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
     {"LFO", "LFO SYNC", "LFO SHAPE / RATE", "LFO SYNC / TRIGGER", "LFO TOP", "LFO BOTTOM", DK_LFO},
@@ -52,7 +52,10 @@ static const dual_t DUALS[] = {
     {"ENV", "ENV DEST", "ENV", "ENV DEST / SYNC", "ENV TOP", "ENV BOTTOM", DK_ENV},
     {"EDIT 1", "EDIT 2", "EDIT 1", "EDIT 2", "EDIT TOP", "EDIT BOTTOM", DK_EDIT},
     {"LANES", "LANES 2", "LANES 1-4", "LANES 5-8", "LANES TOP", "LANES BOTTOM", DK_PLAIN},
-    {"FX", "INSERT", "FX SENDS", "INSERT TYPE / A B C", "FX TOP", "FX BOTTOM", DK_PLAIN},
+    {"FX", "DLY", "FX SENDS (THIS TRACK)", "DELAY (ALL TRACKS)", "FX SENDS", "DELAY", DK_PLAIN},
+    {"REVERB", "CHORUS", "REVERB (ALL TRACKS)", "CHORUS (ALL TRACKS)", "REVERB", "CHORUS", DK_PLAIN},
+    {"INSERT", "INSERT 2", "INSERT TYPE / A B C", "INSERT MIX", "INSERT", "INSERT MIX", DK_PLAIN},
+    {"SLICER", "", "SLICER", "STEP PATTERN", "SLICER", "", DK_GRAPH},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
 };
@@ -69,7 +72,7 @@ static const dual_t *dual_of(const page_t *pg, uint32_t *bottom)
         if (DUALS[i].kind == DK_EDIT && edit_has_picture())
             continue;
         if (str_eq(pg->title, DUALS[i].top)) { if (bottom) *bottom = 0; return &DUALS[i]; }
-        if (str_eq(pg->title, DUALS[i].bot)) { if (bottom) *bottom = 1; return &DUALS[i]; }
+        if (DUALS[i].bot[0] && str_eq(pg->title, DUALS[i].bot)) { if (bottom) *bottom = 1; return &DUALS[i]; }
     }
     return 0;
 }
@@ -106,6 +109,37 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         *v = *vp;
     return d;
 }
+/* DK_GRAPH's lower block: the SLICER's 16-step pattern in a frame like the groups' (graph_slicer's bars, half the height):
+ * an open step a full bar, a closed GATE step what DEPTH leaves open, a closed STUT step a dashed bar, the playing step marked */
+static void slicer_block(const track_t *t, const char *title)
+{
+    uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
+    static const char *const MODE[] = {"OFF", "GATE", "STUT"};
+    int32_t top = 28, hb = 40, open = hb - t->p[P_SLDEPTH] * hb / 127;       /* px a closed GATE step keeps */
+    uint16_t col = mode == SL_OFF ? T_DIM : T_MID;
+    cv_begin(240, 80, T_BG);
+    cv_rrect(3, 0, 234, 80, 5, T_RAISE, T_BG);
+    cv_rrect(5, 2, 230, 76, 3, T_SURF, T_RAISE);
+    cv_rect(5, 5, 230, 16, T_SURF);
+    cv_text_on(10, 6, &AF_S, title, T_TEXT, T_SURF);
+    cv_text_r(230, 6, &AF_S, MODE[mode % 3u], mode == SL_OFF ? T_DIM : T_MID, T_SURF);
+    for (i = 0; i < 16u; i++) {
+        int32_t x = bar_x(i);
+        if ((pat >> i) & 1u) {
+            cv_rrect(x, top, 9, hb, 2, mode == SL_OFF ? T_RAISE : col, T_SURF);
+        } else if (mode == SL_STUT) {
+            for (int32_t y = top; y < top + hb; y += 4)
+                cv_rect(x, y, 9, 1, col);
+        } else {
+            cv_rrect(x, top + hb - 3, 9, 3, 1, T_RAISE, T_SURF);
+            if (open > 3)
+                cv_rrect(x, top + hb - open, 9, open, 2, T_RAISE, T_SURF);
+        }
+        if (mode != SL_OFF && i == cur)
+            cv_rect(x, top + hb + 3, 9, 2, T_ACCENT);
+    }
+    cv_blit(0, Y_LABEL + 90u);
+}
 static void lfo_cards(const page_t *pg)
 {
     uint32_t bottom;
@@ -120,12 +154,19 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
+    if (dd->kind == DK_GRAPH)                              /* the graph: the pattern, the mode, the depth, the playing step */
+        sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
+              sl[TSEL - trk].idx * 977u;
     if (!ui.force && ui.graph_sig == sig)
         return;
     ui.graph_sig = sig;
     for (uint32_t row = 0; row < 2u; row++) {
         int active = row == bottom;
         int32_t y = 0;
+        if (dd->kind == DK_GRAPH && row) {
+            slicer_block(TSEL, dd->hb);
+            continue;
+        }
         /* Two small blits reuse the existing canvas instead of increasing pool RAM. */
         cv_begin(240, row ? 80 : 90, T_BG);
         uint16_t edge = active ? T_THEME : T_RAISE;

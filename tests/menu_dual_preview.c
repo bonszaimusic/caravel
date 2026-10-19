@@ -4,6 +4,7 @@
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 
+static char path0[320];
 static void save_screen(const char *path)
 {
     FILE *f = fopen(path, "wb");
@@ -80,33 +81,43 @@ int main(int argc, char **argv)
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFO);
             /* ARP and VOICE: the same two-group layout over their two normal pages */
-            static const struct { const char *top, *bot; uint32_t a, b; } PAIRS[] = {
-                {"ARP", "ARP 2", P_AMODE, P_ASWING}, {"VOICE", "VOICE 2", P_VOICE, P_ALLOC},
-                {"ENV", "ENV DEST", P_ATK, P_ED_FLT}, {"EDIT 1", "EDIT 2", P_E0, P_E4}, {"LANES", "LANES 2", P_LN0, P_LN4}, {"FX", "INSERT", P_DIST, P_ITYPE}};
-            for (uint32_t k = 0; k < 6; k++) {
+            static const struct { const char *top, *bot, *name; uint32_t a, b; int ga, gb; } PAIRS[] = {
+                {"ARP", "ARP 2", "arp", P_AMODE, P_ASWING, 0, 0}, {"VOICE", "VOICE 2", "voice", P_VOICE, P_ALLOC, 0, 0},
+                {"ENV", "ENV DEST", "env", P_ATK, P_ED_FLT, 0, 0}, {"EDIT 1", "EDIT 2", "edit", P_E0, P_E4, 0, 0},
+                {"LANES", "LANES 2", "lanes", P_LN0, P_LN4, 0, 0}, {"FX", "DLY", "fx-delay", P_DIST, G_DTIME, 0, 1},
+                {"REVERB", "CHORUS", "reverb-chorus", G_RTYPE, G_CRATE, 1, 1}, {"INSERT", "INSERT 2", "insert", P_ITYPE, P_IMIX, 0, 0}};
+            #define PV(k, ab) (PAIRS[k].g##ab ? &song.g[PAIRS[k].ab] : &TSEL->p[PAIRS[k].ab])
+            for (uint32_t k = 0; k < sizeof PAIRS / sizeof PAIRS[0]; k++) {
                 char path[320];
                 uint16_t keep_eng = TSEL->eng_req;
                 if (k == 4) { TSEL->eng_req = ENGI_DRUM; frame(); }   /* (LANES: DRUM only) */
                 for (uint32_t b2 = 0; b2 < 2; b2++) {
                     go_title(b2 ? PAIRS[k].bot : PAIRS[k].top); frame();
-                    snprintf(path, sizeof path, "%s/%s-palette-%02u-%s-%s.ppm", argv[1], k == 5 ? "fx" : k == 4 ? "lanes" : k == 3 ? "edit" : k == 2 ? "env" : k ? "voice" : "arp", palette,
+                    snprintf(path, sizeof path, "%s/%s-palette-%02u-%s-%s.ppm", argv[1], PAIRS[k].name, palette,
                              large ? "large" : "normal", b2 ? "bottom" : "top");
                     save_screen(path);
                 }
                 go_title(PAIRS[k].top); frame();
-                int32_t a0 = TSEL->p[PAIRS[k].a], b0 = TSEL->p[PAIRS[k].b];
+                int32_t a0 = *PV(k, a), b0 = *PV(k, b);
                 turn(EN_K1, 1);
-                if (TSEL->p[PAIRS[k].a] == a0) turn(EN_K1, -1);       /* (at its maximum: the other way) */
-                assert(TSEL->p[PAIRS[k].a] != a0 && TSEL->p[PAIRS[k].b] == b0);
+                if (*PV(k, a) == a0) turn(EN_K1, -1);       /* (at its maximum: the other way) */
+                assert(*PV(k, a) != a0 && *PV(k, b) == b0);
                 turn(EN_SELECT, 1);
                 assert(str_eq(cur_page()->title, PAIRS[k].bot));
-                a0 = TSEL->p[PAIRS[k].a];
+                a0 = *PV(k, a);
                 turn(EN_K1, 1);
-                if (TSEL->p[PAIRS[k].b] == b0) turn(EN_K1, -1);
-                assert(TSEL->p[PAIRS[k].b] != b0 && TSEL->p[PAIRS[k].a] == a0);
+                if (*PV(k, b) == b0) turn(EN_K1, -1);
+                assert(*PV(k, b) != b0 && *PV(k, a) == a0);
                 turn(EN_SELECT, -1);
                 assert(str_eq(cur_page()->title, PAIRS[k].top));
                 TSEL->eng_req = keep_eng; frame();
+            }
+            {   /* SLICER: one page, its graph in the lower block; SELECT leaves it for the next view */
+                go_title("SLICER"); frame();
+                assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+                snprintf(path0, sizeof path0, "%s/slicer-palette-%02u-%s.ppm", argv[1], palette, large ? "large" : "normal");
+                TSEL->p[P_SLCR] = 1; TSEL->p[P_SLPAT] = 8; frame();
+                save_screen(path0);
             }
             {   /* EDIT keeps its normal layout (and its picture) for FM6, SAMPLE and WHEEL */
                 uint16_t keep = TSEL->eng_req;
@@ -143,8 +154,9 @@ int main(int argc, char **argv)
         static const struct { const char *page, *want; } T[] = {
             {"LFO", "LFO TOP 1/4"}, {"LFO SYNC", "LFO BOTTOM 1/4"}, {"LFO DEST", "LFO DEST 2/4"},
             {"LFO2", "LFO2 TOP 3/4"}, {"LFO2 SYNC", "LFO2 BOTTOM 3/4"}, {"MOD", "MOD 4/4"},
-            {"FX", "FX TOP 1/6"}, {"INSERT", "FX BOTTOM 1/6"}, {"INSERT 2", "INSERT 2 2/6"}, {"SLICER", "SLICER 3/6"},
-            {"DLY", "DLY 4/6"}, {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};
+            {"FX", "FX SENDS 1/4"}, {"DLY", "DELAY 1/4"}, {"REVERB", "REVERB 2/4"}, {"CHORUS", "CHORUS 2/4"},
+            {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT MIX 3/4"}, {"SLICER", "SLICER 4/4"},
+            {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};
         ui_power_on();
         for (uint32_t i = 0; i < sizeof T / sizeof T[0]; i++) {
             char ti[20];
