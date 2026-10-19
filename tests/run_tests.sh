@@ -339,6 +339,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "Track voice reservations: isolated notes, ARPs, UNISON, DRUM-X, FX, panel and settings migration" "$OUT/voice_reserve_test"
     $CC -O1 -w -DTIMER5_SYNTH_TEST=1 -Ibuild/gen -Ifirmware/src -o "$OUT/timer5_cc_clock_test" tests/timer5_midi_test.c -lm
     run "TRS clock and all four sequencers under saturated learned CCs (64 mappings, ANALOG and DRUM-X)" "$OUT/timer5_cc_clock_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/midi_clock_cc_test" tests/midi_clock_cc_test.c -lm
+    run "TRS clock at 60..174 BPM with a CC on the wire: tempo, displayed BPM and sequencer position against the wall clock" "$OUT/midi_clock_cc_test"
     $CC -O1 -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/digital_test" tests/digital_test.c -lm
     run "DIGITAL (retired, built here with FELUCCA_FM4=1): operator envelopes/levels" "$OUT/digital_test"
     $CC -O2 -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/fm4_test" tests/fm4_test.c -lm
@@ -552,6 +554,8 @@ else
     done
     $SCC -DTIMER5_SYNTH_TEST=1 -o "$A/timer5_cc_clock_test" tests/timer5_midi_test.c -lm
     run "ASan/UBSan: TRS clock under learned CC load during audio" "$A/timer5_cc_clock_test"
+    $SCC -Itests -o "$A/midi_clock_cc_test" tests/midi_clock_cc_test.c -lm
+    run "ASan/UBSan: TRS clock at 60..174 BPM with a CC on the wire" "$A/midi_clock_cc_test"
     $SCC -o "$A/fuzz_ed" tests/fuzz_ed.c -lm
     run "ASan/UBSan fuzz: editor SysEx and raw USB-MIDI packets (20000, seed 7)" "$A/fuzz_ed" 20000 7
     $SCC -o "$A/fuzz_proj" tests/fuzz_proj.c -lm
