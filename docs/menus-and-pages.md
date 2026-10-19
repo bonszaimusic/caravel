@@ -23,7 +23,7 @@ These pages show two groups of four parameters at once instead of one page and a
 | INSERT | INSERT 2 | INSERT TYPE / MIX (with the type's curve) · INSERT A / B / C |
 | SLICER | (its graph) | SLICER · the step pattern and what it does to a tone |
 | SCL | (its keys) | SCALE · the 12 keys: the scale lit, the root in the accent colour |
-| CHORD | (its keys) | CHORD KEYS · the chord's name and notes on the keys |
+| CHORD | (its keys) | CHORD KEYS · the chord each scale note plays (DIA3, DIA7) with the last one marked, and its notes on the keys |
 
 The active group is framed in the theme colour and marked **EDIT K1-4**; KNOB 1..4 edit it. The other group stays readable and is marked
 VIEW. A page's graph (the LFO scope, the ADSR graph, the effect pictures) is not drawn on these pages; instead a small pictogram under the

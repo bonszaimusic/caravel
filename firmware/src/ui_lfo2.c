@@ -202,20 +202,21 @@ static void scale_block(const track_t *t)
     }
     cv_blit(0, Y_LABEL + 90u);
 }
-/* CHORD: its name ("Cm7": the last one the track played, else the one on its ROOT from C4) as the title, the keys from the C below
- * its lowest note (two octaves, three for a wide chord): its notes THEME, its root the accent, the others RAISE */
+/* CHORD: two lanes. Above, what the keys play: with DIA3 / DIA7 the chord on each note of the scale (name on a cell, the one played last
+ * in the accent colour); with the other shapes every key plays that shape, said in a line. Below, the last chord (its name is the block's
+ * title): the keys from the C below its lowest note (two octaves, three for a wide chord), its notes THEME, its root the accent. */
 static void chord_block(const track_t *t)
 {
     static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint8_t nn[CHORD_MAX];
-    uint32_t n, i, j, k = trk_index(t), lo, cnt, w;
+    uint8_t nn[CHORD_MAX], tmp[CHORD_MAX];
+    uint32_t n, i, j, k = trk_index(t), lo, cnt, w, mode = (uint32_t)t->p[P_CHRD];
     int32_t r;
     uint16_t mask;
     char b[12];
     const char *cap = "LAST";
-    if (!t->p[P_CHRD] || chord_kit(t)) {
-        block_begin(t->p[P_CHRD] ? "NO CHORDS ON KITS" : "CHORD KEYS OFF", 0, T_MID);
-        if (!t->p[P_CHRD])
+    if (!mode || chord_kit(t)) {
+        block_begin(mode ? "NO CHORDS ON KITS" : "CHORD KEYS OFF", 0, T_MID);
+        if (!mode)
             cv_text_in(5, 40, 230, &AF_S, "K1: DIA3 PLAYS IN-KEY CHORDS", T_MID, T_SURF);
         cv_blit(0, Y_LABEL + 90u);
         return;
@@ -234,6 +235,33 @@ static void chord_block(const track_t *t)
         cap = "ROOT ONLY";                              /* MONO / LEGATO / UNISON */
     chord_name(b, (uint32_t)r, mask);
     block_begin(b, cap, T_MID);
+    if (mode == CH_DIA3 || mode == CH_DIA7) {           /* the chord of each scale note, from the ROOT up */
+        uint32_t sm = scale_mask(t), nd = 0, deg[12];
+        if (sm == 0xFFFu)
+            sm = SCALE_MASK[1];                         /* CHR: the major scale of ROOT (as chord.c) */
+        for (i = 0; i < 12u; i++)
+            if ((sm >> i) & 1u)
+                deg[nd++] = i;
+        w = 216u / nd;
+        for (i = 0; i < nd; i++) {
+            int32_t cr;
+            uint16_t cm;
+            char nm[12];
+            int32_t cx = 12 + (int32_t)(i * w + w / 2u), tw, y = 23 + (int32_t)(i & 1u) * 13;   /* (alternate cells on two rows: room for "Bm7b5") */
+            int hit = chord_last[k].n && chord_last[k].root % 12u == (uint32_t)(t->p[P_ROOT] + (int32_t)deg[i] + 120) % 12u;
+            chord_make(t, 60u + ((uint32_t)t->p[P_ROOT] + deg[i]) % 12u, tmp, &cr, &cm);
+            chord_name(nm, (uint32_t)cr, cm);
+            tw = text_w(&AF_S, nm);
+            cv_text_on(cx - tw / 2, y + 1, &AF_S, nm, hit ? T_ACCENT : T_TEXT, T_SURF);
+            if (hit)
+                cv_rect(cx - tw / 2, y + 13, tw, 2, T_ACCENT);
+        }
+    } else {
+        char ln[24];
+        str_cpy(ln, "EVERY KEY: ", 16);
+        str_cpy(ln + str_len(ln), N_CHRD[clamp(mode, 0, 9)], 8);
+        cv_text_in(5, 25, 230, &AF_S, ln, T_MID, T_SURF);
+    }
     lo = nn[0] - nn[0] % 12u;
     cnt = nn[n - 1u] - lo < 24u ? 24u : 36u;
     w = 216u / cnt;
@@ -242,7 +270,7 @@ static void chord_block(const track_t *t)
         int32_t x = 13 + (int32_t)(i * w);
         for (j = 0; j < n; j++)
             on |= nn[j] == note;
-        cv_rrect(x, BLACK[note % 12u] ? 26 : 44, (int32_t)w - 2, BLACK[note % 12u] ? 26 : 31, w > 6u ? 3 : 2,
+        cv_rrect(x, BLACK[note % 12u] ? 54 : 62, (int32_t)w - 2, BLACK[note % 12u] ? 10 : 14, w > 6u ? 3 : 2,
                  !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : T_THEME, T_SURF);
     }
     cv_blit(0, Y_LABEL + 90u);
