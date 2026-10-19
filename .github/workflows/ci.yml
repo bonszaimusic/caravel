@@ -56,3 +56,19 @@ jobs:
             LICENSING.md
             LICENSES/
             assets/samples-cc0/ATTRIBUTION.txt
+      - name: Install Emscripten (pinned, as the Pages workflow)
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Build the browser emulator (unverified preview of this commit)
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          sh web/emu/build.sh
+      - name: Upload the emulator (download, unzip, serve with a local web server; not hosted anywhere)
+        uses: actions/upload-artifact@v4
+        with:
+          name: caravel-emulator-unverified-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: build/emu

@@ -205,6 +205,7 @@ def installs():
     dev = FakeFM1(image)
     rc, out, err = cli([p], dev, answer=False)
     ok(rc == 1 and dev.upgrades == 0 and "cancelled" in out, "install: answer no -> nothing sent but the handshake")
+    ok("own risk" in out and "Transporter" in out and "no backup" in out, "install: the risk notice is printed before the question")
 
     dev = FakeFM1(image, identity="FM-1_905", name="Felucca")
     rc, out, err = cli(["--info"], dev)

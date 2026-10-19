@@ -6,6 +6,7 @@ What Caravel adds to Felucca 1.6.1 and how it works. The list of changes is in [
 [../NOTICE](../NOTICE), [../LICENSING.md](../LICENSING.md) and [../CREDITS.md](../CREDITS.md). Hardware acceptance on a real FM-1 is pending
 for everything here unless a guide says otherwise; host tests are not hardware measurements.
 
+- [Installing Caravel](installing.md): web installer, command line, a specific release, going back to the official firmware.
 - [Pages, groups and the settings menu](menus-and-pages.md): two parameter groups per screen, numbered footer, SELECT, MORE, EDIT and CLEAR STEP.
 - [Per-track voice reservations](voice-reservations.md)
 - [Modulation: LFO2](modulation/LFO2.md)
