@@ -10,7 +10,7 @@ static void l2slot(track_t *t, uint32_t source, uint32_t dest, int amount)
 }
 static void lfo_page_order(void)
 {
-    static const char *const titles[] = {"LFO", "LFO SYNC", "LFO DEST", "LFO2", "LFO2 SYNC", "MOD"};
+    static const char *const titles[] = {"LFO", "LFO SYNC", "LFO2", "LFO2 SYNC", "LFO DEST", "MOD"};
     uint32_t n = sizeof titles / sizeof titles[0];
     ui_power_on();
     press(B_LFO);
