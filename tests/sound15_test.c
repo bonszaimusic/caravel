@@ -205,10 +205,10 @@ static void test_filter(void)
         for (i = 0; i < NPAGES; i++)
             if (str_eq(PAGES[i].title, "FILTER"))
                 k = i + 1u;
-        /* MORPH, FEEDBACK and VOICE 3 are one MORE page (params.c) after the FILTER page: FILTER follows EDIT 2 directly */
-        check("EDIT > FILTER: TYPE CUT RES KTR (ANALOG's), directly after EDIT 2",
+        /* FILTER is the upper group of the view it shares with MORE (params.c, the two-group layout): the last two pages of the family */
+        check("EDIT > FILTER: TYPE CUT RES KTR (ANALOG's), directly before MORE",
               k && PAGES[k - 1u].fam == FAM_EDIT && PAGES[k - 1u].id[0] == P_FTYPE && PAGES[k - 1u].id[1] == P_E4 &&
-              PAGES[k - 1u].id[2] == P_E5 && PAGES[k - 1u].id[3] == P_E7 && str_eq(PAGES[k - 2u].title, "EDIT 2"));
+              PAGES[k - 1u].id[2] == P_E5 && PAGES[k - 1u].id[3] == P_E7 && str_eq(PAGES[k].title, "MORE"));
     }
     /* every engine but ANALOG ignores TYPE; ANALOG's LP is the golden renders' (regress.c) */
     for (e = 1; e < NENGINES; e++) {
