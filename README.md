@@ -98,7 +98,7 @@ FM-1 unusable or need a Transporter for attempted recovery. M-VAVE's updater or 
 attempt an official firmware reinstall, not guarantee factory condition, data restoration, warranty coverage or recoverability.
 Keep the official package and backups of your data. Non-excludable statutory rights and liability are unaffected.
 Use the [web installer](https://bonszaimusic.github.io/caravel/webapp/installer/) for browser-based updates, or
-`tools/fm1_install.py` to install a package from a terminal. The web tools are in `web/` and are built into the site by
+`tools/fm1_install.py` to install a package from a terminal. How to install a specific release, check it, and go back: [Installing Caravel](docs/installing.md). The web tools are in `web/` and are built into the site by
 `web/make_site.py` ([BUILDING.md](BUILDING.md)).
 
 - Build: [BUILDING.md](BUILDING.md); clone with the engines' submodule: `git clone --recurse-submodules https://github.com/bonszaimusic/caravel.git`

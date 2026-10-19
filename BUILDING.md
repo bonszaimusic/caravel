@@ -192,6 +192,8 @@ fixture suites run in disposable repositories and never overwrite audio goldens.
 
 ## Install
 
+Installing a release, with checks and the way back to the official firmware: [docs/installing.md](docs/installing.md). In short:
+
 Use the web installer in Chrome or Edge, built into a site with `web/make_site.py` (below; no hosted copy under the
 Caravel name yet). It installs the released package.
 
