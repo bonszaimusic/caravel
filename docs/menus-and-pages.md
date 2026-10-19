@@ -77,6 +77,14 @@ first preset with its sends, INSERT OFF. **CLEAN INIT** clears the sends and the
 the FX it saved. SAVE held (undo) after a load gives back the sound as it was. Automation and locks on the sends are not touched.
 FX HOLD covers exactly the track's own FX that a factory preset load sets: the four sends and the INSERT. The SLICER stays whatever FX HOLD says.
 
+## The caravel
+
+A small ship, Caravel's mark, sits as a faint watermark in the header between the track and the transport (in the palette's SURF colour; in the LINE
+style in RAISE, because SURF is the background there). At power-on it sails in over the splash screen for about 0.6 s; with MENU > ANIM OFF the splash
+stays the plain 0.4 s. The splash shows the name, the version, the maker and the licence. The picture is 28 x 17 pixels, one bit each (72 bytes of
+flash), drawn as rectangles, so it needs no RAM and the header is redrawn only when it changes anyway. There is no menu switch for it yet: the DISPLAY
+tab has no free row.
+
 ## SELECT
 
 MENU > CONTROL > SELECT chooses what the SELECT knob does: BPM, PAGE, MODW or VEL. On a device without saved settings it starts on

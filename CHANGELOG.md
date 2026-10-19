@@ -44,6 +44,9 @@ unless it says so; host tests and simulations are not hardware measurements.
   ("LFO TOP 1/4"; a pair counts as one view). A small pictogram shows the selected LFO wave and the ENV shape. A tag in every group's
   header says whether it is for **ALL** tracks (the global effects) or for the selected track (T1 to T4). INSERT shows the chosen type's
   curve; the SLICER page shows its step pattern and what it does to a tone, SCL its scale on the keys and CHORD the chord on each scale note (DIA3, DIA7) and the last chord's notes. Every other page frames its card row in the theme colour, so the cards KNOB 1-4 edit look the same everywhere (not in the LINE style).
+- **The caravel**: Caravel's mark, a 28 x 17 pixel ship (72 bytes of flash, no RAM), is a faint watermark in the header, between the track and the
+  transport, and sails over the power-on screen for about 0.6 s (MENU > ANIM OFF keeps the plain 0.4 s splash). The splash shows the name, the version,
+  the maker and the licence; the origin from Felucca stays in ABOUT and the credits.
 - **In the settings menu, SELECT walks the rows** and continues into the next tab (with SELECT on PAGE).
 - **CLEAR STEP: hold SEQ and press F5** clears the cursor step and its locks and moves on; one undo (SAVE held).
 - **MORE page** (EDIT family): SPREAD, MORPH and PHS FB on one page; slots the engine lacks are empty. It replaces the single-parameter

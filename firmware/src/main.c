@@ -164,7 +164,10 @@ static void fm1_main(void)
         settings_save();
     }
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
-    for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
+    for (ms = 0; ms < ((ui_prefs & PREF_ANIM_OFF) ? 400u : SPL_ANIM_MS); ms += 10u) {   /* the splash, with its ship sailing (MENU > ANIM
+                                                                                          * OFF: the plain 400 ms); the pot followed (MIDI IN plays under it) */
+        if (!(ui_prefs & PREF_ANIM_OFF) && ms % 50u == 0u)
+            draw_splash_ship(ms / 50u);
         fm1_delay_ms(10);
         master_poll();
     }

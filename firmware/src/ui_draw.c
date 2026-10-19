@@ -321,6 +321,32 @@ static void head_group(void)
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
     cv_text(x + 4, HEAD_MY, &AF_M, b, T_THEME);
 }
+/* The caravel (Caravel's mark): a 28 x 17 one-bit picture, 72 bytes of flash and no RAM, drawn as runs of rectangles. In the header it is a
+ * watermark, one pixel a dot, in the palette's SURF (RAISE in LINE style: SURF is the BG there), between the track and the transport
+ * where the header is empty; at power-on it sails over the splash three times as big (draw_splash_ship). Rows top down, bit 27 the left. */
+static const uint32_t SHIP_BITS[17] = {   /* (decimal: the build's register-address check reads hex words as windows) */
+    98304, 65536, 98304, 2093312, 2093312, 2088896, 2088928, 2088928, 4186080,
+    67108833, 67108838, 65077516, 67108848, 33554400, 16777152, 2096896, 0};
+#define SHIP_W 28
+#define SHIP_H 17
+#define HEAD_SHIP_X 44                                  /* its left (the REC mark's ink ends at 33, the transport starts past 80) */
+static void ship_draw(int32_t x0, int32_t y0, int32_t k, uint16_t col)
+{
+    for (int32_t r = 0; r < SHIP_H; r++) {
+        uint32_t row = SHIP_BITS[r];
+        for (int32_t c = 0; c < SHIP_W;) {
+            int32_t e = c;
+            if (!((row >> (SHIP_W - 1 - c)) & 1u)) {
+                c++;
+                continue;
+            }
+            while (e < SHIP_W && ((row >> (SHIP_W - 1 - e)) & 1u))
+                e++;
+            cv_rect(x0 + c * k, y0 + r * k, (e - c) * k, k, col);
+            c = e;
+        }
+    }
+}
 static void draw_head(void)
 {
     static int16_t metro_x = -1;                       /* the metronome's ink as drawn (-1: hidden), its beat */
@@ -370,6 +396,7 @@ static void draw_head(void)
     ui.head_sig = sig;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
+    ship_draw(HEAD_SHIP_X, (H_HEAD - SHIP_H) / 2, 1, ux.surf != ux.bg ? T_SURF : T_RAISE);   /* (behind everything else) */
     cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
                                                        * a MIDI IN note into it, #208: lit) */
     if (slot && (centre || !msg)) {                    /* the slot letter (not under a message centred: its room) */
@@ -1400,7 +1427,7 @@ static void draw_columns(void)
 #define SPL_X0 ((240u - SPL_SQ) / 2u)               /* its top-left on the screen (x and y) */
 #define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
 #define SPL_PITCH 20                                /* line to line */
-static const char *const SPLASH_LINES[] = {BRAND_NAME, FELUCCA_VERSION, "based on " BRAND_BASE, BRAND_MAKER};
+static const char *const SPLASH_LINES[] = {BRAND_NAME, FELUCCA_VERSION, BRAND_MAKER, "GPL-3.0"};   /* (the origin is in ABOUT and CREDITS) */
 /* a band of two lines, h tall, at y on the screen: the first line's top at ly; the two lines' capitals declared
  * against al0..al1 (mode: AL_V the band centred there, AL_B the last baseline on al1) */
 static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l, uint32_t mode, int32_t al0,
@@ -1422,6 +1449,28 @@ static void draw_splash(void)
                 SPL_PAD + SPL_PITCH + AF_M_CAP_H, "splash name + version SPL_PAD from the top");
     splash_band(SPL_X0 + SPL_SQ - (uint32_t)h, (uint32_t)h, lb - SPL_PITCH, SPLASH_LINES + 2, AL_B, 0, h - SPL_PAD,
                 "splash maker's baseline SPL_PAD from the bottom");
+    lcd_sync();
+}
+
+/* The power-on splash's ship (main.c, every 50 ms for ~0.6 s unless MENU > ANIM is OFF): in the free middle of the square it sails 24 px
+ * to the right over a swell and bobs; three times the header's picture (84 x 51), in the theme colour. */
+#define SPL_ANIM_MS 600u
+static void draw_splash_ship(uint32_t frame)
+{
+    int32_t h = SPL_PAD - AF_M_CAP_Y + SPL_PITCH + AF_M.h;     /* a text band, as draw_splash's */
+    int32_t mh = SPL_SQ - 2 * h;                                /* the middle between the bands */
+    int32_t sx = 24 + (int32_t)(frame < 12u ? frame : 12u) * 2;   /* sailing in, then at rest */
+    int32_t bob = (int32_t)(osc_sine((uint32_t)frame * 0x0D000000u) * 2 / 32768);
+    int32_t by = mh - 3 * SHIP_H - 4 + bob;                     /* the hull's top: clear of the swell below */
+    if (mh < 3 * SHIP_H + 8)
+        return;
+    cv_begin(SPL_SQ, (uint32_t)mh, T_RAISE);
+    ship_draw(sx, by < 0 ? 0 : by, 3, T_THEME);
+    for (int32_t x = 0; x < SPL_SQ; x += 2) {                   /* the swell, moving with the frame */
+        int32_t y = mh - 5 + (int32_t)(osc_sine(((uint32_t)x * 0x01800000u) + (uint32_t)frame * 0x0A000000u) * 2 / 32768);
+        cv_rect(x, y, 2, 2, T_MID);
+    }
+    cv_blit(SPL_X0, (uint32_t)(SPL_X0 + h));
     lcd_sync();
 }
 
