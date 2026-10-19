@@ -17,8 +17,10 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ENV", "[K1-4]A D S R[ENV]ENV DEST"},
     {"ENV DEST", "[K1-4]ENV AMOUNTS[ENV]ENV"},
     {"LFO", "[K1-4]SHAPE[LFO]HOLD: MOMENTARY"},
-    {"LFO 2", "[K1]SYNC TO BPM[LFO]LFO DEST"},
-    {"LFO DEST", "[K1-4]LFO AMOUNTS[LFO]MOD"},
+    {"LFO SYNC", "[K1]SYNC TO BPM[LFO]LFO DEST"},
+    {"LFO DEST", "[K1-4]LFO AMOUNTS[LFO]LFO2"},
+    {"LFO2", "[K1-4]SHAPE[LFO]LFO2 SYNC"},
+    {"LFO2 SYNC", "[K1]SYNC TO BPM[LFO]MOD"},
     {"MOD", "[K1]SLOT[K2]SOURCE[K3]DEST"},
     {"FX", "[K1-4]SENDS[FX]HOLD: PERFORM"},
     {"SLICER", "[K1]ON[K2]PATTERN[FX]INSERT"},
@@ -32,6 +34,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"EDIT 1", H_EDIT},
     {"EDIT 2", H_EDIT},
     {"FILTER", "[K1]LP BP HP[K2]CUTOFF[EDIT]VOICE"},
+    {"SEM MODE", "[K1]STATE BP HP[K2]PWM[K3]SPREAD"},
     {"LANES", H_LANES},
     {"LANES 2", H_LANES},
     {"SLICES", "[K1]SLICE[K2]MOVE[OCT+]SPLIT, JOIN"},
@@ -40,16 +43,22 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"OPERATOR 2", H_FMOP},
     {"VOICE", "[K1]POLY, MONO[K2]GLIDE"},
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
-    {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
+    {"MORE", "[K1]SPREAD[K2]MORPH[K3]PHS FB"},
     {"SONG", "[K1]SECTION[KEYS]A-D[PLAY]SONG"},
+    {"X KIT", "[K1]BP[K2]FEEDBACK[K3]IMAGE"},
+    {"X-MOD", "[K1]RATE[K2]DEPTH[K4]RANDOM"},
+    {"X SOUND", "[K1]SOUND[K2]SIDE[K3]PITCH"},
+    {"X SOUND 2", "[K1]SOUND[K2]DECAY[K3]NOISE"},
+    {"X MODE", "[K1]SOUND[K2]MODE[K3]PM.TYPE"},
+    {"X LAYER", "[K1]SOUND[K2]LAYER[K4]SEND"},
     {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
-    {"PROJECT", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (1.5.5, #199: ERASE) */
+    {"PROJECT", "[K2]INIT, ERASE[K4]SAVE"},   /* (1.5.5, #199: ERASE) */
     {"TOOLS", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
-    {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */
+    {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]+[REC]STEP REC"},
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
     {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},
@@ -107,3 +116,4 @@ static int help_row(const char *s, int32_t y)
         cv_key_row(8, 232, y, kh, n, 7u, T_BG);
     return n != 0u;
 }
+

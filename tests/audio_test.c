@@ -41,6 +41,7 @@ static void fresh(void)
     uint32_t p;
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
+    voice_policy = voice_policy_active = 0;
     memset(&chain, 0, sizeof chain);
     host_tracks_init();
     for (p = 0; p < NPART; p++) host_preset(&trk[p], 0, 0);
@@ -109,6 +110,14 @@ static void overload(void)
     lead->env = 10000; extra->env = 10;
     shed_voice();
     check("released voices shed the quieter tail first", extra->stage == 4u && lead->stage != 4u);
+    fresh();
+    voice_policy = VOICE_POLICY_FIXED | 0x1133u;
+    trk[0].p[P_VOICE] = V_POLY;
+    trk_note_on(&trk[0], 48, 100); trk_note_on(&trk[0], 60, 100);
+    lead = held(&trk[0], 48); extra = held(&trk[0], 60);
+    shed_voice();
+    check("FIXED reservations retain overload protection and preserve the lowest held note",
+          lead && extra && lead->gate && extra->stage == 4u && shed_count == 1u);
 }
 static void dma(void)
 {

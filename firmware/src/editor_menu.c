@@ -36,10 +36,13 @@ static const uint8_t ED_MENU[][2] = {
                                                        * as MIDI IN: 1..16 OMNI OFF (values 0..17), MIDI */
     {MI_MFOLLOW, 30},                                  /* 1.5.5 (#208): AUTO SELECT OFF / ON, a setting, MIDI */
     {MI_SCRWAKE, 31},                                  /* 1.5.5: SCREEN WAKE +MIDI / PANEL, a setting, MIDI */
+    {MI_FXTRACK, 32}, /* Custom: 1.6 uses upstream ids 0..31; FX TRACK moved from Bonszai 1.5.1 id 25. */
+    {MI_LIVELOAD, 33}, /* Custom: append-only, same setting and names as the device. */
 #if FELUCCA_CPU2
-    {MI_CPU2, 32},                                     /* 1.6.1, the second core (Discussion #141): 2ND CORE OFF / ON (BETA),
-                                                        * SYSTEM, from the next power-on (a FELUCCA_CPU2=0 build: 0..31) */
+    {MI_CPU2, 34}, /* Preserve Custom ids 32/33. Editors discover this descriptor. */
 #endif
+    {MI_EXTSTART, 35},
+    {MI_VMODE, 36}, {MI_V1, 37}, {MI_V2, 38}, {MI_V3, 39}, {MI_V4, 40},
 };
 #define ED_MENU_N NELEM(ED_MENU)
 
@@ -110,3 +113,4 @@ static int ed_menu_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
     ed_v((int32_t)menu_get(row) + lo);
     return 1;
 }
+

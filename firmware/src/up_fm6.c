@@ -83,6 +83,7 @@ static uint32_t upf_tag(const up_rec_t *r)       /* FNV-1a of the record without
     return h;
 }
 
+static int upf_dx(uint32_t k) { return up_used(k) && up_rec(k)->engine == ENGI_DRUM && up_value(up_rec(k), up_rec(k)->np - 8u) == DX_KIT_ID; }
 static int upf_fm6(uint32_t k) { return up_used(k) && up_rec(k)->engine == ENGI_FM6; }
 
 /* a 128-byte packed record's 7-bit bytes, 8 to 7 bytes (UPF_PK) and back (the voice bank too, fm6_vbank.c) */
@@ -117,7 +118,7 @@ static void upf_pk_put(const uint8_t *pk, uint8_t *d)
 /* slot k's patch -> pk (128 bytes), 0 = it has one */
 static int upf_get(uint32_t k, uint8_t *pk)
 {
-    if (k >= UP_SLOTS || !upf_valid(&upf) || !((upf.used >> k) & 1u) || !upf_fm6(k) ||
+    if (k >= UP_SLOTS || !upf_valid(&upf) || !((upf.used >> k) & 1u) || !(upf_fm6(k) || upf_dx(k)) ||
         upf.e[k].tag != upf_tag(up_rec(k)))
         return 1;
     upf_pk_get(upf.e[k].pk, pk);
@@ -132,8 +133,8 @@ static void upf_set(uint32_t k, const uint8_t *pk)
         return;
     if (!upf_valid(&upf))
         upf_empty();
-    fm6_unpack(pk, v);
-    fm6_pack(v, c);
+    if (upf_dx(k)) memcpy(c, pk, sizeof c);
+    else { fm6_unpack(pk, v); fm6_pack(v, c); }
     upf_pk_put(c, upf.e[k].pk);
     upf.e[k].tag = upf_tag(up_rec(k));
     upf.used |= 1u << k;
@@ -200,8 +201,12 @@ static void upf_track_load(track_t *t, uint32_t k)
 {
     uint8_t pk[FM6_PACKED], v[FP_SIZE + 1u];
     uint32_t tr = (uint32_t)(t - trk);
-    if (tr >= NTRK || t->eng_req != ENGI_FM6)
+    if (tr >= NTRK) return;
+    if (dx_track(t)) {
+        if (upf_get(k, pk) || !dx_unpack(tr, pk)) dx_reset(tr);
         return;
+    }
+    if (t->eng_req != ENGI_FM6) return;
     if (upf_get(k, pk)) {
         int32_t s = t->p[P_E7];
         memcpy(pk, s >= 0 && s < (int32_t)FM6_NFACTORY ? FM6_FACTORY[s] : FM6_INIT, FM6_PACKED);
@@ -215,7 +220,8 @@ static void upf_track_load(track_t *t, uint32_t k)
 static int upf_store(uint32_t k, uint32_t tr)
 {
     uint8_t pk[FM6_PACKED];
-    fm6_pack(fm6_patch[tr % NTRK], pk);
+    if (dx_track(&trk[tr % NTRK])) dx_pack(tr % NTRK, pk);
+    else fm6_pack(fm6_patch[tr % NTRK], pk);
     upf_set(k, pk);
     return upf_save();
 }

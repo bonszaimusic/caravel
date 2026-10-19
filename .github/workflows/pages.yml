@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 bonszaimusic
+#
+# The site on GitHub Pages: web installer, editor and browser emulator. It runs when a release is published (or by hand with
+# the version of an existing release) and puts that release's package on the site, so the installer installs exactly what
+# the release holds. Needs: Settings > Pages > Source: GitHub Actions, and a public repository (or a plan with private Pages).
+name: Pages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of an existing release, without the v (e.g. 0.1.0)'
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  site:
+    if: github.repository == 'bonszaimusic/caravel' && (github.event_name == 'workflow_dispatch' || !github.event.release.prerelease)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VER="${INPUT_VERSION:-${TAG#v}}"
+          case "$VER" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "bad version: $VER"; exit 1;; esac
+          echo "VER=$VER" >> "$GITHUB_ENV"
+      - name: Release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "v$VER" --pattern "caravel-$VER.fwsc" --dir "$RUNNER_TEMP/release"
+      - name: Install Python dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Download the JieLi AC79 SDK
+        run: |
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+            https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+      - name: Generate tables and fonts (the emulator builds from them)
+        env:
+          CC: cc -include stdint.h
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh
+      - name: Install Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Build the emulator and the site
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          EMU_PREVIEW=0 EMU_VERSION="v$VER" sh web/emu/build.sh
+          python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site
+          mkdir -p site/emulator
+          cp -R build/emu/. site/emulator/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

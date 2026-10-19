@@ -52,13 +52,19 @@ static void graph_adsr(const track_t *t, uint16_t c)
 
 static void graph_lfo(const track_t *t, uint16_t c)
 {
-    int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy, uni = t->p[P_LPOL] != 0;
-    uint32_t ph = (uint32_t)t->p[P_LPHASE] << 25;
+    int second = cur_page()->graph == GR_LFO2 || cur_page()->graph == GR_LFO2SYNC;
+    uint32_t k = (uint32_t)(t - trk);
+    int32_t wave = second ? lfo2_config[k].p[L2_WAVE] : t->p[P_LWAVE];
+    int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy,
+        uni = second ? lfo2_config[k].p[L2_POL] : t->p[P_LPOL] != 0;
+    uint32_t ph = (uint32_t)(second ? lfo2_config[k].p[L2_PHASE] : t->p[P_LPHASE]) << 25;
     int32_t z = uni ? cy + a : cy;                   /* the zero line: POL UNI (LFO 2) draws 0..+1 over it */
     cv_rect(PANEL_X0, z, PANEL_W, 1, T_RAISE);
     for (x = 0; x < PANEL_W; x++) {                  /* two cycles (lfo_wave only reads the track) */
-        int32_t w = lfo_wave((track_t *)t, ph + (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 2u))), y;
-        if (t->p[P_LWAVE] == 4)
+        uint32_t phase = ph + (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 2u));
+        int32_t w = second ? (wave == 1 ? osc_tri(phase) : wave == 2 ? (int32_t)(phase >> 16) - 32768 :
+            wave == 3 ? (phase < 0x80000000u ? 32767 : -32767) : osc_sine(phase)) : lfo_wave((track_t *)t, phase), y;
+        if (wave == 4)
             w = (int32_t)((x / 20 * 2654435761u) >> 16) - 32768;
         y = uni ? z - (w + 32768) * a / 32768 : cy - w * a / 32768;
         if (x)
@@ -1138,10 +1144,12 @@ static uint32_t strip_kind(void)
     if (ui.home)
         return SK_SCOPE;
     g = cur_page()->graph;
-    return g == GR_ADSR ? SK_ADSR : g == GR_LFO ? SK_LFO : g == GR_TRK ? SK_TRK : SK_TITLE;
+    return g == GR_ADSR ? SK_ADSR : (g == GR_LFO || g == GR_LFOSYNC || g == GR_LFO2 || g == GR_LFO2SYNC) ? SK_LFO : g == GR_TRK ? SK_TRK : SK_TITLE;
 }
 /* the page's title and its number in its family ("ENV DEST 2/2", EDIT: the engine's "OSC 1/2"); the piano roll: its
  * scale ("C MIN"); ti holds 20 (the footer, the strip) */
+static int dual_bottom(const page_t *pg);              /* ui_lfo2.c: the lower half of a two-group view */
+static const char *dual_foot(const page_t *pg);
 static void page_title(char *ti)
 {
     const page_t *pg = cur_page();
@@ -1149,13 +1157,14 @@ static void page_title(char *ti)
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
     uint32_t i, n = 0, k = 0;
     const char *pt = pg->scope == SC_ENGINE ? e->page_title[pg->id[0] != P_E0] : 0;   /* EDIT: the engine's */
+    const char *df = ui.home ? 0 : dual_foot(pg);                                    /* a two-group view: "LFO TOP" */
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == pg->fam && page_visible(i)) {
+        if (PAGES[i].fam == pg->fam && page_visible(i) && !dual_bottom(&PAGES[i])) {   /* (top and bottom: one view) */
             n++;
-            if (i == ui.page)
+            if (i == ui.page || (df && dual_bottom(pg) && i + 1u == ui.page))   /* (its top page just before) */
                 k = n;
         }
-    str_cpy(ti, pt ? pt : grid_on() && !detail_on() ? "GRID" : pg->title, 12);
+    str_cpy(ti, df ? df : pt ? pt : grid_on() && !detail_on() ? "GRID" : pg->title, df ? 16 : 12);
     if (n > 1) {
         str_cpy(ti + str_len(ti), " ", 4);
         fmt_int(ti + str_len(ti), (int32_t)k);
@@ -1225,6 +1234,7 @@ static uint32_t graph_signature(void)
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
         h += graph_pname_sig;
+        h ^= project_ram_mask() * 2654435761u;
     }
     if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the rows, the one selected, + ADD's place, PLAY,
                                                       * QUANTIZE */
@@ -1540,16 +1550,17 @@ static void graph_events(void)
             uint32_t id = MOTION_ID(e), lock = (e->param & MOTION_LOCK) != 0u;
             char b[16], nm[12];
             const char *unit;
-            const param_desc_t *d = track_desc(t, id);
+            const param_desc_t *d = MOTION_IS_FX(e) ? 0 : track_desc(t, id);
             int32_t x;
             b[0] = (char)('0' + ((e->place & 63u) + 1u) / 10u);
             b[1] = (char)('0' + ((e->place & 63u) + 1u) % 10u);
             b[2] = 0;
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, lock ? "LOCK" : "AUTO", sel ? T_INK : lock ? T_ACCENT : T_MID, bg);
+            cv_text_on(14, y + LIST_TY, &AF_M, MOTION_IS_FX(e) ? "FX" : lock ? "LOCK" : "AUTO", sel ? T_INK : lock ? T_ACCENT : T_MID, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
             cv_text_on(EV_SX, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
-            param_format(d, e->value, b, &unit);
+            if (MOTION_IS_FX(e)) { str_cpy(b, lock ? "OFF" : "ON", sizeof b); unit = ""; }
+            else param_format(d, e->value, b, &unit);
             ev_name(t, id, nm);
             x = ev_value(y, b, unit, sel ? T_INK : T_TEXT, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
@@ -1563,12 +1574,18 @@ static void graph_slots(void)
     uint32_t i;
     for (i = 0; i < 4u; i++) {
         int32_t y = 12 + (int32_t)i * 26;
-        char b[4];
+        char b[4], label[20];
         int sel = (int32_t)i + 1 == song.g[G_SLOT], used = graph_project_used(i);
         const char *n = graph_project_name(i);
         b[0] = (char)('A' + i);
         b[1] = 0;
-        list_row(y, sel, b, T_MID, !used ? "--" : n[0] ? n : "USED", used ? T_TEXT : T_DIM, 232);
+        const char *value = !used ? "--" : n[0] ? n : "USED";
+        if (used && (project_ram_mask() & (1u << i))) {
+            str_cpy(label, "RAM: ", sizeof label);
+            str_cpy(label + 5, value, sizeof label - 5);
+            value = label;
+        }
+        list_row(y, sel, b, T_MID, value, used ? T_TEXT : T_DIM, 232);
     }
 }
 /* MIXER page: four SURF columns, one under each card: the track number on its cushion (in the accent:
@@ -2269,6 +2286,9 @@ static void draw_graph(void)
         case GR_ADSR:
             graph_adsr(t, c);
             break;
+        case GR_LFO2:
+        case GR_LFO2SYNC:
+        case GR_LFOSYNC:
         case GR_LFO:
             graph_lfo(t, c);
             break;
@@ -2357,3 +2377,5 @@ static void draw_graph(void)
     cv_oy = 0;
     cv_blit(0, graph_y());
 }
+
+

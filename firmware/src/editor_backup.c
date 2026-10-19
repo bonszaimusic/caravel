@@ -107,7 +107,12 @@ static uint32_t ed_bk_commit(void)
         obj = OBJ_PROJECT0 + ed_bk_id - 2u;
     } else if (ed_bk_id == 1u) {
         const persist_t *p = (const persist_t *)raw;
-        if (ed_bk_len != sizeof *p || p->magic != PERSIST_MAGIC || !palette_stored_ok(p->palette) ||
+        if (!((ed_bk_len == sizeof *p && p->magic == PERSIST_MAGIC) ||
+              (ed_bk_len == PERSIST_PREENGINE_SIZE && p->magic == 0x50455236u) ||
+#if FELUCCA_DRUMX
+              (ed_bk_len == PERSIST_PREVOICE_SIZE && p->magic == 0x50455235u) ||
+#endif
+              (ed_bk_len == PERSIST_BASE_SIZE && p->magic == 0x50455234u)) || !palette_stored_ok(p->palette) ||
             p->lowcut > 2u || !leds_stored_ok(p->zoom) || !hold_stored_ok(p->bold) || p->favorites.filter > 1u || !ed_bk_panel_valid(&p->panel)) return 2;
         obj = OBJ_SETTINGS;
     } else if (ed_bk_id == 6u || ed_bk_id == 7u) {
@@ -140,8 +145,9 @@ static uint32_t ed_bk_commit(void)
             proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */
         if (ed_bk_len) memcpy(&proj_slot[ed_bk_id - 2u], raw, ed_bk_len);
     } else if (ed_bk_id == 1u) {
-        memcpy(&ed_bk_settings, raw, sizeof ed_bk_settings);
-        settings_import(&ed_bk_settings, sizeof ed_bk_settings);
+        memset(&ed_bk_settings, 0, sizeof ed_bk_settings);
+        memcpy(&ed_bk_settings, raw, ed_bk_len);
+        settings_import(&ed_bk_settings, ed_bk_len);
         panel_init(); settings_init(); palette_apply();
 #if FELUCCA_FLASH
         persist_saved = ed_bk_settings; persist_pending = 0;
@@ -168,7 +174,7 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
         if (n != 12u || a[6] > 15u || a[11] > 15u) return 1;
         uint32_t len = ed_bk_r32(a + 2);
         if (len > ED_BK_MAX || (a[1] == 0u && !proj_store_len(len)) ||
-            (a[1] == 1u && len != sizeof(persist_t)) ||
+            (a[1] == 1u && len != sizeof(persist_t) && len != PERSIST_PREENGINE_SIZE && len != PERSIST_PREVOICE_SIZE && len != PERSIST_BASE_SIZE) ||
             (a[1] >= 2u && a[1] <= 5u && len && !proj_store_len(len)) ||
             ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t)) ||
             (a[1] == 8u && len && len != sizeof(fm6_bank_t)) || (a[1] == 9u && len && len != sizeof(upf_t))) return 1;

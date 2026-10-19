@@ -2,13 +2,13 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments -->
 <!-- Sample input recording and waveform trimming adapted from Andrea (@andreahaku), PR #29.
-     Felucca web editor. One file, no libraries. Protocol: EDITOR_PROTOCOL.md.
+     Caravel web editor (the editor of the Felucca fork Caravel). One file, no libraries. Protocol: EDITOR_PROTOCOL.md.
      Add ?mock=1 to the URL to use a built-in simulated device. -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Felucca Editor</title>
+<title>Caravel Editor</title>
 <style>
   /* Fukiai: Hügelton Instruments' icon font (MIT, FUKIAI-LICENSE.txt). Icons are text in .ic spans;
      they stay hidden until the face has loaded (html.fk), so a missing font never shows boxes. */
@@ -157,7 +157,7 @@
 <body>
 <main>
   <button class="lang" id="lang"></button>
-  <h1>Felucca Editor</h1>
+  <h1>Caravel Editor</h1>
   <p class="dim"><a href="../installer/" style="color:inherit" data-t="installer"></a></p>
   <!-- always visible: connection, version, sync mode, the tabs and (Sound / Sequencer / Tracks) the track selector -->
   <header class="top">
@@ -332,6 +332,11 @@
 
   <section class="panel" id="p-settings" data-tab="settings" data-dev hidden>
     <div class="groups" id="setgroups"></div>
+    <div class="group" id="device-live-load" hidden style="margin-top:12px">
+      <h2>LIVE LOAD</h2>
+      <p class="dim" data-t="liveLoadHelp"></p>
+      <label class="bar">LIVE LOAD <select id="live-load" aria-label="LIVE LOAD"><option value="0">PATTERN</option><option value="1">FULL</option></select></label>
+    </div>
     <div class="group" id="device-display" hidden style="margin-top:12px">
       <h2 data-t="deviceDisplay"></h2>
       <p class="dim" data-t="deviceDisplayHelp"></p>
@@ -343,8 +348,8 @@
     </div>
   </section>
 
-  <footer>Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
-    <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners.<br>
+  <footer>Caravel by bonszaimusic, based on Felucca 1.6.1 by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
+    <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by Hügelton Instruments or M-VAVE. <a href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener">Source</a><br>
     <a href="FUKIAI-LICENSE.txt" data-t="iconsCredit"></a></footer>
 </main>
 <script>
@@ -360,7 +365,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
   MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, MENU_DESC: 72, MENU_SET: 73 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANGED]);
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
@@ -437,7 +442,7 @@ const parse = {
     if (trailer[0] === 16) o.chainRows = 16;       /* existing v6 SONG capability */
     if (trailer.length >= 4 && trailer[0] === 16 && trailer[1] === 0x55 && trailer[2] === 1)
       o.uiCaps = trailer[3] & 15;                 /* tagged preferences; never interpret old PR bytes as SONG */
-    o.motionMax = 0; o.chance = false; o.backupCaps = 0;
+    o.motionMax = 0; o.chance = false; o.backupCaps = 0; o.menuCount = 0;
     if (o.uiCaps && trailer[4] === 0x4d && trailer[5] === 1 && trailer[6] === 64) {
       o.motionMax = 64; o.chance = trailer[7] === 1;
       if (trailer[8] === 0x42 && trailer[9] === 1) o.backupCaps = trailer[10] & 3;
@@ -451,9 +456,11 @@ const parse = {
       /* FM6 v2 (1.0.3): bit 0 no bank (SLOT F1..F8, 8 = OWN), bit 1 the user presets carry their patch (target 3) */
       if (trailer[p + 7] === 0x50 && trailer[p + 8] === 1) o.fm6.caps = trailer[p + 9] & 3;
       let r = trailer[p + 7] === 0x50 ? p + 10 : p + 7;                                   /* RATCH after FM6 v2 */
-      if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
+      if (trailer[r] === 0x4E && trailer[r + 1] === 1) { o.menuCount = trailer[r + 2] || 0; r += 3; }
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
+    o.lfo2 = trailer.some((v,i)=>v===0x59 && trailer[i+1]===1 && trailer[i+2]===7);
+    o.drumx = trailer.some((v,i)=>v===0x58 && trailer[i+1]===1 && trailer[i+2]===64);
     return o;
   },
   [CMD.UI_STATE](a) {
@@ -485,7 +492,7 @@ const parse = {
   [CMD.DESC](a) {
     const r = new Reader(a);
     const o = { scope: r.b(), id: r.b(), fmt: r.b(), min: r.v(), max: r.v(), def: r.v(), label: r.s(), unit: r.s(), names: [] };
-    if (o.fmt === F.ENUM) for (let i = 0; i <= o.max - o.min && i < 24; i++) o.names.push(r.s());
+    if (o.fmt === F.ENUM) for (let i = 0; i <= o.max - o.min && i < 32; i++) o.names.push(r.s());
     return o;
   },
   [CMD.STEP_GET](a) {
@@ -586,12 +593,24 @@ const parse = {
     return o;
   },
   [CMD.FM6_ERASE](a) { return { index: a[0], rc: a[1] }; },
+  [CMD.MENU_DESC](a) {
+    const r = new Reader(a), o = { index: r.b(), id: r.b() };
+    if (o.id === 127) return o;
+    o.kind = r.b(); o.value = r.v(); o.min = r.v(); o.max = r.v(); o.name = r.s(); o.names = [];
+    if (o.kind === 0) for (let i = o.min; i <= o.max; i++) o.names.push(r.s());
+    else o.unit = r.s();
+    o.tab = r.b(); o.tabName = r.s();
+    return o;
+  },
+  [CMD.MENU_SET](a) { const r = new Reader(a); return { rc: r.b(), id: r.b(), value: r.v() }; },
 };
 
 /* a name the device accepts: printable ASCII, 1..12 characters */
 function upName(s) { return String(s ?? "").replace(/[^\x20-\x7E]/g, "").trim().slice(0, UP.NAME_MAX) || "PATCH"; }
 
 const req = {
+  menuDesc: (index) => [CMD.MENU_DESC, [index]],
+  menuSet: (id, value) => [CMD.MENU_SET, [id, ...v14enc(value)]],
   uiState: () => [CMD.UI_STATE, []],
   uiSet: (id, value) => [CMD.UI_SET, [id, value]],
   uiPalettes: () => [CMD.UI_PALETTES, []],
@@ -659,6 +678,8 @@ const req = {
 /* which reply belongs to which request (the device echoes these) */
 function replyMatches(cmd, args, a) {
   switch (cmd) {
+    case CMD.MENU_DESC: return a[0] === args[0];
+    case CMD.MENU_SET: return a[1] === args[0];
     case CMD.MOTION: return a[0] === args[0];
     case CMD.BACKUP_GET: return a[0] === args[0] && a.slice(2, 7).every((v, i) => v === args[i + 1]);
     case CMD.BACKUP_PUT: return a[0] === args[0] && a[1] === args[1];
@@ -782,6 +803,7 @@ function parseNotes(s) {
 
 /* close to the device's param_format (params.c), tables from tools/gen_tables.py */
 function fmtValue(d, v) {
+  if (d.formulaPrefix) return [d.formulaPrefix + String((v >> 2) + 1).padStart(2, "0"), ""];
   const sign = (x) => (x > 0 ? "+" + x : String(x));
   switch (d.fmt) {
     case F.PCT: return [String(d.max === 100 ? v : Math.trunc((v * 100 + 63) / 127)), "%"];   /* 0..100 (SWG): the value */
@@ -1120,6 +1142,8 @@ function cleanPatch(pt) {
   };
   if (Number.isInteger(pt.slot)) o.slot = pt.slot;
   if (Array.isArray(pt.fm6) && pt.fm6.length === FM6.PACKED) o.fm6 = pt.fm6.map((x) => (x | 0) & 127);   /* (a converted */
+  if (pt.lfo2 != null) { if (!lfo2Valid(pt.lfo2)) throw new Error("Invalid LFO2 settings"); o.lfo2 = [...pt.lfo2]; }
+  if (Array.isArray(pt.dx) && pt.dx.length === 135 && pt.dx.every(v=>Number.isInteger(v)&&v>=0&&v<=127)) o.dx = [...pt.dx];
   if (Array.isArray(pt.fm4)) o.fm4 = pt.fm4.map((v) => (Number.isFinite(v) ? Math.round(v) : null));    /* DIGITAL sound) */
   return o;
 }
@@ -1135,6 +1159,8 @@ function libraryFile(kind, patches, ctx) {
       const o = { name: c.name, engine: c.engine, engineName: c.engineName || (ctx.engines || [])[c.engine] || "",
         params: c.p, pattern: c.pattern, tags: c.tags, created: c.created, modified: c.modified };
       if (c.grid) o.grid = c.grid;
+      if (c.dx) o.dx = c.dx;
+      if (c.lfo2) o.lfo2 = c.lfo2;
       if (c.fm6) { o.fm6 = c.fm6; if (c.fm4) o.fm4 = c.fm4; }   /* an FM6 sound's own patch (a DIGITAL sound converted: and
                                                          the DIGITAL values) */
       if (Number.isInteger(x.slot)) o.slot = x.slot;
@@ -1195,6 +1221,33 @@ function readLibraryFile(obj, ctx) {
 /* device side; rq(r, opt) -> reply args (Link.request), info from INFO */
 const FLASH_OPT = { timeout: 2500, retries: 0 };
 const presetPatches = (info) => !!(info && info.fm6 && info.fm6.caps & 2);   /* user presets carry FM6 patches (1.0.3) */
+const L2_IDS = Array.from({length:7},(_,i)=>400+i);
+const L2_LABELS = ["Rate", "Wave", "Phase", "Fade", "Sync", "Trigger", "Polarity"];
+const L2_MAX = [127,4,127,127,10,1,1];
+function lfo2Valid(a) { return Array.isArray(a) && a.length===7 && a.every((v,i)=>Number.isInteger(v)&&v>=0&&v<=L2_MAX[i]); }
+function lfo2Values(a,set=false) {
+  const r=new Reader(a);
+  if(set && r.b()) throw new Error("LFO2 parameter could not be changed");
+  const track=r.b(),active=!!r.b(),values=Array.from({length:7},()=>r.v());
+  if(!lfo2Valid(values)) throw new Error("Invalid LFO2 reply");
+  return {track,active,values};
+}
+const DX_IDS = [256,257,258,259,260,261,262,...Array.from({length:128},(_,i)=>264+i)];
+const DX_FIELD_NAMES = ["A Pitch","A Pitch modulation","A Decay","A Noise","A Color","B Pitch","B Pitch modulation","B Decay","B Noise","B Color","Mode","Pitch modulation type","Drive","Layer","Feedback","Effect send"];
+const DX_GLOBAL_NAMES = ["Band-pass","Kit feedback","Stereo image","Morph rate","Morph depth","Morph shape","Random variation"];
+function dxValues(a, set=false) {
+  const r=new Reader(a); if(set && r.b()) throw new Error("DRUM-X parameter could not be changed");
+  const track=r.b(), active=!!r.b(), values=new Map();
+  DX_IDS.forEach(id=>values.set(id,r.v()));
+  return {track,active,values};
+}
+function dxLearnMap(a, set=false) {
+  const r=new Reader(a); let rc=0;
+  if(set) {rc=r.b(); if(![0,3,4].includes(rc)) throw new Error(rc===5?"MIDI Learn slots are full":"This CC cannot be assigned");}
+  const n=r.b(), entries=[];
+  for(let i=0;i<n;i++){const used=r.b(),cc=r.b(),track=r.b(),id=r.b()|(r.b()<<7);if(used)entries.push({cc,track,id});}
+  return entries;
+}
 const bank = {
   async list(rq) {
     const first = parse[CMD.UP_LIST](await rq(req.upList(0, UP.LIST_MAX)));
@@ -1213,11 +1266,27 @@ const bank = {
       const g = parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.USER, slot)));
       if (!g.rc) u.fm6 = g.packed;
     }
+    if(u.used && info.drumx && info.engines[u.engine]==="DRUM" && u.p[info.pe0]===12) {
+      const dx=dxValues(await rq([83,[slot,1]]));if(dx.active)u.dx=[...dx.values.values()];
+    }
+    if(u.used && info.lfo2) u.lfo2=lfo2Values(await rq([89,[slot,1]])).values;
     return u;
   },
   /* -> rc (0 ok); with info, an FM6 sound's patch (pt.fm6) goes with it */
   async put(rq, slot, pt, info) {
-    const rc = parse[CMD.UP_PUT](await rq(req.upPut(slot, pt), FLASH_OPT)).rc;
+    if (pt.dx && (!info?.drumx || pt.dx.length !== DX_IDS.length)) throw new Error("This sound needs DRUM-X firmware and a complete kit");
+    if (pt.lfo2 && (!info?.lfo2 || !lfo2Valid(pt.lfo2))) throw new Error("This sound needs LFO2 firmware");
+    const request = req.upPut(slot, pt);
+    if(pt.lfo2) {
+      /* Supply kind/high bits/category before the tagged extension, even for melodic patches. */
+      if(!pt.grid) request[1].push(0,...Array(16).fill(0));
+      request[1].push(0,0x32,...pt.lfo2);
+    }
+    const rc = parse[CMD.UP_PUT](await rq(request, FLASH_OPT)).rc;
+    if (!rc && pt.dx && info.engines[pt.engine] === "DRUM") {
+      const a = await rq([87,[slot,...pt.dx.flatMap(v14enc)]], FLASH_OPT);
+      return a[1];
+    }
     if (rc || !pt.fm6 || !presetPatches(info) || info.engines[pt.engine] !== "FM6") return rc;
     return parse[CMD.FM6_PUT](await rq(req.fm6Put(FM6.TARGET.USER, slot, pt.fm6), FLASH_OPT)).rc;
   },
@@ -1238,8 +1307,14 @@ async function capturePatch(rq, info, name) {
     const g = parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK, sel)));
     if (!g.rc) fm6 = g.packed;
   }
+  let dx = null;
+  if(info.drumx && drum && dump.p[info.pe0]===12) {
+    const track=info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0;
+    dx=[...dxValues(await rq([83,[track]])).values.values()];
+  }
+  const lfo2=info.lfo2 ? lfo2Values(await rq([89,[info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0]])).values : null;
   return { patch: cleanPatch({ name, engine: dump.engine, engineName: info.engines[dump.engine], p: dump.p, pattern: patternFromSteps(steps),
-    grid: drum ? gridFromSteps(steps) : null, fm6 }), dump, steps };
+    grid: drum ? gridFromSteps(steps) : null, fm6, dx, ...(lfo2 ? {lfo2} : {}) }), dump, steps };
 }
 
 /* the track's own parameters, which no sound load changes (ui.c param_kept): LEVEL, the ARP and ARP 2 pages,
@@ -1256,6 +1331,8 @@ const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(
    there = undo) and treats the SETs right after G_ENGSEL as part of this load (EDITOR_PROTOCOL.md "undo").
    opt: {gEng: G_ENGSEL id, progress(i, n)} */
 async function auditionPatch(rq, info, pt, opt = {}) {
+  if(pt.lfo2 && (!info.lfo2 || !lfo2Valid(pt.lfo2))) throw new Error("This sound needs LFO2 firmware");
+  if(pt.dx && !info.drumx) throw new Error("This sound needs DRUM-X firmware");
   await rq(req.set(1, opt.gEng ?? 20, pt.engine));
   const dump = parse[CMD.DUMP](await rq(req.dump()), info);
   const n = Math.min(info.pcount, pt.p.length);
@@ -1264,6 +1341,14 @@ async function auditionPatch(rq, info, pt, opt = {}) {
     if (opt.progress) opt.progress(i, n);
     if (v == null || v === dump.p[i] || trackOwn(i, info.pe0)) continue;
     await rq(req.set(0, i, v));
+  }
+  if(pt.dx) {
+    const track=info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0;
+    for(let i=0;i<DX_IDS.length;i++){const id=DX_IDS[i];dxValues(await rq([84,[track,id&127,id>>7,...v14enc(pt.dx[i])]]),true);}
+  }
+  if(pt.lfo2) {
+    const track=info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0;
+    for(let i=0;i<7;i++) { const id=400+i; lfo2Values(await rq([90,[track,id&127,id>>7,...v14enc(pt.lfo2[i])]]),true); }
   }
   if (pt.fm6 && info.fm6)                         /* a converted DIGITAL sound: its own FM6 patch on the track */
     await rq(req.fm6Put(FM6.TARGET.TRACK, opt.track ?? 0, pt.fm6));
@@ -1662,8 +1747,8 @@ function makeMockDevice(opt = {}) {
   const NONOFF = ["OFF", "ON"], NDIV = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"], NGO = ["--", "GO"], NDASH = ["--"];
   const D = (label, fmt, min, max, def, names = null, unit = "") => ({ label, fmt, min, max, def, names, unit });
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
-  const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"];   /* (append-only: S&H SLEW, #132) */
-  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"];   /* (DEPTH: #132; VEL TIME: 1.5.6, #213) */
+  const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW", "LFO2", "S&H2", "SLEW2"];   /* (append-only: S&H SLEW, #132) */
+  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB"];   /* (DEPTH: #132; VEL TIME: 1.5.6, #213) */
   const TP = [
     D("LVL", F.DB, 0, 127, 104),
     D("ATK", F.TIME, 0, 127, 10), D("DEC", F.TIME, 0, 127, 70), D("SUS", F.PCT, 0, 127, 90), D("REL", F.TIME, 0, 127, 60),
@@ -1687,14 +1772,14 @@ function makeMockDevice(opt = {}) {
     E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
     E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL",
-      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE"], 0), E("SET", NGO, 0),
+      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE", "SEM", "HADES", "DRONE"], 0), E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
     D("-", F.INT, 0, 0, 0), D("-", F.INT, 0, 0, 0),   /* G_DRLVL, G_DRREV: inert since 1.0 */
   ];
   const NONE = D("-", F.INT, 0, 0, 0);
   const RATIO = [".5", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "14", "16"];
-  const P = (name, e, env = [10, 70, 90, 60], mono = 0, pat = 0) => ({ name, e, env, mono, pat });
+  const P = (name, e, env = [10, 70, 90, 60], mono = 0, pat = 0, fenv = null, fx = null) => ({ name, e, env, mono, pat, fenv, fx });
   const ENG = [
     { name: "ANALOG", titles: ["OSC", "FLT"], edit: [E("WAVE", ["SAW", "SQR", "TRI", "SIN", "PWM", "SYNC", "SUB"], 0), D("DTN", F.INT, 0, 127, 10, null, "ct"), D("MIX", F.PCT, 0, 127, 64),
         D("NOIS", F.PCT, 0, 127, 0), D("CUT", F.CUTOFF, 0, 127, 90), D("RES", F.PCT, 0, 127, 30), D("DRV", F.PCT, 0, 127, 0), D("KTR", F.PCT, 0, 127, 64)],
@@ -1714,11 +1799,12 @@ function makeMockDevice(opt = {}) {
       presets: [P("BRASS", [0, 0, 30, 90, 0, 0, 0, 0], [8, 70, 90, 40], 0, 6), P("ORGAN", [3, 0, 40, 0, 0, 0, 0, 0], [0, 127, 127, 30], 0, 6),
         P("STRING", [0, 4, 50, 40, 12, 0, 0, 0], [40, 90, 100, 70], 0, 5), P("RESO", [5, 0, 60, 60, 0, 0, 0, 0], [0, 70, 30, 60], 0, 1),
         P("BELL", [6, 0, 80, 50, 0, 0, 0, 0], [0, 95, 0, 90], 0, 7), P("WIRE", [4, 7, 70, 40, 7, 0, 0, 0], [10, 80, 80, 60], 0, 4)] },
-    { name: "LOFI", titles: ["CHIP", "MOTN"], edit: [E("CHIP", ["4BIT", "4B/2", "8BIT", "1BIT", "STEP"], 0), E("WAVE", ["PLS", "TRI", "SAW", "NOIS", "WRAM"], 0), D("DUTY", F.INT, 0, 127, 64),
+    { name: "LOFI", titles: ["CHIP", "MOTN"], edit: [E("CHIP", ["4BIT", "4B/2", "8BIT", "1BIT", "STEP"], 0), E("WAVE", ["PLS", "TRI", "SAW", "NOIS", "WRAM", "BYTE", "FLOAT"], 0), D("DUTY", F.INT, 0, 127, 64),
         D("CRSH", F.PCT, 0, 127, 0), D("SWP", F.PCT, 0, 127, 0), D("VIB", F.PCT, 0, 127, 0), E("ARP", ["OFF", "OCT", "MAJ", "MIN"], 0), D("TONE", F.PCT, 0, 127, 127)],
       presets: [P("PULSE LD", [0, 0, 32, 0, 0, 20, 0, 127], [0, 60, 90, 30], 1, 4), P("WAVE BASS", [1, 1, 0, 0, 0, 0, 0, 90], [0, 50, 70, 20], 1, 2),
         P("ARP 8BIT", [2, 0, 96, 0, 0, 0, 2, 110], [0, 60, 80, 40], 0, 13), P("WAVE LEAD", [0, 4, 92, 0, 0, 18, 0, 110], [0, 70, 90, 30], 1, 3),
-        P("STEP LEAD", [4, 0, 40, 34, 0, 16, 0, 127], [0, 64, 127, 55], 1, 4)] },
+        P("STEP LEAD", [4, 0, 40, 34, 0, 16, 0, 127], [0, 64, 127, 55], 1, 4),
+        P("BYTEBEAT", [2, 5, 4, 0, 64, 0, 0, 0], [0, 80, 110, 40], 1, 4), P("FLOAT FM", [2, 6, 4, 0, 64, 0, 0, 0], [0, 60, 90, 40], 1, 4)] },
     { name: "SAMPLE", titles: ["SET", "TONE"], edit: [E("SET", ["PIANO", "PIANO", "FLUTE", "SAX", "PIANO", "USR1", "USR2", "USR3"], 0), D("TUNE", F.SEMI, -24, 24, 0), D("BITS", F.INT, 0, 127, 0),
         E("LOOP", NONOFF, 1), D("CUT", F.INT, 0, 127, 127), NONE, D("DRV", F.PCT, 0, 127, 0), NONE],
       presets: [P("PIANO", [0, 0, 0, 1, 127, 0, 0, 0], [0, 127, 127, 70]), P("PIANO", [0, 0, 0, 1, 127, 0, 0, 0], [0, 127, 127, 70]),
@@ -1752,12 +1838,12 @@ function makeMockDevice(opt = {}) {
         P("KALIMBA", [0, 34, 16, 56, 100, 90, 0, 48], [0, 100, 127, 60], 0, 7), P("HAND DRUM", [2, 112, 76, 56, 44, 100, 14, 24], [0, 100, 127, 64], 0, 6),
         P("TOMS", [2, 0, 52, 40, 30, 100, 40, 30], [0, 100, 127, 70], 0, 2), P("DRONE STRING", [3, 127, 80, 88, 64, 100, 92, 0], [0, 100, 127, 90], 0, 3),
         P("HARP", [3, 8, 62, 74, 60, 90, 0, 0], [0, 100, 127, 80], 0, 3)] },
-    { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"], 0), D("TUNE", F.PCT, 0, 127, 64),
+    { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC", "DRUM-X"], 0), D("TUNE", F.PCT, 0, 127, 64),
         D("TONE", F.PCT, 0, 127, 64), D("DECY", F.PCT, 0, 127, 64), D("SNAP", F.PCT, 0, 127, 64), D("ACC", F.PCT, 0, 127, 100),
-        E("KICK", ["PUNCH", "ROUND"], 0), D("DRV", F.PCT, 0, 127, 0)],
+        D("FOLD", F.PCT, 0, 127, 0), D("DRV", F.PCT, 0, 127, 0)],
       presets: [P("DRUM KIT", [0, 64, 70, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),   /* (1.5.6, #216: the new kits) */
         P("DEEP KIT", [9, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("TIGHT KIT", [10, 64, 64, 56, 64, 100, 0, 16], [0, 100, 127, 100], 0, 12),
-        P("PERC KIT", [11, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12)] },
+        P("PERC KIT", [11, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("DRUM-X", [12, 64, 64, 64, 64, 0, 0, 0], [0, 100, 127, 100], 0, 12)] },
     { name: "NOISE", titles: ["SRC", "MOVE"], edit: [E("MODE", ["ANLG", "DUST", "LFSR", "META"], 0), D("COLR", F.PCT, 0, 127, 64),
         D("FREQ", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("TRK", F.PCT, 0, 127, 64), D("DENS", F.PCT, 0, 127, 0),
         D("DRFT", F.PCT, 0, 127, 0), D("CRSH", F.PCT, 0, 127, 0)],
@@ -1774,6 +1860,47 @@ function makeMockDevice(opt = {}) {
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
+    { name: "SEM", titles: ["OSC", "SEM FLT"], edit: [E("OSC1", ["SAW", "PULSE", "TRI", "PWM"], 0), E("OSC2", ["SAW", "PULSE", "TRI", "PWM"], 0),
+        D("DTN", F.INT, 0, 50, 8, null, "ct"), D("MIX", F.PCT, 0, 127, 64), D("CUT", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 24),
+        D("STATE", F.PCT, 0, 127, 0), D("VINT", F.PCT, 0, 127, 24)],
+      presets: [P("SEM BRASS", [0, 0, 8, 64, 48, 24, 0, 28], [12, 76, 88, 48], 0, 6, 36, [0, 12, 12, 28]),
+        P("WARM PAD", [0, 0, 14, 60, 64, 14, 0, 44], [76, 90, 108, 94], 0, 5, 12, [0, 38, 16, 56]),
+        P("OB STRING", [3, 0, 10, 64, 82, 12, 0, 38], [58, 88, 112, 84], 0, 5, 8, [0, 44, 12, 46]),
+        P("ROUND BAS", [1, 0, 3, 38, 38, 34, 0, 18], [0, 70, 58, 34], 1, 2, 42, [0, 0, 0, 10]),
+        P("NOTCH PAD", [0, 3, 12, 64, 70, 32, 64, 32], [72, 90, 110, 96], 0, 5, 14, [0, 32, 22, 54]),
+        P("SEM LEAD", [0, 1, 6, 58, 76, 38, 0, 24], [2, 72, 100, 44], 1, 4, 22, [0, 10, 34, 24]),
+        P("HIGH AIR", [0, 0, 18, 64, 60, 20, 127, 48], [82, 92, 112, 98], 0, 5, -10, [0, 36, 18, 64]),
+        P("SOFT KEY", [2, 0, 5, 34, 72, 16, 0, 16], [2, 76, 38, 62], 0, 6, 18, [0, 14, 24, 26])] },
+    { name: "HADES", titles: ["OSC SUB", "FLT DRV"], edit: [E("WAVE", ["OFF", "SAW", "PULSE"], 1),
+        D("PW", F.PCT, 0, 127, 64), D("SUB1", F.PCT, 0, 127, 72), D("SUB2", F.PCT, 0, 127, 40),
+        D("CUT", F.CUTOFF, 0, 127, 64), D("RES", F.PCT, 0, 127, 24), D("DRV", F.PCT, 0, 127, 20), D("BODY", F.PCT, 0, 127, 48)],
+      presets: [P("DEEP SUB", [1, 64, 88, 64, 44, 12, 8, 80], [0, 70, 96, 34], 1, 8, 18, [0, 0, 0, 0]),
+        P("DARK SAW", [1, 64, 68, 28, 54, 30, 38, 64], [0, 68, 64, 28], 1, 2, 36, [0, 0, 0, 0]),
+        P("PULSE BAS", [2, 48, 76, 34, 48, 42, 28, 48], [0, 62, 72, 24], 1, 2, 32, [0, 0, 0, 0]),
+        P("SUB ONLY", [0, 64, 100, 68, 72, 8, 0, 64], [0, 74, 112, 38], 1, 8, 0, [0, 0, 0, 0]),
+        P("DRIVEN", [1, 64, 90, 44, 70, 46, 100, 40], [0, 58, 86, 24], 1, 1, 22, [0, 0, 0, 0]),
+        P("RESO BASS", [1, 64, 54, 20, 42, 108, 22, 72], [0, 74, 24, 32], 1, 1, 52, [0, 0, 0, 0]),
+        P("DARK PLK", [2, 32, 52, 18, 62, 58, 44, 24], [0, 58, 0, 30], 0, 3, 42, [0, 0, 0, 0]),
+        P("RAW LEAD", [2, 80, 28, 0, 88, 58, 62, 0], [2, 66, 104, 36], 1, 4, 16, [0, 0, 0, 0])] },
+    { name: "DRONE", titles: ["NETWORK", "DRIFT TONE"], edit: [D("SPREAD", F.PCT, 0, 127, 64), D("DETUNE", F.PCT, 0, 127, 30),
+        D("COUPLE", F.PCT, 0, 127, 40), E("TOPO", ["PAIRS", "CHAIN", "RING", "CELLPAIR", "CELLCHN", "CELLRING"], 3), D("CHAR", F.PCT, 0, 127, 30),
+        D("DRIFT", F.PCT, 0, 127, 60), D("RATE", F.PCT, 0, 127, 40), D("TONE", F.PCT, 0, 127, 76)],
+      presets: [P("STILL AIR", [0, 24, 12, 0, 18, 32, 20, 76], [82, 90, 112, 96], 1, 5, 0, [0, 0, 0, 0]),
+        P("OPEN FIFTH", [127, 18, 28, 0, 28, 24, 28, 88], [76, 88, 116, 94], 1, 5, 0, [0, 0, 0, 0]),
+        P("SLOW CHAIN", [72, 38, 54, 1, 48, 64, 12, 62], [90, 96, 120, 104], 1, 5, 0, [0, 0, 0, 0]),
+        P("DARK RING", [108, 28, 78, 2, 74, 48, 36, 42], [72, 92, 110, 100], 1, 5, 0, [0, 0, 0, 0]),
+        P("BEAT FIELD", [8, 90, 42, 0, 40, 90, 58, 80], [84, 94, 118, 108], 1, 5, 0, [0, 0, 0, 0]),
+        P("CELL AIR", [127, 127, 63, 3, 2, 80, 0, 75], [96, 90, 118, 110], 1, 5, 0, [0, 0, 0, 0]),
+        P("CELL CHN", [68, 61, 0, 4, 0, 19, 3, 35], [84, 90, 112, 100], 1, 5, 0, [0, 0, 0, 0]),
+        P("CELL RNG", [31, 20, 107, 5, 20, 33, 59, 31], [70, 90, 108, 92], 1, 5, 0, [0, 0, 0, 0]),
+        P("GLASS CHOIR", [0, 72, 91, 3, 89, 53, 73, 127], [100, 90, 118, 112], 1, 5, 0, [0, 0, 0, 0]),
+        P("TIDE", [78, 87, 24, 5, 0, 23, 127, 59], [105, 90, 120, 115], 1, 5, 0, [0, 0, 0, 0]),
+        P("IRON BELLS", [113, 17, 127, 5, 47, 14, 60, 103], [40, 100, 100, 110], 1, 5, 0, [0, 0, 0, 0]),
+        P("SUB FOG", [0, 36, 8, 4, 70, 127, 72, 15], [95, 90, 125, 100], 1, 5, 0, [0, 0, 0, 0]),
+        P("SWARM", [30, 60, 42, 3, 88, 123, 48, 63], [80, 90, 112, 90], 1, 5, 0, [0, 0, 0, 0]),
+        P("STATIC", [15, 80, 127, 3, 90, 13, 84, 120], [75, 90, 112, 95], 1, 5, 0, [0, 0, 0, 0]),
+        P("RUST", [75, 44, 70, 5, 102, 45, 67, 127], [60, 90, 110, 100], 1, 5, 0, [0, 0, 0, 0]),
+        P("MOON PULSE", [0, 2, 89, 5, 0, 19, 113, 26], [85, 90, 115, 105], 1, 5, 0, [0, 0, 0, 0])] },
   ];
   const FM6_E = ENG.findIndex((e) => e.name === "FM6"), FM6_OWN = FM6.FACTORY_PK.length, DRUM_E = ENG.findIndex((e) => e.name === "DRUM");
   /* factory PATTERNS[] (engines.c; the device loads them from SAVE > PHRASES, presets only suggest one): absolute
@@ -1804,12 +1931,35 @@ function makeMockDevice(opt = {}) {
     E("INSRT", ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"], 0),   /* 1.5: the INSERT (96..100) */
     D("INS A", F.PCT, 0, 127, 64), D("INS B", F.PCT, 0, 127, 96), D("INS C", F.PCT, 0, 127, 96), D("MIX", F.PCT, 0, 127, 127),
     E("TYPE", ["LP", "BP", "HP"], 0), E("ESYNC", ["OFF", "ON"], 0));   /* 1.5: ANALOG's filter TYPE (101, #104), ENV SYNC (102, #175) */
-  const P_COUNT = 111, G_COUNT = 27, NSTEP = 64, P_E0 = 103, G_ENGSEL = 20, P_SLCR = 45;
+  TP.push(D("MORPH", F.PCT, 0, 127, 0), D("PHS FB", F.PCT, 0, 127, 0));
+  const P_COUNT = 113, G_COUNT = 27, NSTEP = 64, P_E0 = 105, G_ENGSEL = 20, P_SLCR = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const enumOrig = (d, v) => d.fmt === F.ENUM && d.names ? aliasOf(d.names, v - d.min) + d.min : v;   /* params.c enum_orig */
   /* four tracks (firmware v3), four synth parts (1.0); engine / preset / p / step below are the selected track's */
+  const dxDefault = () => [0,0,0,0,0,0,0,
+    ...[
+      [9,70,72,4,20,14,100,88,10,60,1,0,0,0,0,0],
+      [40,30,52,80,90,46,18,64,104,70,8,0,0,6,0,0],
+      [60,0,46,127,84,54,0,58,127,76,2,0,0,0,0,0],
+      [100,0,22,96,116,108,0,14,112,122,16,0,0,9,0,0],
+      [100,0,62,96,112,108,0,74,112,118,16,0,0,9,0,0],
+      [30,40,66,10,30,36,60,76,20,50,1,0,0,0,0,0],
+      [63,10,14,16,46,70,24,20,30,60,23,0,0,0,0,0],
+      [64,0,44,34,50,68,0,54,46,62,15,0,0,11,0,0]
+    ].flat()];
+  const dxDescs = [D("BP",F.INT,0,15,0),D("FEEDBK",F.INT,0,15,0),D("IMAGE",F.PCT,0,127,0),
+    E("RATE",["OFF","4BAR","2BAR","1BAR","1/2","1/4","1/8","1/16","1/32"],0),D("DEPTH",F.PCT,0,127,0),E("SHAPE",["SINE","TRI","SAW","RAMP","S&H"],0),D("RAND",F.PCT,0,127,0),
+    ...["A","B"].flatMap(()=>[D("PITCH",F.INT,0,127,0),...['PMOD','DECAY','NOISE','COLOR'].map(n=>D(n,F.PCT,0,127,0))]),
+    E("MODE",["SIN","FM","MTL","BEL"].flatMap(w=>["LP","BP","HP"].flatMap(f=>[`${w} ${f}`,`${w} ${f}+`])),0),
+    E("PM.TYPE",["DECAY","LONG","NOISE","SINE"],0),D("DRIVE",F.ONOFF,0,1,0),D("LAYER",F.INT,0,15,0),D("FEEDBK",F.INT,0,15,0),
+    E("SEND",["OFF",...["CHO","DLY","REV"].flatMap(n=>Array.from({length:16},(_,i)=>`${n} ${Math.floor((i+1)*100/16)}%`))],0)];
+  const dxDesc = id => dxDescs[id<264?id-256:7+(id-264)%16];
+  const l2Supported = () => dxSupported() && !!opt.lfo2;
+  const l2Desc = id => { const i=id-400; return i===1?E("WAVE",["SIN","TRI","SAW","SQR","S&H"],0):i===4?E("SYNC",["OFF","4BAR","2BAR","1/1","1/2","1/4","1/8","8T","1/16","16T","1/32"],0):i===5?E("TRIG",["NOTE","FREE"],0):i===6?E("POL",["BI","UNI"],0):D(L2_LABELS[i],i===0?F.LFOHZ:i===3?F.TIME:F.INT,0,L2_MAX[i],0); };
+  const dxSupported = () => !opt.legacy && !opt.v3 && !opt.v5 && !opt.noDrumx;
+  const dxActive = t => t && t.engine===10 && t.p[P_E0]===12;
   const NTRK = 4;
-  const newTrack = () => ({ engine: 0, preset: 0, fm6: FM6.INIT_PK.slice(),
+  const newTrack = () => ({ engine: 0, preset: 0, lfo2: Array(7).fill(0), dx: dxDefault(), fm6: FM6.INIT_PK.slice(),
     p: TP.map((d) => d.def).concat(new Array(8).fill(0)),
     motion: {on: true, events: []},
     step: Array.from({ length: NSTEP }, () => ({ chance: 100, ratchet: 1, n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0, hit: 0, acc: 0 })) });
@@ -1823,14 +1973,33 @@ function makeMockDevice(opt = {}) {
     palette: 0, font: 0, monitor: 0, filter: 0, bankSig: 0,
     palettes: ["GREY", "GREEN", "AMBER", "ICE", "VIOLET", "ROSE", "PAPER", "HI-CON", "NIGHT", "MONO"],
     favorites: Array.from({ length: ENG.length + 1 }, () => []),
-    watch: false, v4: false, lastReq: 0,
+    dxLearn: [], dxArmed: null, watch: false, v4: false, lastReq: 0,
   };
   for (const k of ["engine", "preset", "p", "step"]) {
     Object.defineProperty(st, k, { enumerable: false, get: () => st.tracks[st.sel][k], set: (v) => { st.tracks[st.sel][k] = v; } });
   }
   const watchMs = opt.watchMs || 3000;
-  const desc = (scope, id) => (scope === 0 && id < P_COUNT ? (id >= P_E0 ? ENG[st.engine].edit[id - P_E0] : TP[id])
-    : scope === 1 && id < G_COUNT ? GP[id] : null);
+  const desc = (scope, id) => {
+    const d = scope === 0 && id < P_COUNT ? (id >= P_E0 ? ENG[st.engine].edit[id - P_E0] : TP[id]) : scope === 1 && id < G_COUNT ? GP[id] : null;
+    if (scope === 0 && ENG[st.engine].name === "SEM" && id === 101) return E("TYPE", ["STATE", "BP", "HP"], 0);
+    if (scope === 0 && ENG[st.engine].name === "DRUM" && id >= P_E0) {
+      const x=st.p[P_E0]===12,k=id-P_E0;
+      if(k===6)return x?D("FOLD",F.PCT,0,127,0):E("KICK",["PUNCH","ROUND"],0);
+      if(x && k===4)return D("NOISE",F.PCT,0,127,64);
+      if(x && k===5)return D("FM ENV",F.PCT,0,127,0);
+    }
+    if (scope === 0 && ENG[st.engine].name === "LOFI" && st.p[P_E0 + 1] >= 5 && id >= P_E0) {
+      const wave = st.p[P_E0 + 1], k = id - P_E0;
+      if (k === 0 && wave === 6) return E("CHIP", ["4BIT", "4B/2", "FULL", "1BIT", "STEP"], 2);
+      if (k === 2) return D("ALGO", F.INT, 0, 127, 64);
+      if (k === 3) return D("VAR", F.PCT, 0, 127, 0);
+      if (k === 4) return D("MOTION", F.INT, 0, 127, 64);
+      if (k === 5) return D(wave === 5 ? "GRIT" : "FEEDBK", F.PCT, 0, 127, 0);
+      if (k === 6) return E("BEND", ["OFF", "LIGHT", "MED", "DEEP"], 0);
+      if (k === 7) return D("LOOP", F.PCT, 0, 127, 0);
+    }
+    return d;
+  };
   const EMPTY = { n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0, hit: 0, acc: 0, chance: 100, ratchet: 1 };
   const isDrum = () => ENG[st.engine].name === "DRUM";
   const clearSteps = () => st.step.forEach((s) => Object.assign(s, EMPTY, { notes: [0, 0, 0, 0] }));
@@ -1852,10 +2021,14 @@ function makeMockDevice(opt = {}) {
     pi = aliasOf(e.presets.map((x) => x.name), pi % e.presets.length);
     const pr = e.presets[pi];
     st.preset = pi;
+    st.tracks[st.sel].lfo2=Array(7).fill(0);
+    if(e.name === "DRUM" && pi===4)st.tracks[st.sel].dx=dxDefault();
     for (let i = 0; i < 8; i++) st.p[P_E0 + i] = pr.e[i];
     [1, 2, 3, 4].forEach((id, k) => { st.p[id] = pr.env[k]; });
     st.p[37] = pr.mono ? 2 : 0;
     st.p[33] = 0; st.p[34] = 24; st.p[35] = 28; st.p[36] = 36;
+    if (pr.fenv != null) st.p[5] = pr.fenv;
+    if (pr.fx) pr.fx.forEach((v, k) => { st.p[33 + k] = v; });
     for (let i = P_SLCR + 4; i < P_E0; i++) if (!trackOwn(i, P_E0)) st.p[i] = TP[i].def;   /* a factory preset turns the
                                                      matrix off; the SLICER, the chord keys, the steps and the other track
                                                      settings stay (ui.c apply_preset_to) */
@@ -1902,8 +2075,10 @@ function makeMockDevice(opt = {}) {
                                                      track: its patch, up_fm6.c) */
     const grid = isDrum() ? gridFromSteps(st.step) : null;
     const fm6 = st.engine === FM6_E ? st.tracks[st.sel].fm6.slice() : null;
-    return patternUsed(grid) ? { engine: st.engine, name, p: st.p.slice(), pattern: null, grid, fm6 }
-      : { engine: st.engine, name, p: st.p.slice(), pattern: patternFromSteps(st.step), grid: null, fm6 };
+    const dx = dxActive(st.tracks[st.sel]) ? st.tracks[st.sel].dx.slice() : null;
+    const extra = l2Supported() ? {lfo2:st.tracks[st.sel].lfo2.slice()} : {};
+    return patternUsed(grid) ? { engine: st.engine, name, p: st.p.slice(), pattern: null, grid, fm6, dx, ...extra }
+      : { engine: st.engine, name, p: st.p.slice(), pattern: patternFromSteps(st.step), grid: null, fm6, dx, ...extra };
   };
   const ratchetOn = () => !!syncCaps() && !opt.noRatchet;   /* (INFO 52 01 04, after the sync tag) */
   const stepOut = (x, b) => { b(x.n); x.notes.forEach(b); b(x.time); b(x.flags); b(x.vel); hitsEnc(x.hit, x.acc).forEach(b); if (!opt.legacy && !opt.v3 && !opt.v5) b(x.chance ?? 100); if (ratchetOn()) b(x.ratchet ?? 1); };
@@ -1943,6 +2118,37 @@ function makeMockDevice(opt = {}) {
       for (const n of [sig, st.bankSig]) for (let i = 0; i < 4; i++) b(n >>> (i * 7));
     };
     const NB = st.bank.length;
+    if(cmd>=88 && cmd<=90 && l2Supported()) {
+      if(cmd===88) {
+        const id=a[0]|a[1]<<7,d=L2_IDS.includes(id)&&l2Desc(id);
+        if(!d)b(1);else{b(0);b(id&127);b(id>>7);s(d.label);b(d.fmt);v(d.min);v(d.max);b(d.names?.length||0);d.names?.forEach(s);}
+      } else {
+        const t=cmd===89&&a[1]===1?st.bank[a[0]]:st.tracks[a[0]];
+        if(cmd===90) { const id=a[1]|a[2]<<7,d=L2_IDS.includes(id)&&l2Desc(id),rc=!t||!d||a.length!==5?1:0;
+          if(!rc)t.lfo2[id-400]=clamp(v14dec(a[3],a[4]),d.min,d.max);b(rc); }
+        b(a[0]);b(t?1:0);(t?.lfo2||Array(7).fill(0)).forEach(v);
+      }
+      return frame(cmd,out);
+    }
+    if(cmd>=82 && cmd<=87) {
+      if(!dxSupported())return null;
+      const learnOut=()=>{b(64);for(let i=0;i<64;i++){const e=st.dxLearn[i];[e?1:0,e?.cc||0,e?.track||0,(e?.id||0)&127,(e?.id||0)>>7].forEach(b);}};
+      if(cmd===82){const id=a[0]|a[1]<<7,d=DX_IDS.includes(id)&&dxDesc(id);if(!d){b(1);}else{b(0);b(id&127);b(id>>7);s(d.label);b(d.fmt);v(d.min);v(d.max);b(d.names?.length||0);d.names?.forEach(s);}}
+      else if(cmd===85)learnOut();
+      else if(cmd===86){let rc=0;const id=a[3]|a[4]<<7;
+        if(a[0]===0){if(a.length!==5 || a[2]>=4 || ![...Array.from({length:P_COUNT},(_,i)=>i),...DX_IDS,...(l2Supported()?L2_IDS:[])].includes(id) || [0,1,6,7,10,11,32,38,64,74,96,97,98,99,100,101].includes(a[1]) || a[1]>=120)rc=1;
+          else{st.dxLearn=st.dxLearn.filter(e=>e.cc!==a[1] && !(e.track===a[2] && e.id===id));if(st.dxLearn.length===64)rc=5;else st.dxLearn.push({cc:a[1],track:a[2],id});}}
+        else if(a[0]===1)st.dxLearn=st.dxLearn.filter(e=>e.cc!==a[1]);else if(a[0]===2)st.dxLearn=[];
+        else if(a[0]===3)st.dxArmed={track:a[1],id:a[2]|a[3]<<7};else rc=1;b(rc);learnOut();}
+      else if(cmd===87){const u=st.bank[a[0]],vals=Array.from({length:135},(_,i)=>v14dec(a[1+2*i],a[2+2*i]));
+        const rc=a.length!==271 || !dxActive(u) || vals.some((x,i)=>x<dxDesc(DX_IDS[i]).min || x>dxDesc(DX_IDS[i]).max)?1:0;
+        if(!rc)u.dx=vals;b(a[0]);b(rc);}
+      else{const t=cmd===83&&a[1]===1?st.bank[a[0]]:st.tracks[a[0]],active=dxActive(t);
+        if(cmd===84){const id=a[1]|a[2]<<7,d=DX_IDS.includes(id)&&dxDesc(id);const rc=!active||!d||a.length!==5?1:0;
+          if(!rc)t.dx[DX_IDS.indexOf(id)]=clamp(v14dec(a[3],a[4]),d.min,d.max);b(rc);}
+        b(a[0]);b(active?1:0);(t?.dx||dxDefault()).forEach(v);}
+      return frame(cmd,out);
+    }
     switch (cmd) {
       case CMD.UP_LIST: {
         if (a.length < 2) return null;
@@ -1975,7 +2181,11 @@ function makeMockDevice(opt = {}) {
           let pattern = null, grid = null;
           for (let i = 0; i < P_COUNT; i++) p.push(r.v());
           for (let i = 0; i < UP.PAT; i++) raw.push([r.b(), r.b()]);
-          const tail = a.length - r.i;
+          let tail = a.length - r.i;
+          const hasL2=tail===26 && a[a.length-8]===0x32;
+          const lfo2=hasL2?a.slice(-7):null;
+          if(hasL2) { if(!l2Supported() || !lfo2Valid(lfo2)) throw new Error("bad LFO2 extension"); tail-=8; }
+          if(hasL2) tail--; /* category byte in the tagged transfer */
           if (tail !== 0 && (tail !== 1 + UP.PAT || a[r.i] > 1)) throw new Error("bad preset extension");
           if (tail && a[r.i] === 1) {              /* kind 1: a complete drum grid */
             r.b();
@@ -1986,7 +2196,7 @@ function makeMockDevice(opt = {}) {
             const saved = st.engine;                /* values clamped to the ranges of that engine */
             const pc = fromPerc({ engine, p }, ENG.map((x) => x.name), P_E0);   /* SAMPLE PERC: DRUM (upreset.c up_migrate) */
             st.engine = pc ? pc.engine : engine;
-            st.bank[slot] = { engine: st.engine, name, p: (pc ? pc.p : p).map((x, i) => { const d = desc(0, i); return clamp(x, d.min, d.max); }), pattern, grid };
+            st.bank[slot] = { engine: st.engine, name, p: (pc ? pc.p : p).map((x, i) => { const d = desc(0, i); return clamp(x, d.min, (st.engine===10 && i===P_E0+6 && p[P_E0]===12)?127:d.max); }), pattern, grid, ...(lfo2?{lfo2}:{}) };
             st.engine = saved;
           }
         } catch (e) { rc = 1; }
@@ -2009,6 +2219,8 @@ function makeMockDevice(opt = {}) {
           const p = u.p.map((x, i) => (trackOwn(i, P_E0) ? own[i] : x));
           if (u.engine === 1) fm4Apply(p);          /* a DIGITAL record (kept as it is): FM6 */
           else { st.engine = u.engine; st.preset = 0; st.p = p; }
+          st.tracks[st.sel].lfo2=(u.lfo2 || Array(7).fill(0)).slice();
+          if (dxActive(st.tracks[st.sel])) st.tracks[st.sel].dx=(u.dx || dxDefault()).slice();
           if (u.engine === FM6_E) {                 /* its own patch (up_fm6.c upf_track_load); none: SLOT's factory / init */
             const t = st.tracks[st.sel], s = p[P_E0 + 7];
             t.fm6 = (u.fm6 || (s < FM6_OWN ? FM6.FACTORY_PK[s] : FM6.INIT_PK)).slice();
@@ -2033,6 +2245,17 @@ function makeMockDevice(opt = {}) {
         b(0);
         break;
       case CMD.UI_STATE: uiState(); break;
+      case CMD.MENU_DESC:
+        b(a[0]); b(a[0] === 33 && !opt.noLiveLoad ? 33 : 127);
+        if (a[0] === 33 && !opt.noLiveLoad) {
+          b(0); v(st.liveLoad || 0); v(0); v(1); s("LIVE LOAD"); s("PATTERN"); s("FULL"); b(2); s("AUDIO");
+        }
+        break;
+      case CMD.MENU_SET: {
+        const rc = a[0] === 33 && a.length === 3 && !opt.noLiveLoad ? 0 : 1;
+        if (!rc) st.liveLoad = clamp(v14dec(a[1], a[2]), 0, 1);
+        b(rc || (opt.noFlash ? 3 : opt.deferSettings ? 4 : 0)); b(a[0]); v(st.liveLoad || 0); break;
+      }
       case CMD.UI_PALETTES: b(st.palettes.length); st.palettes.forEach(s); break;
       case CMD.UI_SET: {
         const id = a[0], val = a[1], key = ["palette", "font", "monitor", "filter"][id];
@@ -2075,8 +2298,10 @@ function makeMockDevice(opt = {}) {
         if (!opt.legacy && !opt.v3 && !opt.v5) {
           b(16);
           if (st.uiCaps) { b(0x55); b(1); b(st.uiCaps); b(0x4d); b(1); b(64); b(1); if (!opt.noFm6) { b(0x46); b(1); b(FM6.FACTORY_PK.length); b(0); }
-            if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
+            if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); if (!opt.noLiveLoad) { b(0x4E); b(1); b(34); } } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
         }
+        if(dxSupported()){b(0x58);b(1);b(64);}
+        if(l2Supported()){b(0x59);b(1);b(7);}
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
@@ -2134,7 +2359,7 @@ function makeMockDevice(opt = {}) {
         const d = desc(a[0], a[1]);
         if (!d) return null;
         b(a[0]); b(a[1]); b(d.fmt); v(d.min); v(d.max); v(d.def); s(d.label); s(d.unit || "");
-        if (d.fmt === F.ENUM && d.names) for (let i = 0; i <= d.max - d.min && i < 24; i++) s(d.names[i]);
+        if (d.fmt === F.ENUM && d.names) for (let i = 0; i <= d.max - d.min && i < 32; i++) s(d.names[i]);
         break;
       }
       case CMD.STEP_GET: case CMD.STEP_SET: {
@@ -2281,10 +2506,10 @@ function makeMockDevice(opt = {}) {
   }
 
   /* a WebMIDI-like access object: one input and one output named "Felucca" */
-  const input = { id: "mock-in", name: "Felucca", type: "input", state: "connected", onmidimessage: null };
+  const input = { id: "mock-in", name: "Caravel", type: "input", state: "connected", onmidimessage: null };
   let busy = false;
   const output = {
-    id: "mock-out", name: "Felucca", type: "output", state: "connected",
+    id: "mock-out", name: "Caravel", type: "output", state: "connected",
     send(data) {
       const f = unframe(data);
       if (!f) { console.error("mock: refused a frame that is not F0 7D 46 4C ... F7", data); return; }
@@ -2410,7 +2635,8 @@ function aliasOf(names, i) {
 }
 
 /* #48: note divisions (1/4, 8T, 2BAR, 1.5.1's dotted 1/8D ...) are listed by length, longest first, as the device's
-   knobs step them (src/params.c enum_order); the values stay. Any other list: in value order. -> d's values in the order shown */
+   knobs step them (src/params.c enum_order); the values stay. MOD sources and destinations are grouped by function,
+   also without changing stored values. Any other list: in value order. -> d's values in the order shown */
 function divLength(n) {
   const m = /^(\d+)\/(\d+)(D?)$/.exec(n) || /^(\d+)(T|BAR)$/.exec(n);
   return !m ? null : m[2] === "BAR" ? +m[1] : m[2] === "T" ? 2 / 3 / +m[1] : (m[3] ? 1.5 : 1) * +m[1] / +m[2];
@@ -2418,6 +2644,14 @@ function divLength(n) {
 function enumShown(d) {
   const vals = [];
   for (let v = d.min; v <= d.max; v++) vals.push(v);
+  if (d.fmt === F.ENUM && d.names && /^(SRC|DST)[1-4]$/.test(d.label)) {
+    const order = d.label.startsWith("SRC")
+      ? ["OFF", "LFO", "S&H", "SLEW", "LFO2", "S&H2", "SLEW2", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR"]
+      : ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "MORPH", "PHS FB", "RATE", "VIB", "DEPTH",
+         "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "VEL", "TIME", "DIST", "CHO", "DLY", "REV"];
+    const rank = (v) => { const i = order.indexOf(d.names[v - d.min]); return i < 0 ? order.length : i; };
+    return vals.sort((a, b) => rank(a) - rank(b) || a - b);
+  }
   const len = d.fmt === F.ENUM && d.names ? d.names.map(divLength) : [null];
   return len.includes(null) ? vals : vals.sort((a, b) => len[b - d.min] - len[a - d.min] || a - b);
 }
@@ -2426,13 +2660,19 @@ function enumShown(d) {
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
 const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "NOISE",
-  "SLICE", "DRUM"];
+  "SLICE", "DRUM", "SEM", "HADES", "DRONE"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
   return (names || []).map((n, i) => i).filter((i) => names[i] !== "-")
     .sort((a, b) => rank(names[a]) - rank(names[b]) || a - b);
 }
 
+async function readLiveLoad(rq, info) {
+  if (!(info.menuCount > 33)) return null;  // older firmware is never probed
+  const item = parse[CMD.MENU_DESC](await rq(req.menuDesc(33)));
+  return item.id === 33 && item.name === "LIVE LOAD" && item.kind === 0 &&
+    item.names.join() === "PATTERN,FULL" ? item : null;
+}
 function devicePresetRows(info, names, preferences) {
   if (!preferences || !(preferences.state.caps & 8)) return [];
   const rows = engineOrder(info.engines).filter((engine) => names[engine]).flatMap((engine) => names[engine]
@@ -2477,7 +2717,7 @@ const GLYPH = {
   waveform_noise_white: 0xEA7A, waveform_harmonic: 0xEAC5,
 };
 /* section headings (LAYOUT titles) and page titles */
-const HEAD_IC = { ENV: "function_env_adsr_exp", LFO: "waveform_sine", MOD: "symbol_waves", EDIT: "ui_knob", VOICE: "symbol_keyboard",
+const HEAD_IC = { MORPH: "symbol_waves", FEEDBACK: "symbol_waves", ENV: "function_env_adsr_exp", LFO: "waveform_sine", MOD: "symbol_waves", EDIT: "ui_knob", VOICE: "symbol_keyboard",
   FX: "symbol_effector", SCL: "symbol_tuning", ARP: "control_arrow_up_down", "SEQ PATTERN": "symbol_grid",
   GLOBAL: "symbol_cog", INSTRUMENT: "symbol_keyboard" };
 const PAGE_IC = { FLT: "function_filter_lpf_peak", FILT: "function_filter_lpf_peak", DLY: "symbol_echo", REVERB: "symbol_spring", CHORUS: "symbol_waves",
@@ -2518,7 +2758,7 @@ const TEXT = {
     fm6OtherMaker: "別のメーカーの SysEx です", fm6Universal: "音色ではない汎用 SysEx です",
     fm6Factories: "ファクトリー音色",
     fm6NeedDevice: "FM-1 を接続すると 6-OP FM の音色を編集してトラックへ送れます。",
-    fm6NoFw: "このファームウェアには 6-OP FM（FM6）がありません。Felucca 1.0 以降に更新すると使えます。",
+    fm6NoFw: "このファームウェアには 6-OP FM（FM6）がありません。Caravel または Felucca 1.0 以降に更新すると使えます。",
     motion: "オートメーション", motionOn: "再生", motionClear: "オートメーションを消去", motionConfirm: "選択トラックのオートメーションを消しますか？", chance: "確率 %", ratchet: "ラチェット", motionStep: "ステップ", motionParam: "パラメーター", motionValue: "値",
     backupTitle: "全体バックアップ", backupExport: "バックアップ保存", backupImport: "バックアップ復元", backupHelp: "現在の曲・A〜D・音色バンク・ユーザーサンプル・設定を、このパソコンへ保存。", backupOld: "全体バックアップには対応版への更新が必要です。", backupConfirm: "全体バックアップを復元しますか？ 現在の曲、保存データとサンプルを置き換えます。USBを抜かないでください。", backupWorking: "バックアップ処理中 ", backupDone: "バックアップを保存しました", backupRestored: "全体バックアップを復元しました",
     deviceDisplay: "本体の画面",
@@ -2554,9 +2794,9 @@ const TEXT = {
     foot: "Chrome か Edge で使えます。", iconsCredit: "アイコン: Fukiai（MIT）Hügelton Instruments",
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。",
     denied: "MIDI（SysEx）の使用が許可されませんでした。",
-    nodevice: "Felucca が見つかりません。USB で接続して、もう一度押してください。",
+    nodevice: "Caravel が見つかりません。USB で接続して、もう一度押してください。",
     connecting: "接続中", reading: "読み込み中 ", steploading: "ステップを読み込み中 ",
-    ready: "接続しました", disconnected: "切断されました", lost: "Felucca が外されました",
+    ready: "接続しました", disconnected: "切断されました", lost: "Caravel が外されました",
     noreply: "応答がありません", error: "エラー: ", busy: "処理中",
     applying: "書き込み中 ", applied: "読み込みました", badfile: "ファイルを読み込めません: ",
     savedSlot: "保存しました: スロット ", loadedSlot: "読み込みました: スロット ", emptySlot: "空のスロットです: ",
@@ -2592,7 +2832,7 @@ const TEXT = {
     putDone: "本体に書き込みました: スロット ", storedSlot: "本体に保存しました: スロット ", erasedSlot: "消去しました: スロット ",
     loadedUser: "音色を読み込みました（シーケンスはそのまま。パターンは本体の SAVE > PHRASES から。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
-    installer: "Felucca インストーラー",
+    installer: "Caravel インストーラー",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
     needDevice: "FM-1 を接続すると編集できます。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
     bankConnect: "FM-1 を接続すると本体のユーザープリセットも扱えます。", bankNone: "このファームウェアにはユーザープリセットがありません。",
@@ -2600,6 +2840,7 @@ const TEXT = {
     level: "レベル", pan: "パン", mute: "ミュート", rec: "REC", selectTrack: "選択", selectedTrack: "選択中",
     projHelp: "プロジェクトは本体の状態をまとめて保存します: 4 トラックの音色とパターン、曲の並び順、選択中のトラック、グローバル設定。",
     slot: "スロット", songTitle: "ソング", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
+    liveLoadHelp: "再生中のスロット切替: PATTERN は音色と FX を維持。FULL は保存した音色と FX も読み込みます。テンポと MIDI クロックは維持します。",
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
   },
@@ -2621,7 +2862,7 @@ const TEXT = {
     fm6OtherMaker: "SysEx from another manufacturer", fm6Universal: "Universal SysEx, not voice data",
     fm6Factories: "Factory patch",
     fm6NeedDevice: "Connect the FM-1 to edit 6-OP FM voices and send them to a track.",
-    fm6NoFw: "This firmware has no 6-OP FM (FM6). Update to Felucca 1.0 or later to use it.",
+    fm6NoFw: "This firmware has no 6-OP FM (FM6). Update to Caravel or Felucca 1.0 or later to use it.",
     motion: "Automation", motionOn: "Play automation", motionClear: "Clear automation", motionConfirm: "Clear this track's automation?", chance: "Chance %", ratchet: "Ratchet", motionStep: "Step", motionParam: "Parameter", motionValue: "Value",
     backupTitle: "Complete backup", backupExport: "Save backup", backupImport: "Restore backup", backupHelp: "Save the current music, A–D, sound banks, user samples and settings to this computer.", backupOld: "Complete backups need firmware with archive support.", backupConfirm: "Restore this complete backup? Current music, saved data and samples will be replaced. Keep USB connected.", backupWorking: "Backing up / restoring ", backupDone: "Backup saved", backupRestored: "Complete backup restored",
     deviceDisplay: "Device display",
@@ -2657,9 +2898,9 @@ const TEXT = {
     foot: "Works in Chrome or Edge.", iconsCredit: "Icons: Fukiai (MIT), Hügelton Instruments",
     nomidi: "This browser cannot do it. Open the page in Chrome or Edge.",
     denied: "MIDI (SysEx) access was not allowed.",
-    nodevice: "Felucca not found. Connect it by USB and press Connect again.",
+    nodevice: "Caravel not found. Connect it by USB and press Connect again.",
     connecting: "Connecting", reading: "Reading ", steploading: "Reading steps ",
-    ready: "Connected", disconnected: "Disconnected", lost: "Felucca was unplugged",
+    ready: "Connected", disconnected: "Disconnected", lost: "Caravel was unplugged",
     noreply: "No reply from the device", error: "Error: ", busy: "Busy",
     applying: "Writing ", applied: "Loaded", badfile: "Cannot read the file: ",
     savedSlot: "Saved to slot ", loadedSlot: "Loaded slot ", emptySlot: "Empty slot: ",
@@ -2695,7 +2936,7 @@ const TEXT = {
     putDone: "Written to the device: slot ", storedSlot: "Stored on the device: slot ", erasedSlot: "Erased slot ",
     loadedUser: "Sound loaded (the sequence stays; its pattern is on the device under SAVE > PHRASES; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
-    installer: "Felucca installer",
+    installer: "Caravel installer",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
     needDevice: "Connect the FM-1 to edit.", smpNone: "This firmware has no user sample slots.",
     bankConnect: "Connect the FM-1 to see its user presets too.", bankNone: "This firmware has no user presets.",
@@ -2703,6 +2944,7 @@ const TEXT = {
     level: "Level", pan: "Pan", mute: "Mute", rec: "REC", selectTrack: "Select", selectedTrack: "Selected",
     projHelp: "A project keeps the sounds and patterns of all four tracks, the song chain, the selected track and the global settings.",
     slot: "Slot", songTitle: "Song", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
+    liveLoadHelp: "During playback: PATTERN keeps the current sounds and FX. FULL also loads the saved sounds and FX at the next loop boundary. Tempo and MIDI clock keep running.",
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
   },
@@ -2835,23 +3077,26 @@ const EXPECT = { pcount: 91, gcount: 27, pe0: 83 };
 /* the same layout without the chord keys (P_COUNT 89, P_E0 81), the FM operator ENVs too (69, 61) or the matrix
    (firmware 1.0: 57, 49) */
 const knownLayout = (info) => info.gcount === EXPECT.gcount &&
-  [[99, 91], [91, 83], [89, 81], [69, 61], [57, 49]].some(([c, e]) => info.pcount === c && info.pe0 === e);
+  [[113, 105], [111, 103], [104, 96], [99, 91], [91, 83], [89, 81], [69, 61], [57, 49]].some(([c, e]) => info.pcount === c && info.pe0 === e);
 const P = { LEVEL: 0, SLEN: 29 };
 const LAYOUT = (pe0) => [
-  { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7, 8]]] },
-  { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ["LFO DEST", 0, [13, 14, 15, 16]]] },
+  ...(pe0 >= 105 && ["ANALOG", "PHASE", "LOFI"].includes(engName()) && dev.pdesc[103]?.max > 0 ? [{ t: "MORPH", pages: [["MORPH", 0, [103]]] }] : []),
+  ...(pe0 >= 105 && engName() === "PHASE" && dev.pdesc[104]?.max > 0 ? [{ t: "FEEDBACK", pages: [["FEEDBACK", 0, [104]]] }] : []),
+  { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7, 8]], ...(pe0 >= 103 ? [["ENV SYNC", 0, [102]]] : [])] },
+  { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ...(pe0 >= 96 ? [["LFO 2", 0, [91, 92, 93]]] : []), ["LFO DEST", 0, [13, 14, 15, 16]]] },
   ...(pe0 >= 61 ? [{ t: "MOD", mod: 49 }] : []),   /* the matrix: P_M1SRC 49 .. P_M4AMT 60, one row per slot */
   { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]], ["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]],
+    ...(pe0 >= 103 && ["ANALOG", "SEM"].includes(engName()) ? [["FILTER TYPE", 0, [101]]] : []),
     ...(pe0 >= 91 && engName() === "DRUM" ? [["LANES", 0, P_LANES.slice(0, 4)], ["LANES 2", 0, P_LANES.slice(4)]] : [])] },   /* lane levels 83..90 */
   ...(pe0 >= 81 && engName() === "DIGITAL" ? [{ t: "OP ENV", pages: [   /* P_FM1_ATK 61: ATK DEC SUS REL LVL per operator (a
                                                     FELUCCA_FM4=1 firmware only: DIGITAL retired, its engine is "-") */
     ...[0, 1, 2, 3].map((k) => [`OP${k + 1}`, 0, [61 + 5 * k, 62 + 5 * k, 63 + 5 * k, 64 + 5 * k]]),
     ["OP LVL", 0, [65, 70, 75, 80]]] }] : []),
-  { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]]] },
-  { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["SLICER", 0, [45, 46, 47, 48]], ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, [24, 8, 9]], ["CHORUS", 1, [10, 11]]] },   /* G_RTYPE 24: ROOM / SPRING / HALL */
+  { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]], ...(pe0 >= 96 ? [["VOICE 3", 0, [95]]] : [])] },
+  { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["SLICER", 0, [45, 46, 47, 48]], ...(pe0 >= 103 ? [["INSERT", 0, [96, 97, 98, 99]], ["INSERT MIX", 0, [100]]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, [24, 8, 9]], ["CHORUS", 1, [10, 11]]] },   /* G_RTYPE 24: ROOM / SPRING / HALL */
   { t: "SCL", pages: [["SCL", 0, [25, 26, 27, 28]], ...(pe0 >= 83 ? [["CHORD", 0, P_CHORD]] : [])] },   /* CHRD VOIC 81, 82 */
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
-  { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]]] },
+  { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]], ...(pe0 >= 96 ? [["TIMING", 0, [94]]] : [])] },
   /* 1.2: as the device shows them: HOME > CLOCK (BPM SWG; CLK not here), MENU > AUDIO TUNE, MENU > MIDI > MIDI IN (G_ROUTE) */
   { t: "GLOBAL", tab: "setgroups", pages: [["CLOCK", 1, [0, 1, 2]], ["AUDIO", 1, [3]], ["MIDI", 1, [14]]] },
 ];
@@ -2884,7 +3129,7 @@ async function connect() {
       }
       access.onstatechange = onState;
     }
-    const isF = (p) => /felucca/i.test(p.name || "") && p.state !== "disconnected";
+    const isF = (p) => /felucca|caravel/i.test(p.name || "") && p.state !== "disconnected";
     const input = [...access.inputs.values()].find(isF);
     const output = [...access.outputs.values()].find(isF);
     if (!input || !output) { sayK("nodevice"); return; }
@@ -2938,7 +3183,7 @@ function disconnect(reasonKey = "disconnected") {
 
 function onState(e) {
   const p = e.port;
-  if (!p || !/felucca/i.test(p.name || "")) return;
+  if (!p || !/felucca|caravel/i.test(p.name || "")) return;
   if (dev && p.state === "disconnected" && (p.id === dev.input.id || p.id === dev.output.id)) {
     disconnect("lost");
   } else if (!dev && wantConnected && p.state === "connected" && p.type === "output") {
@@ -3143,6 +3388,8 @@ function buildGroups() {
     groups.setgroups.push(c);
   }
   for (const [id, divs] of Object.entries(groups)) $(id).replaceChildren(...divs);
+  if(dev.info.drumx) dxMount(dev);
+  lfo2Mount(dev);
 }
 
 function paramRow(s, id) {
@@ -3199,6 +3446,9 @@ function paramRow(s, id) {
 function showValue(k, v, force) {
   const c = ctl.get(k);
   if (!c || v == null) return;
+  if (!c.scope && c.id === dev.info.pe0 + 2 && dev.info.engines[dev.dump.engine] === "LOFI" && dev.dump.p[dev.info.pe0 + 1] >= 5)
+    c.desc.formulaPrefix = dev.dump.p[dev.info.pe0 + 1] === 5 ? "B" : "F";
+  else delete c.desc.formulaPrefix;
   const [txt0, unit] = fmtValue(c.desc, v), txt = modDst(c.desc, txt0);
   c.out.textContent = unit ? `${txt} ${unit}` : txt;
   if (force || !touched(k)) c.input.value = String(v);
@@ -3231,6 +3481,7 @@ function userSet(s, id, v, final) {
 }
 async function sendSet(s, id, k) {
   if (!dev) return;
+  const d = dev;
   const st = sets.get(k);
   const v = (s ? dev.dump.g : dev.dump.p)[id];
   st.sent = v;
@@ -3240,6 +3491,9 @@ async function sendSet(s, id, k) {
       (s ? dev.dump.g : dev.dump.p)[id] = r.value;
       showValue(k, r.value, false);
       mixFromDump();
+      if (d === dev && !s && id === d.info.pe0 + 1 && d.info.engines[d.dump.engine] === "LOFI") {
+        await rereadEngineDesc(d); refreshAll();
+      }
     }
   } catch (e) { if (e.message !== "closed") console.warn(e); }
 }
@@ -3261,6 +3515,8 @@ async function afterSoundChange(msg = "ready", d = dev) {
   needReload = false;                               /* this re-reads everything a RELOAD asks for */
   d.dump = await getDump(d);
   await rereadEngineDesc(d);
+  if(d.info.drumx) dxMount(d);
+  lfo2Mount(d);
   updateBrowser();
   refreshAll();
   await loadSteps(d);                                /* (a sound load keeps them; read anyway after a RELOAD) */
@@ -3369,7 +3625,7 @@ $("backup-export").addEventListener("click", () => op(async () => {
   assertSession(d);
   const file = await captureBackup((r, o) => sessionRequest(d, r, o), d.info.version, backupProgress);
   assertSession(d);
-  download(`Felucca-backup-${new Date().toISOString().slice(0, 10)}.json`, file);
+  download(`Caravel-backup-${new Date().toISOString().slice(0, 10)}.json`, file);
   sayK("backupDone");
 }));
 $("backup-import").addEventListener("click", () => { if (dev?.info?.backupCaps & 2) $("backup-file").click(); });
@@ -4235,6 +4491,10 @@ function onPush(f) {
       showValue(k, c.value, false);
       blink(k);
       mixFromDump();
+      if (!c.scope && c.id === d.info.pe0 + 1 && d.info.engines[d.dump.engine] === "LOFI" && old !== c.value) {
+        needReload = true; maybeReload();
+      }
+      if (!c.scope && c.id === d.info.pe0 && d.info.engines[d.dump.engine] === "DRUM" && old !== c.value) { needReload = true; maybeReload(); }
       if (!c.scope && c.id === pSlen() && old !== c.value) { $("steptables").dataset.len = ""; renderSteps(); }
     } else if (f.cmd === CMD.RELOAD) {
       d.sel = parse[CMD.RELOAD](f.a).track;          /* v3: another track may be selected on the device */
@@ -4321,6 +4581,7 @@ setInterval(async () => {
     if (d !== dev) return;
     const soundChanged = dump.engine !== d.dump.engine || dump.preset !== d.dump.preset;
     const engineChanged = dump.engine !== d.dump.engine;
+    const waveChanged = d.info.engines[dump.engine] === "LOFI" && dump.p[d.info.pe0 + 1] !== d.dump.p[d.info.pe0 + 1];
     const oldLen = d.dump.p[pSlen()];
     for (const [k, c] of ctl) {
       const v = c.scope ? dump.g[c.id] : dump.p[c.id];
@@ -4328,7 +4589,7 @@ setInterval(async () => {
       showValue(k, v, false);
     }
     d.dump = dump;
-    if (engineChanged) await rereadEngineDesc();
+    if (engineChanged || waveChanged) { await rereadEngineDesc(); refreshAll(); }
     if (hasTracks()) await readMixer();             /* the strips (other tracks push nothing) */
     if (soundChanged) { updateBrowser(); await loadSteps(); sayK("ready"); return; }
     if (dump.p[pSlen()] !== oldLen) { $("steptables").dataset.len = ""; renderSteps(); }
@@ -4350,6 +4611,7 @@ setInterval(async () => {
 async function syncPreferences(d) {
   if (!d || !d.info || !d.info.uiCaps) { renderPreferences(); return; }
   const preferences = await readDevicePreferences((r, o) => sessionRequest(d, r, o), d.info, d.names, d.preferences);
+  if (preferences) preferences.liveLoad = await readLiveLoad((r, o) => sessionRequest(d, r, o), d.info);
   if (dev !== d) return;
   d.preferences = preferences;
   if (preferences.slots) { d.bank = preferences.slots; renderBank(); }
@@ -4384,6 +4646,8 @@ async function changeFavorite(row) {
 }
 function renderPreferences(force = false) {
   const d = dev, p = d && d.preferences;
+  $("device-live-load").hidden = !p || !p.liveLoad;
+  if (p && p.liveLoad) $("live-load").value = String(p.liveLoad.value);
   $("device-display").hidden = !p || !(p.state.caps & 7);
   $("device-presets").hidden = !p || !(p.state.caps & 8);
   if (!p) { renderPreferences.sig = null; return; }
@@ -4424,6 +4688,15 @@ function renderPreferences(force = false) {
   $("device-preset-list").replaceChildren(rows.length ? table : el("p", { class: "dim", text: t("deviceEmpty") }));
 }
 $("device-filter").addEventListener("change", () => changePreference(3, +$("device-filter").value));
+$("live-load").addEventListener("change", () => {
+  const d = dev, value = +$("live-load").value;
+  if (!d || busy || !d.preferences?.liveLoad) return;
+  op(async () => {
+    const result = parse[CMD.MENU_SET](await sessionRequest(d, req.menuSet(33, value), FLASH_OPT));
+    if (dev !== d) return;
+    await syncPreferences(d); preferenceResult(result.rc);
+  });
+});
 setInterval(() => {
   if (!dev || !dev.preferences || busy || document.hidden || !["settings", "library"].includes(tab)) return;
   const d = dev;
@@ -4438,7 +4711,7 @@ $("savefile").addEventListener("click", () => {
     engineName: dev.info.engines[engine], presetName: (dev.names[engine] || [])[preset],
     engine, preset, p: dev.dump.p.slice(), g: dev.dump.g.slice(),
     steps: dev.steps.map((s) => ({ n: s.n, notes: s.notes.slice(), time: s.time, flags: s.flags, vel: s.vel })) };
-  download(`felucca-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
+  download(`caravel-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
 });
 $("loadfile").addEventListener("click", () => { $("file").value = ""; $("file").click(); });
 $("file").addEventListener("change", async () => {
@@ -4814,9 +5087,9 @@ const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").repl
 const today = () => new Date().toISOString().slice(0, 10);
 $("libexp1").addEventListener("click", () => {
   const p = lib.find((x) => x.id === libSel);
-  if (p) download(`felucca-patch-${fileSlug(p.name)}.json`, libraryFile("patch", [p], libCtx()));
+  if (p) download(`caravel-patch-${fileSlug(p.name)}.json`, libraryFile("patch", [p], libCtx()));
 });
-$("libexport").addEventListener("click", () => download(`felucca-library-${today()}.json`, libraryFile("library", lib, libCtx())));
+$("libexport").addEventListener("click", () => download(`caravel-library-${today()}.json`, libraryFile("library", lib, libCtx())));
 $("libimport").addEventListener("click", () => { $("libfile").value = ""; $("libfile").click(); });
 $("libfile").addEventListener("change", async () => {
   let n = 0, skipped = 0;
@@ -4901,7 +5174,7 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
     if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, pattern: u.pattern, grid: u.grid, slot: x.slot, fm6: u.fm6,
       engineName: reservedFm4(dev.info.engines, u.engine) ? "DIGITAL" : dev.info.engines[u.engine] });   /* (DIGITAL's values) */
   }
-  download(`felucca-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
+  download(`caravel-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
   sayK("ready");
 }));
 
@@ -5048,6 +5321,100 @@ function downloadBytes(name, bytes) {
 }
 $("fm6export").addEventListener("click", () => downloadBytes(`${fileSlug(FM6.name(fm6v))}.syx`, FM6.singleSysex(fm6v)));
 
+/* DRUM-X controls and MIDI Learn use explicit track/lane/side targets. */
+function dxTargetLabel(id, d=dev) {
+  if (L2_IDS.includes(id)) return `LFO2 · ${L2_LABELS[id-400]}`;
+  if (id < 128) return d.pdesc[id]?.label || `Parameter ${id}`;
+  if (id < 264) return DX_GLOBAL_NAMES[id-256] || "";
+  const n=id-264; return `${LANES[Math.floor(n/16)]} · ${DX_FIELD_NAMES[n%16]}`;
+}
+async function dxDescriptors(d) {
+  if(d.dxDesc) return d.dxDesc;
+  const desc=new Map();
+  for(const id of [...DX_IDS.slice(0,7),...DX_IDS.slice(7,23)]) {
+    const a=await sessionRequest(d,[82,[id&127,id>>7]]),r=new Reader(a);
+    if(r.b()) throw new Error("DRUM-X descriptor unavailable");
+    const got=r.b()|(r.b()<<7), label=r.s(),fmt=r.b(),min=r.v(),max=r.v(),n=r.b(),names=[];
+    for(let i=0;i<n;i++)names.push(r.s()); desc.set(got,{label,fmt,min,max,names});
+  }
+  for(const id of DX_IDS) if(id>=280) desc.set(id,desc.get(264+(id-264)%16));
+  d.dxDesc=desc;return desc;
+}
+async function dxMount(d=dev) {
+  if(!d?.info?.drumx || d !== dev) return;
+  let box=document.getElementById("drumx-controls");
+  if(box) box.remove();
+  box=el("div",{id:"drumx-controls",class:"group"},el("h2",{text:"DRUM-X & MIDI Learn"}));
+  $("groups").append(box);
+  try {
+    const data=dxValues(await sessionRequest(d,[83,[d.sel||0]]));
+    if(d!==dev || !box.isConnected)return;
+    if(data.active) {
+      const desc=await dxDescriptors(d),lane=el("select"),side=el("select");
+      LANES.forEach((n,i)=>lane.append(el("option",{value:i,text:n})));
+      side.append(el("option",{value:0,text:"A"}),el("option",{value:1,text:"B"}));
+      const panel=el("div"),global=el("div");
+      box.append(el("h3",{text:"Kit movement"}),global,el("h3",{text:"Drum sound"}),lane,side,panel);
+      function row(id) {
+        const p=desc.get(id),out=el("span",{class:"v",text:data.values.get(id)});
+        const input=p.names.length?el("select"):el("input",{type:"range",min:p.min,max:p.max,step:1});
+        p.names.forEach((n,i)=>input.append(el("option",{value:p.min+i,text:n})));
+        input.value=String(data.values.get(id));
+        input.addEventListener("input",()=>{out.textContent=input.value;});
+        input.addEventListener("change",()=>op(async()=>{
+          const result=dxValues(await sessionRequest(d,[84,[data.track,id&127,id>>7,...v14enc(+input.value)]]),true);
+          data.values=result.values;
+        }));
+        return el("div",{class:"row"},el("span",{text:dxTargetLabel(id,d)}),input,out);
+      }
+      DX_IDS.slice(0,7).forEach(id=>global.append(row(id)));
+      function soundRows(){const base=264+16*(+lane.value),start=base+5*(+side.value);panel.replaceChildren(...[...Array.from({length:5},(_,i)=>start+i),...Array.from({length:6},(_,i)=>base+10+i)].map(row));}
+      lane.addEventListener("change",soundRows);side.addEventListener("change",soundRows);soundRows();
+    }
+    const track=el("select"),target=el("select"),cc=el("input",{type:"number",min:0,max:119,value:20});
+    for(let k=0;k<d.info.ntrk;k++)track.append(el("option",{value:k,text:`Track ${k+1}`}));track.value=String(d.sel||0);
+    const common=Array.from({length:d.info.pcount},(_,i)=>i).filter(id=>visible(d.pdesc[id]));
+    for(const id of [...common,...DX_IDS,...(d.info.lfo2?L2_IDS:[])])target.append(el("option",{value:id,text:dxTargetLabel(id,d)}));
+    const table=el("div"),status=el("p",{class:"dim"});
+    const learn=el("button",{text:"Learn"}),assign=el("button",{text:"Assign CC"}),refresh=el("button",{text:"Read assignments"});
+    async function list() {
+      const entries=dxLearnMap(await sessionRequest(d,[85,[]]));
+      if(d!==dev||!box.isConnected)return;
+      table.replaceChildren(el("p",{text:`${entries.length}/64 MIDI assignments`}));
+      for(const e of entries){const remove=el("button",{text:"Remove"});remove.addEventListener("click",()=>op(async()=>{dxLearnMap(await sessionRequest(d,[86,[1,e.cc]]),true);await list();}));table.append(el("div",{class:"row"},el("span",{text:`CC ${e.cc} → T${e.track+1} · ${dxTargetLabel(e.id,d)}`}),remove));}
+    }
+    learn.addEventListener("click",()=>op(async()=>{const id=+target.value;dxLearnMap(await sessionRequest(d,[86,[3,+track.value,id&127,id>>7]]),true);status.textContent="Learn is armed on the FM-1. Move your MIDI controller, then read assignments.";}));
+    assign.addEventListener("click",()=>op(async()=>{const id=+target.value,n=+cc.value;if(!Number.isInteger(n)||n<0||n>119)throw new Error("Choose a CC from 0 to 119");dxLearnMap(await sessionRequest(d,[86,[0,n,+track.value,id&127,id>>7]]),true);await list();}));
+    refresh.addEventListener("click",()=>op(list));
+    box.append(el("h3",{text:"MIDI Learn"}),el("p",{class:"dim",text:"Choose a fixed track and sound parameter. Assignments remain bound to that destination when you change the displayed sound or track."}),track,target,learn,cc,assign,refresh,status,table);
+    await list();
+  } catch(e) { if(e.message!=="closed") {box.append(el("p",{text:e.message}));report(e);} }
+}
+
+async function lfo2Mount(d=dev) {
+  document.getElementById("lfo2-controls")?.remove();
+  if(!d?.info?.lfo2 || d!==dev) return;
+  const box=el("div",{id:"lfo2-controls",class:"group"},el("h2",{text:"LFO2"}),
+    el("p",{class:"dim",text:"Route LFO2, S&H2 or SLEW2 through the MOD matrix. Rate is inactive while Sync is enabled."}));
+  $("groups").append(box);
+  try {
+    const data=lfo2Values(await sessionRequest(d,[89,[d.sel||0]]));
+    if(d!==dev || !box.isConnected) return;
+    for(const id of L2_IDS) {
+      const r=new Reader(await sessionRequest(d,[88,[id&127,id>>7]]));
+      if(r.b()) throw new Error("LFO2 descriptor unavailable");
+      const got=r.b()|(r.b()<<7),label=r.s(),fmt=r.b(),min=r.v(),max=r.v(),n=r.b(),names=Array.from({length:n},()=>r.s());
+      if(got!==id) throw new Error("LFO2 descriptor mismatch");
+      const out=el("span",{class:"v",text:data.values[id-400]}),input=n?el("select"):el("input",{type:"range",min,max,step:1});
+      names.forEach((name,i)=>input.append(el("option",{value:min+i,text:name})));
+      input.value=String(data.values[id-400]);
+      input.addEventListener("input",()=>{out.textContent=input.value;});
+      input.addEventListener("change",()=>op(async()=>{lfo2Values(await sessionRequest(d,[90,[data.track,id&127,id>>7,...v14enc(+input.value)]]),true);}));
+      box.append(el("div",{class:"row"},el("span",{text:L2_LABELS[id-400]}),input,out));
+    }
+  } catch(e) { if(e.message!=="closed") {box.append(el("p",{text:e.message}));report(e);} }
+}
+
 $("connect").addEventListener("click", () => {
   if (dev) { wantConnected = false; disconnect(); } else connect();
 });
@@ -5059,3 +5426,4 @@ if (!MOCK && !navigator.requestMIDIAccess) sayK("nomidi");
 </script>
 </body>
 </html>
+

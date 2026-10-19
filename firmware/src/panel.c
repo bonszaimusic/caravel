@@ -114,6 +114,7 @@ static uint32_t leds_step(uint32_t m, int32_t s)
 }
 
 static void palette_apply(void);               /* (ui.c: the palette in use, CUSTOM or a built-in one) */
+static void ui_prefs_fresh(void);              /* (ui.c: MENU's defaults of a device without saved settings) */
 static void settings_init(void)
 {
     if (settings.magic == SETTINGS_MAGIC_OLD && settings.palette < 20u) {
@@ -121,6 +122,8 @@ static void settings_init(void)
         settings.palette = palette_from_stored(settings.palette);
     }
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
+        if (settings.magic != SETTINGS_MAGIC)
+            ui_prefs_fresh();                  /* never saved (not just a bad palette) */
         settings.magic = SETTINGS_MAGIC;
         settings.palette = UI_GREY_INDEX;      /* GREY (default; named MONO before 1.0.2) */
         settings.lowcut = 0;

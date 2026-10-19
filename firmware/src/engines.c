@@ -21,9 +21,13 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #define ENG_MEM(p) ((void *)eng_mem[p].b)  /* part p's region (p < NPART) */
 #define ENG_MEM_FITS(name, size) _Static_assert((size) <= ENG_MEM_PART, name " state over ENG_MEM_PART")
 
-#include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL NOISE */
+#include "va_blocks.c"  /* reusable VA helpers; no shared mutable state */
+#include "eng_hades.c"
+#include "eng_drone.c"
+#include "eng_sem.c"
+#include "eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL NOISE */
 #include "eng_phase.c"
-#include "../engines/src/eng_lofi.c"
+#include "eng_lofi.c"
 #include "eng_sample.c"
 #include "eng_formant.c"
 #include "../engines/src/eng_trio.c"
@@ -62,7 +66,12 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_FM6,                    /* 12 (ENGI_FM6) */
 #if FELUCCA_SLICE
     &ENG_SLICE,                  /* 13 (FELUCCA_SLICE=0 builds without it) */
+#else
+    &ENG_ANALOG,                 /* reserved, hidden; retain SEM id 14 */
 #endif
+    &ENG_SEM,                    /* 14 */
+    &ENG_HADES,                  /* 15 */
+    &ENG_DRONE,                  /* 16 */
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -123,11 +132,14 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     13,                          /* SLICE */
 #endif
     10,                          /* DRUM */
+    ENGI_SEM,                    /* append: existing engine shortcut order retained */
+    ENGI_HADES,
+    ENGI_DRONE,
 };
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL); }
+static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != 13u); }
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {

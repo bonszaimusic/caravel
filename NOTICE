@@ -1,0 +1,47 @@
+Caravel
+Copyright (C) 2026 bonszaimusic
+SPDX-License-Identifier: GPL-3.0-only
+
+ORIGIN
+Caravel is a modified version of Felucca 1.6.1:
+  Felucca, Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+  https://github.com/hugelton/Felucca, tag v1.6.1 (commit a53ecf4), GPL-3.0-only
+The work began with Felucca 1.5 in use; the first recorded commit (10 October 2026) builds on Felucca 1.5.1, and the 1.6 and 1.6.1
+sources were taken in later. It is released under the name Caravel from version 0.1.0 on. Felucca's active development has ended.
+Felucca and Hügelton Instruments are names of Hügelton Instruments. They are used here only to state where this code comes from.
+
+CHANGES (GNU GPL v3, section 5a)
+This is not the original Felucca. The initial Caravel changes are recorded as one baseline snapshot on the unchanged public
+Felucca 1.6.1 history. That commit identifies the modified files and its preparation date; it does not reconstruct the
+individual development dates of those changes. The additions are listed in CHANGELOG.md and described in docs/. Among them: the renaming (display names, version 0.1.0, USB manufacturer / product strings, installer,
+editor and emulator texts, package file names), the two-group menu layout, the SEQ CLEAR STEP key, LFO2 and the MOD additions,
+the SEM, HADES, DRONE and DRUM-X engines, MORPH, per-track voice reservations and the external-clock fixes.
+Files that were changed keep their original copyright and SPDX headers. New files carry "Copyright (C) 2026 bonszaimusic".
+
+DRUM-X AND OTHER JIANT PARTS
+DRUM-X (fixed-point synthesis and the factory A/B sounds), MORPH, PHASE feedback and LOFI BYTE/FLOAT are adapted from JIANT FM
+(juanjiant-bit/JIANT, GPL-3.0-only, itself a Felucca fork), at the commits named in CREDITS.md. DRUM-X follows the idea of Sonic
+Charge's Microtonic (not affiliated); Caravel added track-local kits, fixed MIDI Learn targets and compatible storage.
+The BYTE/FLOAT formulas acknowledge Tejeez, xpansive and viznut. Affected source files say so in their headers.
+
+LICENCE
+GPL-3.0-only, full text in LICENSE. Parts keep the licences listed in LICENSING.md, with their texts in LICENSES/
+(MIT, Apache-2.0, SIL OFL 1.1, CC0 1.0). The credits are in CREDITS.md. Caravel comes with NO WARRANTY, to the extent permitted
+by law (GPL sections 15 and 16).
+
+SOURCE
+The complete corresponding source is this repository, https://github.com/bonszaimusic/caravel,
+including its submodule firmware/engines/ (clone with --recurse-submodules). Every release also offers caravel-X.Y.Z-source.tar.gz, the whole source with the submodule's files.
+
+NOT AFFILIATED
+Caravel is independent firmware. It is not affiliated with, endorsed by or supported by Hügelton Instruments or M-VAVE. M-VAVE
+and FM-1 are trademarks of their respective owners. No M-VAVE material is part of Caravel. Please do not report problems with
+Caravel to Hügelton Instruments or to M-VAVE.
+
+USE AT YOUR OWN RISK
+Installing custom firmware on an FM-1 can leave it unusable and cannot be fully undone by this project. Keep the official V15
+package (the installer's "Return to official V15") and a complete backup at hand. The authors accept no responsibility for damage.
+
+USB IDENTIFIERS
+The USB vendor / product IDs 1209:0001 (running) and 1209:0002 (update loader) are the pid.codes test IDs used by Felucca. They are
+not allocated to Caravel and must be replaced before any commercial distribution.

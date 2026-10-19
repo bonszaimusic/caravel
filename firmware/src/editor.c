@@ -276,7 +276,12 @@ static void ed_sync(void)                                /* main loop */
 
 /* descriptor of parameter id of track t: the engine parameters of the engine it asked for
  * (t->engine follows in the audio ISR, after a short fade) */
-static const param_desc_t *ed_tdesc(const track_t *t, uint32_t id) { return param_desc_of(t->eng_req % NENGINES, id); }
+static const param_desc_t *ed_tdesc(const track_t *t, uint32_t id)
+{
+    if (ENGINES[t->eng_req % NENGINES] == &ENG_LOFI && t->p[P_E1] >= RW_BYTE && id >= P_E0 && id <= P_E7)
+        return track_desc(t, id);
+    return param_desc_of(t->eng_req % NENGINES, id);
+}
 /* descriptor and value slot of (scope, id): scope 0 = the selected track, 1 = global */
 static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
 {
@@ -364,7 +369,11 @@ static int ed_flash_stop(void)
 static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds, uint32_t full)
 {
     track_t *t = &trk[k];
-    uint32_t i, n = motion_count(t), cap = full ? MOTION_MAX : 64u, j;
+    uint32_t i, n = 0, cap = full ? MOTION_MAX : 64u, j;
+    /* Legacy web motion protocol names sound parameters only. Project backup
+     * still carries every FX edge; the on-device list shows them separately. */
+    for (i = 0; i < motion.count; i++)
+        n += (motion.event[i].place >> 6) == k && !MOTION_IS_FX(&motion.event[i]);
     n = n < cap ? n : cap;
     ed_b(k); ed_b(rc); ed_b(motion_enabled(t));
     if (full) {
@@ -374,12 +383,12 @@ static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds, uint32_t fu
     }
     for (i = j = 0; i < motion.count && j < n; i++) {
         const motion_event_t *e = &motion.event[i];
-        if ((e->place >> 6) != k) continue;
+        if ((e->place >> 6) != k || MOTION_IS_FX(e)) continue;
         ed_b(e->place & 63u); ed_b(MOTION_ID(e)); ed_v(e->value);
         j++;
     }
     for (i = j = 0; kinds && i < motion.count && j < n; i++)
-        if ((motion.event[i].place >> 6) == k) {
+        if ((motion.event[i].place >> 6) == k && !MOTION_IS_FX(&motion.event[i])) {
             ed_b((motion.event[i].param & MOTION_LOCK) != 0u);
             j++;
         }
@@ -424,6 +433,9 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
     }
 }
 
+#include "editor_drumx.c"
+#include "editor_lfo2.c"
+
 static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
 {
     if (n < 4u)
@@ -443,6 +455,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     if (ed_backup_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_fm6_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_menu_handle(cmd, a, na)) { ed_send(); return; }
+    if (ed_lfo2_handle(cmd, a, na)) { ed_send(); return; }
+    if (ed_drumx_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_learn_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_palette_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
@@ -465,7 +479,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         break;
     }
     case ED_INFO:
-        ed_str("FELUCCA " FELUCCA_VERSION, 24);
+        ed_str(BRAND_UPPER " " FELUCCA_VERSION, 24);
         ed_b(NENGINES);
         ed_b(P_COUNT);
         ed_b(G_COUNT);
@@ -489,8 +503,10 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0x54); ed_b(1); ed_b(NUDGE_DIV);   /* 1.2: a step's nudge (1/16 step) after its ratchet; LFO 2, QNTZ */
         ed_b(0x57); ed_b(1); ed_b(NTRK);   /* 1.2: song sections with a slot per track (SONG ops 4..7) */
         ed_b(0x56); ed_b(1); ed_b(FM6_NBANK);   /* 1.4.1: FM6's voice bank (cmds 74..77; SLOT 9..40 = B1..B32) */
-        ed_b(0x43); ed_b(1); ed_b(ML_N);   /* 1.5: MIDI LEARN's map (cmds 78, 79; editor_learn.c) */
+        ed_b(0x43); ed_b(1); ed_b(ML_LEGACY_N);   /* 1.5: MIDI LEARN's map (cmds 78, 79; editor_learn.c) */
         ed_b(0x4B); ed_b(1); ed_b(NCOND);   /* 1.5.5: a step's condition (1..11) after its nudge */
+        ed_b(0x59); ed_b(1); ed_b(L2_N); /* independent LFO2: commands 88..90 */
+        ed_b(0x58); ed_b(1); ed_b(ML_N); /* DRUM-X + Learn2: commands 82..86 */
         ed_b(0x45); ed_b(1); ed_b(ED_PAL_N);   /* 1.6: CUSTOM, the user's palette: 5 colours (cmds 80, 81; editor_palette.c) */
         break;
     case ED_GET:
@@ -539,8 +555,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_v(d->def);
         ed_str(d->label, 8);
         ed_str(d->unit, 8);
-        if (d->fmt == F_ENUM && d->names)                  /* up to 24 (the matrix DST has 20) */
-            for (i = 0; i <= (uint32_t)(d->max - d->min) && i < 24u; i++)
+        if (d->fmt == F_ENUM && d->names)                  /* up to 32 (Custom matrix DST has 25) */
+            for (i = 0; i <= (uint32_t)(d->max - d->min) && i < 32u; i++)
                 ed_str(d->names[i], 8);
         break;
     case ED_STEP_GET:
@@ -929,3 +945,5 @@ static void ed_service(void)
         ed_handle(f, k);
     }
 }
+
+

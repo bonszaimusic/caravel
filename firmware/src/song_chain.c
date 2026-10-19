@@ -20,6 +20,14 @@ typedef struct {
     uint8_t qnt[NTRK];                       /* each track's QUANTIZE (P_SQNT) as saved */
     motion_store_t motion;
 } chain_pattern_t;
+/* Prepared in the main loop, immutable while live_pending is published.
+ * No flash reads, decoding or factory-patch searches at the launch boundary. */
+static struct {
+    int16_t p[NTRK][P_COUNT], g[G_COUNT];
+    uint8_t patch[NTRK][FP_SIZE + 1u], preset[NTRK];
+    dx_config_t dx[NTRK];
+    lfo2_config_t lfo2[NTRK];
+} live_sound __attribute__((section(".pool")));
 static chain_config_t chain_config;
 static struct {
     chain_pattern_t source[4];
@@ -31,6 +39,11 @@ static struct {
     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
     uint8_t rec;
     uint32_t carry;
+    /* Live project-pattern launch: source[0] is a staging buffer only while
+     * SONG is idle. Main loop publishes pending after the complete copy; the
+     * audio ISR consumes it at track 1's loop boundary. No extra pattern RAM. */
+    volatile uint8_t live_pending, live_notice;
+    uint8_t live_applied, live_engine[NTRK], live_full;
 } chain;
 /* a silent lane: its steps (empty: nothing plays) and its timing (a 4/4 bar of 1/16: the section's length when every
  * track is silent) */
@@ -107,6 +120,7 @@ static const step_t *seq_steps(const track_t *t)
     return s < 4u ? chain.source[s].step[k] : chain_silent;
 }
 static void motion_restore(track_t *t);
+static void motion_fx_reset(track_t *t);
 /* a section starts (chain_start, chain_tick: once a section, not per block; not inlined: off the audio ISR's loop) */
 static __attribute__((noinline)) void chain_apply(void)
 {
@@ -119,6 +133,7 @@ static __attribute__((noinline)) void chain_apply(void)
         chain.lane[i] = (uint8_t)(s < 4u ? s : CHAIN_SILENT);
         seq_release(t);
         motion_restore(t);
+        motion_fx_reset(t);
         if (s < 4u) {
             memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
             t->p[P_SQNT] = chain.source[s].qnt[i];
@@ -186,3 +201,5 @@ static void chain_tick(uint32_t n)
     chain.remaining = chain.config.row[chain.row].repeat;
     chain_apply();
 }
+
+

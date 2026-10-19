@@ -50,9 +50,9 @@
  * presets read and write t->p from the main loop, which the ISR preempts; TIMER5 only fills the MIDI rings),
  * and the engines read t->p as before. An engine reads its parameters in note_on (events_block) unmodulated.
  * Nothing active (every slot with SRC, DST or AMT at 0): no work, and the sound is bit-identical. */
-enum { MS_OFF, MS_LFO, MS_ENV, MS_VEL, MS_KEY, MS_RAND, MS_MODW, MS_AT, MS_EXPR, MS_SH, MS_SLEW, MS_N };
+enum { MS_OFF, MS_LFO, MS_ENV, MS_VEL, MS_KEY, MS_RAND, MS_MODW, MS_AT, MS_EXPR, MS_SH, MS_SLEW, MS_LFO2, MS_SH2, MS_SLEW2, MS_N };
 enum { MD_OFF, MD_PITCH, MD_CUT, MD_SHP, MD_AMP, MD_PAN, MD_DIST, MD_CHO, MD_DLY, MD_REV, MD_RATE, MD_VIB, MD_E1,
-       MD_DEPTH = MD_E1 + 8, MD_VEL, MD_TIME, MD_N };   /* (append-only: the stored values keep their meaning) */
+       MD_DEPTH = MD_E1 + 8, MD_VEL, MD_TIME, MD_MORPH, MD_PD_FB, MD_N };   /* (append-only: the stored values keep their meaning) */
 _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST == MS_* / MD_*");
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
 #define NMSLOT 4u
@@ -63,8 +63,9 @@ _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 
 /* the track parameter of a per-block destination */
 static uint32_t mod_param(uint32_t d)
 {
-    static const uint8_t ID[MD_E1] = {[MD_PAN] = P_PAN, [MD_DIST] = P_DIST, [MD_CHO] = P_CHOR, [MD_DLY] = P_DLY,
-                                      [MD_REV] = P_REV, [MD_RATE] = P_LRATE, [MD_VIB] = P_LD_PIT};
+    static const uint8_t ID[MD_N] = {[MD_PAN] = P_PAN, [MD_DIST] = P_DIST, [MD_CHO] = P_CHOR, [MD_DLY] = P_DLY,
+                                      [MD_REV] = P_REV, [MD_RATE] = P_LRATE, [MD_VIB] = P_LD_PIT,
+                                      [MD_MORPH] = P_MORPH, [MD_PD_FB] = P_PD_FB};
     return MD_ENGINE(d) ? P_E0 + d - MD_E1 : ID[d];
 }
 
@@ -102,10 +103,26 @@ static int32_t mod_key(uint32_t note) { return clamp(((int32_t)note - 60) * 512,
 /* S&H: the value of the LFO's cycle (voice.c lfo_rand; 0 before its first one ends), bipolar */
 static int32_t mod_sh(const track_t *t) { return t->lfo_rnd ? (int32_t)(t->lfo_rnd >> 16) - 32768 : 0; }
 
+static __attribute__((noinline)) uint32_t mod_kind(const track_t *t, uint32_t s)
+{
+    if ((s == MS_LFO && t->p[P_LPOL]) || (s == MS_LFO2 && lfo2_config[(uint32_t)(t - trk)].p[L2_POL])) return MS_ENV;
+    return s;
+}
 /* source s of the track: the per-track ones, the per-voice ones of the latest note-on */
 static int32_t mod_tsrc(const track_t *t, uint32_t s, int32_t lfo)
 {
     switch (s) {
+    case MS_LFO2: {
+        const lfo2_state_t *l2 = &lfo2_state[(uint32_t)(t - trk)];
+        return mulq15(l2->val, l2->fade);
+    }
+    case MS_SH2:
+    case MS_SLEW2: {
+        /* Keep LFO2's random-state work out of the legacy sources' path. */
+        const lfo2_state_t *l2 = &lfo2_state[(uint32_t)(t - trk)];
+        int32_t sh2 = l2->rnd ? (int32_t)(l2->rnd >> 16) - 32768 : 0;
+        return s == MS_SH2 ? sh2 : l2->prev + (((sh2 - l2->prev) * (int32_t)(l2->ph >> 17)) >> 15);
+    }
     case MS_SH:
         return mod_sh(t);
     case MS_SLEW:                                       /* the cycle before's value .. this one's, by the phase */
@@ -161,7 +178,7 @@ static __attribute__((noinline)) int32_t mod_depth(const track_t *t, int32_t lfo
     for (k = 0; k < NMSLOT; k++) {
         uint32_t s = (uint32_t)p[P_M1SRC + 3u * k];
         if (p[P_M1DST + 3u * k] == MD_DEPTH && p[P_M1AMT + 3u * k] && s && s < MS_N)
-            g = mulq15(g, mod_gain(s == MS_LFO && p[P_LPOL] ? MS_ENV : s, mod_tsrc(t, s, lfo), p[P_M1AMT + 3u * k]));
+            g = mulq15(g, mod_gain(mod_kind(t, s), mod_tsrc(t, s, lfo), p[P_M1AMT + 3u * k]));
     }
     return g;
 }
@@ -174,9 +191,10 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
     int32_t lfo, off[NMSLOT];
     uint32_t k, j;
     modw_t *mw = &MOD(t);
+    const uint32_t topo_id = t->engine == ENGI_DRONE ? P_E3 : ~0u;
     mw->on = 0;
     for (k = 0; k < NMSLOT; k++)                        /* (VEL and TIME: at the notes, not here) */
-        if (p[P_M1SRC + 3u * k] && p[P_M1DST + 3u * k] && p[P_M1AMT + 3u * k] && p[P_M1DST + 3u * k] < MD_VEL)
+        if (p[P_M1SRC + 3u * k] && p[P_M1DST + 3u * k] && p[P_M1AMT + 3u * k] && ((uint32_t)(p[P_M1DST + 3u * k] - MD_VEL) > 1u && p[P_M1DST + 3u * k] < MD_N))
             break;
     if (k == NMSLOT)
         return 0;
@@ -192,7 +210,7 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
     for (; k < NMSLOT; k++) {
         uint32_t s = (uint32_t)p[P_M1SRC + 3u * k], d = (uint32_t)p[P_M1DST + 3u * k];
         int32_t a = p[P_M1AMT + 3u * k], x;
-        if (!s || !d || !a || s >= MS_N || d >= MD_DEPTH)
+        if (!s || !d || !a || s >= MS_N || d >= MD_N || (uint32_t)(d - MD_DEPTH) <= 2u)
             continue;
         if (d <= MD_AMP) {                              /* per voice */
             mw->amp |= d == MD_AMP;
@@ -201,7 +219,7 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
                 mw->vdst[mw->nv] = (uint8_t)d;
                 mw->vamt[mw->nv++] = (int8_t)a;
             } else {                                    /* (a UNI LFO, 0..1, takes AMP as ENV does) */
-                mod_voice_add(s == MS_LFO && p[P_LPOL] ? MS_ENV : s, d, mod_tsrc(t, s, lfo), a, &mw->pit, &mw->cut,
+                mod_voice_add(mod_kind(t, s), d, mod_tsrc(t, s, lfo), a, &mw->pit, &mw->cut,
                               &mw->shp, &mw->gain);
             }
             continue;
@@ -218,12 +236,14 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
                 off[j] = 0;
                 mw->nk++;
             }
+            pd = drone_topo_span(id == topo_id, pd);
             off[j] += (((x * a) >> 6) * (pd->max - pd->min)) >> 15;
         }
     }
     for (j = 0; j < mw->nk; j++) {
         uint32_t id = mw->kid[j];
         const param_desc_t *pd = id >= P_E0 ? &ENGINES[t->engine]->edit[id - P_E0] : &TP[id];
+        pd = drone_topo_desc(id == topo_id, mw->keep[j], pd);
         t->p[id] = (int16_t)clamp(mw->keep[j] + off[j], pd->min, pd->max);
     }
     return 1;
@@ -255,8 +275,9 @@ static __attribute__((noinline)) void mod_voice(track_t *t, voice_t *v, vmod_t *
         mod_voice_add(s, mw->vdst[k], x, mw->vamt[k], &pit, &cut, &shp, &gain);
     }
     if (pit) {
-        m->pitch16 = clamp(m->pitch16 + pit, 0, 2047);
-        m->inc = pitch_inc(m->pitch16);
+        int32_t pitch = m->pitch16 + pit;
+        m->pitch16 = eng_idx(t->engine) == ENGI_DRONE && drone_cells(t) ? pitch : clamp(pitch, 0, 2047);
+        m->inc = pitch_inc(clamp(m->pitch16, 0, 2047));
         if (fine)
             m->inc += (uint32_t)((int32_t)(m->inc >> 12) * fine);
     }
@@ -301,7 +322,7 @@ static __attribute__((noinline)) int32_t mod_at_note(const track_t *t, uint32_t 
         if (d == MD_VEL) {
             sum += (((x * a) >> 6) * 127) >> 15;
         } else {
-            int32_t u = MS_BIPOLAR(s) && !(s == MS_LFO && p[P_LPOL]) ? (x + 32768) >> 1 : x;
+            int32_t u = MS_BIPOLAR(s) && mod_kind(t, s) != MS_ENV ? (x + 32768) >> 1 : x;
             u = clamp(u, 0, 32767);
             sum += a > 0 ? (u * a) >> 6 : ((32767 - u) * -a) >> 6;
         }
@@ -363,3 +384,4 @@ static const char *mod_dst_name(const track_t *t, int32_t v)
     }
     return N_MDST[v];
 }
+

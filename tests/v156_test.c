@@ -84,7 +84,7 @@ static int humanize(void)
     uint32_t i, at[32], at2[32], n, v, lo = 127, hi = 0, h;
     int16_t rnd[8];
 
-    ok = MD_VEL == MD_DEPTH + 1 && MD_TIME == MD_VEL + 1 && MD_N == MD_TIME + 1 && str_eq(N_MDST[MD_VEL], "VEL") &&
+    ok = MD_VEL == MD_DEPTH + 1 && MD_TIME == MD_VEL + 1 && MD_MORPH == MD_TIME + 1 && MD_PD_FB == MD_MORPH + 1 && MD_N == MD_PD_FB + 1 && str_eq(N_MDST[MD_VEL], "VEL") &&
          str_eq(N_MDST[MD_TIME], "TIME") && TP[P_M1DST].max == MD_N - 1 && MD_DEPTH == 20;
     ok &= str_eq(mod_dst_name(&trk[0], MD_VEL), "VEL") && str_eq(mod_dst_name(&trk[0], MD_TIME), "TIME");
     bad += check("HUMANIZE (#213): VEL and TIME appended after DEPTH (20): 21, 22; the names", ok);
@@ -220,7 +220,7 @@ static int kits(void)
     track_t *t;
     int32_t s;
     static int32_t kbuf[2 * CTL];
-    ok = DK_DEEP == 9 && DK_TIGHT == 10 && DK_PERC == 11 && DK_COUNT == 12 && DV_NKIT == 8 && d->max == DK_PERC &&
+    ok = DK_DEEP == 9 && DK_TIGHT == 10 && DK_PERC == 11 && DK_DX == 12 && DK_COUNT == 13 && DV_NKIT == 8 && d->max == DK_DX &&
          str_eq(d->names[DK_DEEP], "DEEP") && str_eq(d->names[DK_TIGHT], "TIGHT") && str_eq(d->names[DK_PERC], "PERC");
     for (k = 0; k < 3u; k++)
         for (l = 0; l < DV_NLANE; l++) {
@@ -232,10 +232,10 @@ static int kits(void)
         }
     bad += check("KITS (#216): DEEP TIGHT PERC appended (9..11), each lane one of the five kits' (DEEP's kick 2 st down)", ok);
 
-    ok = ENG_DRUM.npresets == 4u && str_eq(ENG_DRUM.presets[0].name, "DRUM KIT") && ENG_DRUM.presets[0].e[0] == DK_STD &&
+    ok = ENG_DRUM.npresets == 5u && str_eq(ENG_DRUM.presets[0].name, "DRUM KIT") && ENG_DRUM.presets[0].e[0] == DK_STD &&
          str_eq(ENG_DRUM.presets[1].name, "DEEP KIT") && ENG_DRUM.presets[1].e[0] == DK_DEEP &&
          str_eq(ENG_DRUM.presets[2].name, "TIGHT KIT") && ENG_DRUM.presets[2].e[0] == DK_TIGHT &&
-         str_eq(ENG_DRUM.presets[3].name, "PERC KIT") && ENG_DRUM.presets[3].e[0] == DK_PERC;
+         str_eq(ENG_DRUM.presets[3].name, "PERC KIT") && ENG_DRUM.presets[3].e[0] == DK_PERC && str_eq(ENG_DRUM.presets[4].name, "DRUM-X") && ENG_DRUM.presets[4].e[0] == DK_DX && preset_cat(ENGI_DRUM, 4u) == CAT_DRUM;
     for (k = 1; k < 4u; k++)
         ok &= preset_cat(ENGI_DRUM, k) == CAT_DRUM;
     bad += check("  DRUM's presets: DRUM KIT first as before, then DEEP KIT, TIGHT KIT, PERC KIT (category DRUM)", ok);

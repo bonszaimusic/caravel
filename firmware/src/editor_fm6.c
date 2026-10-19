@@ -39,7 +39,7 @@ static int ed_fm6_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             else if (a[0] == ED_FM6_FACTORY && a[1] < FM6_NFACTORY)
                 memcpy(pk, FM6_FACTORY[a[1]], FM6_PACKED);
             else if (a[0] == ED_FM6_USER && a[1] < UP_SLOTS)
-                rc = upf_get(a[1], pk) ? 2u : 0u;          /* (2: not an FM6 preset, or none stored with it) */
+                rc = !upf_fm6(a[1]) || upf_get(a[1], pk) ? 2u : 0u;          /* (2: not an FM6 preset, or none stored with it) */
             else
                 rc = 1;
         }

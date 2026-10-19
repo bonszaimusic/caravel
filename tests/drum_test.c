@@ -1263,7 +1263,7 @@ static uint64_t seq_hash(const uint8_t (*ev)[3], uint32_t nev, uint32_t frames, 
 static void retired(void)
 {
     static const uint8_t MAP[4] = {DK_STD, DK_66, DK_10, DK_77};
-    static const uint8_t ORDER[9] = {DK_STD, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC};
+    static const uint8_t ORDER[10] = {DK_STD, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC, DK_DX};
     const param_desc_t *d = &ENG_DRUM.edit[0];
     uint32_t r, n, k, bad = 0, same = 0;
     int16_t kick;
@@ -1304,16 +1304,16 @@ static void retired(void)
     }
     {
         int32_t v = DK_STD, i;
-        for (i = 0; i < 9; i++) {                       /* STD 80 10 66 55 77 DEEP TIGHT PERC, then held at the end */
+        for (i = 0; i < 10; i++) {                       /* STD 80 10 66 55 77 DEEP TIGHT PERC DRUM-X, then held at the end */
             bad += v != ORDER[i];
             v = param_turn(d, v, 1);
         }
-        bad += v != DK_PERC || param_turn(d, DK_80, -1) != DK_STD || param_turn(d, DK_STD, -1) != DK_STD;
+        bad += v != DK_DX || param_turn(d, DK_80, -1) != DK_STD || param_turn(d, DK_STD, -1) != DK_STD;
     }
     for (r = 1; r < 4u; r++)
         bad += strcmp(d->names[r], d->names[MAP[r]]) != 0 || enum_orig(d, (int32_t)r) != MAP[r] ||
                param_fit(d, (int32_t)r) != MAP[r];
-    bad += param_fit(d, 99) != DK_PERC || param_fit(d, -5) != DK_STD || enum_orig(d, DK_55) != DK_55;
+    bad += param_fit(d, 99) != DK_DX || param_fit(d, -5) != DK_STD || enum_orig(d, DK_55) != DK_55;
     bad += param_fit(&TP[P_LEVEL], 77) != 77;
     {   /* a motion event of KIT 2 (CYM): stored and played as 10 */
         host_tracks_init();

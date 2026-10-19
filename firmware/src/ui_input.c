@@ -138,6 +138,7 @@ static uint32_t oct_leds(void)
         return 1u;
     if (ui.menu && !ui.confirm)
         return ui.menu >= 2u ? 1u :                    /* (INFO, ABOUT: OCT- back, lit) */
+               menu_tab() == MTAB_VOICES ? (menu_get(MI_VMODE) ? OCT_BREATH_DN : OCT_BREATH) :
                ui.menu_sel == MI_LCLEAR ? (ml_count() ? OCT_BREATH : 0u) :   /* LEARN CLEAR: while CCs are learned */
                ui.menu_sel >= MI_VALUES ? OCT_BREATH :  /* CALIBRATION / INFO / ABOUT: OCT+ opens */
                (menu_step(ui.menu_sel, -1) != menu_get(ui.menu_sel) ? OCT_BREATH_DN : 0u) |   /* a value: each */
@@ -582,6 +583,7 @@ static uint32_t song_leds(void)
 static int rec_tap(void)                                /* 1: the arming changed */
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
+    uint32_t f;
     if (chain_busy()) {
         ui_message("STOP TO RECORD");
         return 0;
@@ -590,7 +592,12 @@ static int rec_tap(void)                                /* 1: the arming changed
         ui_message("[SEQ] TO RECORD");
         return 0;
     }
+    f = motion_guard();
+    step_record_mask &= (uint8_t)~bit;
     song.rec ^= bit;
+    TSEL->rh_n = TSEL->rskip_n = 0;
+    ui.entry_open = 0;
+    motion_unguard(f);
     ui.force = 1;                                     /* also refresh the status on MENU / ABOUT */
     if ((song.rec & bit) && !song.playing && !seq_counting() && roll_on()) {
         ui_message(ui_prefs2 & (PREF_CHORD_ADD >> 16) ? "KEYS ADD TO STEP" : "KEYS WRITE STEPS");   /* step recording:
@@ -609,7 +616,26 @@ static int rec_tap(void)                                /* 1: the arming changed
 /* live recording into the selected track now: the STEP page's key entry pauses meanwhile */
 static int live_rec_sel(void)
 {
-    return ((song.rec >> song.sel) & 1u) && (song.playing || transport_req == 1u || seq_counting());
+    return (((song.rec & ~step_record_mask) >> song.sel) & 1u) && (song.playing || transport_req == 1u || seq_counting());
+}
+
+/* SEQ held + REC tapped on the piano roll: choose cursor entry independently
+ * of transport. Changing mode with held input notes would split their recording. */
+static void step_rec_toggle(void)
+{
+    uint32_t bit = 1u << song.sel, f;
+    track_t *t = TSEL;
+    if (!roll_on()) { ui_message("OPEN SEQ STEP"); return; }
+    if (chain_busy()) { ui_message("STOP SONG FIRST"); return; }
+    if (fm1_in.notes || t->nheld) { ui_message("RELEASE KEYS"); return; }
+    f = motion_guard();
+    step_record_mask ^= (uint8_t)bit;
+    song.rec |= (uint8_t)bit;
+    t->rh_n = t->rskip_n = 0;
+    ui.entry_open = 0;
+    motion_unguard(f);
+    ui.force = 1;
+    ui_message(step_record_mask & bit ? "STEP REC" : "LIVE REC");
 }
 
 /* the OCT- / OCT+ dialog (ui_draw.c draws it); trk: the track or the slot it is about */
@@ -706,7 +732,7 @@ static void grid_keys(uint32_t pressed)
  * cards show those four while a step is held, a locked value bright, the sound's own DIM). The step held: on the
  * DRUM grid its white keys (several at once: each gets the lock; a press on a hit takes it away only when let go,
  * and not at all when it was held for a lock), on the roll the step being entered (its note keys held). [EDIT]
- * tapped meanwhile clears the held steps' locks (EDIT alone still clears the step, its locks with it). Not while a
+ * tapped meanwhile clears the held steps' locks (EDIT alone opens the EDIT pages; the step is cleared by SEQ held + F5, ui_tools.c). Not while a
  * song plays (STOP TO EDIT). A lock is a motion record (motion.c): AUTOMATION's PLAY plays it, CLEAR clears it */
 static uint64_t lock_held(void)
 {
@@ -944,6 +970,8 @@ static void edit_param(uint32_t slot, int32_t steps)
     const page_t *pg = cur_page();
     const param_desc_t *d;
     int32_t v;
+    if (lfo2_page(pg->graph)) { lfo2_knob(pg, slot, steps); return; }
+    if (dx_page(pg->graph)) { dx_knob(pg, slot, steps); return; }
     if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c) */
         ev_knob(slot, steps);
         return;
@@ -1007,6 +1035,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
+    if (pg->graph == GR_SLOTS && slot == 1u) {
+        if (steps > 0) { ui.proj_erase = ui.act == 2u; ui.act = 2; }
+        else if (ui.act == 2u && ui.proj_erase) ui.proj_erase = 0;
+        else if (ui.act == 2u) ui.act = 0;
+        return;
+    }
     if (pg->graph == GR_TOOLS && slot == 1u) {           /* TOOLS' KNOB 2 (1.5.5, #190): right INIT, on CLEAN INIT; */
         if (steps > 0) {                                  /* left back, then none */
             ui.tl_clean = ui.act == 2u;
@@ -1059,6 +1093,10 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
+    if (cur_page()->graph == GR_SLOTS && c == 1u && !ui.proj_erase) {
+        confirm_open(CF_INIT_PROJECT, 0);
+        return;
+    }
     if (cur_page()->graph == GR_EVENTS) {
         ev_oct();
         return;
@@ -1123,11 +1161,18 @@ static void act_do(void)
         ui.act = 0;
     switch (id) {
     case G_LOAD:
-        project_load(k);
+        if (song.playing) {
+            uint32_t rc = project_pattern_queue(k);
+            char msg[] = "QUEUED A";
+            msg[7] = (char)('A' + k);
+            ui_message(rc == 1u ? "EMPTY SLOT" : rc == 2u ? "STOP SONG FIRST" :
+                       rc == 3u ? "ENGINE MISMATCH" : rc == 4u ? "STOPPED" : msg);
+        } else
+            project_load(k);
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
-        if (transport_busy())
-            ui_message("STOP TO SAVE");
+        if (chain_busy())
+            ui_message("STOP SONG FIRST");
         else if (project_used(k))
             confirm_open(CF_OVR_PROJ, k);
         else
@@ -1204,16 +1249,17 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
     }
 }
 
-/* SEQ step entry = step recording (1.2, Discussion #133: only with the track armed and the transport stopped), acid
+/* SEQ step entry = step recording (armed and stopped, or explicitly STEP REC while playing), acid
  * style: the keys pressed together (POLY: up to 4 notes, MONO: the last one) become the cursor step; releasing all
  * keys moves on one step (wrapping inside LEN). With CHRD on a key writes what it sounds, as live recording does:
  * POLY its chord, MONO the chord's root. MENU > CONTROL > CHORD ENTRY ADD (1.2, #155): each key adds its notes to
  * the cursor step or takes them out (step_toggle), one after another with one hand, and letting go moves nothing: the
- * cursor moves by KNOB 1 (STEP) or PRESETS only, as it always could (EDIT still clears the step and moves on) */
+ * cursor moves by KNOB 1 (STEP) or PRESETS only, as it always could (EDIT opens the EDIT pages; SEQ held + F5 clears the step and moves on) */
 static void seq_entry(uint32_t pressed)
 {
     track_t *t = TSEL;
-    step_t *st = &t->step[ui.cursor];
+    uint32_t cursor = ui.cursor, f;
+    step_t next = t->step[cursor], *st = &next;     /* prepare off-line, publish one coherent step */
     uint32_t k, add = (ui_prefs2 & (PREF_CHORD_ADD >> 16)) != 0u;
     for (k = 0; k < 27u; k++) {
         uint8_t ch[CHORD_MAX];
@@ -1249,6 +1295,15 @@ static void seq_entry(uint32_t pressed)
         }
         last_note = (uint8_t)note;
     }
+    f = motion_guard();
+    if (!((song.rec >> trk_index(t)) & 1u) || chain_busy()) {
+        ui.entry_open = 0;
+        motion_unguard(f);
+        return;
+    }
+    if (pressed)
+        memcpy(&t->step[cursor], &next, sizeof next);
+    motion_unguard(f);
     if (ui.entry_open && !(fm1_in.notes & ~kb_layer)) {
         if (add)
             ui.entry_open = 0;                          /* (ADD: the cursor stays) */
@@ -1345,18 +1400,14 @@ static int page_tap(uint32_t b)
             sd_reset();
         return 1;
     }
-    if (b == B_EDIT && song.seq_mode && !ui.home && cur_page()->graph == GR_ROLL) {   /* STEP: EDIT clears the step */
+    if (b == B_EDIT && song.seq_mode && !ui.home && cur_page()->graph == GR_ROLL) {   /* STEP: EDIT opens EDIT (Custom) */
         uint64_t held = lock_held();
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return 1; }
-        if (held) {                                     /* a step held: its locks (the step stays) */
+        if (held) {                                     /* a key held, the step being entered: EDIT clears its locks */
+            if (chain_busy()) { ui_message("STOP TO EDIT"); return 1; }
             lock_clear(held);
             return 1;
         }
-        step_clear(&TSEL->step[ui.cursor]);
-        (void)motion_clear_locks(TSEL, ui.cursor);
-        cursor_set(ui.cursor + 1);
-        ui_message("STEP CLEARED");
-        return 1;
+        /* (up to 1.6 EDIT cleared the cursor's step here: that is SEQ held + F5 now, ui_tools.c TL_STEPCLR) */
     }
     if (b == B_EDIT && !ui.home && cur_page()->graph == GR_EVENTS) {   /* AUTOMATION: EDIT deletes the row's record */
         ev_delete();
@@ -1454,6 +1505,19 @@ static void ui_notices(void)
     static uint32_t midi_t, midi_last;
     sample_notice();
     ml_poll();                                          /* (MIDI LEARN: a CC came for the picked parameter) */
+    if (midi_resync_notice) {
+        uint32_t notice;
+        fm1_irq_off();
+        notice = midi_resync_notice;
+        midi_resync_notice = 0;
+        fm1_irq_on();
+        ui_message(notice == RS_START_BAR ? "START: NEXT BAR" : notice == RS_START_PULSE ? "START: NEXT PULSE" :
+                   notice == RS_BAR ? "RESYNC: NEXT BAR" : notice == RS_PULSE ? "RESYNC: NEXT PULSE" :
+                   notice == RS_CANCEL ? "RESYNC CANCELLED" : notice == RS_WAIT ? "WAIT MIDI START" :
+                   notice == RS_STOP ? "RESYNC: NEED CLOCK" : notice == RS_REC ? "STOP REC TO RESYNC" :
+                   notice == RS_SONG ? "STOP SONG TO RESYNC" : "RESYNC DONE");
+        ui.force = 1;
+    }
     if (motion_full) { motion_full = 0; ui_message("AUTOMATION FULL"); }
     if (midi_follow())                                  /* (AUTO SELECT took the track: no "MIDI IN -> Tn") */
         midi_hint = 0;
@@ -1477,6 +1541,24 @@ static void ui_input(void)
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
+    if (chain.live_notice) {
+        uint32_t launched;
+        fm1_irq_off();
+        launched = chain.live_notice;
+        chain.live_notice = 0;
+        fm1_irq_on();
+        if (launched <= 4u) {
+            pat_from_set(launched);
+            sync_reload = 1;             /* FULL may have replaced engines/patches; refresh the editor too */
+            if (chain.live_full) {
+                mom.n = 0;              /* releasing a temporary edit must not restore the previous sound */
+                memset(drum_mute, 0, sizeof drum_mute);
+            }
+        }
+        undo.keep = 0;                 /* an undo from the previous pattern must not replace this one */
+        ui.force = 1;
+        { char msg[] = "PLAYING A"; msg[8] = (char)('A' + launched - 1u); ui_message(launched == 5u ? "ENGINE CHANGED" : msg); }
+    }
     midi_take();                                        /* (MIDI IN notes: lights, SCREEN WAKE, AUTO SELECT's) */
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
@@ -1583,8 +1665,10 @@ static void ui_input(void)
             song.seq_mode = 0;
         }
     }
-    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on())   /* REC pressed in another layer (REC alone: */
-        rec_tap();                                      /* its layer's tap); nothing in the menu, a dialog or NAME */
+    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on()) {
+        if (fm1_in.buttons & (1u << panel.btn[B_SEQ])) step_rec_toggle();
+        else rec_tap();
+    }
     if (ui.menu) {                                      /* SAVE / REC taps do nothing here (HOME: above) */
         if (ui.save_t0)
             ui.save_t0 |= 2u;
@@ -1638,6 +1722,8 @@ static void ui_input(void)
                 }
             } else if (kind == CF_CLEAR_SONG) {
                 if (!chain_busy()) { chain_defaults(&chain_config); ui.song_row = 0; ui_message("SONG CLEARED"); }
+            } else if (kind == CF_INIT_PROJECT) {
+                project_init_runtime();
             } else if (kind == CF_INIT_SOUND) {
                 if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
@@ -1678,10 +1764,14 @@ static void ui_input(void)
         case B_PLAY:
             if (layer_play())                           /* (GLO held: RESTART) */
                 break;
-            if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
+            if (midi_clock.resync_start || (!song.playing && transport_req >= 4u))
+                transport_req = 6;                    /* PLAY again cancels an armed external start. */
+            else if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
             else if (!ui.home && cur_page()->graph == GR_SONG)
                 chain_play_ui();
+            else if (song.g[G_CLOCK] && !(song.rec & ~step_record_mask) && !motion_fx_recording)
+                transport_req = (ui_prefs3 & (PREF_START_BAR >> 24)) ? 4u : 5u;
             else
                 transport_req = 1;
             break;
@@ -1737,12 +1827,11 @@ static void ui_input(void)
     } else if (song.grid) {
         grid_keys(notes);
     } else if (song.seq_mode && cur_page()->graph == GR_ROLL) {   /* STEP */
-        if (live_rec_sel() || !((song.rec >> song.sel) & 1u))   /* armed and playing: the keys record live, not
-                                                         * into the cursor step too; not armed (1.2, #133): they
-                                                         * only play, being on STEP writes nothing */
+        if (seq_counting() || live_rec_sel() || !((song.rec >> song.sel) & 1u)) /* LIVE REC uses the playhead;
+                                                         * unarmed keys only play */
             ui.entry_open = 0;
         else if (!chain_busy())
-            seq_entry(notes);                           /* armed and stopped: step recording at the cursor */
+            seq_entry(notes);                           /* STEP REC uses the cursor even during playback */
         else if (notes)
             ui_message("STOP TO EDIT");
     }
@@ -1902,3 +1991,5 @@ timeout:
     ui.force = 1;
     ui_message("SETUP CANCELLED");
 }
+
+

@@ -153,6 +153,20 @@ static int select_page(void)
     }
     bad += check("  PAGE: a bit of its own (MENU's 1.2 flags, bit 4), kept with the settings; 0 (older settings) = BPM", ok);
 
+    {   /* Custom: settings that were never saved start on PAGE; saved settings (even a 0) keep their choice */
+        __typeof__(favorites) fav = favorites;
+        __typeof__(settings) set = settings;
+        memset(&favorites, 0, sizeof favorites); memset(&settings, 0, sizeof settings);
+        settings_init();
+        ok = menu_get(MI_SELECT) == 1u;
+        menu_put(MI_SELECT, 0);
+        settings_init();                                  /* (valid magic now: nothing is re-defaulted) */
+        ok &= menu_get(MI_SELECT) == 0u;
+        favorites = fav; settings = set;
+        palette_apply();
+    }
+    bad += check("  PAGE is the default of settings that were never saved; a saved BPM stays BPM (no format change)", ok);
+
     b0 = song.g[G_BPM];
     go_title("ENV"); frame();
     turn(EN_SELECT, 1);
@@ -165,7 +179,7 @@ static int select_page(void)
     turn(EN_SELECT, 2);
     ok &= title_is("LFO DEST");
     turn(EN_SELECT, -3);
-    ok &= title_is("MOD");                              /* (LFO LFO 2 LFO DEST MOD, round) */
+    ok &= title_is("MOD");                              /* LFO > LFO SYNC > LFO DEST > LFO2 > LFO2 SYNC > MOD, round */
     ok &= song.g[G_BPM] == b0;
     bad += check("  PAGE: SELECT steps the family's pages, a detent each, round both ways; the tempo stays", ok);
 
@@ -278,8 +292,8 @@ static int project_erase_ui(void)
     project_save_as(2, "KEEP ME");
     song.g[G_SLOT] = 2;                                 /* B */
     go_page(GR_SLOTS); frame();
-    ok = act_cols() == 14u && str_eq(act_name(1), "ERASE") && str_eq(act_name(2), "LOAD") && str_eq(act_name(3), "SAVE");
-    turn(EN_K2, 1);
+    ok = act_cols() == 14u && str_eq(act_name(1), "INIT") && str_eq(act_name(2), "LOAD") && str_eq(act_name(3), "SAVE");
+    turn(EN_K2, 1); turn(EN_K2, 1);
     ok &= ui.act == 2u && act_ready();
     press(B_OCTUP);
     ok &= ui.confirm == CF_ERASE_PROJ && ui.confirm_trk == 1u;
@@ -289,11 +303,11 @@ static int project_erase_ui(void)
     ok &= !ui.confirm && project_used(1);
     bad += check("SAVE > PROJECT (#199): KNOB 2 ERASE, OCT+ asks \"ERASE PROJECT B?\" with its name, OCT- keeps it", ok);
 
-    turn(EN_K2, 1);
+    turn(EN_K2, 1); turn(EN_K2, 1);
     press(B_OCTUP);
     press(B_OCTUP);
     ok = !ui.confirm && !project_used(1) && project_used(2) && str_eq(ui.msg, "ERASED (RAM)") && cur_page()->graph == GR_SLOTS;
-    turn(EN_K2, 1);
+    turn(EN_K2, 1); turn(EN_K2, 1);
     ok &= !act_ready();
     press(B_OCTUP);
     ok &= !ui.confirm && str_eq(ui.msg, "EMPTY SLOT");
@@ -301,7 +315,7 @@ static int project_erase_ui(void)
 
     song.g[G_SLOT] = 3;
     song.playing = 1;
-    turn(EN_K2, 1);
+    turn(EN_K2, 1); turn(EN_K2, 1);
     ok = !act_ready();
     press(B_OCTUP);
     ok &= !ui.confirm && str_eq(ui.msg, "STOP TO ERASE") && project_used(2);
@@ -309,7 +323,7 @@ static int project_erase_ui(void)
     turn(EN_K3, 1);
     ok &= ui.act == 3u && str_eq(act_name(2), "LOAD");
     go_page(GR_SLOTS);
-    ok &= help_page() && str_eq(help_page(), "[K2]ERASE[K4]SAVE[EDIT]NAME") && help_fits(help_page());
+    ok &= help_page() && str_eq(help_page(), "[K2]INIT, ERASE[K4]SAVE") && help_fits(help_page());
     bad += check("  not while playing (STOP TO ERASE); LOAD and SAVE where they were; its HELP hint", ok);
     return bad;
 }
@@ -500,3 +514,4 @@ int main(void)
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }
+

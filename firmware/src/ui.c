@@ -7,6 +7,8 @@
 static int project_save(uint32_t slot);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
+static void project_init_runtime(void);
+static uint32_t project_pattern_queue(uint32_t slot);
 static int project_used(uint32_t slot);
 static uint32_t chain_prepare(void);
 static int up_used(uint32_t k);              /* user presets: upreset.c */
@@ -71,7 +73,7 @@ static uint32_t up_gen;                      /* bumped on every user bank change
  * ui_input.c seq_entry). 1.5: bit 3 SYSTEM > HELP ON (Discussion #156, ui_help.c). 1.5.5: bit 4 CONTROL > SELECT PAGE
  * (Discussion #188, ui_input.c: SELECT steps the pages; 0 = BPM, as before); bit 5 MIDI > SCREEN WAKE PANEL (scr_input:
  * only the panel wakes SCREEN OFF, as up to 1.5.1; 0, every older setting, = +MIDI, the default: a note-on too).
- * 1.5.6: bit 6 SELECT's second bit (#84: sel_mode). Bit 7 free */
+ * 1.5.6: bit 6 SELECT's second bit (#84: sel_mode). Custom: bit 7 LIVE LOAD FULL */
 #define ui_prefs2 (favorites.factory[15][24])
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */
 #define PREF_SCOPE_MIX (0x01u << 16)
@@ -81,16 +83,19 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define PREF_SEL_PAGE (0x10u << 16)
 #define PREF_WAKE_PANEL (0x20u << 16)
 #define PREF_SEL_HI (0x40u << 16)
-#define PREF_CPU2_ON (0x80u << 16)              /* MENU > SYSTEM > 2ND CORE ON (BETA): the second core from the next
-                                                 * power-on (main.c); clear = OFF, one core as 1.6 (every older setting:
-                                                 * 1.6 never set bit 7). It turns itself OFF when core 1 misreads
-                                                 * (hal/fm1_cpu1.h). (The 1.6.1 dual-core beta build had it the other
-                                                 * way round, 0 AUTO / 1 OFF) */
+#define ui_prefs3 (favorites.factory[15][13]) /* Custom settings: CPU2 and external PLAY mode; default zero. */
+#define PREF_Y 0xFF000000u
+#define PREF_CPU2_ON (0x01u << 24)
+#define PREF_START_BAR (0x02u << 24)
+#define PREF_FULL_LOAD (0x80u << 16)             /* LIVE LOAD: PATTERN (default) / FULL; settings, not a project value */
 /* MENU > CONTROL > SELECT: 0 BPM, 1 PAGE (1.5.5, #188), 2 MODW, 3 VEL (1.5.6, #84: ui_input.c sel_play), bit 4 and bit 6 of
  * ui_prefs2 (0 in every older setting = BPM; 1.5.5's PAGE keeps its bit; firmware before 1.5.6 reads MODW as BPM and
- * VEL as PAGE (its bit 4), before 1.5.5 both as BPM) */
+ * VEL as PAGE (its bit 4), before 1.5.5 both as BPM). Bit 7: Custom LIVE LOAD FULL. */
 enum { SEL_BPM, SEL_PAGE, SEL_MODW, SEL_VEL, SEL_N };
 static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >> 5) & 2u); }
+/* Settings that were never saved start on SELECT PAGE (Custom); saved settings keep their bits, so an older 0 stays BPM
+ * and a BPM chosen in the menu survives a reboot (no format change). */
+static void ui_prefs_fresh(void) { ui_prefs2 = (uint8_t)(ui_prefs2 | (PREF_SEL_PAGE >> 16)); }
 /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
  * oscilloscope, as before), 1 TRACKS (the four tracks as rows: ui_graph.c draw_home_tracks), 2 LEVELS (1.5, #134: the
  * rows of TRACKS, and KNOB 1..4 the LEVEL of T1..T4 in place of the engine's four: home_param). A byte of its own no
@@ -171,7 +176,7 @@ static struct {
     uint8_t hot_col, hot_t;      /* column whose knob was just turned (drawn white) */
     uint8_t menu;                /* 0 off, 1 list, 2 about + credits, 3 info (1.2) (HOME held) */
     uint8_t menu_sel;            /* MENU: the row (menu_items.c MI_*; its tab MI_TAB), kept while the device runs */
-    uint8_t menu_row[5];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
+    uint8_t menu_row[6];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
     uint16_t menu_scroll;        /* continuous ABOUT + CREDITS position, pixels */
     uint32_t menu_sig, home_t0;  /* HOME press time (btn_hold) */
     uint8_t force;               /* full redraw pending */
@@ -179,6 +184,7 @@ static struct {
     uint8_t help_t;              /* 1.5, MENU > HELP ON: frames the page's hint stays in the footer (ui_help.c) */
     uint8_t bpm_t;               /* frames the BPM stays highlighted after a SELECT turn */
     uint8_t act;                 /* action pages: the column whose action OCT+ does, + 1; 0 = none (act_col) */
+    uint8_t proj_erase;          /* PROJECT KNOB 2: INIT, then ERASE */
     uint8_t tl_clean;            /* SAVE > TOOLS: KNOB 2 turned on past INIT, CLEAN INIT picked (1.5.5, #190) */
     uint32_t rec_t0;             /* REC press time: a tap arms (btn_hold, no hold: held, REC opens its layer) */
     uint32_t save_t0;           /* SAVE press time (btn_hold: held = UNDO) */
@@ -218,7 +224,8 @@ static struct {
     struct {                     /* MIDI LEARN (midi_learn.c; here, not loose globals: the audio ISR's data keeps its
                                   * layout and its cost, tests/target_budget.py) */
         uint8_t on;              /* MIDI LEARN is on */
-        uint8_t pick, trk, id;   /* a parameter picked (1): its track and P_* id */
+        uint8_t pick, trk;
+        uint16_t id;   /* a parameter picked (1): its track and P_* id */
         volatile uint8_t io[2];  /* midi_control.c ml_arm, ml_heard */
     } ml;
     volatile uint8_t mpc[NTRK];  /* MIDI Program Change per track, 0x80 | program, 0 none (midi_control.c mpc_io: here
@@ -226,7 +233,7 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND };
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND, CF_INIT_PROJECT };
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -423,8 +430,19 @@ static uint32_t layer_btn(void);
 /* FM operator pages belong to DIGITAL; they never appear on other instruments (without FELUCCA_FM4: never). SLICES:
  * a SLICE track's (ui_slice.c); LANES / LANES 2 a DRUM track's (its lane levels); FILTER an ANALOG track's; OPERATOR, OP ENV, OPERATOR 2 an FM6
  * track's (its patch's operators, ui_fm6op.c) */
+/* MORE's slots: SPREAD every engine has; MORPH ANALOG, PHASE, LOFI and the DRUM-X kit; PHS FB PHASE only */
+static int more_slot_ok(uint32_t id)
+{
+    if (id == P_MORPH)
+        return FELUCCA_MORPH && (TSEL->eng_req == 0u || TSEL->eng_req == 2u || TSEL->eng_req == 3u || dx_track(TSEL));
+    if (id == P_PD_FB)
+        return FELUCCA_PHASE_FB && TSEL->eng_req == 2u;
+    return 1;
+}
 static int page_visible(uint32_t i)
 {
+    if (str_eq(PAGES[i].title, "SEM MODE")) return TSEL->eng_req == ENGI_SEM;
+    if (PAGES[i].graph >= GR_DXKIT && PAGES[i].graph <= GR_DXLAYER) return dx_track(TSEL);
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
@@ -470,6 +488,7 @@ static void ui_message(const char *s) { ui_say(s, ""); }
 #define MSG_NO_SAMPLE MSG_NOFILE "NO SAMPLE"
 
 static int chain_busy(void) { return chain.running || chain.armed; }
+static uint32_t project_ram_mask(void);          /* A-D changed in RAM, not yet committed to flash */
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */
 static int transport_busy(void)
@@ -866,6 +885,8 @@ static struct {
     uint8_t keep;                /* the track is as the last load left it (undo.after): a next load keeps the copy */
     uint8_t what;                /* UNDO_SOUND | UNDO_PAT: what the loads since the copy changed (undo_swap) */
     uint8_t eng, preset, user, patn;
+    uint8_t dx[128];
+    lfo2_config_t lfo2;
     uint8_t fm6_slot;            /* the track's FM6 patch and its SLOT (eng_fm6.c): an edited or a project's */
     uint8_t fm6[FP_SIZE + 1u];   /* patch is the track's own, not a factory one */
     int16_t p[P_COUNT];
@@ -902,6 +923,8 @@ static uint32_t track_sig(const track_t *t)      /* the sound (an FM6 track's pa
 {
     uint8_t id[3] = {t->eng_req, t->preset, t->user};
     uint32_t h = fnv(fnv(steps_sig(t), t->p, sizeof t->p), id, 3), k = trk_index(t);
+    if (dx_track(t)) h = fnv(h, dx_of(k), sizeof(dx_config_t));
+    h = fnv(h, &lfo2_config[k], sizeof lfo2_config[k]);
     h = fnv(h, fm6_patch[k], sizeof fm6_patch[k]); /* (a patch the editor sent between two loads) */
     for (uint32_t j = 0; j < motion.count; j++)
         if ((motion.event[j].place >> 6) == k) h = fnv(h, &motion.event[j], sizeof motion.event[j]);
@@ -935,6 +958,7 @@ static void pat_from_set(uint32_t slot)             /* every track's pattern is 
 static void load_motion_hold(track_t *t, uint32_t what)
 {
     if (what & UNDO_PAT) {
+        seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
         motion_reset(t);
         load_mo = 0;
         return;
@@ -993,6 +1017,8 @@ static void load_begin(track_t *t, uint32_t what)
     undo.user = t->user;
     memcpy(undo.p, t->p, sizeof undo.p);
     memcpy(undo.step, t->step, sizeof undo.step);
+    dx_pack(i, undo.dx);
+    undo.lfo2 = lfo2_config[i];
     memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
     undo.fm6_slot = fm6_slot[i];
     undo.pat = pat_sig[i];
@@ -1051,6 +1077,8 @@ static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
     undo.user = t->user;
     memcpy(undo.p, t->p, sizeof undo.p);
     memcpy(undo.step, t->step, sizeof undo.step);
+    dx_pack(i, undo.dx);
+    undo.lfo2 = lfo2_config[i];
     memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
     undo.fm6_slot = fm6_slot[i];
     undo.pat = pat_sig[i];
@@ -1094,6 +1122,7 @@ static void undo_swap(void)
         return;
     }
     undo.motion_backup = current_motion;
+    if (undo.what == UNDO_MOT) motion_fx_refresh(t);
     fm1_irq_off();                                /* the audio ISR must not see half a sound */
     if (undo.what & UNDO_SOUND) {
         uint8_t e = t->eng_req, pr = t->preset, u = t->user;
@@ -1112,6 +1141,7 @@ static void undo_swap(void)
             }
     }
     if (undo.what & UNDO_PAT) {
+        seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
         uint32_t ps = pat_sig[trk_index(t)];
         uint8_t pn = pat_last[trk_index(t)];
         pat_sig[trk_index(t)] = undo.pat;
@@ -1139,7 +1169,9 @@ static void undo_swap(void)
     if (undo.what & UNDO_SOUND) {                 /* FM6: the track's patch as it was (edited, a project's, a
                                                    * converted DIGITAL sound), not a factory one */
         uint32_t tr = trk_index(t);
-        uint8_t v[FP_SIZE + 1u], sl = fm6_slot[tr];
+        uint8_t v[FP_SIZE + 1u], sl = fm6_slot[tr], dx[128];
+        dx_pack(tr, dx); dx_unpack(tr, undo.dx); memcpy(undo.dx, dx, sizeof dx);
+        { lfo2_config_t c = lfo2_config[tr]; lfo2_load(tr, &undo.lfo2); undo.lfo2 = c; }
         memcpy(v, fm6_patch[tr], FP_SIZE);
         fm6_set_patch(tr, undo.fm6);
         fm6_slot[tr] = undo.fm6_slot;             /* (fm6_poll: the patch stays) */
@@ -1326,6 +1358,7 @@ static void fm4_load_preset(track_t *t, uint32_t k)
     for (i = 0; i < P_E0; i++)
         if (!param_kept(i))
             p[i] = TP[i].def;
+    lfo2_load(trk_index(t), 0);
     fm4_preset_values(p, k);
     fm4_apply(t, p);
     load_end(t);
@@ -1376,6 +1409,8 @@ static void apply_preset_to(track_t *t, uint32_t pi)
         for (i = 0; i < 4u; i++)
             t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
     }
+    lfo2_load(trk_index(t), 0);
+    if (dx_track(t)) dx_reset(trk_index(t));
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);
 }
@@ -1772,6 +1807,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return 0;
     if (pg->graph == GR_EVENTS) return 16u;     /* AUTOMATION: no knob is an action; OCT+ by the row (ev_oct) */
     if (pg->graph == GR_TOOLS) return 15u;
+    if (pg->graph == GR_SLOTS) return 14u;
     if (pg->graph == GR_SONG)
         return 1u;                               /* PLAY / STOP (also the PLAY button) */
     if (pg->graph == GR_PATS)
@@ -1802,6 +1838,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
     uint32_t id = cur_page()->id[c & 3u];
     if (cur_page()->graph == GR_EVENTS) return ev_act_name();
+    if (cur_page()->graph == GR_SLOTS && c == 1u) return ui.proj_erase ? "ERASE" : "INIT";
     if (cur_page()->graph == GR_TOOLS) {
         static const char *const actions[] = {"CLEAR", "INIT", "DELETE", "CLEAR"};
         return (c & 3u) == 1u && ui.tl_clean ? "CLEAN" : actions[c & 3u];   /* (1.5.5: KNOB 2 on: CLEAN INIT) */
@@ -1841,7 +1878,7 @@ static int act_ready(void)
         return slice_act_ready(c);
 #endif
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PROJECT ERASE: a used slot, stopped */
-        return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
+        return !ui.proj_erase || (!song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u));
     id = cur_page()->id[c & 3u];
     if (id == G_LOAD)
         return project_used((uint32_t)song.g[G_SLOT] - 1u);
@@ -1851,3 +1888,6 @@ static int act_ready(void)
         return !seq_is_empty(TSEL);
     return 1;
 }
+
+
+

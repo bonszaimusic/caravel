@@ -1,11 +1,21 @@
-# Felucca licensing
+# Caravel licensing
 
-Felucca is free software, licensed under the GNU General Public License, version 3 only
+Caravel is free software, licensed under the GNU General Public License, version 3 only
 (`GPL-3.0-only`, full text in `LICENSE`). That covers the code and its own assets. A few
 bundled or ported parts keep their own licences; they are listed below, and their licence
 texts are in `LICENSES/`.
 
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+Caravel is a modified version of **Felucca 1.6.1** (Leo Kuroshita, Hügelton Instruments,
+<https://github.com/hugelton/Felucca>, tag v1.6.1, commit `a53ecf4`). The origin, the changes and the non-affiliation are
+stated in `NOTICE`.
+
+Copyright (C) 2026 bonszaimusic (Caravel and its changes)<br>
+Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca 1.6.1, the base)
+
+The source is at https://github.com/bonszaimusic/caravel.
+
+Files that Caravel changed keep their original copyright and `SPDX-License-Identifier` headers; the changes are recorded in
+this repository's git history. New files carry `Copyright (C) 2026 bonszaimusic`.
 
 ## What is GPL-3.0-only
 
@@ -29,14 +39,14 @@ Hügelton Instruments' own work and live in their own repository, Felucca-Engine
 (`felucca_engine.h`), the shared DSP helpers (`dsp.c`) and the generator of their tables
 (`SPDX-License-Identifier: MIT`, `firmware/engines/LICENSE`, also
 `LICENSES/MIT-Felucca-Engines.txt`). The firmware built with them is GPL-3.0-only as a whole.
-Felucca's complete source includes that submodule: clone with `--recurse-submodules`, and
+Caravel's complete source includes that submodule: clone with `--recurse-submodules`, and
 give it along with the rest when you share the source. Each release also offers
-`felucca-X.Y.Z-source.tar.gz`, the whole source with the submodule's files in it (GitHub's
+`caravel-X.Y.Z-source.tar.gz`, the whole source with the submodule's files in it (GitHub's
 own source archives leave the submodule empty).
 
-You may use, study, change and share Felucca under the GPL. If you distribute Felucca, or
+You may use, study, change and share Caravel under the GPL. If you distribute Caravel, or
 firmware derived from it, you must also give your recipients its complete corresponding
-source under the same licence. That includes devices that ship with modified Felucca inside.
+source under the same licence. That includes devices that ship with modified Caravel inside.
 
 ## Hügelton Instruments' own work
 
@@ -44,7 +54,7 @@ All by Hügelton Instruments (Leo Kuroshita), in this tree:
 
 | What | Licence | Where |
 | --- | --- | --- |
-| Felucca: firmware, tools, web pages, tests | GPL-3.0-only | `LICENSE` |
+| Felucca 1.6.1, the base of Caravel: firmware, tools, web pages, tests | GPL-3.0-only | `LICENSE` |
 | The PHASE engine's waveforms: a C port of the oscillator of CrispyZebra (<https://github.com/hugelton/CrispyZebra>) | GPL-3.0 | `firmware/src/eng_phase.c` |
 | The DRUM voices and kit | GPL-3.0-only | `firmware/src/drum_voice.c`, `firmware/src/eng_drum.c` |
 | The Hügelton Sample Pack: Felucca's drum sounds, made by `tools/gen_waves.py`, from which the SLICE engine's BREAK is built (not CC0) | GPL-3.0-only | `tools/gen_waves.py` |
@@ -85,7 +95,7 @@ checkout at build time (see BUILDING.md); no SDK files are in this tree.
 
 They are licensed under the Apache License, Version 2.0 (`LICENSES/Apache-2.0.txt`), not under
 the GPL, and their copyright stays with JieLi Technology. The SDK has no NOTICE file. Apache-2.0
-files may be distributed together with GPL-3.0 code; Felucca itself stays GPL-3.0-only.
+files may be distributed together with GPL-3.0 code; Caravel itself stays GPL-3.0-only.
 
 Every distribution of a package carries the licence texts with it: the release folder
 (`tools/build.py --release`) and the site (`web/make_site.py`, next to the package in
@@ -93,8 +103,8 @@ Every distribution of a package carries the licence texts with it: the release f
 
 ## No vendor material
 
-No M-VAVE material is part of Felucca. The firmware links no vendor code and contains no vendor
-data, and the packages hold only Felucca and the three SDK files above. The installer's
+No M-VAVE material is part of Caravel. The firmware links no vendor code and contains no vendor
+data, and the packages hold only Caravel and the three SDK files above. The installer's
 "Return to official V15" holds only the official file's size and SHA-256: you select the
 official firmware file you downloaded yourself, and it is checked and installed in your browser,
 never uploaded or redistributed.
@@ -106,12 +116,16 @@ share (`firmware/engines/`) go to the Felucca-Engines repository, under the MIT 
 
 ## Trademarks
 
-"Felucca" and "Hügelton Instruments" are names of Hügelton Instruments.
+"Felucca" and "Hügelton Instruments" are names of Hügelton Instruments. Caravel is a fork under its own name and uses
+them only to state where the code comes from.
 
-"M-VAVE" and "FM-1" are trademarks of their respective owners. Felucca is independent
+"Caravel" is the name of this project; no trademark is claimed or registered for it, and nobody should use it to suggest
+affiliation with Hügelton Instruments or M-VAVE.
+
+"M-VAVE" and "FM-1" are trademarks of their respective owners. Caravel is independent
 firmware that runs on FM-1 hardware. It is not affiliated with, endorsed by or supported
 by those owners.
 
 ## Radio
 
-Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
+Caravel never enables the Bluetooth / Wi-Fi radio of the hardware.

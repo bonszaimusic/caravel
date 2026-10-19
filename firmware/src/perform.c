@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* PERFORM: the effects of the FX hold layer, on the master. A key pressed while FX is held belongs to the
- * layer (seq.c keyboard_block): it plays no note, sends no MIDI, records nothing, and holds its effect until
+ * layer (seq.c keyboard_block): it plays no note, sends no MIDI, and holds its effect until
  * it is let go (ui_input.c opens the layer and shows the map). The 16 white keys (F3 .. G5) hold the effect the map
  * gives them (perf_map: the settings, ui_layer.c; any effect on any key, or none). The default (PF_DEF, 1.1.5's
  * keys and the two of 1.2 after them):
@@ -12,6 +12,9 @@
  * ECHO THROW also lifts the delay's feedback to 0.7 if it is lower (fx.c fx_buses); both glide in and out over 11.6 ms
  * (THR_SLOPE). Let go, the sends are the tracks' own again and what the buses hold rings out. The buses are the song's
  * (no RAM of their own); the tracks' REV / DLY / FDBK values are never touched (nothing saved, nothing recorded).
+ * Bonszai FX automation records special-effect edges on the selected LIVE REC
+ * track (motion.c); the track owns their timeline, while their audio is still
+ * the master FX. Live key holds/latches remain independent of replay.
  * REPEAT and REVERSE start on the next 1/16 (at once while stopped); the others at once; all end when let go,
  * with a 2.9 ms ramp. Effects of different kinds stack; of the buffer ones (REPEAT, REVERSE, TAPE STOP,
  * FREEZE, OCT UP, OCT DN) the last pressed plays, and letting it go returns to the one held before.
@@ -97,6 +100,8 @@ static volatile uint32_t kb_layer;    /* ISR: the keys held that are the layer's
 static volatile uint32_t perf_held;   /* ISR: the effects held (PF_*) */
 static volatile uint8_t perf_latch_on;   /* main: MENU > FX LATCH ON (#40): a key with FX toggles its effect */
 static volatile uint32_t perf_latched;   /* ISR: the effects latched (FX LATCH; main clears it: OCT-, the menu) */
+static uint32_t perf_motion[NTRK];       /* sequencer-owned FX; live holds remain independent */
+static void motion_fx_capture(uint32_t e, int down);
 static volatile uint32_t perf_act;    /* ISR: .. running (a 1/16 one from its start on) */
 static uint32_t perf_ord[PF_N], perf_seq;   /* press order: the last pressed buffer effect plays */
 
@@ -186,12 +191,15 @@ static uint32_t perf_avail(void)
 /* seq.c keyboard_block: a layer key down / up (e: PF_*, PF_N = no effect) */
 static void perf_press(uint32_t e, int down)
 {
+    uint32_t before = perf_held | perf_latched;
     if (e >= PF_N)
         return;
     if (perf_latch_on) {                  /* FX LATCH: a press turns it on or off, letting go does nothing */
         if (down) {
             perf_latched ^= PF_BIT(e);
             perf_ord[e] = ++perf_seq;
+            if ((before ^ (perf_held | perf_latched)) & PF_BIT(e))
+                motion_fx_capture(e, ((perf_held | perf_latched) & PF_BIT(e)) != 0u);
         }
         return;
     }
@@ -201,6 +209,8 @@ static void perf_press(uint32_t e, int down)
     } else {
         perf_held &= ~PF_BIT(e);
     }
+    if ((before ^ (perf_held | perf_latched)) & PF_BIT(e))
+        motion_fx_capture(e, ((perf_held | perf_latched) & PF_BIT(e)) != 0u);
 }
 
 static void perf_start(void) { pf.ph = 0; pf.sync = 1; }      /* seq_start: a 1/16 starts with the transport */
@@ -298,7 +308,8 @@ static void perf_buf_select(uint32_t e)
  * Returns 1 when a stage has something to do */
 static __attribute__((noinline)) int perf_begin(uint32_t n)
 {
-    uint32_t held = perf_kill ? 0u : (perf_held | perf_latched | (perf_solo ? (~(uint32_t)perf_solo & 15u) << PF_M1 : 0u)) & perf_avail();
+    uint32_t held = perf_kill ? 0u : (perf_held | perf_latched | perf_motion[0] | perf_motion[1] |
+        perf_motion[2] | perf_motion[3] | (perf_solo ? (~(uint32_t)perf_solo & 15u) << PF_M1 : 0u)) & perf_avail();
     uint32_t q, k, ph0, bnd;
     int32_t m;
     if (!held && !pf.busy && !(perf_k[0] | perf_k[1] | perf_k[2])) {   /* idle: the clock only */
@@ -801,3 +812,4 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
     pf.busy = pf.act || pf.mode != BM_NONE || pf.w || pf.la || pf.ha || pf.cw || pf.td || pf.mute || pf.fw || pf.pw || pf.thr ||
               pf.fn || perf_k[0] || perf_k[1] || perf_k[2];
 }
+

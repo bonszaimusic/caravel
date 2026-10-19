@@ -14,7 +14,9 @@ import os
 import re
 import sys
 
-FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_render_custom", "phase_render", "phase_render_f", "lofi_render", "sample_render", "formant_render",
+NEW_LFO2 = {'track_lfo2_tick', 'lfo2_sync_inc', 'lfo2_trigger', 'mod_kind'}
+NEW_RENDERERS = NEW_LFO2 | {'drone_render', 'drone_legacy_render', 'drone_cell_render', 'hades_render', 'sem_render', 'drumx_render', 'dx_run', 'dx_layer', 'drumx_mix', 'analog_morph_render', 'lofi_morph_render', 'phase_render_ext'}
+FUNCS = sorted(NEW_LFO2) + ['drone_render', 'drone_legacy_render', 'drone_cell_render', 'hades_render', 'sem_render'] + ['drumx_render', 'dx_run', 'dx_layer', 'drumx_mix'] + ['phase_render_ext', 'analog_morph_render', 'lofi_morph_render'] + ["analog_render", "digital_render", "digital_render_legacy", "digital_render_custom", "phase_render", "phase_render_f", "lofi_render", "lofi_formula_render", "lofi_byte", "lofi_float", "sample_render", "formant_render",
          "trio_render", "trio_pass", "wheel_render", "wheel_block",
          "grain_render", "grain_block", "phys_render", "drum_render", "noise_render", "fm6_render", "fm6_op_run", "fm6_op_fb", "px_modal_block", "px_modal_run", "px_memb_block",
          "px_string_excite", "px_string_run", "px_symp_run",
@@ -23,7 +25,8 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "slicer_track",
          "slice_render", "slc_rev",                          # SLICE (eng_slice.c): the render, the reverse windows
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
-         "mix_part",                                        # a part's block (fx.c), on either core since the second
+         "project_pattern_tick", "project_sound_apply", "project_pattern_engines_ok",  # rare boundary helpers
+         "mix_part", "track_render",                       # a part's block (fx.c), on either core since the second
          "uac_tap48",                                       # the USB audio input at 48 kHz: the 44.1 -> 48 resampler (usb.c)
          "click_render",                                    # the metronome's click (click.c), while it sounds
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
@@ -36,7 +39,7 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,
             "uac_tap48": 504,           # (absent from a FELUCCA_UAC_48K=0 or FELUCCA_UAC=0 build)
-            "mix_part": 2800}           # (FELUCCA_CPU2=1, the default since 1.6.1: out of line, either core may run it)
+            "mix_part": 2800, "track_render": None}           # (FELUCCA_CPU2=1, the default since 1.6.1: out of line, either core may run it)
 # a FELUCCA_CPU2=0 build (no mix_part: inlined into the audio ISR, as 1.6) has the one-core ISR, checked against this
 ONE_CORE = {"fm1_alnk0_irq": 37502}
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not
@@ -69,9 +72,15 @@ def functions(path):
     return out
 
 
-def cost(insns):
+FORMULA_CORES = {"lofi_byte", "lofi_float"}
+
+
+def cost(insns, formula_core=False):
     """loops: one span per loop head (the farthest backward branch to it); an instruction inside d
     spans weighs NEST ** (d - 1) (an inner loop runs several times per pass of the outer one)"""
+    if formula_core:
+        # Formula helpers run per sample; include their straight-line cases.
+        return {"insns": len(insns), "loop": 0, "div": 0, "call": 0, "cost": len(insns)}
     lo = insns[0][0]
     heads = {}
     for a, t in insns:
@@ -100,7 +109,13 @@ def main():
         print(f"target: skip ({dis} missing: run ./build.sh)")
         return 0
     fns = functions(dis)
-    res = {n: cost(fns[n]) for n in FUNCS if fns.get(n)}
+    res = {n: cost(fns[n], n in FORMULA_CORES or n in NEW_LFO2) for n in FUNCS if fns.get(n)}
+    # Custom CPU2 keeps track_render out of line to reduce mixer register pressure.
+    # Charge its complete measured voice loop to the original mix_part budget;
+    # extracting it must not hide any renderer work or increase that budget.
+    if "mix_part" in res and "track_render" in res:
+        helper = res.pop("track_render")
+        res["mix_part"] = {key: value + helper[key] for key, value in res["mix_part"].items()}
     missing = [n for n in FUNCS if n not in res and n not in OPTIONAL]
     base = {}
     if os.path.exists(budget):
@@ -126,6 +141,8 @@ def main():
         if "mix_part" not in res and n in ONE_CORE:
             b = ONE_CORE[n]
         state = "no budget (BUDGET_UPDATE=1 adds it)" if b is None else "ok"
+        if b is None and n in NEW_RENDERERS and not os.environ.get("BUDGET_UPDATE"):
+            fail += 1
         if b is not None and not os.environ.get("BUDGET_UPDATE"):
             if r["cost"] > b * (1 + TOL):
                 state = f"OVER BUDGET (+{(r['cost'] / b - 1) * 100:.0f} %, limit +{TOL * 100:.0f} %)"
@@ -139,3 +156,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

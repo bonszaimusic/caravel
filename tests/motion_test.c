@@ -684,8 +684,8 @@ static int lock_ui(void)
     bad += check("  let go: the note and the lock on step 1, the cursor on", ui.cursor == 1u && t->step[0].n == 1u &&
         motion_lock_count(t) == 1u && motion_lock_steps(0) == 1u);
     cursor_set(0);
-    press(B_EDIT);
-    bad += check("  [EDIT] alone clears the step and its locks", !t->step[0].n && !motion_lock_count(t));
+    tool_clear_step();
+    bad += check("  [SEQ] held + F5 (CLEAR STEP) clears the step and its locks", !t->step[0].n && !motion_lock_count(t));
     song.playing = 1; chain.running = 1;
     lk_down(kn); turn(EN_K3, 1); lk_up(kn);
     bad += check("  a song playing: STOP TO EDIT, no lock", !motion_lock_count(t));

@@ -15,11 +15,13 @@
  * nothing of theirs is in the settings record (MI_PROJECT: menu_get / menu_put read and write song.g) */
 enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_SCOPE, MI_HOME, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_SCLLED,
        MI_PREVIEW, MI_CHADD, MI_SELECT, MI_LOWCUT, MI_USB,
-       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_RESTORE, MI_HELP,
+       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_FXTRACK, MI_LIVELOAD, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR,
+       MI_VMODE, MI_V1, MI_V2, MI_V3, MI_V4, MI_SERIAL, MI_RESTORE, MI_HELP,
 #if FELUCCA_CPU2
-       MI_CPU2,                                        /* (not in a FELUCCA_CPU2=0 build: core.h) */
+       MI_CPU2,
 #endif
-       MI_PANEL, MI_INFO, MI_ABOUT, MI_COUNT };
+       MI_EXTSTART, MI_PANEL, MI_INFO,
+       MI_ABOUT, MI_COUNT };
                                                        /* (1.1: the metronome's rows in AUDIO; 1.2: RESTORE LAST in
                                                         * SYSTEM, SCALE LEDS STEP PREVIEW CHORD ENTRY in CONTROL, SCOPE in
                                                         * DISPLAY, TUNE in AUDIO, MIDI IN in MIDI, INFO in SYSTEM;
@@ -33,18 +35,20 @@ enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_SCOPE, MI_H
 #define MI_TEXT(row) 0
 #endif
 static int menu_valued(uint32_t row) { return row < MI_VALUES && row != MI_LCLEAR; }   /* (a row with a value) */
-#define MI_PROJECT(row) ((row) == MI_TUNE || ((row) >= MI_MIDIIN && (row) <= MI_TCH4))   /* the project's values (song.g,
+#define MI_PROJECT(row) ((row) == MI_FXTRACK || (row) == MI_TUNE || ((row) >= MI_MIDIIN && (row) <= MI_TCH4))   /* the project's values (song.g,
                                                                                          * song.mch), not settings */
 #define MI_TCH(row) ((row) >= MI_TCH1 && (row) <= MI_TCH4)   /* 1.5.5 (#202): T1..T4 CHANNEL, MIDI IN TRACK's */
+#define MI_VCAP(row) ((row) >= MI_V1 && (row) <= MI_V4)
 static const char *const MI_NAME[MI_COUNT] = {"COLOR", "STYLE", "LARGE", "ANIM", "LEDS", "SCREEN OFF", "SCOPE", "HOME", "HOLD", "KNOB ACCEL",
                                               "FX LATCH", "BPM LOCK", "SCALE LEDS", "STEP PREVIEW", "CHORD ENTRY", "SELECT",
-                                              "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE",
+                                              "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE", "FX TRACK", "LIVE LOAD",
                                               "MIDI IN", "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL",
-                                              "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR", "USB SERIAL", "RESTORE LAST", "HELP",
+                                              "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR",
+                                              "MODE", "T1 VOICES", "T2 VOICES", "T3 VOICES", "T4 VOICES", "USB SERIAL", "RESTORE LAST", "HELP",
 #if FELUCCA_CPU2
                                               "2ND CORE",
 #endif
-                                              "CALIBRATION", "INFO",
+                                              "EXT START", "CALIBRATION", "INFO",
                                               "ABOUT"};
 /* 1.0.5: the MENU's tabs (ui_menu.c: ALGORITHM steps between them, PRESETS among one tab's rows; the editor gets a
  * row's tab after its MENU_DESC reply). A tab's rows follow each other in MI order (tests/ui_test.c checks it); at
@@ -52,9 +56,9 @@ static const char *const MI_NAME[MI_COUNT] = {"COLOR", "STYLE", "LARGE", "ANIM",
  * 18 px). A new row
  * joins a tab here. Tabs are in the order the device shows them; a tab's index is what the editor is told, not an id
  * (1.2: MIDI came in before SYSTEM, SYSTEM's index 3 -> 4) */
-enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_MIDI, MTAB_SYSTEM, MTAB_COUNT };
+enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_MIDI, MTAB_SYSTEM, MTAB_VOICES, MTAB_COUNT };
 #define MTAB_ROWS 8u
-static const char *const MTAB_NAME[MTAB_COUNT] = {"DISPLAY", "CONTROL", "AUDIO", "MIDI", "SYSTEM"};
+static const char *const MTAB_NAME[MTAB_COUNT] = {"DISPLAY", "CONTROL", "AUDIO", "MIDI", "SYSTEM", "VOICES"};
 static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY,   /* COLOR STYLE LARGE ANIM LEDS */
     MTAB_DISPLAY,                                                           /* SCREEN OFF (1.1.5) */
@@ -67,15 +71,19 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
                                                                              * COUNT-IN */
     MTAB_AUDIO,                                                             /* TUNE (1.2) */
+    MTAB_AUDIO,                                                             /* FX TRACK: project audio FX owner */
+    MTAB_AUDIO,                                                             /* LIVE LOAD: device preference */
     MTAB_MIDI,                                                              /* MIDI IN (1.2) */
     MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI,                             /* T1..T4 CHANNEL (1.5.5) */
     MTAB_MIDI,                                                              /* AUTO SELECT (1.5.5) */
     MTAB_MIDI,                                                              /* SCREEN WAKE (1.5.5: DISPLAY is full) */
     MTAB_MIDI,                                                              /* LEARN CLEAR (1.5) */
+    MTAB_VOICES, MTAB_VOICES, MTAB_VOICES, MTAB_VOICES, MTAB_VOICES,          /* MODE, T1..T4 VOICES */
     MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* USB SERIAL, RESTORE LAST, HELP (1.5) */
 #if FELUCCA_CPU2
     MTAB_SYSTEM,                                                            /* 2ND CORE (1.6.1) */
 #endif
+    MTAB_SYSTEM,                                                             /* EXT START */
     MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* CALIBRATION, INFO (1.2), ABOUT */
 };
 /* TUNE: the project's tuning in cents (G_TUNE, -50..+50); as a row its values 0..TUNE_N - 1 (value - TUNE_MIN). The
@@ -106,6 +114,8 @@ static const char *const STYLE_N[2] = {"FLAT", "LINE"};
  * second name (STYLE LINE, USB LEVEL FIXED); a step down the other (menu_step) */
 typedef struct { uint8_t row; uint32_t bit; const char *name[2]; } menu_flag_t;
 static const menu_flag_t MENU_FLAGS[] = {
+    {MI_EXTSTART, PREF_START_BAR, {"PULSE", "BAR"}},
+    {MI_LIVELOAD, PREF_FULL_LOAD, {"PATTERN", "FULL"}},
     {MI_LARGE, PREF_LARGE, {"OFF", "ON"}},            /* #15 / Discussion #80: ON, big knob labels and values (ui.c large_kind) */
     {MI_ACCEL, PREF_ACCEL, {"OFF", "ON"}},            /* #52: ui_input.c accel */
     {MI_LATCH, PREF_LATCH, {"OFF", "ON"}},
@@ -182,8 +192,8 @@ static const char *const SELECT_N[SEL_N] = {"BPM", "PAGE", "MODW", "VEL"};
 /* a row's value as 0..menu_n(row) - 1 in the order the menu steps it (LEDS: OFF DIM LO DIM HI INV INV LO INV HI) */
 static uint32_t menu_n(uint32_t row)
 {
-    return row == MI_COLOR ? palette_n() : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
-           row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_ROWS : row == MI_SCROFF ? NELEM(SCROFF_N) :
+    return MI_VCAP(row) ? 5u : row == MI_COLOR ? palette_n() : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
+           row == MI_HOLD || row == MI_FXTRACK ? 4u : row == MI_LEDS ? LEDS_ROWS : row == MI_SCROFF ? NELEM(SCROFF_N) :
            row == MI_TUNE ? TUNE_N : row == MI_MIDIIN ? NELEM(N_ROUTE) : MI_TCH(row) ? MCH_N : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT :
            row == MI_SELECT ? SEL_N : 2u;
 }
@@ -192,12 +202,15 @@ static uint32_t menu_get(uint32_t row)
     const menu_flag_t *f = menu_flag(row);
     uint32_t i = 0;
     if (f)
-        return ((ui_prefs | (uint32_t)ui_rec_prefs << 8 | (uint32_t)ui_prefs2 << 16) & f->bit) != 0;
+        return ((ui_prefs | (uint32_t)ui_rec_prefs << 8 | (uint32_t)ui_prefs2 << 16 | (uint32_t)ui_prefs3 << 24) & f->bit) != 0;
     switch (row) {
+    case MI_VMODE: return (voice_policy & VOICE_POLICY_FIXED) != 0u;
+    case MI_V1: case MI_V2: case MI_V3: case MI_V4: return voice_policy_cap(voice_policy, row - MI_V1) - 1u;
     case MI_COLOR: return palette_cur();
     case MI_STYLE: return ui_style == ST_LINE;
     case MI_LOWCUT: return settings.lowcut % 3u;
     case MI_HOLD: return settings_hold % 4u;
+    case MI_FXTRACK: return motion_fx_track();
     case MI_SCROFF: return scr_get();
     case MI_ANIM: return ui_prefs & PREF_ANIM_OFF ? 1u : (ui_idle & 1u) ? 2u : 0u;
     case MI_HOME: return ui_home_view < HV_COUNT ? ui_home_view : HV_SCOPE;
@@ -219,10 +232,15 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     if (f)
         return f->name[v & 1u];
     switch (row) {
+    case MI_VMODE: return v ? "FIXED" : "AUTO";
+    case MI_V1: case MI_V2: case MI_V3: case MI_V4: {
+        static const char *const n[] = {"1", "2", "3", "4", "5"}; return n[v % 5u];
+    }
     case MI_COLOR: return palette_name(v);
     case MI_STYLE: return STYLE_N[v & 1u];
     case MI_LOWCUT: return SPK_EQ[v % 3u];
     case MI_HOLD: return HOLD_N[v & 3u];
+    case MI_FXTRACK: { static const char *const names[] = {"T1", "T2", "T3", "T4"}; return names[v & 3u]; }
     case MI_CLICK: return CLICK_N[v % 3u];
     case MI_CLKLVL: return CLKLVL_N[v % 3u];
     case MI_COUNTIN: return COUNTIN_N[v % 3u];
@@ -257,8 +275,23 @@ static const char *menu_vname(uint32_t row, uint32_t v)
 static void menu_put(uint32_t row, uint32_t v)
 {
     const menu_flag_t *f = menu_flag(row);
+    if (row == MI_VMODE || MI_VCAP(row)) {
+        uint32_t p = voice_policy;
+        if (!(p & 0xFFFFu)) p |= VOICE_POLICY_DEFAULT;
+        if (row == MI_VMODE)
+            p = v ? p | VOICE_POLICY_FIXED : p & ~VOICE_POLICY_FIXED;
+        else {
+            uint32_t shift = (row - MI_V1) * 4u;
+            p = (p & ~(15u << shift)) | (v + 1u) << shift;
+        }
+        if (voice_policy_normalize(p)) voice_policy = p;
+        else ui_message("8 VOICES MAX");              /* reduce another track before increasing this one */
+        return;
+    }
     if (f) {
-        if (f->bit & PREF_X)
+        if (f->bit & PREF_Y)
+            ui_prefs3 = (uint8_t)(v ? ui_prefs3 | f->bit >> 24 : ui_prefs3 & ~(f->bit >> 24));
+        else if (f->bit & PREF_X)
             ui_prefs2 = (uint8_t)(v ? ui_prefs2 | f->bit >> 16 : ui_prefs2 & ~(f->bit >> 16));
         else if (f->bit & PREF_REC)
             ui_rec_prefs = (uint8_t)(v ? ui_rec_prefs | f->bit >> 8 : ui_rec_prefs & ~(f->bit >> 8));
@@ -280,6 +313,7 @@ static void menu_put(uint32_t row, uint32_t v)
     case MI_STYLE: ui_style = (uint8_t)(v ? ST_LINE : ST_FLAT); break;   /* (drawn so from the next frame) */
     case MI_LOWCUT: settings.lowcut = v; fx_lowcut = (uint8_t)v; break;
     case MI_HOLD: settings_hold = (uint8_t)v; break;
+    case MI_FXTRACK: motion_fx_set_track(v); ui.force = 1; break;
     case MI_SCROFF: scr_put(v); break;                 /* (read every frame: ui.c scr_frame) */
     case MI_ANIM:                                      /* (read where they are used, every frame) */
         ui_prefs = (uint8_t)(v == 1u ? ui_prefs | PREF_ANIM_OFF : ui_prefs & ~PREF_ANIM_OFF);
@@ -325,3 +359,4 @@ static uint32_t menu_step(uint32_t row, int32_t s)
         return v ? v - 1u : row == MI_COLOR ? n - 1u : 0u;
     return v;
 }
+

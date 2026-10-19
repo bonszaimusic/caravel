@@ -222,14 +222,14 @@ static const uint8_t MIDI_CC_ENG[NENGINES] = {
     0x56, 0x00, 0x30, 0x80, 0x50, 0x07, 0x67, 0x00,   /* ANALOG CUT RES, -, PHASE DCW, LOFI TONE, SAMPLE CUT, VOICE Q,
                                                        * TRIO CUT RES, WHEEL - */
     0x80, 0x30, 0x30, 0x34, 0x30,                     /* GRAIN TONE, PHYS BRIT, DRUM TONE, NOISE FREQ RES, FM6 MLVL */
-#if FELUCCA_SLICE
-    0x80,                                             /* SLICE TONE */
-#endif
+    FELUCCA_SLICE ? 0x80 : 0,                         /* reserved SLICE TONE slot */
+    0x56, 0x56,                                      /* SEM and HADES CUT/RES */
 };
 /* a CC sets parameter id of track t as a knob would: 0..127 over its range */
 static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)
 {
-    const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
+    const param_desc_t *d = track_desc(t, id);
+    d = drone_automated_desc(eng_idx(t->eng_req), id, t->p[id], d);
     int32_t v = d->min + ((int32_t)value * (d->max - d->min) + 63) / 127;
     if (d->max <= d->min || t->p[id] == v)
         return;
@@ -245,7 +245,8 @@ static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)
  * the standard map (#103) on any channel: the controller is the user's now. The CCs with a meaning of their own
  * (midi_control's cases, CC0 / 32 bank select, CC11 EXPR, CC96 / 97 data increment, CC120..127) are never learned. The UI
  * (midi_learn.c) writes the entries with the interrupts off; ml_arm / ml_heard hand a CC heard while learning to it */
-#define ML_N 16u
+#define ML_LEGACY_N 16u
+#define ML_N (ML_LEGACY_N + ML_EXTRA_N)
 #define ML_E0 120u
 typedef char ml_ids_fit[P_E0 < ML_E0 && P_COUNT - P_E0 == 8 ? 1 : -1];
 static uint8_t *const ml_tab;               /* favorites.factory[14] (midi_learn.c: a build without the UI, none) */
@@ -254,7 +255,8 @@ static volatile uint8_t *const ml_io;       /* ui.ml.io (midi_learn.c; not globa
 #define ml_heard (ml_io[1])                 /* .. the CC that came meanwhile, + 1 (0 none) */
 static uint32_t ml_id(uint32_t code)        /* an entry's code -> P_* id, P_COUNT: none this firmware knows */
 {
-    return code >= ML_E0 ? P_E0 + code - ML_E0 : code && code <= P_E0 ? code - 1u : P_COUNT;
+    if (virtual_target(code)) return code;
+    return code >= ML_E0 && code < 128u ? P_E0 + code - ML_E0 : code && code <= P_E0 ? code - 1u : P_COUNT;
 }
 static int ml_free_cc(uint32_t cc)          /* (CC1 6 38 64 98..101 120..127: midi_control's own) */
 {
@@ -273,10 +275,21 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
         return 1;
     }
     for (i = 0; i < ML_N; i++) {
-        e = ml_tab[2u * i] | (uint32_t)ml_tab[2u * i + 1u] << 8;
+        e = i < ML_LEGACY_N ? ml_tab[2u * i] | (uint32_t)ml_tab[2u * i + 1u] << 8 : ml_extra[i - ML_LEGACY_N];
+        if (i < ML_LEGACY_N && e >> 9 == 119u && virtual_target(ml_virtual[i])) e = (e & 511u) | (uint32_t)ml_virtual[i] << 9;
         if ((e >> 9) && (e & 127u) == cc) {
-            if ((id = ml_id(e >> 9)) < P_COUNT)
-                midi_cc_set(&trk[(e >> 7) & 3u], id, value);
+            id = ml_id(e >> 9);
+            if (lfo2_target(id)) {
+                uint32_t k = (e >> 7) & 3u;
+                const param_desc_t *d = lfo2_desc(id);
+                lfo2_set(k, id, d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
+            } else if (dx_target(id)) {
+                uint32_t k = (e >> 7) & 3u;
+                if (dx_track(&trk[k])) {
+                    const param_desc_t *d = dx_desc(id);
+                    dx_set(k, id, d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
+                }
+            } else if (id < P_COUNT) midi_cc_set(&trk[(e >> 7) & 3u], id, value);
             hit = 1;
         }
     }
@@ -409,3 +422,4 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
     else if (st == 0xC0u && mpc_io)                /* Program Change: the main loop loads it (ui.c midi_pc_poll) */
         mpc_io[trk_index(midi_track(ch))] = (uint8_t)(0x80u | d1);
 }
+

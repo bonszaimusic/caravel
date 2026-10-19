@@ -153,7 +153,7 @@ static void test_matrix(void)
     for (i = 0; i < NELEM(DST_V12); i++)
         ok &= str_eq(N_MDST[i], DST_V12[i]);
     check("SRC / DST lists only grew: every stored value keeps its name (S&H SLEW, DEPTH appended)",
-          ok && MS_SH == 9 && MS_SLEW == 10 && MS_N == 11 && MD_DEPTH == 20 && MD_N == 23 /* (1.5.6: VEL TIME, #213) */ &&
+          ok && MS_SH == 9 && MS_SLEW == 10 && MS_N == 14 && MS_LFO2 == 11 && MS_SH2 == 12 && MS_SLEW2 == 13 && MD_DEPTH == 20 && MD_N == 25 && MD_MORPH == 23 && MD_PD_FB == 24 /* (1.5.6: VEL TIME, #213) */ &&
           str_eq(N_MSRC[MS_SH], "S&H") && str_eq(N_MSRC[MS_SLEW], "SLEW") && str_eq(N_MDST[MD_DEPTH], "DEPTH") &&
           TP[P_M1SRC].max == MS_N - 1 && TP[P_M1DST].max == MD_N - 1);
     check("DST names: DEPTH is not an engine parameter (E1..E8 only)", str_eq(mod_dst_name(t, MD_DEPTH), "DEPTH") &&
@@ -269,7 +269,7 @@ static void test_matrix(void)
     mod_begin(t);
     check("no DEPTH slot: the LFO untouched (track_render leaves it alone)", MOD(t).ldep == 32767);
     mod_end(t);
-    slot(t, 0, 11, MD_CUT, 40);                           /* past the lists: nothing */
+    slot(t, 0, MS_N, MD_CUT, 40);                           /* past the lists: nothing */
     slot(t, 1, MS_LFO, MD_N, 40);
     mod_begin(t);
     check("a SRC / DST past the lists does nothing", MOD(t).cut == 0 && MOD(t).nk == 0 && MOD(t).nv == 0);
@@ -511,8 +511,8 @@ static void test_spread(void)
     char msg[200];
 
     check("SPRD: a track parameter 0..127, default 0 (as before), id 95 (1.5: the INSERT, TYPE and ESYNC after it, P_E0 103, P_COUNT 111)",
-          TP[P_SPRD].min == 0 && TP[P_SPRD].max == 127 && TP[P_SPRD].def == 0 && P_SPRD == 95 && P_SPRD + 8 == P_E0 &&
-          P_E0 == 103 && P_COUNT == 111 && str_eq(TP[P_SPRD].label, "SPRD") && motion_param(P_SPRD));
+          TP[P_SPRD].min == 0 && TP[P_SPRD].max == 127 && TP[P_SPRD].def == 0 && P_SPRD == 95 && P_SPRD + 8 == P_MORPH && P_PD_FB + 1 == P_E0 &&
+          P_E0 == 105 && P_COUNT == 113 && str_eq(TP[P_SPRD].label, "SPRD") && motion_param(P_SPRD));
     h1 = phrase_child(0, 1, sp_mono0);
     h2 = phrase_child(0, 1, sp_mono127);
     check("MONO: SPRD 127 plays bit for bit as SPRD 0 (one voice: on PAN)", h1 && h1 == h2);
@@ -919,3 +919,4 @@ int main(int argc, char **argv)
     printf("sound14: %s\n", bad ? "FAILED" : "all ok");
     return bad ? 1 : 0;
 }
+

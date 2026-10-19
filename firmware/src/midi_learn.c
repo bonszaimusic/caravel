@@ -8,17 +8,28 @@
  * row says what is picked and its CC (ml_line). The map: midi_control.c (ML_N entries in favorites.factory[14], kept
  * with the settings, saved as each one changes); one CC sets one parameter, a parameter has one CC: learning one again
  * replaces both. The editor reads and edits it (editor_learn.c). Its state: ui.ml (ui.c) */
-typedef char ml_row_free[NENGINES <= 14 ? 1 : -1];   /* (factory[14]: no engine's favourites; favorites.c) */
+_Static_assert(ENGI_SEM == ENGINE_FAV_FIRST && NENGINES <= ENGINE_FAV_FIRST + ENGINE_FAV_N,
+               "new engine favorites must use their dedicated storage, never the Learn row");
 static uint8_t *const ml_tab = favorites.factory[14];
 static volatile uint8_t *const ml_io = ui.ml.io;         /* (midi_control.c ml_arm, ml_heard) */
 
-static uint32_t ml_code(uint32_t id) { return id >= P_E0 ? ML_E0 + id - P_E0 : id + 1u; }
-static uint32_t ml_get(uint32_t i) { return ml_tab[2u * i] | (uint32_t)ml_tab[2u * i + 1u] << 8; }
+static uint32_t ml_code(uint32_t id) { return virtual_target(id) ? id : id >= P_E0 ? ML_E0 + id - P_E0 : id + 1u; }
+static uint32_t ml_get(uint32_t i)
+{
+    if (i >= ML_N) return 0;
+    if (i >= ML_LEGACY_N) return ml_extra[i - ML_LEGACY_N];
+    uint32_t e = ml_tab[2u * i] | (uint32_t)ml_tab[2u * i + 1u] << 8;
+    return e >> 9 == 119u && virtual_target(ml_virtual[i]) ? (e & 511u) | (uint32_t)ml_virtual[i] << 9 : e;
+}
 static void ml_put(uint32_t i, uint32_t e)       /* (the ISR reads the two bytes: never half of one) */
 {
     fm1_irq_off();
-    ml_tab[2u * i] = (uint8_t)e;
-    ml_tab[2u * i + 1u] = (uint8_t)(e >> 8);
+    if (i < ML_LEGACY_N) {
+        ml_virtual[i] = virtual_target(e >> 9) ? (uint16_t)(e >> 9) : 0;
+        if (ml_virtual[i]) e = (e & 511u) | 119u << 9;
+        ml_tab[2u * i] = (uint8_t)e;
+        ml_tab[2u * i + 1u] = (uint8_t)(e >> 8);
+    } else if (i < ML_N) ml_extra[i - ML_LEGACY_N] = e;
     fm1_irq_on();
 }
 /* the CC of parameter id on track k, + 1; 0 none */
@@ -56,7 +67,7 @@ static int ml_drop(uint32_t cc, uint32_t k, uint32_t id)
 static uint32_t ml_learn(uint32_t cc, uint32_t k, uint32_t id)
 {
     uint32_t i;
-    if (!ml_free_cc(cc) || k >= NTRK || id >= P_COUNT)
+    if (!ml_free_cc(cc) || k >= NTRK || !(id < P_COUNT || virtual_target(id)))
         return 2;
     (void)ml_drop(cc, k, id);
     for (i = 0; i < ML_N; i++)
@@ -104,10 +115,10 @@ static void ml_toggle(void)
 /* a knob turned parameter id of track t (ui_input.c): picked while learning */
 static void ml_knob(const track_t *t, uint32_t id)
 {
-    if (!ui.ml.on || id >= P_COUNT)
+    if (!ui.ml.on || !(id < P_COUNT || virtual_target(id)))
         return;
     ui.ml.trk = (uint8_t)trk_index(t);
-    ui.ml.id = (uint8_t)id;
+    ui.ml.id = (uint16_t)id;
     ui.ml.pick = 1;
     ml_heard = 0;
     ml_arm = 1;
@@ -118,7 +129,9 @@ static void ml_name(char *b)
     b[0] = 'T';
     b[1] = (char)('1' + ui.ml.trk);
     b[2] = ' ';
-    str_cpy(b + 3, track_desc(&trk[ui.ml.trk % NTRK], ui.ml.id)->label, 9);
+    if (lfo2_target(ui.ml.id)) { str_cpy(b + 3, "L2 ", 4); str_cpy(b + 6, lfo2_desc(ui.ml.id)->label, 6); }
+    else if (dx_target(ui.ml.id)) dx_short_name(b + 3, ui.ml.id);
+    else str_cpy(b + 3, track_desc(&trk[ui.ml.trk % NTRK], ui.ml.id)->label, 9);
 }
 /* each frame: a CC heard for the picked parameter is learned */
 static void ml_poll(void)
@@ -182,3 +195,4 @@ static void ml_line(char *b)
     str_cpy(b + str_len(b), " = CC", 6);
     fmt_int(b + str_len(b), (int32_t)cc - 1);
 }
+

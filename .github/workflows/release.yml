@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 bonszaimusic
+#
+# Push a tag vX.Y.Z (one digit each, optionally -suffix, as ./build.sh --release takes it) to build, test and attach the
+# release files to a DRAFT release. Nothing is published until you publish the draft on GitHub.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'bonszaimusic/caravel'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Version from the tag
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          echo "release version: $VER"
+      - name: Install Python dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Download the JieLi AC79 SDK
+        run: |
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+            https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+      - name: Build and test
+        env:
+          CC: cc -include stdint.h
+        shell: bash
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh
+          sh tests/run_tests.sh
+      - name: Release build
+        shell: bash
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh --release "$VER"
+          ls -l "build/release-$VER"
+      - name: Source archive (with the engines submodule)
+        run: |
+          git ls-files -z --recurse-submodules \
+            | tar --null -T - --transform "s,^,caravel-$VER/," -czf "build/release-$VER/caravel-$VER-source.tar.gz"
+          (cd "build/release-$VER" && sha256sum "caravel-$VER-source.tar.gz" >> SHA256SUMS)
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<NOTES
+          Caravel $VER. What changed: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md).
+
+          Installing custom firmware is at your own risk: no warranty, and a failed update can need a Transporter to recover
+          the FM-1. M-VAVE's updater takes you back. Caravel is not affiliated with or endorsed by Hügelton Instruments or M-VAVE.
+
+          - \`caravel-$VER.fwsc\`: the installable package (app and loader)
+          - \`caravel-$VER-app.bin\`: the firmware app alone
+          - \`caravel-$VER-source.tar.gz\`: the complete source including the Felucca-Engines submodule (GitHub's own source archives leave it empty)
+          - \`SHA256SUMS\`, \`ATTRIBUTION.txt\`, \`LICENSE\`, \`LICENSING.md\`, \`LICENSES/\`: checksums and licence texts (the package contains Apache-2.0 SDK files)
+          NOTES
+          PRE=""; case "$VER" in *-*) PRE="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" --draft $PRE --title "Caravel $VER" --notes-file "$RUNNER_TEMP/notes.md" \
+            "build/release-$VER"/caravel-* "build/release-$VER/SHA256SUMS" \
+            "build/release-$VER/LICENSE" "build/release-$VER/LICENSING.md"
+          [ -f "build/release-$VER/ATTRIBUTION.txt" ] && gh release upload "$GITHUB_REF_NAME" "build/release-$VER/ATTRIBUTION.txt"
+          for f in "build/release-$VER"/LICENSES/*; do gh release upload "$GITHUB_REF_NAME" "$f"; done

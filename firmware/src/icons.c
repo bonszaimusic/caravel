@@ -243,6 +243,7 @@ static uint32_t engine_icon(const char *name)
 {
     static const icon_map_t M[] = {
         {"ANALOG", ICON_WAVE},
+        {"SEM", ICON_WAVE}, {"HADES", ICON_WAVE},
 #if FELUCCA_FM4
         {"DIGITAL", ICON_ALGORITHM},
 #endif

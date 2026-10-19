@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 bonszaimusic
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Download the JieLi AC79 SDK
+        run: |
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+            https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+      - name: Build firmware and run the host tests
+        env:
+          CC: cc -include stdint.h
+        shell: bash
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh
+          sh tests/run_tests.sh
+      - name: Upload the installable package and licences
+        uses: actions/upload-artifact@v4
+        with:
+          name: caravel-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/caravel.fwsc
+            build/felucca.bin
+            build/loader/ota.bin
+            LICENSE
+            LICENSING.md
+            LICENSES/
+            assets/samples-cc0/ATTRIBUTION.txt

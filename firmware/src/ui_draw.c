@@ -451,11 +451,18 @@ static void draw_gaps(uint32_t y, uint32_t h)
         }
     }
 }
+static int dual_page(const page_t *pg);                 /* ui_lfo2.c: the two-group pages */
+static const char *dual_foot(const page_t *pg);
 /* full redraw: the strips (header, cards, panel, footer) cover the rest; only the BG between them is filled */
 static void draw_frame(void)
 {
     uint32_t ch = card_h(), gy = graph_y(), gh = graph_h();   /* (MENU > LARGE: tall cards, a strip) */
     gap_rows(H_HEAD, Y_LABEL);
+    if (!ui.home && dual_page(cur_page())) {            /* the two-group blits cover cards and panel: no BG fill under
+                                                         * them (it would flash on a full redraw, #181) */
+        gap_rows(gy + gh, Y_FOOT);
+        return;
+    }
     gap_rows(Y_LABEL + ch, gy);
     gap_rows(gy + gh, Y_FOOT);
     draw_gaps(Y_LABEL, ch);
@@ -824,10 +831,20 @@ static void draw_foot(void)
     const char *ename = e->name, *help;
     int32_t x;
     sound_name(t, pn);
+    if (!ui.home && pg->graph == GR_EVENTS) {
+        ename = "GLOBAL FX";
+        str_cpy(pn, "T1", sizeof pn);
+        pn[1] = (char)('1' + motion_fx_track());
+    }
     if (ui.home)
         str_cpy(ti, "HOME", sizeof ti);
-    else                                               /* page title + number in its family: "ENV DEST 2/2" */
+    else                                               /* page title + number in its family: "ENV DEST 2/2" (a two-group
+                                                        * view counts once: "LFO TOP 1/4", "LFO BOTTOM 1/4") */
         page_title(ti);
+    if (!ui.home && pg->graph == GR_ROLL && !drum_track(t) && ((song.rec >> song.sel) & 1u)) {
+        if ((step_record_mask >> song.sel) & 1u) str_cpy(ti, "STEP REC", sizeof ti);
+        else if (song.playing) str_cpy(ti, "LIVE REC", sizeof ti);
+    }
     str_cpy(s, ename, sizeof s);
     s[str_len(s) + 1u] = 0;
     s[str_len(s)] = (char)('1' + song.sel);
@@ -930,12 +947,13 @@ static void draw_foot(void)
         }
         x = cv_text_fit(x, 19, &AF_S, ename, T_THEME, T_BG, 80);
         cv_free_text(x + 10, 19, &AF_S, pn, T_TEXT, T_BG, tx - 12 - (x + 10));
+        cv_rrect(tx - 5, 16, r - tx + 10, 20, 4, T_THEME, T_BG);
         if (pi != ICON_NONE) {
             GFX_HOOK_ALIGN(0, 19 + AF_S_CAP_Y, 0, 19 + AF_S_CAP_Y + AF_S_CAP_H, AL_V,
                            "footer icons on the names' line");
-            cv_icon_in(tx, 19 + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, pi, T_MID, T_BG);
+            cv_icon_in(tx, 19 + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, pi, T_INK, T_THEME);
         }
-        cv_text_r(r, 19, &AF_S, ti, T_MID, T_BG);
+        cv_text_r(r, 19, &AF_S, ti, T_INK, T_THEME);
     }
     cv_blit(0, Y_FOOT);
 }
@@ -953,8 +971,13 @@ static void engine_columns(void)
     draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
     draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
 }
+#include "ui_drumx.c"
+#include "ui_lfo2.c"
+
 static void draw_columns(void)
 {
+    if (!ui.home && dual_page(cur_page())) { lfo_cards(cur_page()); return; }
+    if (!ui.home && dx_page(cur_page()->graph)) { dx_cards(cur_page()); return; }
     uint32_t c;
     char val[12];
     const char *unit;
@@ -1029,6 +1052,15 @@ static void draw_columns(void)
         draw_column(0, "ROW", val, "", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)step + 1);
         draw_column(1, "STEP", val, "", k != EVK_ADD || step < (uint32_t)t->p[P_SLEN] ? VAL(1u) : T_DIM, -1, ICON_AUTO);
+        if (k == EVK_REC && MOTION_IS_FX(&motion.event[c & 0xFFu])) {
+            static const char *const short_fx[PF_NFX] = {"RPT8", "RPT16", "RPT32", "REV", "LPF", "HPF",
+                "TAPE", "FREEZ", "OCT+", "OCT-", "FLANG", "PHAS", "RTHR", "ECHO"};
+            const motion_event_t *e = &motion.event[c & 0xFFu];
+            draw_column(2, "FX", short_fx[id - MOTION_FX_FIRST], "", T_MID, -1, ICON_AUTO);
+            fmt_int(val, (uint8_t)e->value);
+            draw_column(3, (e->param & MOTION_LOCK) ? "OFF AT" : "ON AT", val, "/256", VAL(3u), -1, ICON_AUTO);
+            return;
+        }
         if (!ev_id_ok(t, id)) {
             draw_column(2, "PARAM", "--", "", T_DIM, -1, ICON_AUTO);
             draw_column(3, "VALUE", "--", "", T_DIM, -1, ICON_AUTO);
@@ -1300,8 +1332,8 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* PROJECT: ERASE (1.5.5, #199) */
-            draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
+        if (cur_page()->graph == GR_SLOTS && c == 1u) {
+            draw_act_column(c, ui.proj_erase ? "ERASE" : "INIT", ui.proj_erase && !graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_DIM : T_THEME, ICON_AUTO);
             continue;
         }
         if (!d || !d->label || d->label[0] == '-') {
@@ -1337,7 +1369,7 @@ static void draw_columns(void)
 #define SPL_X0 ((240u - SPL_SQ) / 2u)               /* its top-left on the screen (x and y) */
 #define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
 #define SPL_PITCH 20                                /* line to line */
-static const char *const SPLASH_LINES[] = {"Felucca", FELUCCA_VERSION, "H\xFCgelton Instruments", "with community"};
+static const char *const SPLASH_LINES[] = {BRAND_NAME, FELUCCA_VERSION, "based on " BRAND_BASE, BRAND_MAKER};
 /* a band of two lines, h tall, at y on the screen: the first line's top at ly; the two lines' capitals declared
  * against al0..al1 (mode: AL_V the band centred there, AL_B the last baseline on al1) */
 static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l, uint32_t mode, int32_t al0,
@@ -1461,6 +1493,10 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_CLEAR_SONG:
         str_cpy(a, "CLEAR SONG ORDER?", 24);
+        break;
+    case CF_INIT_PROJECT:
+        str_cpy(a, "INITIALIZE PROJECT?", 24);
+        str_cpy(b, "SAVED SLOTS KEPT", 24);
         break;
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);
@@ -1625,7 +1661,8 @@ static void ui_draw_page(uint32_t counting)
     felucca_dbg.stage = 4;
     draw_columns();
     felucca_dbg.stage = 5;
-    draw_graph();
+    if (ui.home || !dual_page(cur_page()))
+        draw_graph();
     if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {     /* the second message (ui_notices) */
         str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
         ui.msg2[0] = 0;
@@ -1641,3 +1678,5 @@ static void ui_draw_page(uint32_t counting)
     draw_foot();
     ui.force = 0;
 }
+
+

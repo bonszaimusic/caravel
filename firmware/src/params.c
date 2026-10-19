@@ -67,20 +67,25 @@ static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2
 /* modulation matrix (mod.c): sources, destinations (E1..E8 = P_E0..P_E7: shown with the engine's labels).
  * Append-only (stored values keep their meaning): S&H SLEW and DEPTH (#132) came after EXPR and E8; VEL and TIME
  * (1.5.6, #213: at the note) after DEPTH */
-static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"};
+static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW", "LFO2", "S&H2", "SLEW2"};
 static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
-                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"};
+                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB"};
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
                                              "DRUM", "NOISE", "FM6",
 #if FELUCCA_SLICE
                                              "SLICE",
+#else
+                                             "-",
 #endif
+                                             "SEM", "HADES", "DRONE",
 };
 
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
 #define PE(l, n, df) {l, F_ENUM, 0, (int16_t)(sizeof(n) / sizeof(n[0]) - 1), df, n, 0}
 
 static const param_desc_t TP[P_COUNT] = {
+    [P_MORPH] = PD("MORPH", F_PCT, 0, FELUCCA_MORPH ? 127 : 0, 0),
+    [P_PD_FB] = PD("PHS FB", F_PCT, 0, FELUCCA_PHASE_FB ? 127 : 0, 0),
     [P_LEVEL] = PD("LVL", F_DB, 0, 127, 104),
     [P_ATK] = PD("ATK", F_TIME, 0, 127, 10),
     [P_DEC] = PD("DEC", F_TIME, 0, 127, 70),
@@ -222,6 +227,28 @@ static const param_desc_t GP[G_COUNT] = {
     [G_DRREV] = PD("-", F_INT, 0, 0, 0),
 };
 
+static const param_desc_t L2_DESC[L2_N] = {
+    PD("RATE", F_LFOHZ, 0, 127, 0), PE("WAVE", N_LWAVE, 0),
+    PD("PHS", F_INT, 0, 127, 0), PD("FADE", F_TIME, 0, 127, 0),
+    PE("SYNC", N_LSYNC, 0), PE("TRIG", N_LTRIG, 0), PE("POL", N_LPOL, 0),
+};
+static const param_desc_t *lfo2_desc(uint32_t id) { return lfo2_target(id) ? &L2_DESC[id - L2_FIRST] : 0; }
+static int virtual_target(uint32_t id) { return lfo2_target(id) || dx_target(id); }
+static int32_t lfo2_get(uint32_t k, uint32_t id) { return k < NTRK && lfo2_target(id) ? lfo2_config[k].p[id - L2_FIRST] : 0; }
+static void lfo2_set(uint32_t k, uint32_t id, int32_t value)
+{
+    const param_desc_t *d = lfo2_desc(id);
+    if (k < NTRK && d) lfo2_config[k].p[id - L2_FIRST] = (uint8_t)clamp(value, d->min, d->max);
+}
+static void lfo2_load(uint32_t k, const lfo2_config_t *c)
+{
+    if (k >= NTRK) return;
+    memset(&lfo2_state[k], 0, sizeof lfo2_state[k]);
+    memset(&lfo2_config[k], 0, sizeof lfo2_config[k]);
+    if (c && lfo2_valid(c)) lfo2_config[k] = *c;
+    lfo2_state[k].ph = (uint32_t)lfo2_config[k].p[L2_PHASE] << 25;
+}
+
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
 {
     if (id >= P_E0 && id <= P_E7) {                   /* the engine asked for (t->engine follows after a fade) */
@@ -233,6 +260,8 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
         return ins_desc(t->p[P_ITYPE], id - P_IA);
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ENV SYNC: note values (1.5, #175) */
         return &ESYNC_DESC[id == P_ATK ? 0 : id == P_DEC ? 1 : 2];
+    if (id == P_MORPH && dx_track(t)) return &DX_MORPH_DESC;
+    if (id == P_FTYPE && t->eng_req == ENGI_SEM) return &SEM_TYPE;
     return &TP[id];
 }
 
@@ -240,6 +269,7 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
  * only; range and default are the same): what the editor protocol, user presets and projects use */
 static const param_desc_t *param_desc_of(uint32_t e, uint32_t id)
 {
+    if (e == ENGI_SEM && id == P_FTYPE) return &SEM_TYPE;
     return id >= P_E0 ? &ENGINES[e]->edit[id - P_E0] : &TP[id];
 }
 
@@ -291,9 +321,14 @@ static const uint8_t DIV_ORDER[10] = {9, 8, 7, 6, 0, 1, 4, 2, 5, 3};   /* 4BAR 2
 static const uint8_t SLDIV_ORDER[6] = {0, 3, 1, 4, 2, 5};              /* 1/8 8T 1/16 16T 1/32 32T */
 static const uint8_t DTIME_ORDER[13] = {9, 8, 7, 6, 12, 0, 10, 1, 11, 4, 2, 5, 3};   /* 4BAR 2BAR 1/1 1/2 1/4D 1/4 1/8D
                                                                                       * 1/8 1/16D 8T 1/16 16T 1/32 */
+/* UI order only: the append-only source/destination IDs remain unchanged in sounds and MIDI. */
+static const uint8_t MSRC_ORDER[] = {0, 1, 9, 10, 11, 12, 13, 2, 3, 4, 5, 6, 7, 8};
+static const uint8_t MDST_ORDER[] = {0, 1, 2, 3, 4, 5, 23, 24, 10, 11, 20,
+                                      12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 6, 7, 8, 9};
 static const uint8_t *enum_order(const param_desc_t *d)
 {
-    return d->names == N_DIV ? DIV_ORDER : d->names == N_SLDIV ? SLDIV_ORDER : d->names == N_DTIME ? DTIME_ORDER : 0;
+    return d->names == N_MSRC ? MSRC_ORDER : d->names == N_MDST ? MDST_ORDER :
+           d->names == N_DIV ? DIV_ORDER : d->names == N_SLDIV ? SLDIV_ORDER : d->names == N_DTIME ? DTIME_ORDER : 0;
 }
 static int32_t enum_rank(const param_desc_t *d, int32_t v)   /* v's place in the shown order (+ min): the gauges */
 {
@@ -434,7 +469,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS };   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DXKIT, GR_DXMOT, GR_DXSOUND, GR_DXSOUND2, GR_DXMODE, GR_DXLAYER, GR_LFO2, GR_LFO2SYNC, GR_LFOSYNC };   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
 
 typedef struct {
     const char *title;
@@ -447,13 +482,15 @@ static const page_t PAGES[] = {
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_NONE, {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},   /* (P_ED_FX: nothing reads it);
                                                                              * 1.5: ESYNC, ENV's times as note values */
     {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
-    {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
+    {"LFO SYNC", FAM_LFO, SC_TRACK, GR_LFOSYNC, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
+    {"LFO2", FAM_LFO, SC_TRACK, GR_LFO2, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"LFO2 SYNC", FAM_LFO, SC_TRACK, GR_LFO2SYNC, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
-    {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
+    {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* (Custom: after INSERT, so FX + INSERT are neighbours for the two-group layout) */
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
@@ -462,6 +499,13 @@ static const page_t PAGES[] = {
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
     {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E4, P_E5, P_E7}},   /* ANALOG only (1.5, #104): TYPE CUT RES KTR */
+    {"SEM MODE", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_LD_SHP, P_SPRD, 0xFF}},
+    {"X KIT", FAM_EDIT, SC_TRACK, GR_DXKIT, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"X-MOD", FAM_EDIT, SC_TRACK, GR_DXMOT, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"X SOUND", FAM_EDIT, SC_TRACK, GR_DXSOUND, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"X SOUND 2", FAM_EDIT, SC_TRACK, GR_DXSOUND2, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"X MODE", FAM_EDIT, SC_TRACK, GR_DXMODE, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"X LAYER", FAM_EDIT, SC_TRACK, GR_DXLAYER, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"LANES", FAM_EDIT, SC_TRACK, GR_NONE, {P_LN0, P_LN1, P_LN2, P_LN3}},   /* DRUM only: the lane levels */
     {"LANES 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_LN4, P_LN5, P_LN6, P_LN7}},
     {"SLICES", FAM_EDIT, SC_TRACK, GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SLICE only: the slices by hand (ui_slice.c) */
@@ -475,7 +519,9 @@ static const page_t PAGES[] = {
     {"OP LEVEL", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM1_LEVEL, P_FM2_LEVEL, P_FM3_LEVEL, P_FM4_LEVEL}},
     {"VOICE", FAM_EDIT, SC_TRACK, GR_NONE, {P_VOICE, P_GLIDE, P_GLMODE, P_PRIO}},
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_ALLOC, P_DETUNE, P_PAN, P_MUTE}},
-    {"VOICE 3", FAM_EDIT, SC_TRACK, GR_NONE, {P_SPRD, 0xFF, 0xFF, 0xFF}},   /* #148: SPREAD */
+    /* Custom: MORE gathers the single parameters that had a page each (VOICE 3's SPREAD #148, MORPH, FEEDBACK); a slot the
+     * track's engine does not have is empty (more_slot_ok), so KNOB 1 is always SPREAD */
+    {"MORE", FAM_EDIT, SC_TRACK, GR_NONE, {P_SPRD, P_MORPH, P_PD_FB, 0xFF}},
     /* 1.2 (Discussion #153): a family's pages go round in this order, a tap of its button each (ui.c open_family) */
     {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's only page (1.2; up to 1.1.5 SEQ's) */
     /* SAVE's taps (1.5, #173): USER (SAVE from another page: the quick save, SAVE OCT+ OCT+), PRESETS (the engines and
@@ -501,6 +547,7 @@ static const page_t PAGES[] = {
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
+static int more_slot_ok(uint32_t id);              /* (ui.c: MORPH / PHS FB only on the engines that have them) */
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
@@ -516,8 +563,13 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         *valp = &song.g[id];
         return &GP[id];
     }
+    if (pg->id[1] == P_MORPH && pg->scope == SC_TRACK && !more_slot_ok(id)) {   /* MORE: an engine without that one */
+        *valp = 0;
+        return 0;
+    }
     if (pg->graph == GR_MOD)                          /* SRC DST AMT of the slot shown */
         id += 3u * mod_ui_slot;
     *valp = &TSEL->p[id];
     return track_desc(TSEL, id);
 }
+

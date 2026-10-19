@@ -75,7 +75,9 @@ static up_rec_t *up_rec(uint32_t k) { return &up_bank[k / UP_PER_BANK].r[k % UP_
  * before keeps the byte (a bank is written whole) without reading it: no format change, no version bump. A record of
  * versions 1..3 (a 16-bit value in every pair) has none; giving it one (a rename) rewrites it as version 4 / 5 when its
  * values fit a byte (up_to_v4; not a version 1 PHYS sound, whose MODEL 2 means DUST) */
+#define UP_L2_AT 128u
 #define UP_CAT_AT (UP_PMAX * 2u - 1u)
+_Static_assert(P_COUNT <= UP_L2_AT && UP_L2_AT + L2_N < UP_CAT_AT, "LFO2 preset extension fits");
 #include "category.c"
 static uint32_t up_cat_of(const up_rec_t *r)
 {
@@ -107,15 +109,22 @@ static void up_set_cat(up_rec_t *r, uint32_t c)  /* c CAT_BASS..CAT_OTHER; a rec
 
 static int up_valid(const up_rec_t *r)
 {
-    if (!(r->used == UP_USED && r->ver >= 1u && r->ver <= UP_VER_GRID && r->engine < NENGINES &&
+    if (!(r->used == UP_USED && r->ver >= 1u && r->ver <= 11u && r->engine < NENGINES &&
           r->np >= 8u && r->np <= (r->ver >= 4u ? UP_PMAX * 2u : UP_PMAX) && r->name[0])) return 0;
+    if ((r->ver == 6u || r->ver == 7u || r->ver >= 10u) && !(r->engine == ENGI_DRUM && (int16_t)r->packed[r->np - 8u] - 64 == DX_KIT_ID)) return 0;
     if (r->ver >= 4u) for (uint32_t i = 0; i < r->np; i++) if (r->packed[i] > 191u) return 0;
+    if (r->ver >= 8u) {
+        lfo2_config_t c;
+        if (r->np > UP_L2_AT) return 0;
+        memcpy(c.p, r->packed + UP_L2_AT, L2_N);
+        if (!lfo2_valid(&c)) return 0;
+    }
     return 1;
 }
 
 static int up_used(uint32_t k) { return k < UP_SLOTS && up_valid(up_rec(k)); }
 
-static int up_grid(const up_rec_t *r) { return r->ver == 3u || r->ver == UP_VER_GRID; }
+static int up_grid(const up_rec_t *r) { return r->ver == 3u || (r->ver == UP_VER_GRID || r->ver == 7u || r->ver == 9u || r->ver == 11u); }
 static int16_t up_value(const up_rec_t *r, uint32_t k) { return r->ver >= 4u ? (int16_t)r->packed[k] - 64 : r->p[k]; }
 static void up_set_value(up_rec_t *r, uint32_t k, int16_t v)
 {
@@ -218,6 +227,18 @@ static int up_pat_empty(const up_rec_t *r)
  * (values not yet clamped); 0 ok, 1 bad arguments. *slot gets the slot byte when there is one. kind 1 (and its 16
  * bytes): a drum grid, the pairs the low 7 bits of each step's hits and accents, hi bit 0 / 1 their bit 7 (lane 8).
  * category (1.2, category.c CAT_*, 0 none): after the kind's 16 bytes (kind 0 sends them too, ignored) */
+static int up_lfo2_parse(up_rec_t *r, const uint8_t *raw)
+{
+    lfo2_config_t c = {{0}};
+    if (raw) memcpy(c.p, raw, L2_N);
+    if (!lfo2_valid(&c)) return 0;
+    int need = raw != 0;
+    if (need) {
+        memcpy(r->packed + UP_L2_AT, c.p, L2_N);
+        r->ver = r->ver >= 6u ? (up_grid(r) ? 11u : 10u) : (up_grid(r) ? 9u : 8u);
+    }
+    return 1;
+}
 static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
 {
     uint32_t i, n, k, end;
@@ -228,6 +249,8 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
         ;
     k = 3u + n;                                  /* after the name's 0 */
     end = k + 2u * P_COUNT + 32u;
+    uint32_t has_l2 = na == end + 26u && a[end + 18u] == 0x32u;
+    if (has_l2) na -= 8u;
     if (a[0] >= UP_SLOTS || a[1] >= NENGINES || 2u + n >= na || !up_name_ok(a + 2, n) ||
         (na != end && ((na != end + 17u && na != end + 18u) || a[end] > 1u)) || (na == end + 18u && a[end + 17u] >= CAT_N))
         return 1;
@@ -255,6 +278,8 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
         }
         if (na == end + 18u)
             up_set_cat(r, a[end + 17u]);
+        if (r->engine == ENGI_DRUM && up_value(r, r->np - 8u) == DX_KIT_ID) r->ver = 7u;
+        if (!up_lfo2_parse(r, has_l2 ? a + end + 19u : 0)) return 1;
         *target = *r;
         return 0;
     }
@@ -266,6 +291,8 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
     if (na == end + 18u)
         up_set_cat(r, a[end + 17u]);
     up_migrate(r);                               /* (an editor of before the DRUM engine) */
+    if (r->engine == ENGI_DRUM && up_value(r, r->np - 8u) == DX_KIT_ID) r->ver = 6u;
+    if (!up_lfo2_parse(r, has_l2 ? a + end + 19u : 0)) return 1;
     *target = *r;
     return 0;
 }
@@ -422,9 +449,18 @@ static int up_store_cat(uint32_t k, const char *name, uint32_t cat)
             }
         }
     }
+    if (dx_track(TSEL)) r.ver = r.ver == UP_VER_GRID ? 7u : 6u;
+    {
+        int need = lfo2_nonzero(&lfo2_config[(uint32_t)(TSEL - trk)]);
+        for (i = 0; i < NMSLOT; i++) if (r.packed[P_M1SRC + 3u * i] - 64 >= MS_LFO2) need = 1;
+        if (need) {
+            memcpy(r.packed + UP_L2_AT, lfo2_config[(uint32_t)(TSEL - trk)].p, L2_N);
+            r.ver = dx_track(TSEL) ? (up_grid(&r) ? 11u : 10u) : (up_grid(&r) ? 9u : 8u);
+        }
+    }
     {
         int rc = up_put(k, &r);                         /* the record first, then its FM6 patch (up_fm6.c) */
-        if ((rc == 0 || rc == 3) && r.engine == ENGI_FM6) {
+        if ((rc == 0 || rc == 3) && (r.engine == ENGI_FM6 || dx_track(TSEL))) {
             int u = upf_store(k, (uint32_t)(TSEL - trk));
             if (u == 2)
                 rc = 2;
@@ -481,6 +517,11 @@ static int up_load(uint32_t k)
         t->preset = 0;
         fm1_irq_on();
         upf_track_load(t, k);                           /* FM6: the preset's own patch (up_fm6.c) */
+    }
+    {
+        lfo2_config_t c = {{0}};
+        if (r->ver >= 8u) memcpy(c.p, r->packed + UP_L2_AT, L2_N);
+        fm1_irq_off(); lfo2_load((uint32_t)(t - trk), &c); fm1_irq_on();
     }
     t->user = (uint8_t)(k + 1u);
     load_end(t);
@@ -598,3 +639,4 @@ static void up_ui_named(uint32_t op, uint32_t k, const char *name, uint32_t cat)
 }
 static void up_ui(uint32_t op, uint32_t k) { up_ui_named(op, k, 0, 0); }
 #endif
+

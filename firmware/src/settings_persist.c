@@ -11,6 +11,8 @@
  * [15][24]: MENU's 1.2 flags SCOPE MIX, STEP PREVIEW ON, CHORD ENTRY ADD (bits 0-2, ui.c ui_prefs2; 0 = the defaults),
  *   1.5 HELP ON (bit 3), 1.5.5 SELECT PAGE (bit 4; 0 = BPM, as before), 1.5.5 SCREEN WAKE PANEL (bit 5; 0 = +MIDI);
  *   1.6.1 2ND CORE ON (bit 7; 0 = OFF, one core, as before);
+ * [15][13]: Custom flags: bit 0 CPU2 ON (default OFF), bit 1 EXT START BAR (default PULSE);
+ *   Custom keeps LIVE LOAD FULL in [15][24] bit 7, independently of upstream 1.6.1 CPU2 storage.
  * [15][10]: MENU > ANIM IDLE (1.2, Discussion #135, ui.c ui_idle: bit 0; 0 = off, ANIM as its bit in MENU's flags says);
  * [15][11]: PRESETS > LIST's category (1.2, Discussion #90, ui.c ui_lcat: 0 none = ALL / FAV as favorites.filter says);
  * [15][0..9], [12] (1.6, #244: CUSTOM, a palette of the user's: five RGB565 colours little endian, flags: ui.c ui_cpal); older
@@ -19,22 +21,65 @@
  * key's default, an unknown code too: kept as saved, a later firmware's effect survives a round trip here).
  * MENU's flags (ui.c PREF_*) are append-only bits whose 0 is the default: BPM LOCK (16) is clear in every older setting
  * = unlocked, LARGE (32) = OFF, RESTORE LAST OFF (128, 1.2) = ON, read as saved (nothing to migrate, so importing twice changes nothing). */
+#include "voice_policy.h"
+#include "engine_storage.h"
 typedef struct {
     uint32_t magic, palette, lowcut, zoom;
     panel_t panel;
     uint32_t bold;
     struct { uint8_t factory[16][32]; uint32_t user, filter; } favorites;
+#if FELUCCA_DRUMX
+    uint32_t learn_extra[ML_EXTRA_N];
+    uint16_t learn_virtual[16];
+#endif
+    uint32_t voice_allocation;                       /* PER6: device-wide AUTO / FIXED track caps */
+    uint32_t engine_favorites[ENGINE_FAV_N];          /* PER7: engines 14..21, outside Learn/preferences */
 } persist_t;
-#define PERSIST_MAGIC 0x50455234u
+#define PERSIST_MAGIC 0x50455237u
+#define PERSIST_PREENGINE_SIZE (sizeof(persist_t) - ENGINE_FAV_N * sizeof(uint32_t))
+#define PERSIST_PREVOICE_SIZE (PERSIST_PREENGINE_SIZE - sizeof(uint32_t))
+#if FELUCCA_DRUMX
+#define PERSIST_BASE_SIZE (PERSIST_PREVOICE_SIZE - ML_EXTRA_N * sizeof(uint32_t) - 16u * sizeof(uint16_t))
+#else
+#define PERSIST_BASE_SIZE PERSIST_PREVOICE_SIZE
+#endif
 
 /* Normalize in place; 1 = current, 2 = migrated, 0 = invalid. */
 static int settings_import(persist_t *p, int n)
 {
     int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;
-    int old3 = n == (int)(sizeof *p - sizeof p->favorites) && p->magic == 0x50455233u;
-    int old2 = n == (int)(sizeof *p - sizeof p->favorites - sizeof p->bold) && p->magic == 0x50455232u;
+    int old6 = n == (int)PERSIST_PREENGINE_SIZE && p->magic == 0x50455236u;
+    int old3 = (n == (int)(PERSIST_BASE_SIZE - sizeof p->favorites) || n == (int)(sizeof *p - sizeof p->favorites)) && p->magic == 0x50455233u;
+    int old2 = (n == (int)(PERSIST_BASE_SIZE - sizeof p->favorites - sizeof p->bold) || n == (int)(sizeof *p - sizeof p->favorites - sizeof p->bold)) && p->magic == 0x50455232u;
     int old1 = n == (int)(8u + sizeof(panel_t)) && p->magic == 0x50455231u;
-    if (!(current || old3 || old2 || old1)) return 0;
+    int old4 = n == (int)PERSIST_BASE_SIZE && p->magic == 0x50455234u;
+#if FELUCCA_DRUMX
+    int old5 = n == (int)PERSIST_PREVOICE_SIZE && p->magic == 0x50455235u;
+    if (!(current || old6 || old5 || old4 || old3 || old2 || old1)) return 0;
+    if (!(current || old6 || old5)) { memset(p->learn_extra, 0, sizeof p->learn_extra); memset(p->learn_virtual, 0, sizeof p->learn_virtual); }
+    memcpy(ml_virtual, p->learn_virtual, sizeof ml_virtual);
+    for (uint32_t i = 0; i < 16u; i++) if (!virtual_target(ml_virtual[i])) ml_virtual[i] = p->learn_virtual[i] = 0;
+    memcpy(ml_extra, p->learn_extra, sizeof ml_extra);
+    for (uint32_t i = 0; i < ML_EXTRA_N; i++) {
+        uint32_t e = ml_extra[i], code = e >> 9;
+        if (e && (!ml_free_cc(e & 127u) || !(code > 0u && (ml_id(code) < P_COUNT || virtual_target(code)))))
+            ml_extra[i] = p->learn_extra[i] = 0;
+    }
+#else
+    if (!(current || old6 || old4 || old3 || old2 || old1)) return 0;
+#endif
+    if (!current) {
+        memset(p->engine_favorites, 0, sizeof p->engine_favorites);
+        if (old6) {
+            /* Custom20 put SEM favorites in the idle-animation byte. Preserve
+             * all favorite bits and the existing idle bit; bit 0 is ambiguous.
+             * Older PER1..5 predate SEM and must not invent a favorite. */
+            p->engine_favorites[0] = p->favorites.factory[15][10];
+            p->favorites.factory[15][10] &= 1u;
+        }
+    }
+    p->voice_allocation = (current || old6) ? voice_policy_normalize(p->voice_allocation) : 0u;
+    voice_policy = p->voice_allocation;
     if (old1) {
         panel_t old;
         memcpy(&old, (uint8_t *)p + 8, sizeof old);
@@ -42,7 +87,11 @@ static int settings_import(persist_t *p, int n)
         p->lowcut = p->zoom = 0;
     }
     if (old1 || old2) p->bold = 0;
-    if (!current) memset(&p->favorites, 0, sizeof p->favorites);
+#if FELUCCA_DRUMX
+    if (!(current || old6 || old5 || old4)) memset(&p->favorites, 0, sizeof p->favorites);
+#else
+    if (!(current || old6 || old4)) memset(&p->favorites, 0, sizeof p->favorites);
+#endif
     if (p->favorites.factory[15][29] > 1u)        /* STYLE (ui.c ui_style): 2, the retired PIXEL = LINE; unknown = FLAT */
         p->favorites.factory[15][29] = p->favorites.factory[15][29] == 2u ? 1u : 0u;
     {   /* CLICK, CLICK LEVEL, COUNT-IN (ui.c ui_rec_prefs): two bits each, 3 is no value: the default (0) */
@@ -76,6 +125,7 @@ static int settings_import(persist_t *p, int n)
     settings_leds = (uint8_t)leds_from_stored(p->zoom);
 #ifdef FELUCCA_FAVORITES
     memcpy(&favorites, &p->favorites, sizeof favorites);
+    memcpy(engine_favorites, p->engine_favorites, sizeof engine_favorites);
     favorites.filter = favorites.filter == 1u;
 #if defined(FM4_NPRESETS) && !FELUCCA_FM4
     {   /* DIGITAL's starred presets (engine 1, retired) -> the FM6 presets that cover them (fm4_convert.c) */
@@ -101,6 +151,11 @@ static int settings_import(persist_t *p, int n)
  * feature absent from this build. No save-on-boot or extra flash writes. */
 static void settings_export(persist_t *p)
 {
+    p->voice_allocation = voice_policy_normalize(voice_policy);
+#if FELUCCA_DRUMX
+    memcpy(p->learn_extra, ml_extra, sizeof ml_extra);
+    memcpy(p->learn_virtual, ml_virtual, sizeof ml_virtual);
+#endif
     p->magic = PERSIST_MAGIC;
     p->palette = palette_to_stored(settings.palette);
     p->lowcut = settings.lowcut;
@@ -109,5 +164,7 @@ static void settings_export(persist_t *p)
     p->bold = hold_to_stored(p->bold, settings_hold);
 #ifdef FELUCCA_FAVORITES
     memcpy(&p->favorites, &favorites, sizeof favorites);
+    memcpy(p->engine_favorites, engine_favorites, sizeof engine_favorites);
 #endif
 }
+

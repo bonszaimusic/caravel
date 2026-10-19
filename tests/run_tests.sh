@@ -199,7 +199,7 @@ OUT=build/host
 mkdir -p "$OUT"
 CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 fail=0
-run() { echo "== $1"; shift; "$@" || fail=1; }
+run() { label=$1; echo "== $label"; shift; "$@" || { rc=$?; echo "FAILED (exit $rc): $label"; fail=1; }; }
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
@@ -212,6 +212,11 @@ run "keys and buttons: fast press, long release, bouncy contacts (one note each)
 
 $CC -o "$OUT/midi_uart_test" tests/midi_uart_test.c
 run "TRS MIDI parser" "$OUT/midi_uart_test"
+
+$CC -O2 -o "$OUT/timer5_midi_test" tests/timer5_midi_test.c
+run "TRS timestamping during audio with saturated CC input" "$OUT/timer5_midi_test"
+$CC -O2 -DFELUCCA_UART=0 -o "$OUT/timer5_midi_nouart_test" tests/timer5_midi_test.c
+run "TIMER5 with TRS input disabled" "$OUT/timer5_midi_nouart_test"
 
 HALF=$(sed -n 's/^#define HALF_FRAMES \([0-9]*\).*/\1/p' firmware/src/core.h)
 $CC -O2 -DT_CDC=1 -DHALF_FRAMES=$HALF -o "$OUT/uac_test" tests/uac_test.c -lm
@@ -242,15 +247,15 @@ EOF
         "$OUT/usb_desc_test"
 done
 
-[ -f build/felucca.fwsc ] || { echo "run ./build.sh first"; exit 1; }
+[ -f build/caravel.fwsc ] || { echo "run ./build.sh first"; exit 1; }
 
 $CC -DOWN_PKG=1 -o "$OUT/ota_test" tests/ota_test.c
-run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/felucca.fwsc
+run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/caravel.fwsc
 
 head -c 200000 build/felucca.bin > "$OUT/old_app.bin"
 python3 tools/fm1pkg_make.py "$OUT/old_app.bin" build/loader/ota.bin "$OUT/old.fwsc" >/dev/null
 $CC -o "$OUT/ldr_test" tests/ldr_test.c
-run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
+run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/caravel.fwsc
 
 if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm
@@ -265,6 +270,12 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "TRACKS: 4-track pattern, live recording (lengths, swing), voice budget, engine switch, cost" env TRACKS=build/tracks_demo "$OUT/hostsim" 0 0 1 "$OUT/tracks.wav"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/project_test" tests/project_test.c -lm
     run "project formats (FUN1..FUN5 -> FUN6, the grid and song chain; DIGITAL tracks -> FM6, SAMPLE PERC -> DRUM)" "$OUT/project_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx_motion_test" tests/fx_motion_test.c -lm
+    run "FX-special automation: fine-timed edges, latch, lifecycle, capacity and saved parts" "$OUT/fx_motion_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx_edit_test" tests/fx_edit_test.c -lm
+    run "FX edge editing: independent step/phase, live chase, undo, loop and ordering" "$OUT/fx_edit_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/duplicate_test" tests/duplicate_test.c -lm
+    run "DUP x2: step/motion copies, shared capacity, undo, live boundary and part launch" "$OUT/duplicate_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/motion_test" tests/motion_test.c -lm
     run "motion, whole-step chance, FUN7 migration, song restore, ARP repeat and the 1.2 ARP modes" "$OUT/motion_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ratchet_test" tests/ratchet_test.c -lm
@@ -273,6 +284,28 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "1.5 STEP: a note's LEN (TIEs on KNOB 3), a step's VEL (playback, AUTOMATION's VEL rows)" "$OUT/step15_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/detail_test" tests/detail_test.c -lm
     run "1.5.1 SEQ > DETAIL: a step's CHANCE RATCH NUDGE VEL on KNOB 1..4 (walk, entries, undo, DRUM, chords, playback, marks)" "$OUT/detail_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/bytebeat_test" tests/bytebeat_test.c -lm
+    run "LOFI BYTE/FLOAT: legacy sound equivalence, formula bounds and storage" "$OUT/bytebeat_test"
+    $CC -O1 -g -w -fsanitize=undefined -fno-sanitize=shift -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src -o "$OUT/hades_dsp_test" tests/hades_dsp_test.c -lm
+    run "HADES isolated DSP: strict integer overflow, 12000 settings, aliased output and live control continuity" "$OUT/hades_dsp_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/lfo2_test" tests/lfo2_test.c -lm
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/lfo2_editor_test" tests/lfo2_editor_test.c -lm
+    run "LFO2 editor: descriptors, values, bounds and Learn2" "$OUT/lfo2_editor_test"
+    run "Independent LFO2: modulation, UI, Learn, sound and project storage" "$OUT/lfo2_test"
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hades_test" tests/hades_test.c -lm
+    run "HADES: divider subs, filter, stability, controls, persistence and native timing" "$OUT/hades_test"
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drone_test" tests/drone_test.c -lm
+    run "DRONE: Learn, storage, favorites, locks, DSP corners, tuning, retriggers and release" "$OUT/drone_test"
+    $CC -O2 -w -DC1_HOST -pthread -Ibuild/gen -Ifirmware/src -o "$OUT/drone_c1_test" tests/drone_test.c -lm
+    run "DRONE second core: four networks and mixed engines, live controls, every split bit-identical" "$OUT/drone_c1_test"
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drone_cells_test" tests/drone_cells_test.c -lm
+    run "DRONE cells: ownership, all128 keys, local pitch/gain, snapshot inhibition, lifecycle, FULL and bounds" "$OUT/drone_cells_test"
+    $CC -O2 -w -DC1_HOST -pthread -Ibuild/gen -Ifirmware/src -o "$OUT/drone_cells_c1_test" tests/drone_cells_test.c -lm
+    run "DRONE cells second core: four cells tracks and mixed engines, all splits, samples and state" "$OUT/drone_cells_c1_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/sem_test" tests/sem_test.c -lm
+    run "SEM engine: filter response, endpoint stability, Learn, storage and reservations" "$OUT/sem_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/jiant_sound_test" tests/jiant_sound_test.c -lm
+    run "JIANT sound ports: legacy zero paths, isolated parameters, storage, locks, MIDI and combined DSP" "$OUT/jiant_sound_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq155_test" tests/seq155_test.c -lm
     run "1.5.5 SEQ: conditions and FILL, SONG, storage, editor; SEQ TOOLS EUCLID, DOUBLE, HALF" "$OUT/seq155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm
@@ -285,6 +318,14 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "1.2 (FUN10): LFO 2 SYNC / TRIG / POL, NUDGE (record, QUANTIZE, play, controls), 128 motion records, FUN10 / FUN9 / FUN8 / FUN7, user presets" "$OUT/fun10_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/midi_control_test" tests/midi_control_test.c -lm
     run "USB/TRS clock, bend, sustain, ownership and panic recovery" "$OUT/midi_control_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/midi_resync_test" tests/midi_resync_test.c -lm
+    run "Custom USB/TRS bar and manual pulse resync, ARPs and panel" "$OUT/midi_resync_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/midi_drift_test" tests/midi_drift_test.c -lm
+    run "External clock: five 20-minute phase runs, polymeter and ARPs" "$OUT/midi_drift_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/voice_reserve_test" tests/voice_reserve_test.c -lm
+    run "Track voice reservations: isolated notes, ARPs, UNISON, DRUM-X, FX, panel and settings migration" "$OUT/voice_reserve_test"
+    $CC -O1 -w -DTIMER5_SYNTH_TEST=1 -Ibuild/gen -Ifirmware/src -o "$OUT/timer5_cc_clock_test" tests/timer5_midi_test.c -lm
+    run "TRS clock and all four sequencers under saturated learned CCs (64 mappings, ANALOG and DRUM-X)" "$OUT/timer5_cc_clock_test"
     $CC -O1 -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/digital_test" tests/digital_test.c -lm
     run "DIGITAL (retired, built here with FELUCCA_FM4=1): operator envelopes/levels" "$OUT/digital_test"
     $CC -O2 -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/fm4_test" tests/fm4_test.c -lm
@@ -305,7 +346,15 @@ if [ -f build/gen/felucca_tables.h ]; then
     fi
     $CC -O1 -w -Ibuild/gen -o "$OUT/settings_test" tests/settings_test.c
     run "settings: PER1..PER4 migration, palette ids and preference preservation" "$OUT/settings_test"
-    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test" tests/ui_test.c -lm
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/live_pattern_test" tests/live_pattern_test.c -lm
+    run "live project patterns: boundary, motion/locks, replacement, stop, engine guard and LOAD UI" "$OUT/live_pattern_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/live_full_test" tests/live_full_test.c -lm
+    run "FULL live load: RAM snapshot, sounds/FX, FM6, DRUM-X, fades, settings and TRS clock" "$OUT/live_full_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/step_play_test" tests/step_play_test.c -lm
+    run "step recording during playback: cursor, chords, live mode, MIDI, automation and RAM save" "$OUT/step_play_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drumx_test" tests/drumx_test.c -lm
+    run "DRUM-X: fixed A/B MIDI Learn, 64 slots, project/preset, payload and audio" "$OUT/drumx_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test" tests/ui_test.c -lm
     run "UI: sounds keep steps, undo, recording, MIDI overflow, pending saves, panel recovery, drum grid, song chain, GREY gray, MONO neutral" "$OUT/ui_test"
     $CC -w -DFELUCCA_CPU2=0 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_c1" tests/ui_test.c -lm
     run "UI, a FELUCCA_CPU2=0 build: MENU > SYSTEM without 2ND CORE, the rest as the default build" "$OUT/ui_test_c1"
@@ -320,7 +369,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "UI renders: layout lint (every screen and palette, every page, engine and column value), GREY gray, MONO neutral, alignment by ink (1 px fails), draw cost, LARGE one value size per knob (#251)" \
         "$OUT/ui_render" build/ui_new build/ui_slot
     if python3 -c "import PIL" 2>/dev/null; then python3 tests/ui_render.py build/ui_new build/ui_slot; fi
-    $CC -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_fm4" tests/ui_test.c -lm
+    $CC -O1 -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_fm4" tests/ui_test.c -lm
     run "UI built with FELUCCA_FM4=1 (DIGITAL, kept in the tree): its OP pages, EDIT cycle, algorithm charts" "$OUT/ui_test_fm4"
     $CC -O1 -w -DFELUCCA_FM4=1 "-DFELUCCA_VERSION=\"$FV\"" -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/ui_render_fm4" tests/ui_render.c -lm
     mkdir -p build/ui_fm4/ppm build/ui_fm4_slot
@@ -387,11 +436,19 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -pthread -o "$OUT/dualcore_test" tests/dualcore_test.c -lm
     run "second core: 4 parts of every preset, mixes: bit for bit on one core and on two, every split" \
         "$OUT/dualcore_test"
+    run "FIXED voice reservations: Custom synth/DRUM-X mixes identical on one and two cores, every split" \
+        env FIXED_VOICES=1 SCENE=Custom "$OUT/dualcore_test"
+    run "LFO2: independent random and smooth modulation on both cores" env LFO2_TEST=1 SCENE="Custom HADES" "$OUT/dualcore_test"
     if [ -n "$TSAN" ]; then                     # TSAN=1: the same under ThreadSanitizer (~6 min): shared state
         TSAN_CC="cc -O1 -g -w -Ibuild/gen -Ifirmware/src -fsanitize=thread -pthread"
         $TSAN_CC -o "$OUT/dualcore_tsan" tests/dualcore_test.c -lm
         run "second core under ThreadSanitizer: 4 parts of every preset, mixes" \
             env TSAN_OPTIONS=halt_on_error=1 "$OUT/dualcore_tsan"
+        ${CC%% *} -O1 -g -w -Ibuild/gen -Ifirmware/src -fsanitize=thread -pthread -DC1_HOST -o "$OUT/drone_tsan" tests/drone_test.c -lm
+        run "DRONE second core under ThreadSanitizer: four networks and mixed engines, every split" \
+            env TSAN_OPTIONS=halt_on_error=1 "$OUT/drone_tsan"
+        ${CC%% *} -O1 -g -w -Ibuild/gen -Ifirmware/src -fsanitize=thread -pthread -DC1_HOST -o "$OUT/drone_cells_tsan" tests/drone_cells_test.c -lm
+        run "DRONE cells second core under ThreadSanitizer: ownership, live controls, every split" env TSAN_OPTIONS=halt_on_error=1 "$OUT/drone_cells_tsan"
     fi
     # Felucca-Engines (firmware/engines, MIT): its own test, then its standalone host built with Felucca's generated
     # tables against its golden renders (the same hashes: build/gen/felucca_tables.h has the engines' tables)
@@ -473,13 +530,15 @@ else
     SCC="${CC%% *} $SAN -Ibuild/gen -Ifirmware/src"
     export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}"
     $SCC -o "$A/ldr_test" tests/ldr_test.c
-    run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
+    run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/caravel.fwsc
     $SCC -DOWN_PKG=1 -o "$A/ota_test" tests/ota_test.c
-    run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/felucca.fwsc
-    for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test; do
+    run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/caravel.fwsc
+    for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test duplicate_test fx_edit_test jiant_sound_test drumx_test live_full_test midi_resync_test midi_drift_test voice_reserve_test sem_test lfo2_test lfo2_editor_test drone_test drone_cells_test; do
         $SCC -o "$A/$t" tests/$t.c -lm
         run "ASan/UBSan: $t" "$A/$t"
     done
+    $SCC -DTIMER5_SYNTH_TEST=1 -o "$A/timer5_cc_clock_test" tests/timer5_midi_test.c -lm
+    run "ASan/UBSan: TRS clock under learned CC load during audio" "$A/timer5_cc_clock_test"
     $SCC -o "$A/fuzz_ed" tests/fuzz_ed.c -lm
     run "ASan/UBSan fuzz: editor SysEx and raw USB-MIDI packets (20000, seed 7)" "$A/fuzz_ed" 20000 7
     $SCC -o "$A/fuzz_proj" tests/fuzz_proj.c -lm
@@ -513,3 +572,7 @@ else
 fi
 
 [ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }
+
+
+
+

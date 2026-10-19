@@ -9,8 +9,8 @@ enum { ED_LEARN_GET = 78, ED_LEARN_SET };
 static void ed_learn_list(void)
 {
     uint32_t i, e, id;
-    ed_b(ML_N);
-    for (i = 0; i < ML_N; i++) {
+    ed_b(ML_LEGACY_N);
+    for (i = 0; i < ML_LEGACY_N; i++) {
         e = ml_get(i);
         id = ml_id(e >> 9);
         if (!(e >> 9) || id >= P_COUNT) {
@@ -30,7 +30,13 @@ static int ed_learn_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
     if (cmd != ED_LEARN_SET)
         return 0;
     if (n == 4u && a[0] == 0u) {                       /* 0, cc, track, id: learn */
-        rc = ml_learn(a[1], a[2], a[3]);
+        uint32_t free = 0, can_replace = 0;
+        for (uint32_t i = 0; i < ML_LEGACY_N; i++) {
+            uint32_t e = ml_get(i);
+            free |= !(e >> 9);
+            can_replace |= (e >> 9) && ((e & 127u) == a[1] || (((e >> 7) & 3u) == a[2] && ml_id(e >> 9) == a[3]));
+        }
+        rc = !ml_free_cc(a[1]) || a[2] >= NTRK || a[3] >= P_COUNT ? 2u : free || can_replace ? ml_learn(a[1], a[2], a[3]) : 0u;
         rc = rc == 1u ? 0u : rc ? 1u : 5u;              /* (5: ML_N others, no room) */
         ch = !rc;
     } else if (n == 2u && a[0] == 1u) {                /* 1, cc: its entry cleared */

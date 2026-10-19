@@ -453,7 +453,7 @@ grid lives in the steps themselves, so every engine has it:
   (about 10 ms each); with the next piece sent before the reply, every second piece was dropped.
 - **Following the device.** With v2 firmware, `WATCH` and `PING` (above). Older firmware pushes
   nothing (no reply to `PING`): poll `DUMP` about every 300–500 ms while the page is visible.
-- **Port.** The device's MIDI port is named "Felucca" (USB 1209:0001). Updates use the same
+- **Port.** The device's MIDI port is named "Caravel" (USB 1209:0001; "Felucca" on Felucca firmware: an editor accepts both). Updates use the same
   port with other SysEx (the `F0 22 24 35 …` keys, `00 59 …` frames); never send those
   from the editor. Since 1.0 the same USB device also has an audio input ("Felucca",
   44.1 kHz stereo; bcdDevice 3.11; since 1.1 44.1 or 48 kHz, the host's choice, bcdDevice 3.21
@@ -1124,7 +1124,7 @@ before MIDI IN the first 21, 1.2 the first 23, 1.3 / 1.4 the first 24, 1.5 / 1.5
 | 29 | 29 | T4 CHANNEL | 0 | as T1 CHANNEL | 4 | 3 MIDI |
 | 30 | 30 | AUTO SELECT | 0 | 0 OFF, 1 ON (1.5.5) | OFF | 3 MIDI |
 | 31 | 31 | SCREEN WAKE | 0 | 0 +MIDI, 1 PANEL (1.5.5) | +MIDI | 3 MIDI |
-| 32 | 32 | 2ND CORE | 0 | 0 OFF, 1 ON (BETA) (1.6.1, Discussion #141: the second core renders some of the parts; from the next power-on) | OFF | 4 SYSTEM |
+| 34 | 34 | 2ND CORE | 0 | 0 OFF, 1 ON (BETA) (1.6.1, Discussion #141: the second core renders some of the parts; from the next power-on) | OFF | 4 SYSTEM |
 
 The device's AUDIO tab shows SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL, COUNT-IN and (1.2) TUNE (index 9, 10, 12, 13,
 14, 22).
@@ -1235,3 +1235,34 @@ device gone at ~0.3 s, the MIDI port gone at ~0.57 s and back at ~1.15 s; ON -> 
 at ~0.6 s while the MIDI port was not seen to disappear at all (so do not wait for a disconnect event: after
 a real change, wait ~1.5 s and open again). What the editor sends in that window is lost, `WATCH` ends with the
 bus reset (send `INFO` and `WATCH` again after reconnecting), and a backup in progress answers rc 5 (stale).
+
+Caravel appends MENU descriptor/id 32: FX TRACK, T1..T4, default T1, AUDIO tab (2), project value (rc 0). In Felucca 1.6 id 25 is SELECT. Read the current firmware descriptors before issuing MENU_SET.
+
+Caravel appends descriptor/id 33: LIVE LOAD, PATTERN/FULL, default PATTERN,
+AUDIO tab (2), a device setting (normal settings-save return codes). Ids 0..32 retain
+their meaning. This chooses the device panel's queued A-D load behavior during PLAY;
+the legacy PROJECT command still performs its full stopped load. FULL restores saved
+sounds/engines/FX while retaining master tempo/swing/clock and MIDI routing. Project
+formats and live FX latch/macro persistence are unchanged.
+
+Caravel keeps menu ids 32 FX TRACK and 33 LIVE LOAD. CPU2 is id 34 (when built), EXT START id 35: PULSE/BAR, default PULSE, SYSTEM; the voice reservations use 36..40. Read descriptors from this firmware; Felucca 1.6.1 id 32 is not this map.
+
+
+## Independent LFO2
+
+INFO capability `59 01 07` advertises seven virtual controls 400..406: RATE,
+WAVE, PHASE, FADE, SYNC, TRIG, POL. MIDI LEARN2 accepts these fixed targets.
+Common parameter IDs/count stay unchanged; matrix sources append 11..13.
+
+Command 88 (DESC) takes an unsigned 14-bit ID, low byte first, and replies
+`rc, idLo, idHi, label0, fmt, minV14, maxV14, enumCount, enumNames0...`.
+Command 89 (GET) takes `track` or `slot,1` for a user preset; reply is
+`index,active,7 x V14`. Command 90 (SET) takes `track,idLo,idHi,valueV14`,
+clamps a recognized setting and replies `rc,track,active,7 x V14`. Invalid
+SET arguments do not mutate a track. GET of a legacy preset reports zeros.
+
+UP_PUT optionally appends `32,7 x raw7` after the existing kind/16 high-bit/
+category extension (always supply all those fields). Bad values reject the
+whole staged record. The editor library adds the optional seven-value `lfo2`
+array and refuses unsupported destination firmware before audition/PUT.
+Project FUNC and user record versions 8..11 are described in [the LFO2 documentation](../docs/modulation/LFO2.md).

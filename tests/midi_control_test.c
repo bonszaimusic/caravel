@@ -749,13 +749,16 @@ static int learn_test(void)
     bad += check("  OCT- keeps CC16 learned on another parameter", ok);
 
     /* full: ML_N; a CC never learned */
-    for (i = 0; i < ML_N - 1u; i++)
-        ml_learn(40u + i, 2, P_ATK + i);
+    uint32_t uint_cc;
+    for (i = 0, uint_cc = 2; i < ML_N - 1u; uint_cc++) {
+        if (!ml_free_cc(uint_cc) || uint_cc == 74u || uint_cc == 90u) continue;
+        ml_learn(uint_cc, 2, P_ATK + i++);
+    }
     turn(EN_K1, 1);
     queued(0xB0, 90, 5, 1); frame();
     ok = msg_is("LEARN FULL") && ml_count() == ML_N && !ml_cc_of(0, P_E4);
     ok &= ml_learn(64, 0, P_E4) == 2u && ml_learn(1, 0, P_E4) == 2u && ml_learn(123, 0, P_E4) == 2u;
-    bad += check("  16 learned: the 17th says LEARN FULL, nothing replaced; CC1 / 64 / 123 are never learned", ok);
+    bad += check("  64 learned: the 65th says LEARN FULL, nothing replaced; CC1 / 64 / 123 are never learned", ok);
 
     /* OCT+: done; a CC is no longer taken */
     press(B_OCTUP);
@@ -790,7 +793,7 @@ static int learn_test(void)
 
     /* the stored codes with 1.5's parameters (the INSERT 96..100, TYPE 101, ESYNC 102, P_E0 103): a common parameter
      * id + 1, below ML_E0; an engine one ML_E0 + k whatever P_E0 is; every id back as it went in */
-    ok = P_E0 == 103u && P_COUNT == 111u && P_E0 < ML_E0;
+    ok = P_ESYNC == 102u && P_MORPH == 103u && P_PD_FB == 104u && P_E0 == 105u && P_COUNT == 113u && P_E0 < ML_E0;
     for (i = 0; i < P_COUNT; i++)
         ok &= ml_id(ml_code(i)) == i && (i < P_E0 ? ml_code(i) == i + 1u && ml_code(i) < ML_E0 : ml_code(i) == ML_E0 + i - P_E0);
     ok &= ml_id(0) == P_COUNT && ml_id(P_E0 + 1u) == P_COUNT && ml_id(ML_E0 - 1u) == P_COUNT;   /* (no such parameter) */
@@ -904,10 +907,10 @@ static int pc_test(void)
                 ok &= k == P_E0 || dr->p[k] == was.p[k];
             last = dr->p[P_E0];
         }
-        ok &= n == 9u && last == d->max;                 /* (1.5.6, #216: DEEP TIGHT PERC 6..8) */
+        ok &= n == 10u && last == d->max;                 /* (1.5.6, #216: DEEP TIGHT PERC 6..8) */
         pc(3, DK_COUNT + 2u); frame();
         ok &= dr->p[P_E0] == last;
-        bad += check("  DRUM: 0..8 the nine kits (STD 80 10 66 55 77 DEEP TIGHT PERC; HAND CYM H+CYM skipped), only KIT; 9.. ignored", ok);
+        bad += check("  DRUM: original programs 0..8 unchanged, program 9 DRUM-X, only KIT; 10.. ignored", ok);
     }
 
     /* FM6: its presets, then the bank's voices */

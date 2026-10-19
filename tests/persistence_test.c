@@ -82,6 +82,8 @@ static void reset(void)
     memset(&chain, 0, sizeof chain);
     chain_defaults(&chain_config);
     memset(proj_slot, 0, sizeof proj_slot);
+    project_ram_set(0);
+    project_save_retry = project_save_retry_ms = 0;
     memset(up_bank, 0, sizeof up_bank);
     memset(&persist_saved, 0, sizeof persist_saved);
     memset(&settings, 0, sizeof settings);
@@ -422,6 +424,113 @@ static int autosave_test(void)
     return bad;
 }
 
+static int live_save_test(void)
+{
+    int bad = 0, ok = 1;
+    project_store_t snapshots[4], got, old;
+    uint32_t before;
+    reset();
+    memset(&motion, 0, sizeof motion);
+    trk[0].step[0] = (step_t){{48}, 1, ST_NOTE, 0, 96, 0, 0};
+    project_save_as(0, "BEFORE");
+    old = proj_slot[0];
+    before = erases;
+    seq_start();
+    song.rec = 1;
+    for (uint32_t slot = 0; slot < 4u; slot++) {
+        char name[] = "PART A"; name[5] += slot;
+        for (uint32_t k = 0; k < NTRK; k++) {
+            trk[k].step[0] = (step_t){{60u + slot + k}, 1, ST_NOTE, 0, 96, 0, 0};
+            trk[k].p[P_SLEN] = 8u + slot;
+        }
+        motion.on = 1;
+        motion.count = 2;
+        motion.event[0] = (motion_event_t){0, P_PAN, 20u + slot};
+        motion.event[1] = (motion_event_t){1, P_PAN | MOTION_LOCK, 50u + slot};
+        uint32_t pos = trk[0].seq_pos, idx = trk[0].seq_idx;
+        ok &= project_save_as(slot, name) == 0 && song.playing && song.rec &&
+              trk[0].seq_pos == pos && trk[0].seq_idx == idx && erases == before &&
+              !strcmp(ui.msg, "RAM ONLY") && !strcmp(ui.msg2, "STOP TO SAVE");
+        snapshots[slot] = proj_slot[slot];
+        ok &= proj_import(&proj_scratch, &proj_slot[slot], sizeof proj_slot[slot]) &&
+              proj_scratch.t[0].step[0].note[0] == 60u + slot &&
+              proj_scratch.t[3].step[0].note[0] == 63u + slot &&
+              proj_scratch.t[0].p[P_SLEN] == 8u + slot &&
+              !memcmp(&proj_scratch.motion, &motion, sizeof motion);
+        project_save_poll();
+        ok &= erases == before;
+    }
+    bad += check("live save: four independent snapshots, motion/locks, no erase or transport reset", ok && project_ram_mask() == 15u);
+    bad += check("live save: durable A remains unchanged during playback",
+                 st_load(OBJ_PROJECT0, &got, sizeof got) == sizeof got && !memcmp(&got, &old, sizeof got));
+    trk[0].step[0].note[0] = 99;
+    bad += check("live save: fresh RAM A is immediately launchable", project_pattern_queue(0) == 0);
+    trk[0].seq_idx = trk[0].p[P_SLEN] - 1;
+    trk[0].seq_pos = step_samples(&trk[0], div_samples(trk[0].p[P_SDIV]), trk[0].seq_idx) - CTL;
+    project_pattern_tick(CTL);
+    for (uint32_t k = 0; k < NTRK; k++) seq_tick(&trk[k], CTL);
+    chain.live_applied = 0;
+    bad += check("live save: RAM A launches with its motion and all tracks, still no erase",
+                 song.playing && trk[0].step[0].note[0] == 60u && trk[3].step[0].note[0] == 63u &&
+                 trk[0].p[P_SLEN] == 8u && motion.event[1].value == 50 && project_ram_mask() == 15u && erases == before);
+    trk[0].step[0].note[0] = 80;
+    project_save_as(1, "B REVISED");
+    snapshots[1] = proj_slot[1];
+    bad += check("live save: replacing B preserves independent A, C and D",
+                 !memcmp(&proj_slot[0], &snapshots[0], sizeof old) &&
+                 !memcmp(&proj_slot[2], &snapshots[2], sizeof old) &&
+                 !memcmp(&proj_slot[3], &snapshots[3], sizeof old));
+    trk[0].step[0].note[0] = 100;                 /* unsaved working edits must never replace the snapshots */
+    seq_stop();
+    transport_req = 1;
+    project_save_poll();
+    transport_req = 0; chain.armed = 1;
+    project_save_poll();
+    chain.armed = 0; cin_left = 1;
+    project_save_poll();
+    cin_left = 0;
+    bad += check("live save: pending PLAY, SONG and count-in block all flash writes", erases == before && project_ram_mask() == 15u);
+    project_save_poll();
+    bad += check("live save: STOP commits one saved slot per main-loop pass", erases == before + 1 && project_ram_mask() == 14u);
+    seq_start(); project_save_poll();
+    bad += check("live save: resumed playback pauses remaining commits", erases == before + 1 && project_ram_mask() == 14u);
+    seq_stop();
+    for (uint32_t i = 0; i < 4u; i++) project_save_poll();
+    ok = !project_ram_mask() && !strcmp(ui.msg, "PARTS SAVED") && erases == before + 4u;
+    for (uint32_t slot = 0; slot < 4u; slot++)
+        ok &= st_load(OBJ_PROJECT0 + slot, &got, sizeof got) == sizeof got && !memcmp(&got, &snapshots[slot], sizeof got);
+    bad += check("live save: all four exact snapshots reach flash; working edits stay unsaved", ok);
+
+    reset();
+    project_save_as(0, "OLD"); old = proj_slot[0];
+    seq_start(); trk[0].step[0].note[0] = 77;
+    project_save_as(0, "NEW"); snapshots[0] = proj_slot[0];
+    seq_stop(); fail_after = 1; fm1_ms = 0xFFFFFF00u;
+    project_save_poll(); before = erases;
+    bad += check("live save: torn commit keeps the RAM snapshot and previous durable copy",
+                 project_ram_mask() == 1u && !strcmp(ui.msg, "RAM: SAVE ERROR") &&
+                 !memcmp(&proj_slot[0], &snapshots[0], sizeof old) &&
+                 st_load(OBJ_PROJECT0, &got, sizeof got) == sizeof got && !memcmp(&got, &old, sizeof got));
+    fail_after = -1;
+    project_save_poll(); fm1_ms += 999u; project_save_poll();
+    bad += check("live save: failed commit waits 1 s, including clock wrap", erases == before && project_ram_mask() == 1u);
+    fm1_ms++; project_save_poll();
+    bad += check("live save: retry writes the saved snapshot and clears RAM warning",
+                 erases == before + 1u && !project_ram_mask() && !strcmp(ui.msg, "PARTS SAVED") &&
+                 st_load(OBJ_PROJECT0, &got, sizeof got) == sizeof got && !memcmp(&got, &snapshots[0], sizeof got));
+    reset(); flash_ok = 0; seq_start();
+    project_save_as(2, "NO FLASH"); seq_stop(); project_save_poll();
+    bad += check("live save: unavailable flash keeps RAM warning and snapshot", project_used(2) && project_ram_mask() == 4u && !erases);
+    flash_ok = 1; project_save_poll();
+    bad += check("live save: available flash can commit the retained snapshot", !project_ram_mask() && erases == 1u);
+    reset(); chain.armed = 1;
+    bad += check("live save: active SONG is refused without touching its cache",
+                 project_save_as(0, "SONG") != 0 && !project_used(0) && !project_ram_mask() &&
+                 !strcmp(ui.msg, "STOP SONG FIRST") && !erases);
+    reset();
+    return bad;
+}
+
 int main(void)
 {
     int bad = 0, ok;
@@ -561,8 +670,8 @@ int main(void)
     before = erases;
     transport_req = 1;
     project_save(1);
-    bad += check("pending PLAY: project save leaves slot and flash", !project_used(1) && erases == before &&
-                  !strcmp(ui.msg, "STOP TO SAVE"));
+    bad += check("pending PLAY: project save changes RAM without erasing", project_used(1) && erases == before &&
+                  !strcmp(ui.msg, "RAM ONLY") && project_ram_mask() == 2u);
     transport_req = 0;
     erase_error = 1;
     project_save(2);
@@ -713,8 +822,9 @@ int main(void)
     chain.armed = 0;
     bad += check("preset invalid slot blocked before access", up_put(UP_SLOTS, &r) == 1 && erases == before);
     song.playing = 0; transport_req = 1; irq_start_race = 1;
-    bad += check("PLAY consumed before the save snapshot still blocks a project write",
-                  project_save(1) != 0 && irq_races == 1u && song.playing && !transport_req && erases == before);
+    bad += check("PLAY consumed before save captures RAM without a flash write",
+                  project_save(1) == 0 && irq_races == 1u && song.playing && !transport_req && erases == before &&
+                  (project_ram_mask() & 2u));
     song.playing = 0; transport_req = 1; irq_start_race = 1;
     bad += check("PLAY consumed before the preset snapshot still blocks a bank write",
                   up_put(3, &r) == 2 && irq_races == 2u && song.playing && !transport_req && erases == before);
@@ -725,6 +835,7 @@ int main(void)
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
     bad += mig_test();
     bad += autosave_test();
+    bad += live_save_test();
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
     return bad != 0;
 }

@@ -157,7 +157,7 @@ static int lfo(void)
     }
     bad += check("LFO 2 is no automation (motion_param), its page SYNC TRIG POL after LFO (LFO's family)",
                  !motion_param(P_LSYNC) && !motion_param(P_LTRIG) && !motion_param(P_LPOL) && !motion_param(P_SQNT) &&
-                 motion_param(P_LN7) && motion_param(P_E0) && PAGES[3].id[0] == P_LSYNC && !strcmp(PAGES[3].title, "LFO 2") &&
+                 motion_param(P_LN7) && motion_param(P_E0) && PAGES[3].id[0] == P_LSYNC && !strcmp(PAGES[3].title, "LFO SYNC") &&
                  PAGES[3].fam == FAM_LFO && PAGES[2].graph == GR_LFO && !strcmp(PAGES[4].title, "LFO DEST"));
     go_page(GR_LFO);
     ui.page++;                                       /* LFO 2 */
@@ -681,11 +681,11 @@ static int midi_track_fmt(void)
     memset(song.mch, 0, sizeof song.mch);
     song.g[G_ROUTE] = 0;
     project_capture(&a);
-    ok = proj_pack(&st, &a) && PROJ_MIDI_OFF == PROJ_FM6_OFF - 3u && end <= PROJ_MIDI_OFF && PROJ_FM6_OFF - end == 16u;
+    ok = proj_pack(&st, &a) && PROJ_MIDI_OFF == PROJ_FM6_OFF - 3u && end <= PROJ_MIDI_OFF && PROJ_FM6_OFF - end == 8u;
     for (i = end; i < PROJ_FM6_OFF; i++)
         ok &= st.raw[i] == 0u;
     ok &= proj_import(&b, &st, sizeof st) && !memcmp(&a, &b, sizeof a) && !b.mch[0] && !b.mch[3] && !b.g[G_ROUTE];
-    bad += check("MIDI IN TRACK (1.5.5): CH1-4 and the default channels pack as before (the 16 spare bytes all 0)", ok);
+    bad += check("MIDI IN TRACK (1.5.5): CH1-4 and the default channels pack as before (the 8 spare bytes all 0)", ok);
 
     song.g[G_ROUTE] = ROUTE_TRACK;
     mch_set(0, 9); mch_set(1, 1); mch_set(2, MCH_OMNI); mch_set(3, MCH_OFF);
@@ -769,3 +769,4 @@ int main(void)
     printf(bad ? "ui: 1.2 FORMAT (FUN10) TEST FAILED\n" : "1.2 format (FUN10) tests passed\n");
     return bad != 0;
 }
+

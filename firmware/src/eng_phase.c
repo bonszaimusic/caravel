@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+ * Portions adapted from JIANT (juanjiant-bit, GPL-3.0-only); changes since the fork: Copyright (C) 2026 bonszaimusic */
 /* Phase distortion. The waveforms are a C port of the oscillator of
  * CrispyZebra (Leo Kuroshita, GPL-3.0, github.com/hugelton/CrispyZebra), the
  * author's own phase-distortion core: a -cos table read through a bent phase whose
@@ -127,6 +128,7 @@ static void phase_note_on(track_t *t, voice_t *v)
     v->ph[2] = 0;
     v->s[0] = 0;                 /* WAVE / WAVE2 toggle, line 1 */
     v->s[1] = 0;                 /* line 2 */
+    v->s[2] = v->s[3] = 0;       /* dry first-line feedback history */
     v->s[4] = t->p[P_E7] > 0 ? 0 : PD_UNFOLDED;   /* FOLD's DC blocker (only FOLD > 0 reads them; kept on a */
     v->s[5] = 0;                                   /* retrigger: .keep) */
     v->s[6] = 163;               /* FOLD's last gain (phase_xfade): FOLD 1's, PD_FOLD_G0, until a folded block */
@@ -208,6 +210,97 @@ static inline __attribute__((always_inline)) void phase_loop(track_t *t, voice_t
         v->s[6] = (int32_t)fg;
     }
 }
+static inline __attribute__((always_inline)) void phase_loop_ext(track_t *t, voice_t *v, int32_t *out, uint32_t n,
+                                                            const vmod_t *m, uint32_t fg)
+{
+    const int16_t *p = t->p;
+    uint32_t w1 = (uint32_t)p[P_E0] & 7u, w2 = (uint32_t)p[P_E1], i;
+    int32_t depth = (p[P_E2] << 8) + m->cutoff + mulq15(m->envq15, p[P_E3] * 256);
+    uint32_t dcw, inc = m->inc, inc2;
+    int32_t det = p[P_E4], line2 = det != 0 || p[P_E5], ring = p[P_E5], sub = p[P_E6] * 200;
+    int32_t d16 = det * 16 / 100, rem = det * 16 - d16 * 100;   /* (cents_inc(), written out: the host
+                                                                 * compiler makes the loop slower with it) */
+    uint32_t ph0 = v->ph[0], ph1 = v->ph[1], ph2 = v->ph[2];
+    int32_t tg0 = v->s[0], tg1 = v->s[1];                    /* WAVE / WAVE2 toggles */
+    int32_t fx1 = fg ? v->s[4] : 0, fhp = fg ? v->s[5] : 0;  /* FOLD's DC blocker: the last fold, its output */    pd_t b1, b2;
+    pd_t morph_b[8];
+    int32_t ma = (int32_t)w1 * 256 + t->mo_prev * 3 / 127;
+    int32_t mb = (int32_t)w1 * 256 + t->mo_cur * 3 / 127;
+    int32_t f1 = v->s[2], f2 = v->s[3];
+    int32_t fdq = ((int32_t)t->fb_cur - t->fb_prev) * 256 / (int32_t)(n ? n : 1u);
+    depth = clamp(depth + (m->shape - (64 << 8)), 0, 127 << 8);
+    dcw = (uint32_t)depth * 65535u / (127u << 8);
+    dcw = (dcw * 56000u) >> 16;                              /* the classic range of the bend */
+    inc2 = pitch_inc(clamp(m->pitch16 + d16, 0, 2047));
+    inc2 += (uint32_t)((int32_t)(inc2 >> 12) * (rem * 2367 / 16000));
+    pd_setup(&b1, w1, dcw);
+    pd_setup(&b2, w2 ? w2 - 1u : w1, dcw);                   /* WAVE2 (every other cycle) */
+    int32_t mdq = (mb - ma) * 256 / (int32_t)(n ? n : 1u);
+    for (i = 0; i < 8u; i++) pd_setup(&morph_b[i], i, dcw);
+    for (i = 0; i < n; i++) {
+        uint32_t old = ph0;
+        int32_t s;
+        uint32_t pp = ph0 >> 16;
+        int32_t fb = t->fb_prev + ((fdq * (int32_t)i) >> 8);
+        pp = (pp + (uint32_t)((((f1 + f2) >> 1) * (fb >> 8)) >> 8)) & 0xFFFFu;
+        if ((!tg0 || !w2) && (t->mo_cur || t->mo_prev)) {
+            int32_t pos = ma + ((mdq * (int32_t)i) >> 8);
+            uint32_t w = ((uint32_t)pos >> 8) & 7u, frac = (uint32_t)pos & 255u;
+            s = pd_wave(&morph_b[w], pp);
+            if (frac) s += (pd_wave(&morph_b[(w + 1u) & 7u], pp) - s) * (int32_t)frac >> 8;
+        } else s = pd_wave(tg0 ? &b2 : &b1, pp);
+        f2 = f1; f1 = s;
+        ph0 += inc;
+        if (ph0 < old)
+            tg0 ^= 1;
+        if (line2) {
+            uint32_t old2 = ph1;
+            int32_t s2 = pd_wave(tg1 ? &b2 : &b1, ph1 >> 16);
+            ph1 += inc2;
+            if (ph1 < old2)
+                tg1 ^= 1;
+            s = ring ? mulq15(s, s2) : (s + s2) >> 1;     /* both within +-32767 */
+        }
+        if (fg) {   /* sin(pi/2 s gain): full scale x1 is a quarter turn; then a DC blocker (~14 Hz): folding a wave
+                     * that sits off centre (PLS, RING, the RESO windows) moves its DC around */
+            int32_t f = sine_i((uint32_t)(s * (int32_t)fg) << 7);
+            fhp += f - fx1 - (fhp >> 9);
+            fx1 = f;
+            s = fhp;
+        }
+        if (sub) {
+            ph2 += inc >> 1;
+            s += mulq15(osc_sine(ph2), sub);
+        }
+        if (fg)     /* (the blocker's step of a full-scale swing, +-65534, and SUB's 25400 on it: s x amp would wrap
+                     * 32 bits past 65538; FOLD 0 stays within 58167) */
+            s = clamp(s, -65535, 65535);
+        out[i] += voice_amp(s, m, i) << 1;
+    }
+    v->ph[0] = ph0;
+    v->ph[1] = ph1;
+    v->ph[2] = ph2;
+    v->s[0] = tg0;
+    v->s[1] = tg1;
+    v->s[2] = f1; v->s[3] = f2;
+    if (fg) {
+        v->s[4] = fx1;
+        v->s[5] = fhp;
+        v->s[6] = (int32_t)fg;
+    }
+}
+static __attribute__((noinline)) void phase_render_ext(track_t *t, voice_t *v, int32_t *out,
+                                                        uint32_t n, const vmod_t *m, uint32_t fg)
+{
+    phase_loop_ext(t, v, out, n, m, fg);
+}
+static void phase_run(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m, uint32_t fg)
+{
+    if (t->mo_cur || t->mo_prev || t->fb_cur || t->fb_prev)
+        phase_render_ext(t, v, out, n, m, fg);
+    else
+        phase_loop(t, v, out, n, m, fg);
+}
 static __attribute__((noinline)) void phase_render_f(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     phase_loop(t, v, out, n, m, pd_fold_gain((uint32_t)t->p[P_E7], m->inc));
@@ -217,27 +310,30 @@ static __attribute__((noinline)) void phase_render_f(track_t *t, voice_t *v, int
  * fold's output has none of the wave's DC, so the switch would step (up to half full scale on PLS / RING). That block
  * is rendered both ways and crossfaded, unfolded -> folded or back (going off: at the last FOLD's gain); going on, the
  * blocker starts afresh as on a note-on (its state from the last FOLD long gone). Once per switch: not the loop's cost */
-static int32_t pd_xa[CTL], pd_xb[CTL];
+static int32_t pd_scratch[C1_NP][2][CTL];
 static __attribute__((noinline)) void phase_xfade(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m,
                                                   uint32_t on)
 {
+    int32_t *pd_xa = pd_scratch[C1_PI(t)][0], *pd_xb = pd_scratch[C1_PI(t)][1];
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1], ph2 = v->ph[2], i;
     int32_t tg0 = v->s[0], tg1 = v->s[1], k;
+    int32_t f1 = v->s[2], f2 = v->s[3];
     if (n > CTL)
         n = CTL;
     for (i = 0; i < n; i++)
         pd_xa[i] = pd_xb[i] = 0;
-    phase_loop(t, v, pd_xa, n, m, 0);                               /* unfolded; then from the same phases: */
+    phase_run(t, v, pd_xa, n, m, 0);                               /* unfolded; then from the same phases: */
     v->ph[0] = ph0;
     v->ph[1] = ph1;
     v->ph[2] = ph2;
     v->s[0] = tg0;
     v->s[1] = tg1;
+    v->s[2] = f1; v->s[3] = f2;
     if (on) {
         v->s[4] = v->s[5] = 0;
-        phase_render_f(t, v, pd_xb, n, m);
+        phase_run(t, v, pd_xb, n, m, pd_fold_gain((uint32_t)t->p[P_E7], m->inc));
     } else {
-        phase_loop(t, v, pd_xb, n, m, (uint32_t)v->s[6]);          /* (s[6]: set with the last folded block) */
+        phase_run(t, v, pd_xb, n, m, (uint32_t)v->s[6]);          /* (s[6]: set with the last folded block) */
         v->s[4] = PD_UNFOLDED;
     }
     for (i = 0; i < n; i++) {
@@ -246,7 +342,7 @@ static __attribute__((noinline)) void phase_xfade(track_t *t, voice_t *v, int32_
     }
 }
 
-static void phase_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+static __attribute__((noinline)) void phase_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     if (t->p[P_E7] > 0) {
         if (v->s[4] == PD_UNFOLDED)
@@ -258,6 +354,21 @@ static void phase_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     } else {
         phase_loop(t, v, out, n, m, 0);
     }
+}
+
+/* Keep the established zero-feature renderer in its own function so the target
+ * compiler does not combine feedback/morph setup with its legacy sample loop. */
+static void phase_dispatch(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+{
+    if (!(t->mo_cur || t->mo_prev || t->fb_cur || t->fb_prev)) {
+        phase_render(t, v, out, n, m);
+        return;
+    }
+    if (t->p[P_E7] > 0) {
+        if (v->s[4] == PD_UNFOLDED) phase_xfade(t, v, out, n, m, 1);
+        else phase_render_ext(t, v, out, n, m, pd_fold_gain((uint32_t)t->p[P_E7], m->inc));
+    } else if (v->s[4] != PD_UNFOLDED) phase_xfade(t, v, out, n, m, 0);
+    else phase_render_ext(t, v, out, n, m, 0);
 }
 
 static const preset_t PHASE_PRESETS[] = {
@@ -286,7 +397,7 @@ static const engine_t ENG_PHASE = {
     .presets = PHASE_PRESETS,
     .npresets = NELEM(PHASE_PRESETS),
     .note_on = phase_note_on,
-    .render = phase_render,
+    .render = phase_dispatch,
     .keep = 0x30,                /* FOLD's DC blocker (1.5.5): a retrigger does not restart it */
     .knob = {P_E2, P_E3, P_E4, P_REL},
 };

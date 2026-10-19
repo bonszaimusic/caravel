@@ -7,7 +7,8 @@
  * written). EDIT on those pages renames the selected slot (only its name is written). The name is prefilled:
  * USER the sound's own (the user preset it came from) or the automatic one ("DIGITAL 14"), PROJECT the current
  * project's (as loaded or last saved; none: "PROJECT A"), so SAVE, OCT+, OCT+ saves with the default name.
- * Writing needs the transport stopped (STOP TO SAVE; the screen stays).
+ * USER saves and renames need the transport stopped. PROJECT SAVE can capture
+ * A-D in RAM during playback, warns RAM ONLY / STOP TO SAVE, then commits after STOP.
  *
  * The keys type and never sound, record or send MIDI (seq.c keyboard_block: song.grid 2). Upper case, at most 12:
  *   white keys   ABC (letters): AB CD EF GH IJK LM NO PQ RS TU VW XYZ, then 123 456 789 0-. ; phone style: a tap
@@ -241,7 +242,8 @@ static void nm_knob(uint32_t k, int32_t s)             /* KNOB 1 the cursor, KNO
     nm.s[nm.cur] = NM_SET[((i + s) % n + n) % n];
 }
 
-/* OCT+: the name (spaces at its ends dropped) is written; the screen stays while that is refused (playing) */
+/* OCT+: save a named RAM snapshot during playback, or write it while stopped.
+ * The screen stays if the save fails; user preset writes still need STOP. */
 static void name_ok(void)
 {
     char b[NM_LEN + 1u];
@@ -253,6 +255,10 @@ static void name_ok(void)
         a++;
     for (z -= a, b[z] = 0; z--;)
         b[z] = nm.s[a + z];
+    if (nm.kind == NK_PROJ_SAVE) {
+        if (project_save_as(nm.slot, b) == 0) name_close();
+        return;
+    }
     if (transport_busy()) {
         ui_message("STOP TO SAVE");
         return;
@@ -263,9 +269,6 @@ static void name_ok(void)
         break;
     case NK_USER_RENAME:
         up_ui_named(3, nm.slot, b, nm.cat);
-        break;
-    case NK_PROJ_SAVE:
-        project_save_as(nm.slot, b);
         break;
     default:
         project_rename(nm.slot, b);
@@ -431,7 +434,7 @@ static void nm_draw_panel(void)
 static void nm_draw_foot(void)
 {
     khint_t a[3], b[3];
-    int ok = !transport_busy();
+    int ok = nm.kind == NK_PROJ_SAVE ? !chain_busy() : !transport_busy();
     a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE" : "RENAME"};
     a[1] = (khint_t){KC_OCTDN, "CANCEL"};
     a[2] = (khint_t){KC_K3, nm.kind <= NK_USER_RENAME ? "CATEGORY" : "RANDOM"};   /* (1.2: the category, a random name) */

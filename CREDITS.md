@@ -1,8 +1,11 @@
 # Credits
 
-Felucca is Leo Kuroshita's ([@kurogedelic](https://github.com/kurogedelic), [Hügelton Instruments](https://hugelton.com)). It uses and
+Caravel is bonszaimusic's fork of Felucca 1.6.1, which is Leo Kuroshita's ([@kurogedelic](https://github.com/kurogedelic),
+[Hügelton Instruments](https://hugelton.com)); see [NOTICE](NOTICE). Caravel is not affiliated with Hügelton Instruments. It uses and
 thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICENSING.md](LICENSING.md) and [LICENSES/](LICENSES/)).
 
+- **bonszaimusic:** Caravel, the changes to Felucca 1.6.1 (renaming, the two-group menus, SEM, HADES,
+  DRONE, DRUM-X integration, LFO2, MORPH, voice reservations, clock fixes), as summarized in CHANGELOG.md and the Caravel baseline commit
 - **[Hügelton Instruments](https://hugelton.com)** (Leo Kuroshita, [@kurogedelic](https://github.com/kurogedelic)):
   Felucca itself; the PHASE engine's waveforms (a C port of the oscillator of
   [CrispyZebra](https://github.com/hugelton/CrispyZebra), GPL-3.0); the DRUM voices and kits; the Hügelton Sample
@@ -29,3 +32,12 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
   [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
   [gospodindilly-ops](https://github.com/gospodindilly-ops) (the second core, #247)
+
+- LOFI BYTE/FLOAT formula helpers: ported from [JIANT](https://github.com/juanjiant-bit/JIANT/tree/d5f99ee2d4277adefcdf8f892e34133d33ec27a6), GPL-3.0-only; source retains Leo Kuroshita / Hügelton attribution and formula acknowledgements (Tejeez, xpansive, viznut). The Felucca integration preserves the original five LOFI waves.
+
+- Custom MORPH / PHASE feedback: adapted from `juanjiant-bit/JIANT` at `d5f99ee2d4277adefcdf8f892e34133d33ec27a6` (GPL-3.0-only), retaining Leo Kuroshita / Hügelton Instruments attribution. Felucca FOLD, SYNC/SUB, filters and legacy defaults are retained.
+
+- Custom DRUM-X: fixed-point synthesis and factory A/B sounds adapted from [JIANT](https://github.com/juanjiant-bit/JIANT/tree/aaa73f0465cfe4519d586fe86f077a2ea45b3404), GPL-3.0-only, retaining Leo Kuroshita / Hügelton Instruments attribution. Custom integration uses track-local kits, fixed MIDI Learn targets and compatible engine-specific storage.
+  DRUM-X history: the idea follows Sonic Charge's Microtonic (a tuned oscillator with pitch envelope and FM, filtered noise, two
+  patches and a MORPH); JIANT (juanjiant-bit, a Felucca fork) built it as "FELUCCA TONIC" in fixed point for the FM-1; Caravel
+  adapted it (track-local kits, fixed MIDI Learn targets, compatible storage) and continues it. None of these projects is affiliated with Caravel.

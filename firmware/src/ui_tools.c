@@ -6,6 +6,8 @@
  *   C4 RANDOM D4 COOK     E4 BEAT (DRUM)  F4 EUCLID      new / a little changed (EUCLID: 1.5.5, below)
  *   G4 CLEAR  A4 REVERSE  B4 FILL  C5 RANDOM             the selected lane (DRUM: ui.lane, black keys 1..8 pick it)
  *   D5 DOUBLE E5 HALF                                    LEN x2 / half (1.5.5, below)
+ *   F5 CLEAR STEP                                        the cursor's step and its locks (Custom: EDIT on STEP opens the
+ *                                                        EDIT pages now; the cursor moves on, as EDIT's clear did)
  * Each works on the selected track's steps 1..LEN (the steps past LEN stay) and is one undo: SAVE held swaps back
  * the copy taken just before it (ui.c undo, UNDO_PAT; unlike a load the track's automation stays), so after a few
  * COOKs SAVE held takes back the last one only; the layer's OCT- puts back the track as the layer opened (tl_open).
@@ -13,7 +15,8 @@
  * steps' automation and locks with them. RANDOM and COOK draw from libc.c rng(): no seed is kept, each press
  * differs. A sequence of ties reversed keeps its note first: N T T -> N T T at the mirrored place */
 enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_EUCLID, TL_LCLR, TL_LREV, TL_LFILL, TL_LRND,
-       TL_DOUBLE, TL_HALF, TL_N };
+       TL_DOUBLE, TL_HALF, TL_STEPCLR, TL_N };
+#define TL_DUP TL_DOUBLE /* Bonszai tests and internal name: now the upstream D5 DOUBLE key. */
 
 /* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
 static struct { step_t step[NSTEP]; motion_store_t mo; } tl_open __attribute__((section(".pool")));
@@ -47,6 +50,72 @@ static void tl_undo_take(track_t *t)
     undo.from_h = pat_from_h[i];
     undo.patn = pat_last[i];
     motion_snapshot_track(t, &undo.motion_backup);
+}
+
+/* DUP x2: preflight the shared pool, including reserved releases. Replace only
+ * the destination range, preserve raw FX edge order/phase, and publish steps,
+ * motion and LEN together. An open recorded FX hold has no release to copy yet.
+ * Failures leave both the pattern and the previous undo untouched. */
+static const char *tl_duplicate(track_t *t)
+{
+    static char b[24];
+    char n[4];
+    uint32_t len = tl_len(t), k = trk_index(t), f = motion_guard(), src = 0, dst = 0, i, count;
+    uint32_t nl = len * 2u < NSTEP ? len * 2u : NSTEP, cn = nl - len;
+    if (len >= NSTEP) {
+        motion_unguard(f);
+        ui_message("64 STEPS: NO ROOM");
+        return 0;
+    }
+    for (i = 0; i < PF_NFX; i++)
+        if (motion_fx_owner[i] == k + 1u) {
+            motion_unguard(f);
+            ui_message("RELEASE FX FIRST");
+            return 0;
+        }
+    for (i = 0; i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        if ((e->place >> 6) != k) continue;
+        uint32_t step = e->place & 63u;
+        src += step < cn;
+        dst += step >= len && step < nl;
+    }
+    if (motion.count - dst + src + motion_fx_reserved() > MOTION_MAX) {
+        motion_unguard(f);
+        ui_message("AUTOMATION FULL");
+        return 0;
+    }
+    tl_undo_take(t);
+    count = 0;
+    for (i = 0; i < motion.count; i++) {
+        motion_event_t e = motion.event[i];
+        uint32_t step = e.place & 63u;
+        if ((e.place >> 6) != k || step < len || step >= nl)
+            motion.event[count++] = e;
+    }
+    motion.count = (uint8_t)count;
+    for (i = 0; i < count; i++) {
+        motion_event_t e = motion.event[i];
+        if ((e.place >> 6) == k && (e.place & 63u) < cn) {
+            e.place = (uint8_t)(e.place + len);
+            motion.event[motion.count++] = e;
+        }
+    }
+    memset(motion.event + motion.count, 0, (MOTION_MAX - motion.count) * sizeof motion.event[0]);
+    motion_fx_meta(&motion);
+    memcpy(t->step + len, t->step, cn * sizeof t->step[0]);
+    if (song.playing) {
+        (void)seq_loop_len(t);                         /* discard a stale extension after a LEN edit */
+        if (!seq_extend_end[k] && t->seq_pos < 0x7FFFFFFFu)
+            seq_extend_end[k] = (uint8_t)len;
+        seq_extend_target[k] = (uint8_t)nl;
+    }
+    t->p[P_SLEN] = (int16_t)nl;
+    motion_unguard(f);
+    str_cpy(b, "DOUBLED: ", sizeof b);
+    fmt_int(n, (int32_t)nl); str_cpy(b + str_len(b), n, sizeof b - str_len(b));
+    str_cpy(b + str_len(b), " STEPS", sizeof b - str_len(b));
+    return b;
 }
 
 /* steps 1..len of t that are not empty (a REST); after the action the ones emptied lose their locks */
@@ -500,9 +569,11 @@ static int tl_motion_plan(track_t *t, uint32_t lo, uint32_t hi, uint32_t cn, uin
             n++;
         }
     }
-    if (motion.count - motion_count(t) + n > MOTION_MAX)
+    memcpy(tl_mo.rsv, motion.rsv, sizeof tl_mo.rsv);
+    if (motion.count - motion_count(t) + n + motion_fx_reserved() > MOTION_MAX)
         ok = 0;
     tl_mo.count = (uint8_t)(n < MOTION_MAX ? n : MOTION_MAX);
+    motion_fx_meta(&tl_mo);
     motion_unguard(f);
     return ok;
 }
@@ -514,6 +585,8 @@ static int tl_resize_ok(track_t *t, uint32_t p, uint32_t len)
         ui_message("64 STEPS: NO ROOM");
         return 0;
     }
+    for (uint32_t fx = 0; fx < PF_NFX; fx++)
+        if (motion_fx_owner[fx] == trk_index(t) + 1u) { ui_message("RELEASE FX FIRST"); return 0; }
     if (p == TL_HALF && len < 2u) {
         ui_message("1 STEP: NO HALF");
         return 0;
@@ -555,6 +628,8 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
     int drum = drum_track(t);
     const char *msg = 0;
     l %= NLANE;
+    if (p == TL_DOUBLE)
+        return tl_duplicate(t);
     if ((p == TL_DOUBLE || p == TL_HALF) && !tl_resize_ok(t, p, len))
         return 0;
     if (p == TL_COOK) {                                 /* (nothing there: nothing to cook, no undo copy) */
@@ -565,8 +640,16 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
             return 0;
         }
     }
+    if (p == TL_STEPCLR && (ui.cursor >= len || !((was >> ui.cursor) & 1u))) {   /* (nothing there: no undo copy) */
+        ui_message(ui.cursor >= len ? "NO STEP" : "STEP IS EMPTY");
+        return 0;
+    }
     tl_undo_take(t);
     switch (p) {
+    case TL_STEPCLR:
+        step_clear(&t->step[ui.cursor]);
+        msg = "STEP CLEARED";
+        break;
     case TL_CLEAR:
         for (i = 0; i < len; i++)
             step_clear(&t->step[i]);
@@ -636,3 +719,4 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
     tl_unlock(t, was, len);
     return msg;
 }
+

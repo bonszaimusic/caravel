@@ -1,6 +1,7 @@
 # FELUCCA target cost budget (tests/target_budget.py): instructions in the loops of each
 # function in build/felucca.dis, x4 per nesting level, divides x9. The check allows +10 %.
 # Rewritten by BUDGET_UPDATE=1.
+project_pattern_tick 112
 analog_render 585
 phase_render 79
 phase_render_f 102
@@ -42,7 +43,8 @@ slc_rev 120
 fm1_alnk0_irq 8285
 fm1_timer5_irq 33387
 click_render 30
-mod_begin 158
+# DRONE TOPO matrix scaling/clamp stays in the stored family (0..2 or 3..5): +24 % per block, not per sample.
+mod_begin 196
 mod_voice 30
 mod_end 7
 perf_begin 28
@@ -60,3 +62,41 @@ rev_side_mix 9
 track_insert 3
 ins_drive 277
 ins_swept 230
+
+# BYTE/FLOAT pi32v2 baseline: weighted renderer loop; full formula code footprints.
+lofi_formula_render 183
+lofi_byte 324
+lofi_float 840
+
+# New sound renderers measured in pi32v2 CI 38392191675; existing budgets unchanged.
+phase_render_ext 231
+analog_morph_render 790
+lofi_morph_render 223
+# DRUM-X initial measured pi32v2 baselines (existing thresholds retained).
+drumx_render 468
+dx_run 1426
+dx_layer 105
+drumx_mix 34
+
+# FULL live-load boundary helpers, measured with pi32v2; existing budgets retained.
+project_sound_apply 123
+project_pattern_engines_ok 7
+
+# SEM renderer, measured pi32v2; both oscillators inlined into the counted loop.
+sem_render 409
+hades_render 633
+
+
+# Custom 22: new control-rate helper footprints, measured with pi32v2.
+lfo2_sync_inc 20
+lfo2_trigger 35
+mod_kind 17
+track_lfo2_tick 115
+
+# Coupled DRONE prototype, measured pi32v2 loop baseline (2026-10-17).
+drone_render 828
+
+# Opt-in cell renderer and separately tracked unchanged legacy DSP.
+drone_legacy_render 788
+# Custom 25: PM makeup + DRIFT breathing (multiplies only; still ~3 divides per sample).
+drone_cell_render 1471

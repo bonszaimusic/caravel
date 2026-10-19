@@ -1,4 +1,7 @@
-# Building Felucca
+# Building Caravel
+
+Caravel is a fork of Felucca 1.6.1 (see [NOTICE](NOTICE)). Internal file and macro names keep their Felucca spelling
+(`felucca.c`, `FELUCCA_*`, `build/felucca.bin`); the package and release files are named `caravel*`.
 
 The build makes three files in `build/`:
 
@@ -6,7 +9,7 @@ The build makes three files in `build/`:
 | --- | --- |
 | `felucca.bin` | the firmware app |
 | `loader/ota.bin` | the update loader |
-| `felucca.fwsc` | the installable package (app + loader) |
+| `caravel.fwsc` | the installable package (app + loader) |
 
 ## Get the source
 
@@ -14,11 +17,11 @@ Five engines are in a git submodule (`firmware/engines/`, [Felucca-Engines](http
 MIT), so clone with `--recurse-submodules`:
 
 ```
-git clone --recurse-submodules https://github.com/hugelton/Felucca.git
+git clone --recurse-submodules https://github.com/bonszaimusic/caravel.git
 ```
 
 In a clone made without it, run `git submodule update --init` once. GitHub's "Download ZIP" and the source archives
-it adds to a release leave `firmware/engines/` empty; each release also has `felucca-X.Y.Z-source.tar.gz`, the whole
+it adds to a release leave `firmware/engines/` empty; each release also has `caravel-X.Y.Z-source.tar.gz`, the whole
 source with the submodule's files in it. The build stops with "firmware/engines is empty" when they are missing.
 
 ## Prerequisites (macOS)
@@ -57,9 +60,9 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
 `./build.sh --release 1.0` makes a release build: the package identity becomes `FM-1_910`
-and the version string `v1.0`; the package is `build/felucca-1.0.fwsc`, and
+and the version string `v1.0`; the package is `build/caravel-1.0.fwsc`, and
 `build/release-1.0/` holds what a release ships: the package, the app
-(`felucca-1.0-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
+(`caravel-1.0-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
 `LICENSES/` (the package contains Apache-2.0 SDK files, so the licence texts travel with it).
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `core.h` and `icons.c`):
@@ -101,8 +104,7 @@ python3 -m http.server -d build/emu 8790     # open http://localhost:8790/
 `web/emu/felucca_web.c` builds the firmware's sources as the host tests do, against a simulated FM-1, and
 Emscripten compiles it to WebAssembly (`build/emu/felucca.wasm`, with `index.html`, `worklet.js` and the font in `fonts/`). The page
 keeps the flash's storage sectors (projects, user presets, settings) in the browser. Not emulated: USB (audio,
-MIDI out, the editor, updates), TRS MIDI and the user sample slots. A build of it is on the site:
-<https://hugelton.github.io/Felucca/webapp/try/>.
+MIDI out, the editor, updates), TRS MIDI and the user sample slots. Build it as above and serve `build/emu/` (no hosted copy under the Caravel name yet).
 
 ## Tests
 
@@ -130,13 +132,13 @@ does the same for the cost files.
 
 ## Install
 
-Use the web installer in Chrome or Edge:
-<https://hugelton.github.io/Felucca/webapp/installer/>. It installs the released package.
+Use the web installer in Chrome or Edge, built into a site with `web/make_site.py` (below; no hosted copy under the
+Caravel name yet). It installs the released package.
 
 From the command line (needs `pip3 install mido python-rtmidi`):
 
 ```
-python3 tools/fm1_install.py build/felucca.fwsc
+python3 tools/fm1_install.py build/caravel.fwsc
 python3 tools/fm1_install.py --info          # identity of the connected FM-1
 ```
 
@@ -144,7 +146,7 @@ Or, to install your own build from the web installer, make a local copy of the s
 (Web MIDI needs a secure context):
 
 ```
-python3 web/make_site.py build/felucca.fwsc dev /tmp/felucca-site
+python3 web/make_site.py build/caravel.fwsc dev /tmp/felucca-site
 cd /tmp/felucca-site && python3 -m http.server 8000
 # open http://localhost:8000/webapp/installer/
 ```

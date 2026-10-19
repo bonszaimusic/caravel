@@ -6,7 +6,7 @@ The fake device is the one in web/test_web.mjs: identity on the handshake,
 then "device asks, host answers" reads of the logical image. Run from the repo root:
   python3 tests/install_test.py
 Also checks logical_image/product_of against web/fm1pkg.js (needs node and
-build/felucca.fwsc, skipped otherwise)."""
+build/caravel.fwsc, skipped otherwise)."""
 import io
 import queue
 import shutil
@@ -194,6 +194,14 @@ def installs():
     rc, out, err = cli([p, "--yes"], dev)
     ok(rc == 0 and dev.bad == 0 and dev.upgrades == 1 and "update mode" in out, "install: device already in update mode -> finishes the write")
 
+    dev = FakeFM1(image, identity="ota-FM-1_900", name="Caravel Update")
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and dev.upgrades == 1 and "update mode" in out, "install: a device named Caravel Update (Caravel's loader) is found too")
+
+    dev = FakeFM1(image, identity="FM-1_900", name="Caravel")
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and "done: the FM-1 runs FM-1_900" in out, "install: a running device named Caravel is found too (Felucca's name works as well: above)")
+
     dev = FakeFM1(image)
     rc, out, err = cli([p], dev, answer=False)
     ok(rc == 1 and dev.upgrades == 0 and "cancelled" in out, "install: answer no -> nothing sent but the handshake")
@@ -274,9 +282,9 @@ def errors():
 
 
 def against_js():
-    clean = ROOT / "build/felucca.fwsc"
+    clean = ROOT / "build/caravel.fwsc"
     if not shutil.which("node") or not clean.exists():
-        print("logical image vs fm1pkg.js: skipped (needs node and build/felucca.fwsc)")
+        print("logical image vs fm1pkg.js: skipped (needs node and build/caravel.fwsc)")
         return
     js = ("import { logicalImage, productOf } from %r; import { readFileSync } from 'node:fs';"
           "const p = readFileSync(process.argv[1]); process.stderr.write(productOf(p));"

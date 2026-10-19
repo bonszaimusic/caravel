@@ -1,17 +1,17 @@
 name: Bug report
-description: Something in Felucca doesn't work as it should (one bug per issue)
+description: Something in Caravel doesn't work as it should (one bug per issue)
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Issues are for reproducible bugs only. Feature ideas go to [Discussions › Ideas](https://github.com/hugelton/Felucca/discussions/categories/ideas), questions to [Q&A](https://github.com/hugelton/Felucca/discussions/categories/q-a).
+        Issues are for reproducible bugs only. Caravel is a separate fork of Felucca 1.6.1: please do not report its problems to Hügelton Instruments or M-VAVE.
   - type: input
     id: version
     attributes:
-      label: Felucca version
+      label: Caravel version
       description: Hold HOME > ABOUT on the FM-1
-      placeholder: "v1.0.2"
+      placeholder: "v0.1.0"
     validations:
       required: true
   - type: input

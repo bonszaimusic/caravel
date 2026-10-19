@@ -22,6 +22,22 @@ static int32_t peak[NPART];                         /* each part's loudest (trac
 
 static void part_setup(track_t *t, uint32_t k, uint32_t e)
 {
+    if (getenv("LFO2_TEST")) {
+        lfo2_load(k,0);
+        lfo2_set(k,L2_FIRST + L2_RATE,80 + k*10);
+        lfo2_set(k,L2_FIRST + L2_WAVE,k==1?4:1);
+        lfo2_set(k,L2_FIRST + L2_POL,k&1u);
+        t->p[P_M3SRC] = k==2 ? MS_SLEW2 : MS_LFO2;
+        t->p[P_M3DST] = MD_CUT; t->p[P_M3AMT] = 14;
+        t->p[P_M4SRC] = MS_SH2; t->p[P_M4DST] = MD_PAN; t->p[P_M4AMT] = 10;
+    }
+    if (e == 0u || e == 2u || e == 3u) t->p[P_MORPH] = (int16_t)(40u + k * 20u);
+    if (e == 2u) t->p[P_PD_FB] = 48;
+    if (dx_track(t)) {
+        dx_config_t *c = dx_of(k);
+        c->image = 100; c->send[0] = 127; c->send[1] = 191; c->send[2] = 255;
+        c->mot[0] = 7; c->mot[1] = 60;
+    }
     t->p[P_ITYPE] = (int16_t)((k * 4u + e) % IT_N);  /* an INSERT on most parts (its own state, ins[]) */
     t->p[P_IMIX] = 90;
     t->p[P_REV] = (int16_t)(20 + 10 * k);
@@ -58,6 +74,7 @@ static uint64_t render(const scen_t *sc, int dual, const char *mask)
     uint32_t f, k, i;
     int32_t o[2 * CTL];
     host_tracks_init();
+    voice_policy = getenv("FIXED_VOICES") ? VOICE_POLICY_FIXED | 0x2222u : 0u;
     c1h_off = !dual;
     if (mask)
         setenv("C1_MASK", mask, 1);
@@ -137,6 +154,10 @@ int main(void)
             sc[n++].morph = 0;
         }
     }
+    sc[n++] = (scen_t){"4 x Custom DRUM-X", {10, 10, 10, 10}, {4, 4, 4, 4}, 0};
+    sc[n++] = (scen_t){"Custom MORPH BYTE FLOAT DRUM-X", {0, 3, 3, 10}, {1, 12, 13, 4}, 0};
+    sc[n++] = (scen_t){"Custom HADES SEM FM6 DRUM-X", {ENGI_HADES, ENGI_SEM, ENGI_FM6, ENGI_DRUM}, {4, 4, 4, 4}, 0};
+    sc[n++] = (scen_t){"SEM DRUM-X FM6 ANALOG", {ENGI_SEM, ENGI_DRUM, ENGI_FM6, 0}, {4, 4, 4, 1}, 0};
     sc[n++] = (scen_t){"PHYS FM6 ANALOG DRUM", {ENGI_PHYS, ENGI_FM6, 0, ENGI_DRUM}, {1, 4, 7, 0}, 0};
     sc[n++] = (scen_t){"GRAIN NOISE VOICE LOFI", {8, 11, 5, 3}, {1, 4, 7, 10}, 0};
     sc[n++] = (scen_t){"TRIO WHEEL PHASE FM6", {6, 7, 2, ENGI_FM6}, {1, 4, 7, 10}, 0};
@@ -181,3 +202,4 @@ int main(void)
     printf("dualcore: %u of %u scenes differ\n", fail, n);
     return fail != 0;
 }
+

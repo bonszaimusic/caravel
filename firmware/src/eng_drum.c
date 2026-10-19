@@ -35,14 +35,16 @@
  * State: 8 lanes per part in the part's engine memory (engines.c eng_mem; drum_kit_of: the parameters, coefficients, voice and metal
  * source of each lane). */
 #include "drum_voice.c"
+#include "drumx_voice.c"
+#include "drumx_control.c"
 
 /* 1.5.6 (Discussion #216): DEEP TIGHT PERC (9..11), kits put together from the five's pieces (drum_voice.c DV_KIT),
  * appended. Firmware before 1.5.6 clamps 9..11 to 8 (77) when it loads them (param_fit) */
-enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC, DK_COUNT };   /* (stored values) */
+enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC, DK_DX, DK_COUNT };   /* (stored values) */
 /* the kit a stored KIT value plays: HAND CYM H+CYM (retired after 1.0.4) -> 66 (a conga on TOM), 10 (a cymbal on
  * BELL), 77 (claves on RIM, a cymbal on BELL) */
 static const uint8_t DK_PLAYS[DK_COUNT] = {DK_STD, DK_66, DK_10, DK_77, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP,
-                                           DK_TIGHT, DK_PERC};
+                                           DK_TIGHT, DK_PERC, DK_DX};
 static uint32_t drum_kit_plays(int32_t v) { return DK_PLAYS[clamp(v, 0, DK_COUNT - 1)]; }
 /* the model kits' pieces where a lane plays another than its own (the lane's name): 1 TOM -> CONGA, 2 RIM -> CLAVE,
  * 4 BELL -> CYM */
@@ -55,6 +57,8 @@ typedef struct {
     dv_param_t key;              /* the parameters the coefficients were set up with */
     dv_coef_t c;
     dv_voice_t v;
+    dx_voice_t x;
+    uint8_t dx_active;
     dv_metal_t mb;
     uint8_t owner;               /* the voice playing the lane: index + 1, 0 = none */
     uint8_t role;                /* the drum struck (DVT_*) */
@@ -70,7 +74,7 @@ ENG_MEM_FITS("DRUM", sizeof(drum_lane_t) * DV_NLANE);
 static uint8_t drum_mute[NPART];
 
 /* 1..3 named as the kit they play: aliases, never shown or offered (EDITOR_PROTOCOL.md: retired values) */
-static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"};
+static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC", "DRUM-X"};
 static const char *const N_DRUM_KICK[] = {"PUNCH", "ROUND"};
 
 /* General MIDI notes 35..81 -> the drum (DVT_*; DVT_PUNCH: the kick KICK picks) and semitones from its
@@ -114,6 +118,7 @@ static uint32_t drum_lane(uint32_t note)
 static uint32_t drum_swaps(const track_t *t)
 {
     uint32_t kit = drum_kit_plays(t->p[P_E0]);
+    if (kit == DK_DX) return 0;
     return kit >= DK_80 ? DK_SWAP[kit - DK_80] : 0u;
 }
 
@@ -209,6 +214,10 @@ static voice_t *drum_reuse(track_t *t, uint32_t note)
     return v->active && (uint32_t)v->s[0] == lane ? v : 0;
 }
 
+static void drumx_note_on(track_t *, voice_t *);
+static int32_t drumx_amp(track_t *, voice_t *);
+static void drumx_render(track_t *, voice_t *, int32_t *, uint32_t, const vmod_t *);
+
 static void drum_note_on(track_t *t, voice_t *v)
 {
     drum_lane_t *K = drum_kit_of(t), *L;
@@ -216,6 +225,7 @@ static void drum_note_on(track_t *t, voice_t *v)
     int32_t st;
     if (!K || i >= NVOICE)
         return;
+    if (dx_sounding(t)) { drumx_note_on(t, v); return; }
     role = drum_gm(t->p, v->note, &st);
     lane = drum_lane(v->note);
     L = &K[(uint32_t)v->s[0] & (DV_NLANE - 1u)];
@@ -234,6 +244,7 @@ static void drum_note_on(track_t *t, voice_t *v)
     v->env = 1 << 24;                                    /* the ADSR held at full from here, not from drum_amp:
                                                           * a key-off before the first block (zero-length MIDI
                                                           * notes) would end a fresh voice at env 0 in env_tick */
+    L->dx_active = 0;
     dv_trigger(&L->v);
     if (lane == DV_HATC && K[DV_HATO].v.live)            /* a closed hat chokes the open one */
         dv_choke(&K[DV_HATO].v);
@@ -247,7 +258,8 @@ static int32_t drum_amp(track_t *t, voice_t *v, int32_t adsr)
     (void)adsr;
     if (!v->active)                                      /* (taken for another part: env_tick ended it) */
         return 0;
-    if (!L || (!L->v.live && !L->v.trig)) {
+    if (dx_sounding(t)) return drumx_amp(t, v);
+    if (!L || L->dx_active || (!L->v.live && !L->v.trig)) {
         v->active = v->gate = 0;
         v->stage = 0;
         v->env = 0;
@@ -260,13 +272,14 @@ static int32_t drum_amp(track_t *t, voice_t *v, int32_t adsr)
 static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     const int16_t *p = t->p;
+    if (dx_sounding(t)) { drumx_render(t, v, out, n, m); return; }
     drum_lane_t *L = drum_lane_of(t, v);
     dv_param_t k;
     int32_t y[CTL], mb[CTL], acc = clamp(p[P_E5] * v->vel * 4, 0, 65536), drv = p[P_E7], g = 0, mk = 0;   /* acc Q16 */
     int32_t lv = clamp(p[P_LN0 + ((uint32_t)v->s[0] & (DV_NLANE - 1u))], 0, 127);
     uint32_t i, r;
     vmod_t ml;                                           /* (only its amplitude ramp is read: voice_amp) */
-    if (!L)
+    if (!L || L->dx_active)
         return;
     if (lv < 127) {                                      /* the lane's LEVEL (square law) on the block's amplitude
                                                           * ramp, not per sample; 100 %: the ramp as it was */
@@ -308,6 +321,8 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     }
 }
 
+#include "drumx_engine.c"
+
 /* the GM drum map, the first C (key 7) is the kick (C2, 36) */
 static int32_t drum_keys(const track_t *t, uint32_t k)
 {
@@ -322,6 +337,7 @@ static const preset_t DRUM_PRESETS[] = {
     {"DEEP KIT", {DK_DEEP, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 28), PAT(12)},
     {"TIGHT KIT", {DK_TIGHT, 64, 64, 56, 64, 100, 0, 16}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8), PAT(12)},
     {"PERC KIT", {DK_PERC, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24), PAT(12)},
+    {"DRUM-X", {DK_DX, 64, 64, 64, 64, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 16), PAT(12)},
 };
 
 static const engine_t ENG_DRUM = {
@@ -334,7 +350,7 @@ static const engine_t ENG_DRUM = {
         {"DECY", F_PCT, 0, 127, 64, 0, 0},
         {"SNAP", F_PCT, 0, 127, 64, 0, 0},
         {"ACC", F_PCT, 0, 127, 100, 0, 0},
-        {"KICK", F_ENUM, 0, 1, 0, N_DRUM_KICK, 0},
+        {"FOLD", F_PCT, 0, 127, 0, 0, 0},
         {"DRV", F_PCT, 0, 127, 0, 0, 0},
     },
     .presets = DRUM_PRESETS,
@@ -347,4 +363,5 @@ static const engine_t ENG_DRUM = {
     .oneshot = 1,
     .keys = drum_keys,
     .mem = sizeof(drum_lane_t) * DV_NLANE,
+    .desc = drumx_desc,
 };

@@ -119,6 +119,41 @@ check("FX held: its button and the effects' keys breathe, none lit; let go: noth
         Math.abs(got[3] - lo) <= 0.06);
 }
 
+// ---- master FX edges through the actual REC + FX/key gestures
+const fx = await device(null);
+fx.render(1000);
+fx.tap(B.REC);
+fx.ex.web_buttons(1 << B.FX); fx.render(700);
+fx.ex.web_keys(1 << 7); fx.render(25); // C4: default LPF, short press
+fx.ex.web_keys(0); fx.render(20);
+check("FX special: REC + held FX/key records short press and release", fx.ex.web_test_fx_events() === 2 &&
+      fx.ex.web_test_fx_live() === 0 && fx.ex.web_playing() === 1);
+fx.ex.web_buttons(0); fx.render(100);
+fx.tap(B.REC); // disarm
+fx.tap(B.PLAY); // stop
+check("FX special: STOP releases sequencer FX and retains both edges", fx.ex.web_test_fx_replay() === 0 && fx.ex.web_test_fx_events() === 2);
+fx.tap(B.PLAY);
+let fxHeard = false;
+for (let i = 0; i < 400; i++) { fx.render(5); fxHeard ||= fx.ex.web_test_fx_replay() !== 0; }
+check("FX special: next pass replays without FX button or live key", fxHeard && fx.ex.web_test_fx_live() === 0);
+fx.tap(B.PLAY);
+
+// ---- edit the captured FX edges through SEQ > AUTOMATION's real knobs
+const fxOn = fx.ex.web_test_fx_edge(1), fxOff = fx.ex.web_test_fx_edge(0);
+// Space page taps so the panel's double-tap shortcut does not lock SEQ TOOLS.
+for (let i = 0; i < 3; i++) { fx.tap(B.SEQ); fx.render(320); }
+fx.turn(EN.K1, 2); // first FX edge after PLAY / QUANTIZE
+fx.turn(EN.K2, 1);
+check("FX edit: KNOB2 moves ON one step and leaves OFF unchanged",
+      fx.ex.web_test_fx_edge(1) === fxOn + 256 && fx.ex.web_test_fx_edge(0) === fxOff);
+fx.turn(EN.K4, 1);
+check("FX edit: KNOB4 adjusts unsigned ON phase by 1/256",
+      fx.ex.web_test_fx_edge(1) === fxOn + 256 + ((fxOn & 255) < 255 ? 1 : 0));
+fx.turn(EN.K1, -1); // ON moved after the short take's OFF; select that OFF
+fx.turn(EN.K2, 2);
+check("FX edit: independent OFF move changes duration and retains both edges",
+      fx.ex.web_test_fx_edge(0) === fxOff + 512 && fx.ex.web_test_fx_events() === 2);
+
 // ---- a user preset saved from the panel, kept across a fresh instance
 const w0 = a.ex.web_flash_writes_count();
 a.tap(B.SAVE);
@@ -137,6 +172,88 @@ c.render(600);
 check("a fresh instance with the kept sectors has it; one without does not",
       b.ex.web_test_user_preset(0) === 1 && c.ex.web_test_user_preset(0) === 0);
 
+// ---- four parts saved from the real PROJECT UI during playback, committed only after STOP
+const live = await device(null);
+live.render(1000);
+live.ex.web_test_heavy();
+for (let i = 0; i < 4; i++) live.tap(B.SAVE);    // USER -> PRESETS -> PHRASES -> PROJECT
+live.tap(B.PLAY);
+const writesBeforeLive = live.ex.web_flash_writes_count();
+let liveOk = true;
+for (let slot = 0; slot < 4; slot++) {
+  live.ex.web_test_scene_fx(20 + slot * 20);
+  if (slot) live.turn(EN.K1, 1);
+  live.turn(EN.K4, 1);                          // pick SAVE
+  live.tap(B.OCTUP);                           // NAME
+  live.tap(B.OCTUP);                           // capture current part
+  liveOk &&= live.ex.web_playing() === 1 && live.ex.web_test_project_used(slot) === 1 &&
+             live.ex.web_test_project_ram_mask() === (1 << (slot + 1)) - 1 &&
+             live.ex.web_flash_writes_count() === writesBeforeLive;
+}
+check("PROJECT UI: live-save A-D without stopping or any flash write", liveOk);
+live.ex.web_test_scene_fx(123);
+live.turn(EN.K1, -3);                          // newly saved A, available without STOP
+live.turn(EN.K3, 1);
+live.tap(B.OCTUP);
+live.render(100);
+check("PROJECT UI: live LOAD accepts a newly RAM-saved slot", live.ex.web_playing() === 1 &&
+      live.ex.web_test_project_ram_mask() === 15 && live.ex.web_flash_writes_count() === writesBeforeLive);
+live.render(2500);
+check("PATTERN live LOAD keeps current track and global FX", live.ex.web_test_scene_fx_value() === (123 | 123 << 8));
+live.ex.web_test_live_load_mode(1);
+live.tap(B.OCTUP);
+live.render(2500);
+check("FULL live LOAD restores track and global FX from RAM without STOP", live.ex.web_playing() === 1 &&
+      live.ex.web_test_scene_fx_value() === (20 | 20 << 8) && live.ex.web_flash_writes_count() === writesBeforeLive);
+live.tap(B.PLAY);
+live.render(200);
+check("STOP: all A-D RAM snapshots committed automatically", live.ex.web_playing() === 0 &&
+      live.ex.web_test_project_ram_mask() === 0 && live.ex.web_flash_writes_count() > writesBeforeLive);
+const liveSaved = storeSectors(new Uint8Array(live.mem.buffer, live.ex.web_nor(), live.ex.web_nor_size()));
+const liveReboot = await device(liveSaved);
+liveReboot.render(600);
+check("A-D remain saved in a fresh emulator instance", [0, 1, 2, 3].every((i) => liveReboot.ex.web_test_project_used(i) === 1) &&
+      liveReboot.ex.web_test_project_ram_mask() === 0);
+
+// ---- STEP REC from the panel while the playhead keeps running
+const stepLive = await device(null);
+stepLive.render(1000);
+stepLive.ex.web_test_heavy();
+stepLive.tap(B.SEQ);
+stepLive.turn(EN.K1, 8);
+stepLive.tap(B.PLAY);
+const modeGesture = () => {
+  stepLive.ex.web_buttons(1 << B.SEQ); stepLive.render(60);
+  stepLive.ex.web_buttons((1 << B.SEQ) | (1 << B.REC)); stepLive.render(60);
+  stepLive.ex.web_buttons(1 << B.SEQ); stepLive.render(60);
+  stepLive.ex.web_buttons(0); stepLive.render(60);
+};
+modeGesture();
+check("SEQ + REC: STEP REC armed during playback, independent cursor at step 8",
+      stepLive.ex.web_test_step_record_mask() === 1 && stepLive.ex.web_playing() === 1 && stepLive.ex.web_test_cursor() === 8);
+stepLive.ex.web_keys(1 << 1); stepLive.render(60);
+stepLive.ex.web_keys((1 << 1) | (1 << 7)); stepLive.render(60);
+check("STEP REC: physical keys write a chord at the cursor, playhead unchanged",
+      stepLive.ex.web_test_step_count(8) === 2 && stepLive.ex.web_test_cursor() === 8 &&
+      stepLive.ex.web_test_step_count(stepLive.ex.web_test_seq_idx()) === 4);
+stepLive.ex.web_keys(0); stepLive.render(60);
+const headBeforeStep = stepLive.ex.web_test_seq_idx();
+stepLive.render(600);
+check("STEP REC: releasing advances cursor once, playback advances separately",
+      stepLive.ex.web_test_cursor() === 9 && stepLive.ex.web_playing() === 1 &&
+      stepLive.ex.web_test_seq_idx() !== headBeforeStep);
+stepLive.turn(EN.K1, -5); // choose step 4, away from the live playhead
+modeGesture();
+const beforeLiveNotes = Array.from({length: 16}, (_, i) => stepLive.ex.web_test_step_note(i, 3));
+stepLive.ex.web_keys(1 << 26); stepLive.render(60); // G5 is absent from the prepared chords
+stepLive.ex.web_keys(0); stepLive.render(60);
+check("SEQ + REC again: LIVE REC keeps the cursor, records at the playhead",
+      stepLive.ex.web_test_step_record_mask() === 0 && stepLive.ex.web_playing() === 1 &&
+      stepLive.ex.web_test_cursor() === 4 && stepLive.ex.web_test_step_note(4, 3) === beforeLiveNotes[4] &&
+      beforeLiveNotes.some((note, i) => stepLive.ex.web_test_step_note(i, 3) !== note));
+stepLive.tap(B.REC);
+check("normal REC disarms without stopping playback", stepLive.ex.web_playing() === 1 &&
+      !(stepLive.ex.web_lit_buttons() & (1 << B.REC)));
 // ---- the panel's knobs from a MIDI controller: the page turns them by midiKnob (worklet.js), as a drag does
 {
   const last = [], cc = KNOB_CC + EN.PRESETS, k = (c, v, mode) => midiKnob(last, c, v, mode);
@@ -174,6 +291,51 @@ check("a fresh instance with the kept sectors has it; one without does not",
   }
 }
 
+// ---- the new bass engine runs in the matching wasm, all eight dry presets
+for (let preset = 0; preset < 8; preset++) {
+  const h = await device(null);
+  h.render(1000);
+  h.ex.web_test_hades(preset);
+  h.ex.web_midi(0x90, 36, 100);
+  h.render(500);
+  const peak = h.peak;
+  h.ex.web_midi(0x80, 36, 0);
+  h.render(2000);
+  h.peak = 0;
+  h.render(500);
+  check(`HADES preset ${preset + 1}: MIDI bass sounds, note-off leaves silence`, peak > 0.005 && h.peak < 0.001);
+}
+
+// ---- coupled drone presets in the actual WebAssembly render path
+for (let preset = 0; preset < 8; preset++) {
+  const d = await device(null);
+  d.render(1000);
+  d.ex.web_test_drone(preset);
+  d.ex.web_midi(0x90, 48, 100);
+  d.render(6000);
+  if (preset >= 5) {
+    for (const note of [60, 67]) {
+      d.peak = 0;
+      d.ex.web_midi(0x90, note, 100);
+      d.render(2000);
+      const gesturePeak = d.peak;
+      d.ex.web_midi(0x80, note, 0);
+      d.render(2000);
+      d.peak = 0;
+      d.render(500);
+      check(`DRONE cell preset ${preset + 1}: gesture ${note} released, anchor 48 still sounds`,
+            gesturePeak > 0.005 && gesturePeak < 1 && d.peak > 0.005 && d.peak < 1);
+    }
+  }
+  const peak = d.peak;
+  d.ex.web_midi(0x80, 48, 0);
+  d.render(8000);
+  d.peak = 0;
+  d.render(500);
+  check(`DRONE preset ${preset + 1}: held MIDI note sounds, long release reaches silence`,
+        peak > 0.005 && peak < 1 && d.peak < 0.001);
+}
+
 // ---- deterministic: the same gestures, the same samples
 async function song() {
   const d = await device(null);
@@ -206,3 +368,4 @@ const ratio = best / 1000, max = +(process.env.BENCH_MAX || 0.5);
 check(`1 s of the heavy song (FM6 PHYS GRAIN chords + DRUM) in ${best.toFixed(1)} ms: ${(ratio * 100).toFixed(1)} % of real time`, ratio < max);
 console.log(fails ? `emu: ${fails} FAILED` : "emu: all ok");
 process.exit(fails ? 1 : 0);
+

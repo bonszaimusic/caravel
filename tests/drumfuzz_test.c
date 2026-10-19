@@ -228,14 +228,31 @@ static void fz_play(void)
     } else
         fz_press(B_PLAY);
 }
+/* A real boot initializes the song before audio_init() (src/main.c). The virtual
+ * ISR remains active between seeds; block only the two power-on/reset calls,
+ * whose temporary zero BPM is not a state in which hardware audio can run.
+ * Restore the previous signal mask immediately; every live edit remains preemptible. */
+static void fz_power_on(void)
+{
+#ifdef PREEMPT
+    sigset_t audio, previous;
+    sigemptyset(&audio); sigaddset(&audio, SIGVTALRM);
+    sigprocmask(SIG_BLOCK, &audio, &previous);
+#endif
+    ui_power_on();
+#ifdef PREEMPT
+    sigprocmask(SIG_SETMASK, &previous, 0);
+#endif
+}
+
 static void setup(uint32_t synth)
 {
     uint32_t i;
-    ui_power_on();
+    fz_power_on();
     for (i = 0; i < MI_VALUES; i++)                       /* the MENU at random (HELP, LARGE, PREVIEW, ACCEL ..) */
         if (menu_valued(i) && i != MI_SERIAL && rnd(2))
             menu_put(i, rnd(menu_n(i)));
-    ui_power_on();
+    fz_power_on();
     for (i = 0; i < NTRK; i++)
         eng_mem_claim(&trk[i]);
     set_engine_of(&trk[0], synth);

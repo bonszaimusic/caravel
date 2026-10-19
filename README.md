@@ -1,29 +1,107 @@
-# Felucca
+# Caravel
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-![Felucca 1.0](docs/felucca-1.0.png)
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.1.0**.
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 1.6.1**. Connect the FM-1 to a computer by USB, open the
-[web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge and press Install; no extra hardware is needed.
-Installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** takes you back.
-Want to look around first? [Try it in your browser](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed.
+Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
+[Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
+has ended. 0.1.0 is the first version under this name. Caravel is **not affiliated with, endorsed or supported by Hügelton
+Instruments or M-VAVE**, and "Felucca" and "Hügelton Instruments" are those authors' names, used here only to say where the code
+comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](CREDITS.md).
 
-- Install: [web installer](https://hugelton.github.io/Felucca/), or `tools/fm1_install.py` from a terminal
-- Edit: [web editor](https://hugelton.github.io/Felucca/webapp/editor/) (developed in [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp))
-- Read: the manual is in the [wiki](https://github.com/hugelton/Felucca/wiki/Home): [Installation](https://github.com/hugelton/Felucca/wiki/Installation) ·
+## Watch and listen
+
+[![M-VAVE FM-1: Hades & SEM-Inspired Sounds (YouTube)](https://img.youtube.com/vi/rfY23zoBgzQ/hqdefault.jpg)](https://youtu.be/rfY23zoBgzQ)
+
+Sounds of the SEM and HADES engines on the FM-1 (recorded before the rename). More videos on the maintainer's channel:
+[BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+
+## A look at the screen
+
+<table>
+<tr>
+<td align="center"><img src="docs/img/home.png" width="240" alt="HOME: four knobs, the scope and the track's engine"><br>HOME</td>
+<td align="center"><img src="docs/img/lfo.png" width="240" alt="LFO: two parameter groups on one screen"><br>LFO: two groups, one framed</td>
+<td align="center"><img src="docs/img/env.png" width="240" alt="ENV and ENV DEST with the envelope pictogram"><br>ENV with its pictogram</td>
+</tr>
+<tr>
+<td align="center"><img src="docs/img/seq.png" width="240" alt="STEP page with the piano roll"><br>STEP and piano roll</td>
+<td align="center"><img src="docs/img/presets.png" width="240" alt="PRESETS list"><br>PRESETS</td>
+<td align="center"><img src="docs/img/sem-filter.png" width="240" alt="SEM: OSC and filter groups"><br>SEM: oscillators and filter</td>
+</tr>
+</table>
+
+The screens are drawn by the firmware's own drawing code (AMBER palette, 240 x 240 shown at 2x). MENU > COLOR has more palettes:
+
+![HOME in the GREEN, AMBER, ICE, VIOLET and ROSE palettes](docs/img/palettes.png)
+
+## Engines at a glance
+
+| Engine | Good for |
+| --- | --- |
+| ANALOG | classic subtractive leads, basses, pads, plucks |
+| SEM | warm pads, brass, strings, notch sweeps |
+| HADES | basses, sub layers, dark leads |
+| DRONE (experimental) | evolving drones, beds, bells, slow textures |
+| PHASE | bright, glassy and organ-like tones, bells |
+| LOFI | chiptune, 8-bit arps, bytebeat |
+| TRIO | fat basses, sync and ring-mod leads |
+| WHEEL | tonewheel organ |
+| FM6 | electric pianos, bells, FM basses and pads |
+| PHYS | mallets, plucks, hand drums, metallic textures |
+| VOICE | sung vowels, choirs, vocal leads |
+| SAMPLE, GRAIN, SLICE | instrument samples and your own, granular clouds, sliced loops |
+| DRUM (with DRUM-X) | drum kits and percussion |
+| NOISE | wind, rain, risers, effects |
+
+What each engine is and how its controls work: [Engines at a glance](docs/engines/overview.md). Tips for good sounds with SEM, HADES and
+DRONE: [Tips and tricks](docs/engines/tips.md).
+
+## What Caravel adds to Felucca
+
+The focus is usability and the sound experience:
+
+- **Two parameter groups on one screen** (LFO, LFO2, ENV, ARP, VOICE, EDIT 1/2, LANES, FX/INSERT): the active group is framed
+  and marked EDIT K1-4, SELECT steps through the groups, and the footer shows a numbered view ("LFO TOP 1/4"). SELECT starts on
+  PAGE; in the menu it walks the rows.
+- **Clearer sequencing:** EDIT opens the EDIT pages everywhere; the cursor step is cleared with SEQ held + F5 (CLEAR STEP,
+  one undo). Euclid, DOUBLE/HALF, conditional steps and external-clock start and resync are inherited and extended.
+- **Deeper modulation:** an independent LFO2 and the MOD matrix (SLEW, S&H sources, MORPH and PHS FB destinations).
+- **More sound sources:** SEM, HADES, DRONE (experimental), DRUM-X, MORPH on ANALOG, PHASE and LOFI, BYTE/FLOAT waves in LOFI.
+- **Per-track voice reservations** (MENU > VOICES) and a MORE page for SPREAD, MORPH and PHS FB.
+
+The full list is in [CHANGELOG.md](CHANGELOG.md); how the features work is in [docs/](docs/README.md).
+
+## Compatibility with Felucca
+
+Caravel 0.1.0 changes names and text, not storage: settings, projects, presets, the `.fwsc` package markers and the editor's
+file formats are the ones of Felucca 1.6.1 and its Custom additions, so Felucca data opens in Caravel. Projects that use
+Caravel-only parameters need Caravel or newer. The web editor and installer accept devices named Felucca as well as Caravel.
+Identifiers in the source (`FELUCCA_*`, `felucca.c`, the `firmware/engines/` submodule) keep their names.
+
+## Installing
+
+Installing custom firmware is at your own risk: no warranty, and a failed update can need a Transporter to recover the FM-1.
+M-VAVE's updater or the installer's **Return to official V15** takes you back. The web installer and editor are in `web/` and are
+built into the site by `web/make_site.py` ([BUILDING.md](BUILDING.md)); `tools/fm1_install.py` installs a package from a terminal.
+A public site under the Caravel name is not set up yet.
+
+- Build: [BUILDING.md](BUILDING.md); clone with the engines' submodule: `git clone --recurse-submodules https://github.com/bonszaimusic/caravel.git`
+- Documentation of what Caravel adds: [docs/](docs/README.md); engines: [docs/engines](docs/engines/README.md)
+- Sequencer documentation: [live parts, recording and FX automation](docs/sequencer/README.md)
+- Felucca's manual describes the features Caravel inherits, but not Caravel's additions:
+  [Installation](https://github.com/hugelton/Felucca/wiki/Installation) ·
   [Controls](https://github.com/hugelton/Felucca/wiki/Controls) · [Menu](https://github.com/hugelton/Felucca/wiki/Menu) ·
-  [Engines](https://github.com/hugelton/Felucca/wiki/Engines) · [Release notes](https://github.com/hugelton/Felucca/wiki/Release-Notes) ·
-  [Troubleshooting](https://github.com/hugelton/Felucca/wiki/Troubleshooting)
-- Build: [BUILDING.md](BUILDING.md); clone with the engines' submodule: `git clone --recurse-submodules https://github.com/hugelton/Felucca.git`
-
-<a href="https://hugelton.itch.io/felucca"><img src="https://static.itch.io/images/badge-color.svg" alt="Available on itch.io" width="74"></a>
+  [Engines](https://github.com/hugelton/Felucca/wiki/Engines) · [Features](https://github.com/hugelton/Felucca/wiki/Features)
 
 ## What it is
 
-Thirteen engines with factory presets, four tracks (8 voices shared), a 64-step sequencer (chords, ties, chance, conditions,
+Sixteen engines with factory presets, four tracks (8 voices shared), a 64-step sequencer (chords, ties, chance, conditions,
 ratchets, nudge, locks, automation, live and step recording), SEQ TOOLS, songs, effects, a MOD matrix, MIDI (USB and TRS,
-per-track channels, MIDI LEARN) and USB audio. More: [Features](https://github.com/hugelton/Felucca/wiki/Features).
+per-track channels, MIDI LEARN) and USB audio.
+
+## Inherited from Felucca
 
 ## New in 1.6.1
 
@@ -43,17 +121,18 @@ per-track channels, MIDI LEARN) and USB audio. More: [Features](https://github.c
 
 All changes and what to know before going back: [Release notes](https://github.com/hugelton/Felucca/wiki/Release-Notes) · [Upgrading from 1.1.5](https://github.com/hugelton/Felucca/wiki/Upgrading-from-1.1.5).
 
+
 ## Support and contributing
 
-Please report what you find in [Issues](https://github.com/hugelton/Felucca/issues) (reproducible bugs, one per issue). Ideas and
-requests go to [Discussions](https://github.com/hugelton/Felucca/discussions). Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
-Felucca is GPLv3 and you are free to fork it; before starting yet another fork, please consider whether a PR would do.
+Please report what you find in this repository's Issues (reproducible bugs, one per issue), not to Hügelton Instruments or M-VAVE.
+Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Caravel is GPLv3 and you are free to fork it.
 
 ## AI disclaimer
 
-Felucca is developed with the assistance of AI coding agents (code, tests, documentation, translation, maintenance). The
-design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
-icons or artwork. See [On AI-Assisted Development and Responsibility](https://github.com/hugelton/Felucca/discussions/166).
+Caravel-specific changes to Felucca were developed with AI coding agents (code, tests and documentation). Direction, design
+decisions and acceptance are the maintainer's. The original public Felucca history through 1.6.1 is unchanged and is the work
+of its authors. The initial Caravel changes are recorded as one baseline snapshot rather than as their individual
+development commits.
 
 ## Credits and licence
 
@@ -61,6 +140,8 @@ Free software: [GPL-3.0-only](LICENSE), the Hügelton Sample Pack included; the 
 and five engines ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines), `firmware/engines/`) are MIT
 ([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)). Thanks to everyone whose work and contributions are in it: [CREDITS.md](CREDITS.md).
 
-M-VAVE and FM-1 are trademarks of their respective owners. Felucca is not affiliated with or endorsed by them.
+M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by them or by Hügelton
+Instruments.
 
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+Copyright (C) 2026 bonszaimusic (Caravel and its changes to Felucca)<br>
+Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca 1.6.1, the base of this work)

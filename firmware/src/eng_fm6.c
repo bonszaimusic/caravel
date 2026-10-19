@@ -44,6 +44,7 @@
 
 static uint8_t fm6_patch[NTRK][FP_SIZE + 1u];   /* the tracks' patches (main loop writes, then fm6_pgen) */
 static volatile uint8_t fm6_pgen[NTRK];          /* +1 after each write of fm6_patch[t] */
+static volatile uint8_t fm6_writing;            /* a FULL launch must not interrupt a main-loop patch copy */
 static uint8_t fm6_slot[NTRK];                   /* the SLOT value last loaded (main loop); 0xFF = none */
 static uint8_t fm6_own[NTRK][FM6_PACKED] __attribute__((section(".pool")));   /* the own patch while SLOT shows a factory one (fm6_poll) */
 static uint8_t fm6_own_ok;                       /* bit tr: fm6_own[tr] holds it */
@@ -170,9 +171,13 @@ static void fm6_set_patch(uint32_t tr, const uint8_t *v)
     tr %= NTRK;
     memcpy(s, v, FP_SIZE);
     fm6_sanitize(s);                                /* not in place: fm6_sync must never copy an unsanitized byte */
+    fm6_writing = 1;
+    RING_PUBLISH();
     memcpy(fm6_patch[tr], s, FP_SIZE + 1u);
     RING_PUBLISH();
     fm6_pgen[tr]++;
+    RING_PUBLISH();
+    fm6_writing = 0;
 }
 
 /* SLOT value s < FM6_NFACTORY: that factory patch into track tr; a bank slot: its voice (0 = loaded; 1 = the bank

@@ -202,6 +202,23 @@ int main(void)
     bad += check("settings of an older backup restore with the palette migrated",
                  put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings.palette == 6u);
     ps.palette = palette_to_stored(6);
+    {
+        persist_t restore = ps;
+        restore.voice_allocation = VOICE_POLICY_FIXED | 0x3131u;
+        bad += check("PER7 settings backup restores fixed track reservations",
+                     put_all(1, &restore, sizeof restore, st_crc32(&restore, sizeof restore)) == 0 &&
+                     voice_policy == (VOICE_POLICY_FIXED | 0x3131u));
+        restore.magic = 0x50455236u;
+        restore.favorites.factory[15][10] = 0xA5u;
+        bad += check("Custom20 PER6 backup migrates SEM favorites, idle and track reservations",
+                     put_all(1, &restore, PERSIST_PREENGINE_SIZE, st_crc32(&restore, PERSIST_PREENGINE_SIZE)) == 0 &&
+                     voice_policy == (VOICE_POLICY_FIXED | 0x3131u) && favorite_has(ENGI_SEM, 7) &&
+                     !favorite_has(ENGI_HADES, 0) && favorites.factory[15][10] == 1u);
+        restore.magic = 0x50455235u;
+        bad += check("Custom18 PER5 settings backup restores and migrates to AUTO",
+                     put_all(1, &restore, PERSIST_PREVOICE_SIZE, st_crc32(&restore, PERSIST_PREVOICE_SIZE)) == 0 &&
+                     voice_policy == 0u);
+    }
     before = erases;
     ps.lowcut = 3;
     bad += check("settings with an unknown SPEAKER value are refused, nothing written",

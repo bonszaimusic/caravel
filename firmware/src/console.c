@@ -192,7 +192,7 @@ static void con_uac(void)                              /* USB audio input: strea
 static void con_status(void)
 {
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
-    con_puts("felucca ");
+    con_puts("caravel ");
     con_puts(FELUCCA_VERSION);
     con_puts("\r\n");
     con_kv("uptime_ms", (int32_t)fm1_ms);
@@ -201,7 +201,7 @@ static void con_status(void)
     con_kv("audio_late", (int32_t)felucca_dbg.late);
     con_kv("voices_shed", (int32_t)shed_count);
 #if FELUCCA_CPU2
-    con_kv("cpu2_set", (ui_prefs2 & (PREF_CPU2_ON >> 16)) != 0u);   /* MENU > 2ND CORE: 1 ON (from power-on), 0 OFF */
+    con_kv("cpu2_set", (ui_prefs3 & (PREF_CPU2_ON >> 24)) != 0u);   /* MENU > 2ND CORE: 1 ON (from power-on), 0 OFF */
     con_kv("cpu2", fm1_c1_on);                          /* the second core renders parts (hal/fm1_cpu1.h) */
     con_kv("cpu2_gave_up", fm1_c1_gave_up);             /* 1: it misread a job, 2: one timed out (then one core) */
     con_kv("cpu2_bad", (int32_t)fm1_c1_mb.bad);
@@ -384,7 +384,7 @@ static void con_exec(const char *p)
 static void cdc_task(void)                              /* main loop */
 {
     if (cdc.dtr && !con.dtr_seen) {
-        con_puts("\r\nFelucca ");
+        con_puts("\r\nCaravel ");
         con_puts(FELUCCA_VERSION);
         con_puts(" console - 'help'\r\n> ");
     }

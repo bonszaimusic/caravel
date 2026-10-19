@@ -866,14 +866,26 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
 static uint16_t part_cost[NTRK];                        /* the last block's, per part */
 static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67, 70, 174, 144, 143, 189, 309, 113, 134,
                                              181,
-#if FELUCCA_SLICE
-                                             129
-#endif
+                                             FELUCCA_SLICE ? 129 : 0,
+                                             190, 400, 1100 /* SEM, HADES, DRONE incl. cells: provisional split estimates */
 };
 #endif
 
 /* one synth part into the dry mix and the sends of sm (mx[0]; mx[1] on the second core); a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
+static __attribute__((noinline)) void drumx_mix(const track_t *t, uint32_t n SM_DECL)
+{
+    uint32_t i;
+    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127];
+    if (((pf.mute >> (t - trk)) & 1u) || t->p[P_MUTE]) return;
+    for (i = 0; i < n; i++) {
+        SM(l)[i] -= ((DX_SIDE(t).sl[i] >> 2) * lvl) >> 10;
+        SM(r)[i] -= ((DX_SIDE(t).sr[i] >> 2) * lvl) >> 10;
+        SM(c)[i] += ((DX_SIDE(t).send[0][i] >> 2) * lvl) >> 10;
+        SM(d)[i] += ((DX_SIDE(t).send[1][i] >> 2) * lvl) >> 10;
+        SM(v)[i] += ((DX_SIDE(t).send[2][i] >> 2) * lvl) >> 10;
+    }
+}
 static void mix_part(track_t *t, uint32_t n SM_DECL)
 {
     int32_t *b = SM(b);
@@ -881,8 +893,9 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #if FELUCCA_CPU2
     uint32_t nr;
 #endif
+    dx_side_begin(t, n);
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
-    T_SPREAD(t) = t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
+    T_SPREAD(t) = !dx_track(t) && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
 #if FELUCCA_CPU2
     nr = track_render(t, b, n);
     part_cost[(uint32_t)(t - trk) % NTRK] = (uint16_t)(nr * ENG_VCOST[t->engine % NENGINES] + (nr || t->tail ? 60u : 0u));
@@ -933,6 +946,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         }
         t->peak = pk;
     }
+    if (DX_SIDE(t).on && dx_track(t)) drumx_mix(t, n SM_ARG(sm));
     if (pf.thr)
         perf_throw(t, b, SM(d), SM(v), n);              /* perform.c: REV / ECHO THROW (1.5.1), the sends towards full */
     if (MOD(t).on)
