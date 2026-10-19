@@ -19,7 +19,8 @@ Select **DRONE / STILL AIR**, play and hold a low note (for example C3), and
 raise COUPLE slowly. The four performance knobs control **COUPLE, CHAR, DRIFT,
 TONE**. Try PAIRS, CHAIN and RING on the first EDIT page. Notes transpose the
 whole instrument. Long ADSR settings need a held note or sequencer ties; the
-prototype does not latch itself. Begin listening at a low monitor level.
+engine does not latch itself, but the track's [LATCH](latch.md) (CHORD page) keeps the keys' and MIDI notes held for it.
+Begin listening at a low monitor level.
 The existing delay/reverb can be added, but factory presets are dry so the
 network can be evaluated without effects masking its behavior.
 
@@ -38,8 +39,9 @@ there are no independently tuned LYRA-style touch generators. POLY mode can
 steal/retrigger this single voice; MONO/LEGATO follows the existing host policy.
 UNISON is still capped at one tracked voice. All four generators share the
 host's ADSR, velocity, amplitude modulation, pan/spread side, and note gate.
-There is no individual oscillator envelope, touch gate, latch, or autonomous
-sound after the normal voice envelope/panic has stopped rendering it.
+There is no individual oscillator envelope, touch gate, engine latch, or autonomous
+sound after the normal voice envelope/panic has stopped rendering it. The track's LATCH ([latch.md](latch.md)) works
+above the engine: it only withholds the note-off, so the engine still sees a held note.
 
 Each generator uses interpolated `sine_i`, optionally blended toward the odd
 soft-character polynomial `1.5*x - 0.5*x^3`. All four are always averaged at
@@ -135,7 +137,7 @@ only after a zeroed-memory claim; sounding retriggers never reset this state.
   bytes before note-on. Switching via a memoryless engine does **not** change
   the owner; returning can therefore be warm. This prototype intentionally
   follows that existing contract rather than promising a reset on every switch.
-- **Panic:** the engine has no independent output callback/tail or note latch.
+- **Panic:** the engine has no independent output callback/tail or note latch (the track's LATCH, [latch.md](latch.md), ends on a panic).
   It relies on the normal host voice/envelope/panic path. Retaining internal
   samples does not itself add output when the host does not render it.
 

@@ -9,6 +9,7 @@ for everything here unless a guide says otherwise; host tests are not hardware m
 - [Installing Caravel](installing.md): web installer, command line, a specific release, going back to the official firmware.
 - [Pages, groups and the settings menu](menus-and-pages.md): two parameter groups per screen, numbered footer, SELECT, MORE, EDIT and CLEAR STEP.
 - [Per-track voice reservations](voice-reservations.md)
+- [LATCH: notes that keep sounding](latch.md): NEW and STACK per track, with chord keys, ARP and MIDI IN.
 - [Modulation: LFO2](modulation/LFO2.md)
 - [Engines](engines/README.md): [all engines and what they are good for](engines/overview.md), [tips for SEM, HADES and DRONE](engines/tips.md), the guides for SEM, HADES, DRONE and its cell modes, DRUM-X, MORPH and PHASE feedback, LOFI BYTE and FLOAT.
 - [Sequencer and recording](sequencer/README.md): live parts and step recording, FX-special automation, DOUBLE, project INIT and the global FX

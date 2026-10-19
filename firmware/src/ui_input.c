@@ -138,7 +138,7 @@ static uint32_t oct_leds(void)
         return 1u;
     if (ui.menu && !ui.confirm)
         return ui.menu >= 2u ? 1u :                    /* (INFO, ABOUT: OCT- back, lit) */
-               menu_tab() == MTAB_VOICES ? (menu_get(MI_VMODE) ? OCT_BREATH_DN : OCT_BREATH) :
+               menu_voice_row() ? (menu_get(MI_VMODE) ? OCT_BREATH_DN : OCT_BREATH) :
                ui.menu_sel == MI_LCLEAR ? (ml_count() ? OCT_BREATH : 0u) :   /* LEARN CLEAR: while CCs are learned */
                ui.menu_sel >= MI_VALUES ? OCT_BREATH :  /* CALIBRATION / INFO / ABOUT: OCT+ opens */
                (menu_step(ui.menu_sel, -1) != menu_get(ui.menu_sel) ? OCT_BREATH_DN : 0u) |   /* a value: each */
@@ -1071,6 +1071,11 @@ static void edit_param(uint32_t slot, int32_t steps)
         fop_knob(slot, steps);
         return;
     }
+    if (pg->graph == GR_INS && slot == 3u && pg->id[0] == P_IA) {   /* INSERT 2: KNOB 4 is FX HOLD, a device setting (ui.c load_kept) */
+        menu_put(MI_FXHOLD, steps > 0 ? 1u : 0u);
+        settings_later();                                /* (saved when the page is left or after a pause) */
+        return;
+    }
     if (pg->graph == GR_MOD && slot == 0u) {             /* MOD: KNOB 1 the slot, 2..4 its SRC DST AMT */
         mod_ui_slot = (uint8_t)clamp((int32_t)mod_ui_slot + (steps > 0 ? 1 : -1), 0, 3);
         return;
@@ -1183,7 +1188,7 @@ static void act_do(void)
         confirm_open(CF_CLEAR_SEQ, song.sel);
         break;
     default:                                              /* G_INITSND */
-        set_engine(TSEL->eng_req);                        /* engine defaults + its first preset (the steps stay) */
+        sound_init();                                     /* engine defaults + its first preset (the steps stay) */
         ui_message("SOUND INIT");
         ui.force = 1;
         break;
@@ -1725,7 +1730,7 @@ static void ui_input(void)
             } else if (kind == CF_INIT_PROJECT) {
                 project_init_runtime();
             } else if (kind == CF_INIT_SOUND) {
-                if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
+                if (!chain_busy()) { sound_init(); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
                 if (!chain_busy()) { clean_engine(); ui_message("CLEAN INIT"); }
             } else {
@@ -1789,9 +1794,13 @@ static void ui_input(void)
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
                 break;                                  /* MIDI LEARN: clear / done (below) */
-            if ((fm1_in.buttons & both) == both)
+            if ((fm1_in.buttons & both) == both) {
                 song.octave = 0;
-            else
+                if (TSEL->p[P_LATCH] || TSEL->p[P_AHOLD]) {   /* LATCH / ARP HOLD: let go of what they keep */
+                    latch_req |= (uint8_t)(1u << trk_index(TSEL));
+                    ui_message("LATCH RELEASED");
+                }
+            } else
                 song.octave += b == B_OCTDN ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
             break;
         }

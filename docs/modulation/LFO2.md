@@ -8,10 +8,10 @@ HADES; no new synthesis engine or voices are needed.
 
 ## Shared LFO controls
 
-Press LFO to cycle through LFO, LFO SYNC, LFO DEST, LFO2, LFO2 SYNC and MOD.
-The first LFO's settings and direct destinations stay together, followed by
-LFO2's settings and the shared MOD routing page. LFO2 has no separate DEST
-page: its destinations and amounts are configured in MOD.
+Press LFO to cycle through LFO, LFO SYNC, LFO2, LFO2 SYNC, LFO DEST and MOD.
+LFO and LFO SYNC share a view, as do LFO2 and LFO2 SYNC; the last view has the first
+LFO's direct destinations (LFO DEST) above the shared MOD routing (MOD). LFO2 has no
+separate DEST page: its destinations and amounts are configured in MOD.
 The former page called **LFO 2** is now **LFO SYNC**: it still configures the
 first LFO, and its stored parameter IDs have not changed.
 

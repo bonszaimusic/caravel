@@ -73,6 +73,18 @@ static int midi_local_held(const track_t *t, uint32_t note)
     return 0;
 }
 
+/* a MIDI note or a key holds something on track t (LATCH NEW: a press with none starts a new set) */
+static int midi_any_held(const track_t *t)
+{
+    uint32_t k;
+    if (midi_owners[trk_index(t)])
+        return 1;
+    for (k = 0; k < 27u; k++)
+        if (kb_chn[k] && kb_trk[k] == trk_index(t))
+            return 1;
+    return 0;
+}
+
 static void midi_release(uint32_t ch, uint32_t note)
 {
     uint32_t id = midi_notes[ch][note] & 0x7Fu;
@@ -104,7 +116,7 @@ static void midi_release(uint32_t ch, uint32_t note)
 static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
 {
     uint8_t nn[CHORD_MAX];
-    uint32_t n = chord_build(t, note, nn), i, f = 0;
+    uint32_t n = chord_build(t, note, nn), i, f = 0, eat;
     if (n > 1u || nn[0] != note)
         for (f = 0; f < MCHORD_N && mchord[f].id; f++)
             ;
@@ -112,8 +124,9 @@ static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
         n = 1;
         nn[0] = (uint8_t)note;
     }
+    eat = (uint32_t)latch_press(t, nn, n);        /* LATCH STACK: the note again ends its latched notes */
     for (i = 0; i < n; i++)
-        if (!midi_note_held(t, nn[i]) && !midi_local_held(t, nn[i]))
+        if (!eat && !midi_note_held(t, nn[i]) && !midi_local_held(t, nn[i]))
             input_on(t, nn[i], vel);
     if (n > 1u || nn[0] != note) {
         mchord_t *m = &mchord[f];
@@ -185,6 +198,7 @@ static void midi_silence_track(uint32_t track)
     track_t *t = &trk[track];
     uint32_t i;
     trk_all_off(t);
+    latch_forget(track);
     t->nheld = t->arp_phys = t->rh_n = 0;
     arp_forget(t);
     t->seq_n = t->seq_hold = t->slide_glide = 0;
@@ -337,6 +351,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         for (i = 0; i < NTRK; i++)
             if ((mask & (1u << i)) && !midi_track_held(i)) {
                 trk_all_off(&trk[i]);
+                latch_forget(i);
                 trk[i].nheld = trk[i].arp_phys = trk[i].rh_n = 0;
                 arp_forget(&trk[i]);
             }

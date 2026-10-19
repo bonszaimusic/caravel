@@ -4,6 +4,7 @@
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 
+static char path0[320];
 static void save_screen(const char *path)
 {
     FILE *f = fopen(path, "wb");
@@ -50,13 +51,17 @@ int main(int argc, char **argv)
             assert(lfo2_get(0, L2_FIRST + L2_SYNC) == sync + 1);
             assert(lfo2_get(0, L2_FIRST + L2_RATE) == rate + 1);
             turn(EN_SELECT, 1);
+            assert(str_eq(cur_page()->title, "LFO DEST"));
+            turn(EN_SELECT, 1);
             assert(cur_page()->graph == GR_MOD);
+            turn(EN_SELECT, -1);
+            assert(str_eq(cur_page()->title, "LFO DEST"));
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFO2SYNC);
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFO2);
             turn(EN_SELECT, -1);
-            assert(str_eq(cur_page()->title, "LFO DEST"));
+            assert(str_eq(cur_page()->title, "LFO SYNC"));
             /* LFO (1) uses the same two groups; its K1-4 edit the track's own parameters */
             for (uint32_t b1 = 0; b1 < 2; b1++) {
                 char path[320];
@@ -74,39 +79,106 @@ int main(int argc, char **argv)
             turn(EN_K1, 1);
             assert(TSEL->p[P_LSYNC] == s1 + 1 && TSEL->p[P_LRATE] == r1 + 1);
             turn(EN_SELECT, 1);
-            assert(str_eq(cur_page()->title, "LFO DEST"));
+            assert(cur_page()->graph == GR_LFO2);
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFOSYNC);
             turn(EN_SELECT, -1);
             assert(cur_page()->graph == GR_LFO);
             /* ARP and VOICE: the same two-group layout over their two normal pages */
-            static const struct { const char *top, *bot; uint32_t a, b; } PAIRS[] = {
-                {"ARP", "ARP 2", P_AMODE, P_ASWING}, {"VOICE", "VOICE 2", P_VOICE, P_ALLOC},
-                {"ENV", "ENV DEST", P_ATK, P_ED_FLT}, {"EDIT 1", "EDIT 2", P_E0, P_E4}, {"LANES", "LANES 2", P_LN0, P_LN4}, {"FX", "INSERT", P_DIST, P_ITYPE}};
-            for (uint32_t k = 0; k < 6; k++) {
+            static const struct { const char *top, *bot, *name; uint32_t a, b; int ga, gb; } PAIRS[] = {
+                {"ARP", "ARP 2", "arp", P_AMODE, P_ASWING, 0, 0}, {"VOICE", "VOICE 2", "voice", P_VOICE, P_ALLOC, 0, 0},
+                {"ENV", "ENV DEST", "env", P_ATK, P_ED_FLT, 0, 0}, {"EDIT 1", "EDIT 2", "edit", P_E0, P_E4, 0, 0},
+                {"LANES", "LANES 2", "lanes", P_LN0, P_LN4, 0, 0}, {"FX", "DLY", "fx-delay", P_DIST, G_DTIME, 0, 1},
+                {"REVERB", "CHORUS", "reverb-chorus", G_RTYPE, G_CRATE, 1, 1}, {"INSERT", "INSERT 2", "insert", P_ITYPE, P_IA, 0, 0}};
+            #define PV(k, ab) (PAIRS[k].g##ab ? &song.g[PAIRS[k].ab] : &TSEL->p[PAIRS[k].ab])
+            for (uint32_t k = 0; k < sizeof PAIRS / sizeof PAIRS[0]; k++) {
                 char path[320];
                 uint16_t keep_eng = TSEL->eng_req;
                 if (k == 4) { TSEL->eng_req = ENGI_DRUM; frame(); }   /* (LANES: DRUM only) */
                 for (uint32_t b2 = 0; b2 < 2; b2++) {
                     go_title(b2 ? PAIRS[k].bot : PAIRS[k].top); frame();
-                    snprintf(path, sizeof path, "%s/%s-palette-%02u-%s-%s.ppm", argv[1], k == 5 ? "fx" : k == 4 ? "lanes" : k == 3 ? "edit" : k == 2 ? "env" : k ? "voice" : "arp", palette,
+                    snprintf(path, sizeof path, "%s/%s-palette-%02u-%s-%s.ppm", argv[1], PAIRS[k].name, palette,
                              large ? "large" : "normal", b2 ? "bottom" : "top");
                     save_screen(path);
                 }
                 go_title(PAIRS[k].top); frame();
-                int32_t a0 = TSEL->p[PAIRS[k].a], b0 = TSEL->p[PAIRS[k].b];
+                int32_t a0 = *PV(k, a), b0 = *PV(k, b);
                 turn(EN_K1, 1);
-                if (TSEL->p[PAIRS[k].a] == a0) turn(EN_K1, -1);       /* (at its maximum: the other way) */
-                assert(TSEL->p[PAIRS[k].a] != a0 && TSEL->p[PAIRS[k].b] == b0);
+                if (*PV(k, a) == a0) turn(EN_K1, -1);       /* (at its maximum: the other way) */
+                assert(*PV(k, a) != a0 && *PV(k, b) == b0);
                 turn(EN_SELECT, 1);
                 assert(str_eq(cur_page()->title, PAIRS[k].bot));
-                a0 = TSEL->p[PAIRS[k].a];
+                a0 = *PV(k, a);
                 turn(EN_K1, 1);
-                if (TSEL->p[PAIRS[k].b] == b0) turn(EN_K1, -1);
-                assert(TSEL->p[PAIRS[k].b] != b0 && TSEL->p[PAIRS[k].a] == a0);
+                if (*PV(k, b) == b0) turn(EN_K1, -1);
+                assert(*PV(k, b) != b0 && *PV(k, a) == a0);
                 turn(EN_SELECT, -1);
                 assert(str_eq(cur_page()->title, PAIRS[k].top));
                 TSEL->eng_req = keep_eng; frame();
+            }
+            {   /* LFO DEST above MOD: KNOB 1 of the lower group picks the slot, 2..4 edit its SRC DST AMT */
+                char p1[320];
+                TSEL->p[P_M1SRC] = 1; TSEL->p[P_M1DST] = 2; TSEL->p[P_M1AMT] = 90;          /* slots 1 and 3 in use */
+                TSEL->p[P_M1SRC + 6] = 2; TSEL->p[P_M1DST + 6] = 3; TSEL->p[P_M1AMT + 6] = 40;
+                mod_ui_slot = 2;
+                for (uint32_t b3 = 0; b3 < 2; b3++) {
+                    go_title(b3 ? "MOD" : "LFO DEST"); frame();
+                    snprintf(p1, sizeof p1, "%s/lfodest-mod-palette-%02u-%s-%s.ppm", argv[1], palette, large ? "large" : "normal", b3 ? "bottom" : "top");
+                    save_screen(p1);
+                }
+                go_title("MOD"); frame();
+                assert(dual_bottom(cur_page()));
+                uint32_t slot0 = mod_ui_slot;
+                int16_t d0 = TSEL->p[P_LD_PIT];
+                turn(EN_K1, 1);
+                assert(mod_ui_slot == slot0 + 1u && TSEL->p[P_LD_PIT] == d0);
+                int16_t m0 = TSEL->p[P_M1SRC + 3u * mod_ui_slot];
+                turn(EN_K2, 1);
+                assert(TSEL->p[P_M1SRC + 3u * mod_ui_slot] != m0 && TSEL->p[P_LD_PIT] == d0);
+                mod_ui_slot = 0;
+            }
+            {   /* INSERT 2: KNOB 4 is FX HOLD, the device setting that MENU > VOICES has as well */
+                go_title("INSERT 2"); frame();
+                uint32_t h0 = menu_get(MI_FXHOLD) ? 1u : 0u;
+                int16_t ia = TSEL->p[P_IA];
+                turn(EN_K4, h0 ? -1 : 1);
+                assert((menu_get(MI_FXHOLD) ? 1u : 0u) != h0 && TSEL->p[P_IA] == ia);
+                turn(EN_K4, h0 ? 1 : -1);
+                assert((menu_get(MI_FXHOLD) ? 1u : 0u) == h0);
+            }
+            {   /* SCL and CHORD: one page above, the keys in the lower block (captured; the chord for a C minor 7 on the root) */
+                static const char *const T2[] = {"SCL", "CHORD"};
+                TSEL->p[P_ROOT] = 3; TSEL->p[P_SCALE] = 2;
+                for (uint32_t k = 0; k < 2; k++) {
+                    char p2[320];
+                    if (k) {
+                        uint8_t tmp[CHORD_MAX];
+                        TSEL->p[P_CHRD] = CH_DIA3; TSEL->p[P_VOICE] = V_POLY;
+                        chord_build(TSEL, 62u, tmp);                       /* a chord played: D# MIN's second degree */
+                    }
+                    go_title(T2[k]); frame();
+                    assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+                    snprintf(p2, sizeof p2, "%s/%s-palette-%02u-%s.ppm", argv[1], k ? "chord" : "scl", palette, large ? "large" : "normal");
+                    save_screen(p2);
+                }
+                TSEL->p[P_CHRD] = 0;
+            }
+            {   /* INSERT: the type's curve beside TYPE and MIX (a drive, a folder, a phaser); not asserted, captured */
+                static const struct { const char *name; uint32_t type; } IT[] = {{"soft", IT_SOFT}, {"fold", IT_FOLD}, {"crush", IT_CRUSH}, {"phaser", IT_PHASER}};
+                for (uint32_t k = 0; k < sizeof IT / sizeof IT[0]; k++) {
+                    TSEL->p[P_ITYPE] = (int16_t)IT[k].type; TSEL->p[P_IMIX] = 100;
+                    go_title("INSERT"); frame();
+                    snprintf(path0, sizeof path0, "%s/insert-%s-palette-%02u-%s.ppm", argv[1], IT[k].name, palette, large ? "large" : "normal");
+                    save_screen(path0);
+                }
+                TSEL->p[P_ITYPE] = 0;
+            }
+            {   /* SLICER: one page, its graph in the lower block; SELECT leaves it for the next view */
+                go_title("SLICER"); frame();
+                assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+                snprintf(path0, sizeof path0, "%s/slicer-palette-%02u-%s.ppm", argv[1], palette, large ? "large" : "normal");
+                TSEL->p[P_SLCR] = 1; TSEL->p[P_SLPAT] = 8; frame();
+                save_screen(path0);
             }
             {   /* EDIT keeps its normal layout (and its picture) for FM6, SAMPLE and WHEEL */
                 uint16_t keep = TSEL->eng_req;
@@ -141,10 +213,11 @@ int main(int argc, char **argv)
     }
     {   /* the footer's numbering: a two-group view counts once and shows its number on both halves */
         static const struct { const char *page, *want; } T[] = {
-            {"LFO", "LFO TOP 1/4"}, {"LFO SYNC", "LFO BOTTOM 1/4"}, {"LFO DEST", "LFO DEST 2/4"},
-            {"LFO2", "LFO2 TOP 3/4"}, {"LFO2 SYNC", "LFO2 BOTTOM 3/4"}, {"MOD", "MOD 4/4"},
-            {"FX", "FX TOP 1/6"}, {"INSERT", "FX BOTTOM 1/6"}, {"INSERT 2", "INSERT 2 2/6"}, {"SLICER", "SLICER 3/6"},
-            {"DLY", "DLY 4/6"}, {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};
+            {"LFO", "LFO TOP 1/3"}, {"LFO SYNC", "LFO BOTTOM 1/3"}, {"LFO2", "LFO2 TOP 2/3"}, {"LFO2 SYNC", "LFO2 BOTTOM 2/3"},
+            {"LFO DEST", "LFO DEST 3/3"}, {"MOD", "MOD 3/3"},
+            {"FX", "FX SENDS 1/4"}, {"DLY", "DELAY 1/4"}, {"REVERB", "REVERB 2/4"}, {"CHORUS", "CHORUS 2/4"},
+            {"INSERT", "INSERT 3/4"}, {"INSERT 2", "INSERT A-C 3/4"}, {"SLICER", "SLICER 4/4"},
+            {"ARP", "ARP TOP"}, {"ARP 2", "ARP BOTTOM"}};
         ui_power_on();
         for (uint32_t i = 0; i < sizeof T / sizeof T[0]; i++) {
             char ti[20];
@@ -162,6 +235,24 @@ int main(int argc, char **argv)
             assert(!strncmp(a, "VOICE TOP ", 10) && !strncmp(b, "VOICE BOTTOM ", 13) && !strncmp(c, "MORE ", 5));
             assert(!strcmp(sa, sb) && sa[0] + 1 == sc[0] && sa[1] == '/' && sc[1] == '/' && !strcmp(sa + 2, sc + 2));
         }
+    }
+    {   /* ANALOG: FILTER above MORE (one view); SEM: MORE is not offered (SEM MODE has its SPREAD); other engines: MORE alone */
+        char path[320], ti[20];
+        ui_power_on();
+        TSEL->eng_req = 0; frame();
+        go_title("FILTER"); frame();
+        assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+        page_title(ti); assert(!strncmp(ti, "FILTER ", 7));
+        snprintf(path, sizeof path, "%s/analog-filter-more-palette-%02u.ppm", argv[1], settings.palette);
+        save_screen(path);
+        go_title("MORE"); frame();
+        assert(dual_bottom(cur_page()));
+        TSEL->eng_req = ENGI_SEM; frame();
+        go_title("EDIT 1");
+        for (uint32_t i = 0; i < 12; i++) { assert(!str_eq(cur_page()->title, "MORE")); turn(EN_SELECT, 1); frame(); }
+        TSEL->eng_req = ENGI_FM6; frame();
+        go_title("MORE"); frame();
+        assert(!dual_page(cur_page()));
     }
     {   /* MORE: SPREAD, MORPH, PHS FB on one page; a slot the engine lacks is empty and its knob does nothing */
         static const struct { uint16_t eng; int morph, fb; } E[] = {{0, 1, 0}, {2, 1, 1}, {3, 1, 0}, {4, 0, 0}, {12, 0, 0}};

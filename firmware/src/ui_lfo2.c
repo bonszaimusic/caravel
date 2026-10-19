@@ -44,15 +44,23 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 }
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
-enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT };
+enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS };   /* DK_GRAPH: one page above, its graph in the lower block;
+                                                                          * DK_INS: the upper group's free cards hold the type's curve */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
     {"LFO", "LFO SYNC", "LFO SHAPE / RATE", "LFO SYNC / TRIGGER", "LFO TOP", "LFO BOTTOM", DK_LFO},
     {"LFO2", "LFO2 SYNC", "LFO2 SHAPE / RATE", "LFO2 SYNC / TRIGGER", "LFO2 TOP", "LFO2 BOTTOM", DK_LFO2},
+    {"LFO DEST", "MOD", "LFO AMOUNTS", "MOD MATRIX", "LFO DEST", "MOD", DK_PLAIN},
     {"ENV", "ENV DEST", "ENV", "ENV DEST / SYNC", "ENV TOP", "ENV BOTTOM", DK_ENV},
     {"EDIT 1", "EDIT 2", "EDIT 1", "EDIT 2", "EDIT TOP", "EDIT BOTTOM", DK_EDIT},
+    {"FILTER", "MORE", "FILTER", "MORE", "FILTER", "MORE", DK_PLAIN},        /* ANALOG only: FILTER beside MORE */
     {"LANES", "LANES 2", "LANES 1-4", "LANES 5-8", "LANES TOP", "LANES BOTTOM", DK_PLAIN},
-    {"FX", "INSERT", "FX SENDS", "INSERT TYPE / A B C", "FX TOP", "FX BOTTOM", DK_PLAIN},
+    {"FX", "DLY", "FX SENDS", "DELAY", "FX SENDS", "DELAY", DK_PLAIN},
+    {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
+    {"INSERT", "INSERT 2", "INSERT TYPE / MIX", "INSERT A / B / C", "INSERT", "INSERT A-C", DK_INS},
+    {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
+    {"SCL", "", "SCALE", "", "SCL", "", DK_GRAPH},
+    {"CHORD", "", "CHORD KEYS", "", "CHORD", "", DK_GRAPH},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
 };
@@ -65,11 +73,15 @@ static int edit_has_picture(void)
 }
 static const dual_t *dual_of(const page_t *pg, uint32_t *bottom)
 {
+    if (pg < PAGES || pg >= PAGES + NPAGES)             /* (a layer's own page, LY_SCL: not one of the family's) */
+        return 0;
     for (uint32_t i = 0; i < sizeof DUALS / sizeof DUALS[0]; i++) {
         if (DUALS[i].kind == DK_EDIT && edit_has_picture())
             continue;
+        if (str_eq(DUALS[i].top, "FILTER") && ENGINES[TSEL->eng_req % NENGINES] != &ENG_ANALOG)
+            continue;                                   /* (FILTER is ANALOG's: MORE stands alone on the others) */
         if (str_eq(pg->title, DUALS[i].top)) { if (bottom) *bottom = 0; return &DUALS[i]; }
-        if (str_eq(pg->title, DUALS[i].bot)) { if (bottom) *bottom = 1; return &DUALS[i]; }
+        if (DUALS[i].bot[0] && str_eq(pg->title, DUALS[i].bot)) { if (bottom) *bottom = 1; return &DUALS[i]; }
     }
     return 0;
 }
@@ -101,10 +113,173 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
             *v = lfo2_get(song.sel, id);
         return d;
     }
+    if (rp && rp->graph == GR_INS && col == 3u && rp->id[0] == P_IA) {   /* INSERT 2: FX HOLD, the device setting, as its fourth card */
+        static const char *const ONOFF[] = {"OFF", "ON"};
+        static const param_desc_t HOLD = {"FX HOLD", F_ENUM, 0, 1, 0, ONOFF, 0};
+        *v = menu_get(MI_FXHOLD) ? 1 : 0;
+        return &HOLD;
+    }
+    if (rp && rp->graph == GR_MOD && !col) {                  /* MOD: KNOB 1 picks the slot (ui_input.c), as on its own page */
+        static const param_desc_t SLOT = {"SLOT", F_INT, 1, 4, 1, 0, "/4"};
+        *v = (int32_t)mod_ui_slot + 1;
+        return &SLOT;
+    }
     d = rp ? page_desc(rp, col, &vp) : 0;
     if (d && vp)
         *v = *vp;
     return d;
+}
+/* DK_GRAPH's lower block: a picture of the page's settings in a frame like the groups' (inner area y 22 .. 77), headed by a
+ * title and a caption. The SLICER's, SCL's and CHORD's. */
+static void block_begin(const char *title, const char *right, uint16_t rcol)
+{
+    cv_begin(240, 80, T_BG);
+    cv_rrect(3, 0, 234, 80, 5, T_RAISE, T_BG);
+    cv_rrect(5, 2, 230, 76, 3, T_SURF, T_RAISE);
+    cv_rect(5, 5, 230, 16, T_SURF);
+    cv_text_on(10, 6, &AF_S, title, T_TEXT, T_SURF);
+    if (right)
+        cv_text_r(230, 6, &AF_S, right, rcol, T_SURF);
+}
+/* the SLICER: two lanes. Above, the 16 steps of the pattern in four groups of four (an open step a lit bar, a closed GATE
+ * step what DEPTH leaves open, a closed STUT step a dashed bar), the playing step in the accent colour on a light column.
+ * Below, what that does to a held tone: GATE chops it (a closed step as loud as DEPTH leaves it), STUT repeats the last open
+ * step's piece at DEPTH. A picture of the settings, not the audio. */
+static void slicer_block(const track_t *t)
+{
+    uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
+    static const char *const MODE[] = {"OFF", "GATE", "STUT"};
+    int32_t top = 26, hb = 18, open = hb - t->p[P_SLDEPTH] * hb / 127, cy = 63, amp = 11, px, py = cy;
+    uint16_t lit = mode == SL_OFF ? T_RAISE : T_THEME, dim = mode == SL_OFF ? T_DIM : T_MID;
+    char ti[16], rate[8];
+    const char *unit;
+    str_cpy(ti, "PATTERN ", 12);
+    fmt_int(ti + str_len(ti), (int32_t)t->p[P_SLPAT]);
+    param_format(&TP[P_SLRATE], t->p[P_SLRATE], rate, &unit);
+    block_begin(ti, MODE[mode % 3u], mode == SL_OFF ? T_DIM : T_THEME);
+    cv_text_r(188, 6, &AF_S, rate, T_MID, T_SURF);
+    if (mode != SL_OFF)
+        cv_rect(bar_x(cur) - 2, top - 2, 13, 51, T_RAISE);                        /* the playing step's column */
+    for (i = 0; i < 16u; i++) {
+        int32_t x = bar_x(i);
+        uint16_t col = mode != SL_OFF && i == cur ? T_ACCENT : lit;
+        if ((pat >> i) & 1u) {
+            cv_rrect(x, top, 9, hb, 2, col, T_SURF);
+        } else if (mode == SL_STUT) {
+            for (int32_t y = top; y < top + hb; y += 3)
+                cv_rect(x, y, 9, 1, mode != SL_OFF && i == cur ? T_ACCENT : dim);
+        } else {
+            cv_rrect(x, top + hb - 2, 9, 2, 1, mode != SL_OFF && i == cur ? T_ACCENT : T_RAISE, T_SURF);
+            if (open > 2)
+                cv_rrect(x, top + hb - open, 9, open, 2, mode != SL_OFF && i == cur ? T_ACCENT : T_RAISE, T_SURF);
+        }
+    }
+    cv_rect(bar_x(0), cy, bar_x(15) + 9 - bar_x(0), 1, T_RAISE);                  /* the tone, chopped */
+    for (px = bar_x(0); px < bar_x(15) + 9; px++) {
+        uint32_t k = 0, ph = (uint32_t)(px - bar_x(0)) * (0xFFFFFFFFu / 7u);
+        int32_t g = 127, y;
+        for (i = 0; i < 16u; i++)
+            if (bar_x(i) <= px)
+                k = i;
+        if (mode != SL_OFF && !((pat >> k) & 1u))
+            g = mode == SL_GATE ? 127 - t->p[P_SLDEPTH] : t->p[P_SLDEPTH];
+        y = cy - osc_sine(ph) * g / 127 * amp / 32768;
+        if (px > bar_x(0))
+            cv_line(px - 1, py, px, y, mode == SL_OFF ? T_DIM : mode != SL_OFF && k == cur ? T_ACCENT : (g == 127 ? T_THEME : T_MID));
+        py = y;
+    }
+    cv_blit(0, Y_LABEL + 90u);
+}
+/* SCL: the 12 keys (black keys high, white keys low): in the scale THEME, the root the accent, out of the scale RAISE */
+static void scale_block(const track_t *t)
+{
+    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+    uint32_t i, mask = scale_mask(t);
+    char ti[16];
+    str_cpy(ti, N_NOTE[(uint32_t)t->p[P_ROOT] % 12u], 4);
+    str_cpy(ti + str_len(ti), " ", 4);
+    str_cpy(ti + str_len(ti), N_SCALE[clamp(t->p[P_SCALE], 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1)], 8);
+    block_begin(ti, 0, T_MID);
+    for (i = 0; i < 12u; i++) {
+        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
+        int32_t x = 13 + (int32_t)i * 18;
+        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : T_THEME) : T_RAISE;
+        cv_rrect(x + 3, BLACK[i] ? 26 : 44, 10, BLACK[i] ? 26 : 31, 3, col, T_SURF);
+    }
+    cv_blit(0, Y_LABEL + 90u);
+}
+/* CHORD: two lanes. Above, what the keys play: with DIA3 / DIA7 the chord on each note of the scale (name on a cell, the one played last
+ * in the accent colour); with the other shapes every key plays that shape, said in a line. Below, the last chord (its name is the block's
+ * title): the keys from the C below its lowest note (two octaves, three for a wide chord), its notes THEME, its root the accent. */
+static void chord_block(const track_t *t)
+{
+    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+    uint8_t nn[CHORD_MAX], tmp[CHORD_MAX];
+    uint32_t n, i, j, k = trk_index(t), lo, cnt, w, mode = (uint32_t)t->p[P_CHRD];
+    int32_t r;
+    uint16_t mask;
+    char b[12];
+    const char *cap = "LAST";
+    if (!mode || chord_kit(t)) {
+        block_begin(mode ? "NO CHORDS ON KITS" : "CHORD KEYS OFF", 0, T_MID);
+        if (!mode)
+            cv_text_in(5, 40, 230, &AF_S, "K1: DIA3 PLAYS IN-KEY CHORDS", T_MID, T_SURF);
+        cv_blit(0, Y_LABEL + 90u);
+        return;
+    }
+    if (chord_last[k].n) {
+        r = chord_last[k].root;
+        mask = chord_last[k].mask;
+        n = chord_last[k].n;
+        for (i = 0; i < n; i++)
+            nn[i] = chord_last[k].note[i];
+    } else {
+        n = chord_make(t, (uint32_t)(60 + t->p[P_ROOT]), nn, &r, &mask);
+        cap = "ON ROOT";
+    }
+    if (trk_vmode(t) != V_POLY)
+        cap = "ROOT ONLY";                              /* MONO / LEGATO / UNISON */
+    chord_name(b, (uint32_t)r, mask);
+    block_begin(b, cap, T_MID);
+    if (mode == CH_DIA3 || mode == CH_DIA7) {           /* the chord of each scale note, from the ROOT up */
+        uint32_t sm = scale_mask(t), nd = 0, deg[12];
+        if (sm == 0xFFFu)
+            sm = SCALE_MASK[1];                         /* CHR: the major scale of ROOT (as chord.c) */
+        for (i = 0; i < 12u; i++)
+            if ((sm >> i) & 1u)
+                deg[nd++] = i;
+        w = 216u / nd;
+        for (i = 0; i < nd; i++) {
+            int32_t cr;
+            uint16_t cm;
+            char nm[12];
+            int32_t cx = 12 + (int32_t)(i * w + w / 2u), tw, y = 23 + (int32_t)(i & 1u) * 13;   /* (alternate cells on two rows: room for "Bm7b5") */
+            int hit = chord_last[k].n && chord_last[k].root % 12u == (uint32_t)(t->p[P_ROOT] + (int32_t)deg[i] + 120) % 12u;
+            chord_make(t, 60u + ((uint32_t)t->p[P_ROOT] + deg[i]) % 12u, tmp, &cr, &cm);
+            chord_name(nm, (uint32_t)cr, cm);
+            tw = text_w(&AF_S, nm);
+            cv_text_on(cx - tw / 2, y + 1, &AF_S, nm, hit ? T_ACCENT : T_TEXT, T_SURF);
+            if (hit)
+                cv_rect(cx - tw / 2, y + 13, tw, 2, T_ACCENT);
+        }
+    } else {
+        char ln[24];
+        str_cpy(ln, "EVERY KEY: ", 16);
+        str_cpy(ln + str_len(ln), N_CHRD[clamp(mode, 0, 9)], 8);
+        cv_text_in(5, 25, 230, &AF_S, ln, T_MID, T_SURF);
+    }
+    lo = nn[0] - nn[0] % 12u;
+    cnt = nn[n - 1u] - lo < 24u ? 24u : 36u;
+    w = 216u / cnt;
+    for (i = 0; i < cnt; i++) {
+        uint32_t note = lo + i, on = 0;
+        int32_t x = 13 + (int32_t)(i * w);
+        for (j = 0; j < n; j++)
+            on |= nn[j] == note;
+        cv_rrect(x, BLACK[note % 12u] ? 54 : 62, (int32_t)w - 2, BLACK[note % 12u] ? 10 : 14, w > 6u ? 3 : 2,
+                 !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : T_THEME, T_SURF);
+    }
+    cv_blit(0, Y_LABEL + 90u);
 }
 static void lfo_cards(const page_t *pg)
 {
@@ -120,12 +295,36 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
+    if (dd->kind == DK_GRAPH && str_eq(dd->top, "CHORD")) {      /* the chord's notes: the last one played */
+        uint32_t k = trk_index(TSEL);
+        sig = sig * 33u + chord_last[k].n * 131u + chord_last[k].mask * 7u + (uint32_t)chord_last[k].root + trk_vmode(TSEL) * 977u +
+              (uint32_t)TSEL->p[P_ROOT] * 31u;
+    }
+    if (dd->kind == DK_GRAPH && str_eq(dd->top, "SCL"))
+        sig = sig * 33u + scale_mask(TSEL) + (uint32_t)TSEL->p[P_ROOT] * 31u;
+    if (dd->kind == DK_GRAPH && str_eq(dd->top, "SLICER"))   /* the graph: the pattern, the mode, the rate, the depth, the playing step */
+        sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
+              (uint32_t)TSEL->p[P_SLRATE] * 7919u + (uint32_t)TSEL->p[P_SLPAT] * 31337u + sl[TSEL - trk].idx * 977u;
+    if (rps[1] && rps[1]->graph == GR_MOD)                 /* the slot pips: every slot's SRC, DST and AMT */
+        for (uint32_t k = 0; k < NMSLOT * 3u; k++)
+            sig = sig * 33u + (uint32_t)TSEL->p[P_M1SRC + k];
+    if (dd->kind == DK_INS)                                /* the curve: TYPE and MIX are cards, A B C are not on this page */
+        sig = sig * 33u + (uint32_t)TSEL->p[P_IA] * 97u + (uint32_t)TSEL->p[P_IB] * 8191u + (uint32_t)TSEL->p[P_IC] * 524287u;
     if (!ui.force && ui.graph_sig == sig)
         return;
     ui.graph_sig = sig;
     for (uint32_t row = 0; row < 2u; row++) {
         int active = row == bottom;
         int32_t y = 0;
+        if (dd->kind == DK_GRAPH && row) {
+            if (str_eq(dd->top, "SLICER"))
+                slicer_block(TSEL);
+            else if (str_eq(dd->top, "SCL"))
+                scale_block(TSEL);
+            else
+                chord_block(TSEL);
+            continue;
+        }
         /* Two small blits reuse the existing canvas instead of increasing pool RAM. */
         cv_begin(240, row ? 80 : 90, T_BG);
         uint16_t edge = active ? T_THEME : T_RAISE;
@@ -135,6 +334,25 @@ static void lfo_cards(const page_t *pg)
         cv_rect(5, y + 5, 230, 16, head);
         cv_text_on(10, y + 6, &AF_S, row ? dd->hb : dd->ht, active ? T_INK : T_TEXT, head);
         cv_text_r(230, y + 6, &AF_S, active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+        if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
+            for (uint32_t k = 0; k < NMSLOT; k++) {
+                const int16_t *mp = &TSEL->p[P_M1SRC + 3u * k];
+                int on = mp[0] && mp[1] && mp[2];
+                int32_t px = 90 + (int32_t)k * 11;
+                cv_rrect(px, y + 8, 8, 8, 2, on ? (active ? T_INK : T_MID) : T_RAISE, head);
+                if (!on)
+                    cv_rrect(px + 1, y + 9, 6, 6, 1, head, T_RAISE);
+                if (k == mod_ui_slot)
+                    cv_rect(px, y + 18, 8, 1, active ? T_INK : T_MID);
+            }
+        }
+        if (rps[row] || dd->kind == DK_LFO2) {            /* who the group is for: this track, or every track (a global page) */
+            char tag[4];
+            int global = rps[row] && rps[row]->scope == SC_GLOBAL;
+            tag[0] = global ? 'A' : 'T'; tag[1] = global ? 'L' : (char)('1' + song.sel % NTRK); tag[2] = global ? 'L' : 0; tag[3] = 0;
+            cv_rrect(144, y + 7, 28, 12, 3, global ? T_ACCENT : active ? T_INK : T_RAISE, head);
+            cv_text_in(144, y + 6, 28, &AF_S, tag, global ? T_INK : active ? T_THEME : T_MID, global ? T_ACCENT : active ? T_INK : T_RAISE);
+        }
         if (dd->kind == DK_ENV && !row)                     /* the envelope's shape beside its title */
             env_icon(76, y + 7, 70, 12, TSEL->p[rps[0]->id[0]], TSEL->p[rps[0]->id[1]], TSEL->p[rps[0]->id[2]],
                      TSEL->p[rps[0]->id[3]], active ? T_INK : T_MID);
@@ -144,6 +362,11 @@ static void lfo_cards(const page_t *pg)
             int32_t x = 6 + (int32_t)col * 58;
             if (col)
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
+            if (dd->kind == DK_INS && !row && col >= 2u) {     /* the two free cards: the type's curve */
+                if (col == 2u)
+                    insert_curve(TSEL, active ? T_THEME : T_MID, x + 6, 100, y + 49, 20);
+                continue;
+            }
             if (!d || !d->label || d->label[0] == '-') {
                 cv_text_in(x, y + 43, 56, &AF_M, "--", T_DIM, T_SURF);
                 continue;

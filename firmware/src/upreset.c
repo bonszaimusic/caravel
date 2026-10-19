@@ -486,7 +486,7 @@ static int up_rename_cat(uint32_t k, const char *name, uint32_t cat)
 static int up_rename(uint32_t k, const char *name) { return up_rename_cat(k, name, 0); }
 
 /* slot k -> the selected part's sound: engine and every parameter except the track's own (param_kept:
- * the mix, ARP, SCL, the pattern parameters, the SLICER). The steps stay: the record's pattern is
+ * the mix, ARP, SCL, the pattern parameters, the SLICER). The record's own sends and INSERT are loaded, FX HOLD or not). The steps stay: the record's pattern is
  * loaded only from SAVE > PHRASES (up_pat_load). 0 ok, 1 empty */
 static int up_load(uint32_t k)
 {

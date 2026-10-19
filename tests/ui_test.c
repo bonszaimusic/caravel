@@ -1674,7 +1674,7 @@ static int test_menu_tabs(void)
     ui_prefs = 0;
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM VOICES, 1..8 rows each, fit the page; tab gaps "
                  "constant (S, LARGE)",
-                 ok && MTAB_COUNT == 6u && mtab_rows(MTAB_VOICES) == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
+                 ok && MTAB_COUNT == 6u && mtab_rows(MTAB_VOICES) == 6u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
                  mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 8u &&
                  mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 7u + FELUCCA_CPU2 && MI_TAB[MI_TUNE] == MTAB_AUDIO &&   /* (1.5: LEARN CLEAR, HELP) */
                  MI_TAB[MI_MIDIIN] == MTAB_MIDI && MI_TAB[MI_INFO] == MTAB_SYSTEM && MI_INFO >= MI_VALUES);
@@ -3024,7 +3024,7 @@ static int test_product_ux(void)
     for (p = 0; p < NPALETTES; p++) for (b = 0; b < 1u; b++) {
         uint16_t graph[240 * H_GRAPH], columns[240 * (Y_SEP_END - Y_LABEL)];
         ui_power_on(); palette_set(p); settings.zoom = 1;
-        open_family(FAM_SCL); frame();                     /* (ENV and FX are two-group pages in the dual-block layout) */
+        go_title("CLOCK"); frame();                         /* (a one-group page with its graph: most others are two-group or group + picture) */
         memcpy(graph, host_screen + Y_GRAPH * 240, sizeof graph);
         memcpy(columns, host_screen + Y_LABEL * 240, sizeof columns);
         ui.hot_col = 1; ui.hot_t = 40; ui.force = 1; ui_draw();
@@ -3120,7 +3120,7 @@ static int test_layer(void)
     bad += check("FX tap: nothing on press, the FX page when let go", ok && !ui.home && cur_page()->fam == FAM_FX);
     frames(320);                                       /* (not a double tap: #83) */
     press(B_FX);
-    bad += check("  a second tap: the next page of the family (INSERT; Custom order FX, INSERT, INSERT 2, SLICER)", str_eq(cur_page()->title, "INSERT"));
+    bad += check("  a second tap: the next page of the family (DLY; order FX, DLY, REVERB, CHORUS, INSERT, INSERT 2, SLICER)", str_eq(cur_page()->title, "DLY"));
     ui_power_on();
     btn_down(B_FX);
     for (flash = 0, i = 0; i < 22u; i++) { frame(); flash |= ui.layer; }      /* 0.35 s */
@@ -3615,7 +3615,7 @@ static int engine_cycle(const char *const *want, uint32_t n)   /* EDIT tapped fr
 static int test_edit_cycle(void)
 {
     static const char *const CYC_A[] = {"EDIT 1", "EDIT 2",
-        "FILTER", "VOICE", "VOICE 2", "MORE", "EDIT 1"};   /* (1.5: FILTER; Custom: MORE has SPREAD, MORPH, PHS FB) */
+        "VOICE", "VOICE 2", "FILTER", "MORE", "EDIT 1"};   /* (FILTER: ANALOG's, beside MORE: SPREAD, MORPH, PHS FB) */
     static const char *const CYC_D[] = {"EDIT 1", "EDIT 2", "OP1 ENV", "OP2 ENV", "OP3 ENV", "OP4 ENV",
                                         "OP LEVEL", "VOICE", "VOICE 2", "MORE", "EDIT 1"};
     int bad = 0, ok;
@@ -8293,8 +8293,8 @@ static int test_large(void)
     /* HOME: tall cards (rows 28..132) and the strip (136..198); the footer as it was */
     frame();
     ok = ui.home && large_kind() == LK_TALL && card_h() == LG_CARD_H && graph_y() == LG_Y_GRAPH && strip_kind() == SK_SCOPE;
-    ok &= lg_px(30, Y_SEP_END + 1) == T_SURF && off[(Y_SEP_END + 1) * 240 + 30] == swap16(T_BG);     /* a card where the gap was */
-    ok &= lg_px(30, LG_Y_GRAPH - 2) == T_BG && off[(LG_Y_GRAPH - 2) * 240 + 30] == swap16(T_SURF);   /* a gap in the panel */
+    ok &= lg_px(30, Y_SEP_END + 3) == T_SURF && off[(Y_SEP_END + 3) * 240 + 30] == swap16(T_BG);     /* a card where the gap was */
+    ok &= lg_px(30, LG_Y_GRAPH - 1) == T_BG && off[(LG_Y_GRAPH - 1) * 240 + 30] == swap16(T_SURF);   /* a gap in the panel */
     ok &= lg_px(30, LG_Y_GRAPH + 1) == T_SURF;
     for (c = 0; c < 4u; c++)                                      /* each column's K pill, over its knob */
         ok &= lg_px(CARD_X(c) + 8, Y_LABEL + LG_MY + LG_MH / 2) == T_KEY;
@@ -8330,11 +8330,11 @@ static int test_large(void)
     ok &= large_kind() == LK_LABEL;
     go_page(GR_TRK); frame();
     ok &= large_kind() == LK_TALL && strip_kind() == SK_TRK && lg_px(CARD_X(0) + 8, LG_Y_GRAPH + 56) == T_SURF;
-    go_title("SCL"); frame();                                     /* (a one-group page: ENV and FX are two-group) */
+    go_title("CLOCK"); frame();                                   /* (a one-group page: most others are two-group or group + picture) */
     btn_down(B_GLO); frames(800);
     ok &= ui.layer && large_kind() == LK_LABEL && card_h() == CARD_H;
     btn_up(B_GLO); frame(); frame();
-    ok &= !ui.layer && large_kind() == LK_TALL && lg_px(30, LG_Y_GRAPH - 2) == T_BG;
+    ok &= !ui.layer && large_kind() == LK_TALL && lg_px(30, LG_Y_GRAPH - 1) == T_BG;
     bad += check("#15 LARGE: PRESETS and the roll keep the layout (labels in M), the layers too; MIXER tall, its tracks in the strip", ok);
 
     {   /* saved with the settings; settings from before it: OFF (and so again: idempotent) */
@@ -8350,7 +8350,7 @@ static int test_large(void)
         q = p;
         ok &= settings_import(&q, (int)sizeof q) == 1 && !ui_prefs;
         ui.force = 1; frame();
-        ok &= large_kind() == LK_OFF && lg_px(30, Y_SEP_END + 1) == T_BG;
+        ok &= large_kind() == LK_OFF && lg_px(30, Y_SEP_END + 3) == T_BG;
         bad += check("#15 LARGE saved with the settings; settings from before it: OFF (idempotent)", ok);
     }
     ui_prefs = 0;
@@ -8452,7 +8452,7 @@ static int test_style(void)
     frame();
     ok = ui_style == ST_FLAT && ux.style == ST_FLAT && ux.surf != ux.bg;
     ui.force = 1; frame();
-    ok &= host_screen[rule] == swap16(T_BG);
+    ok &= host_screen[rule] == swap16(T_THEME);        /* (FLAT: the card row's frame is there, no rule) */
     hold(B_HOME); ui.menu_sel = MI_STYLE;
     ok &= ui.menu == 1u && str_eq(MI_NAME[MI_STYLE], "STYLE");
     turn(EN_K1, 1); ok &= ui_style == ST_LINE && ux.style == ST_LINE && ux.surf == ux.bg;
@@ -9862,12 +9862,129 @@ static int test_edit_quick_actions(void)
 
 
 #ifndef DRUMX_TEST_ONLY
+/* FX HOLD (MENU > VOICES, PREF_FX_HOLD, ui.c load_kept): a factory preset load always keeps the track's INSERT (no preset has
+ * one) and, with FX HOLD on, its sends too (off: the preset's); a user preset loads its own sends and INSERT; the global
+ * DLY / REVERB / CHORUS are never touched; the inits start from scratch either way */
+static void fx_mark(track_t *t)                       /* values no preset has: sends 71..74, an INSERT of every field */
+{
+    uint32_t i;
+    for (i = 0; i < 4u; i++)
+        t->p[P_DIST + i] = (int16_t)(71 + i);
+    t->p[P_ITYPE] = IT_FLANGER; t->p[P_IA] = 11; t->p[P_IB] = 22; t->p[P_IC] = 33; t->p[P_IMIX] = 44;
+}
+static int fx_marked(const track_t *t)
+{
+    return t->p[P_DIST] == 71 && t->p[P_CHOR] == 72 && t->p[P_DLY] == 73 && t->p[P_REV] == 74 && t->p[P_ITYPE] == IT_FLANGER &&
+           t->p[P_IA] == 11 && t->p[P_IB] == 22 && t->p[P_IC] == 33 && t->p[P_IMIX] == 44;
+}
+static int fx_preset_sends(const track_t *t, const engine_t *e, uint32_t pi)   /* the sends preset pi of e sets */
+{
+    static const uint8_t FX_DEF[4] = {0, 24, 28, 36};
+    uint32_t i;
+    int ok = 1;
+    for (i = 0; i < 4u; i++)
+        ok &= t->p[P_DIST + i] == (e->presets[pi].fx[i] ? e->presets[pi].fx[i] - 1 : FX_DEF[i]);
+    return ok;
+}
+static int fx_insert_off(const track_t *t)
+{
+    return t->p[P_ITYPE] == TP[P_ITYPE].def && t->p[P_IA] == TP[P_IA].def && t->p[P_IB] == TP[P_IB].def &&
+           t->p[P_IC] == TP[P_IC].def && t->p[P_IMIX] == TP[P_IMIX].def;
+}
+static int test_fx_hold(void)
+{
+    int bad = 0, ok;
+    track_t *t = &trk[0];
+    uint32_t i, g[G_COUNT];
+    int16_t v[P_COUNT];
+    const engine_t *e;
+    ui_power_on();
+    bad += check("FX HOLD: off in a fresh setting, a MENU row (VOICES tab) with the editor id 41",
+                 menu_get(MI_FXHOLD) == 0u && !(ui_prefs3 & 4u) && MI_TAB[MI_FXHOLD] == MTAB_VOICES &&
+                 str_eq(MI_NAME[MI_FXHOLD], "FX HOLD") && str_eq(menu_vname(MI_FXHOLD, 0), "OFF") && str_eq(menu_vname(MI_FXHOLD, 1), "ON"));
+    e = ENGINES[t->eng_req % NENGINES];
+    my_steps(t);
+    t->p[P_SLCR] = SL_GATE;
+    t->p[P_GLIDE] = 9;
+    fx_mark(t);
+    song.g[G_DTIME] = 33; song.g[G_DMIX] = 41; song.g[G_RSIZE] = 55; song.g[G_CRATE] = 66; song.g[G_CDEPTH] = 77;
+    for (i = 0; i < G_COUNT; i++) g[i] = (uint32_t)song.g[i];
+    apply_preset_to(t, 2);
+    bad += check("FX HOLD off: a preset load sets the preset's sends and the INSERT OFF (no factory preset has one); the SLICER stays",
+                 fx_preset_sends(t, e, 2) && fx_insert_off(t) && t->p[P_SLCR] == SL_GATE && t->p[P_GLIDE] == TP[P_GLIDE].def);
+    menu_put(MI_FXHOLD, 1);
+    bad += check("FX HOLD: ON is bit 2 of ui_prefs3 (a setting, kept by an export / import)", menu_get(MI_FXHOLD) == 1u && (ui_prefs3 & 4u));
+    {
+        persist_t pp;
+        settings_export(&pp); ui_prefs3 = 0; settings_import(&pp, sizeof pp);
+        bad += check("  .. it survives a settings round trip", menu_get(MI_FXHOLD) == 1u);
+    }
+    fx_mark(t);
+    t->p[P_GLIDE] = 9;
+    apply_preset_to(t, 3);
+    bad += check("FX HOLD on: a preset load keeps the sends (and the INSERT); the rest of the sound is the preset's",
+                 fx_marked(t) && t->preset == 3u && t->p[P_GLIDE] == TP[P_GLIDE].def && t->p[P_SLCR] == SL_GATE &&
+                 t->p[P_E0] == (int16_t)e->presets[3].e[0] && t->p[P_ATK] == e->presets[3].env[0]);
+    ok = 1;
+    for (i = 0; i < G_COUNT; i++) ok &= (uint32_t)song.g[i] == g[i];
+    bad += check("  .. the global DLY / REVERB / CHORUS untouched (with or without the hold)", ok);
+    turn(EN_PRESET, 1);
+    bad += check("  .. PRESETS on HOME too", fx_marked(t) && t->preset == 4u);
+    midi_pc_load(t, 1);
+    bad += check("  .. a MIDI program change", fx_marked(t) && t->preset == 1u);
+    select_engine(ENGI_FM6);
+    bad += check("  .. an engine change (the new engine's first preset)", fx_marked(t) && t->eng_req == ENGI_FM6 && t->preset == 0u);
+    t->p[P_DIST] = 5; t->p[P_CHOR] = 6; t->p[P_DLY] = 7; t->p[P_REV] = 8; t->p[P_ITYPE] = IT_FUZZ; t->p[P_IMIX] = 99;
+    up_store(9, "FXHOLD");                             /* a user preset: stored with other FX, loaded under the hold */
+    up_values(up_rec(9), v);
+    bad += check("  .. a user preset still stores the FX it was saved with (format unchanged)",
+                 up_used(9) && v[P_DIST] == 5 && v[P_REV] == 8 && v[P_ITYPE] == IT_FUZZ && v[P_IMIX] == 99);
+    fx_mark(t);
+    up_load(9);
+    bad += check("  .. a user preset load sets its own sends and INSERT even so (a whole sound)",
+                 t->p[P_DIST] == 5 && t->p[P_REV] == 8 && t->p[P_ITYPE] == IT_FUZZ && t->p[P_IMIX] == 99 && t->user == 10u);
+    menu_put(MI_FXHOLD, 0);
+    fx_mark(t);
+    up_load(9);
+    bad += check("FX HOLD off: the same", t->p[P_DIST] == 5 && t->p[P_REV] == 8 && t->p[P_ITYPE] == IT_FUZZ && t->p[P_IMIX] == 99);
+    menu_put(MI_FXHOLD, 1);
+    fx_mark(t);
+    apply_preset_to(t, 1);
+    undo_swap();
+    bad += check("  .. SAVE held (undo) brings the sound back, the FX are the same", fx_marked(t));
+    undo_swap();
+    bad += check("  .. and again", fx_marked(t) && t->preset == 1u);
+    fx_mark(t);
+    sound_init();
+    e = ENGINES[t->eng_req % NENGINES];
+    bad += check("SOUND INIT with the hold: the engine's first preset with its sends, INSERT OFF", fx_preset_sends(t, e, 0) && fx_insert_off(t));
+    fx_mark(t);
+    clean_engine();
+    bad += check("CLEAN INIT with the hold: no sends, INSERT OFF", t->p[P_DIST] == 0 && t->p[P_CHOR] == 0 && t->p[P_DLY] == 0 &&
+                 t->p[P_REV] == 0 && fx_insert_off(t));
+    fx_mark(&trk[0]);
+    project_save(2);                                   /* a project keeps its tracks' FX whatever the hold says */
+    apply_preset_to(&trk[0], 5);
+    project_load(2);
+    bad += check("a project load restores the saved FX (the hold only governs sound loads)", fx_marked(&trk[0]));
+    fx_mark(t);
+    project_init_runtime();
+    ok = 1;
+    for (i = 0; i < NTRK; i++)
+        ok &= fx_preset_sends(&trk[i], ENGINES[trk[i].eng_req % NENGINES], TRK_DEF[i][1]) && fx_insert_off(&trk[i]);
+    bad += check("project INIT with the hold: every track's power-on sound and sends", ok && menu_get(MI_FXHOLD) == 1u);
+    menu_put(MI_FXHOLD, 0);
+    ui_power_on();
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     int bad = 0;
     bad += test_large_face();
     bad += test_sound_loads();
+    bad += test_fx_hold();
     bad += test_patterns();
     bad += test_rec();
     bad += test_step_rec();

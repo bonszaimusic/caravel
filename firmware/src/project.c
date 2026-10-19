@@ -1138,8 +1138,10 @@ static void project_init_runtime(void)
         memset(t->step, 0, sizeof t->step);
         track_defaults(t);
         fm1_irq_on();
+        fx_fresh++;                                     /* (a new project: FX HOLD keeps nothing of the old one) */
         set_engine_of(t, TRK_DEF[k][0]);
         apply_preset_to(t, TRK_DEF[k][1]);
+        fx_fresh--;
         track_defaults_steps(t);
         t->nheld = t->arp_phys = 0;
         pat_sig[k] = steps_sig(t);
@@ -1263,7 +1265,9 @@ static int project_restore_runtime(const project_t *input)
         track_t *t = &trk[k];
         int16_t keep[P_COUNT];
         if (p->t[k].preset == PROJ_DEF_SOUND) {
+            fx_fresh++;                                 /* (a stored project's power-on sound, with its sends) */
             apply_preset_to(t, TRK_DEF[k][1]);
+            fx_fresh--;
             track_defaults_steps(t);
         } else if (p->t[k].preset == PROJ_DEF_KEEP) {   /* the steps, LEVEL PAN MUTE, LEN DIV SWING GATE kept */
             memcpy(keep, t->p, sizeof keep);

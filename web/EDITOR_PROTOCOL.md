@@ -1245,7 +1245,7 @@ the legacy PROJECT command still performs its full stopped load. FULL restores s
 sounds/engines/FX while retaining master tempo/swing/clock and MIDI routing. Project
 formats and live FX latch/macro persistence are unchanged.
 
-Caravel keeps menu ids 32 FX TRACK and 33 LIVE LOAD. CPU2 is id 34 (when built), EXT START id 35: PULSE/BAR, default PULSE, SYSTEM; the voice reservations use 36..40. Read descriptors from this firmware; Felucca 1.6.1 id 32 is not this map.
+Caravel keeps menu ids 32 FX TRACK and 33 LIVE LOAD. CPU2 is id 34 (when built), EXT START id 35: PULSE/BAR, default PULSE, SYSTEM; the voice reservations use 36..40, and FX HOLD is id 41: OFF/ON, default OFF, VOICES tab (5), a device setting (normal settings-save return codes); while ON a factory preset load keeps the track's sends (a factory preset load always keeps the INSERT; a user preset loads its own). Read descriptors from this firmware; Felucca 1.6.1 id 32 is not this map.
 
 
 ## Independent LFO2

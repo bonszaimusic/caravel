@@ -18,8 +18,8 @@ Lower COUPLE to reduce both effects; allow several seconds for activity to settl
   re-excites its existing owner if that owner has not been replaced.
 - A new gesture has a local velocity-dependent excitation. Releasing its note
   lets that cell decay while the remaining held cells continue.
-- The last held note-off releases the normal shared ADSR; there is no latch or
-  autonomous background sound. Panic and engine changes retain host authority.
+- The last held note-off releases the normal shared ADSR; the engine has no latch or
+  autonomous background sound (the track's LATCH, [latch.md](../latch.md), simply never sends the note-offs). Panic and engine changes retain host authority.
 - Replaced note owners cannot release their replacement. Repeated note-on/on/off
   is one held key, matching the host policy. The internal held mask covers MIDI
   notes 0..127, not only the eight entries retained by the host mono stack.
