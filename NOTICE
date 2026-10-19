@@ -16,7 +16,8 @@ Felucca 1.6.1 history. That commit identifies the modified files and its prepara
 individual development dates of those changes. The additions are listed in CHANGELOG.md and described in docs/. Among them: the renaming (display names, version 0.1.0, USB manufacturer / product strings, installer,
 editor and emulator texts, package file names), the two-group menu layout, the SEQ CLEAR STEP key, LFO2 and the MOD additions,
 the SEM, HADES, DRONE and DRUM-X engines, MORPH, per-track voice reservations and the external-clock fixes.
-Files that were changed keep their original copyright and SPDX headers. New files carry "Copyright (C) 2026 bonszaimusic".
+Files that were changed keep their original copyright and SPDX headers. Copyright notices cover the contributions they
+identify, not sole authorship of every added file.
 
 DRUM-X AND OTHER JIANT PARTS
 DRUM-X (fixed-point synthesis and the factory A/B sounds), MORPH, PHASE feedback and LOFI BYTE/FLOAT are adapted from JIANT FM
@@ -25,8 +26,8 @@ Charge's Microtonic (not affiliated); Caravel added track-local kits, fixed MIDI
 The BYTE/FLOAT formulas acknowledge Tejeez, xpansive and viznut. Affected source files say so in their headers.
 
 LICENCE
-GPL-3.0-only, full text in LICENSE. Parts keep the licences listed in LICENSING.md, with their texts in LICENSES/
-(MIT, Apache-2.0, SIL OFL 1.1, CC0 1.0). The credits are in CREDITS.md. Caravel comes with NO WARRANTY, to the extent permitted
+GPL-3.0-only, full text in LICENSE. Parts keep the licences listed in LICENSING.md. MIT, Apache-2.0 and SIL OFL 1.1
+texts are in LICENSES/; CC0 sample provenance and references are in assets/samples-cc0/ATTRIBUTION.txt. The credits are in CREDITS.md. Caravel comes with NO WARRANTY, to the extent permitted
 by law (GPL sections 15 and 16).
 
 SOURCE
@@ -39,9 +40,17 @@ and FM-1 are trademarks of their respective owners. No M-VAVE material is part o
 Caravel to Hügelton Instruments or to M-VAVE.
 
 USE AT YOUR OWN RISK
-Installing custom firmware on an FM-1 can leave it unusable and cannot be fully undone by this project. Keep the official V15
-package (the installer's "Return to official V15") and a complete backup at hand. The authors accept no responsibility for damage.
+Installing custom firmware on an FM-1 can leave it unusable. Keep the official V15 package and backups of your data at hand.
+The installer's "Return to official V15" attempts an official firmware reinstall; it does not guarantee factory condition,
+data restoration, warranty coverage or recoverability. The authors disclaim liability only to the extent permitted by law;
+non-excludable statutory rights and liability are unaffected.
 
 USB IDENTIFIERS
-The USB vendor / product IDs 1209:0001 (running) and 1209:0002 (update loader) are the pid.codes test IDs used by Felucca. They are
-not allocated to Caravel and must be replaced before any commercial distribution.
+The USB vendor / product IDs 1209:0001 (running) and 1209:0002 (update loader) are pid.codes test IDs, not allocated to Caravel
+and not universally unique. Their policy permits private / in-house testing only: they MUST NOT be used on devices that will
+be redistributed, sold or manufactured, including devices given away for free. Source / configuration references are
+contemplated with a prominent warning that these IDs are not unique and must not be used outside test environments.
+Policy: https://pid.codes/1209/0001/ and https://pid.codes/1209/0002/
+Before general deployment, the maintainer must obtain suitable identifiers or written authorization / clarification from
+the allocation authority. Firmware-only downloads and end-user reflashing need policy clarification; being free does not
+establish permission. This is not a blanket prohibition on publishing source containing the test IDs.

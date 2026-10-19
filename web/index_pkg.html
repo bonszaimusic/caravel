@@ -34,6 +34,7 @@
   <p data-t="warn"></p>
   <p class="small" data-t="direct"></p>
   <p class="small" data-t="beta"></p>
+  <p class="small" data-t="usbIds"></p>
   <p class="small"><span data-t="brick"></span>
     <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener" style="color:inherit">FM-1-transporter</a></p>
   <p><button id="go" disabled data-t="install"></button></p>
@@ -52,9 +53,9 @@
   <p><a href="../editor/" style="color:inherit" data-t="editor"></a></p>
   <p class="small">Caravel by bonszaimusic, based on Felucca 1.6.1 by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments</a>, with its CrispyZebra waveforms, drum voices, Sample Pack and Fukiai icons (MIT).<br>
     Font: Inter Tight (The Inter Project Authors, SIL OFL 1.1). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
-    FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0). <a href="../../firmware/LICENSING.md" style="color:inherit">Licences</a>: <a href="../../firmware/LICENSE" style="color:inherit">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt" style="color:inherit">Apache-2.0</a>, <a href="../../firmware/LICENSES/" style="color:inherit">all</a>.<br>
+    FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin; the pinned SDK has an Apache-2.0 root licence. See LICENSING.md for provenance and applicable-notice limits. <a href="../../firmware/LICENSING.md" style="color:inherit">Licences</a>: <a href="../../firmware/LICENSE" style="color:inherit">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt" style="color:inherit">Apache-2.0</a>, <a href="../../firmware/LICENSES/" style="color:inherit">all</a>.<br>
     M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by Hügelton Instruments or M-VAVE.<br>
-    <span data-t="license"></span> <a href="../../firmware/LICENSING.md" style="color:inherit">LICENSING.md</a> · <a href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener" style="color:inherit">Source</a> · Felucca: <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener" style="color:inherit">github.com/hugelton/Felucca</a></p>
+    <span data-t="license"></span> <a href="../../firmware/LICENSING.md" style="color:inherit">LICENSING.md</a> · <a href="../../firmware/NOTICE" style="color:inherit">NOTICE</a> · <a href="../../firmware/CREDITS.md" style="color:inherit">CREDITS</a> · <a id="matching-source" href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener" style="color:inherit">Matching source</a> · Felucca: <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener" style="color:inherit">github.com/hugelton/Felucca</a></p>
 </main>
 <script type="module">
 /*LIB*/
@@ -67,12 +68,13 @@ const TEXT = {
     editor: "エディタ（インストール後、パソコンから音色やシーケンスを編集）",
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
     brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
-    beta: "Caravel 0.1 は実地テスト版です。不具合は GitHub で知らせてください。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
+    beta: "Caravel 0.1 はテスト用ビルドです。導入すると FM-1 が起動しなくなる可能性があります。法令上除外できない権利や責任を制限するものではありません。",
+    usbIds: "このビルドは Caravel に割り当てられていない共用テスト用 USB ID 1209:0001/0002 を使用します。無償配布を含め、再配布・販売・製造する機器には使用できません。NOTICE を確認してください。",
     back: "M-VAVEから公式FM-1 V15を取得し、未変更のFM-1.fwscを選んでください。ファイルはこのブラウザ内で検証し、サーバーへ送りません。",
     stockTitle: "公式V15に戻す", stockFile: "公式FM-1.fwsc", stockGo: "バックアップして公式V15へ戻す",
-    stockBackup: "現在の曲・保存曲・音色バンク・サンプル・設定を先に保存します。全体バックアップ非対応版は、Caravelを更新してから行ってください。復元はCaravelを再インストールしてエディタから行います。",
+    stockBackup: "対応する音楽・バンク・サンプル・設定をエクスポートします。ファイルの保存を確認してください。公式ファームウェアの再導入は、工場出荷状態・データ・保証・復旧を保証しません。",
     stockRecovery: "更新中断の再開：全体バックアップはすでにパソコンへ保存済み",
-    stockValid: "公式V15を確認しました", stockConfirm: "全体バックアップファイルをパソコンに保存できましたか？ 続けると公式V15へ戻します。Caravelの曲は公式V15では開けません。",
+    stockValid: "登録された V15 ファイルのハッシュと一致", stockConfirm: "全体バックアップファイルをパソコンに保存できましたか？ 続けると公式V15へ戻します。Caravelの曲は公式V15では開けません。",
     stockNeedBackup: "書き込みモードからはバックアップできません。保存済みバックアップがある場合だけ、更新中断の再開にチェックしてください。",
     stockUnsupported: "このCaravelは全体バックアップに未対応です。先に最新版をインストールしてください。",
     backup: "全体バックアップ保存中 ", stockError: "公式ファイルを確認できません: ",
@@ -98,12 +100,13 @@ const TEXT = {
     editor: "Editor (after installing: edit sounds and sequences from the computer)",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
-    beta: "Caravel 0.1 is a field-testing release; please report problems on GitHub. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
+    beta: "Caravel 0.1 is a field-testing build. Installing it may leave the FM-1 unusable. Use it at your own risk; nothing here excludes rights or liability that applicable law does not allow to be excluded.",
+    usbIds: "This build retains shared, non-unique pid.codes test USB IDs 1209:0001/0002, not allocated to Caravel. They are not for devices that will be redistributed (even free), sold or manufactured. See NOTICE; public deployment needs an identifier-policy decision.",
     back: "Get official FM-1 V15 from M-VAVE and select the unmodified FM-1.fwsc. The browser validates it locally; it is not sent to a server.",
     stockTitle: "Return to official V15", stockFile: "Official FM-1.fwsc", stockGo: "Back up and return to official V15",
-    stockBackup: "Current music, saved music, sound banks, samples and settings are saved first. Older firmware needs a Caravel update for complete backups. To restore an archive later, reinstall Caravel and use the editor.",
+    stockBackup: "The supported music, banks, samples and settings are exported first; confirm the file was saved. This is not a factory image or a guarantee of recovery. Reinstalling official V15 does not restore all data, warranty or factory state. Older firmware may need a Caravel update for supported backups.",
     stockRecovery: "Resume an interrupted update: I already saved a complete backup to this computer",
-    stockValid: "Official V15 verified", stockConfirm: "Has the complete backup file been saved to this computer? Continue to return to official V15. Official V15 cannot open Caravel music.",
+    stockValid: "Matches the pinned V15 file hash", stockConfirm: "Has the complete backup file been saved to this computer? Continue to return to official V15. Official V15 cannot open Caravel music.",
     stockNeedBackup: "An update loader cannot export a backup. Only select resume if you already saved a complete backup.",
     stockUnsupported: "This Caravel does not support complete backups. Install the current Caravel first.",
     backup: "Saving complete backup ", stockError: "Cannot validate official firmware: ",

@@ -23,12 +23,15 @@ Pull requests are welcome, including AI-assisted ones, with the same bar for all
 - make sure you understand the change and can explain it;
 - test it on a real FM-1;
 - run `tests/run_tests.sh` (see [BUILDING.md](BUILDING.md));
-- new files carry the GPL-3.0-only SPDX header and `Copyright (C) 2026 bonszaimusic` (or your own line); keep the existing
-  copyright lines of files you change.
+- new Caravel files should carry the GPL-3.0-only SPDX header and accurate copyright notices for their authors;
+  keep existing author credits and licence notices, including those of adapted material. Do not assign another author's
+  work to bonszaimusic.
 
-By contributing you agree that your contribution is licensed under GPL-3.0-only.
+By contributing to Caravel you agree that your contribution is licensed under GPL-3.0-only. This includes the active,
+local JIANT-derived ANALOG and LOFI variants, `firmware/src/eng_analog.c` and `firmware/src/eng_lofi.c`.
 
-The ANALOG, LOFI, TRIO, WHEEL and NOISE engines and the code they share (`firmware/engines/`, a git submodule) live in
-[Felucca-Engines](https://github.com/hugelton/Felucca-Engines), under the MIT licence.
+The unchanged MIT components in the `firmware/engines/` submodule (TRIO, WHEEL, NOISE, shared DSP and the original MIT
+ANALOG / LOFI variants) live in [Felucca-Engines](https://github.com/hugelton/Felucca-Engines).
+Send changes to those components there under MIT, preserving their notices; they are distinct from Caravel's local variants.
 
 The web editor and installer are in `web/` of this repository. The separate `hugelton/Felucca-WebApp` is Felucca's.

@@ -82,10 +82,19 @@ Identifiers in the source (`FELUCCA_*`, `felucca.c`, the `firmware/engines/` sub
 
 ## Installing
 
-Installing custom firmware is at your own risk: no warranty, and a failed update can need a Transporter to recover the FM-1.
-M-VAVE's updater or the installer's **Return to official V15** takes you back. The web installer and editor are in `web/` and are
-built into the site by `web/make_site.py` ([BUILDING.md](BUILDING.md)); `tools/fm1_install.py` installs a package from a terminal.
-A public site under the Caravel name is not set up yet.
+**USB test IDs:** the current firmware uses `1209:0001` (running) and `1209:0002` (loader).
+They are not allocated to Caravel or universally unique. The pid.codes policy permits private / in-house testing only and
+forbids their use on devices that will be redistributed, sold or manufactured, even if given away for free.
+Do not use them outside test environments. General deployment needs suitable IDs or written authorization / clarification;
+firmware-only downloads and end-user reflashing need policy clarification, not an assumption that free use is allowed.
+See [NOTICE](NOTICE) and the policies for [0001](https://pid.codes/1209/0001/) and [0002](https://pid.codes/1209/0002/).
+
+Installing custom firmware is at your own risk, without warranty to the extent permitted by law; a failed update can leave the
+FM-1 unusable or need a Transporter for attempted recovery. M-VAVE's updater or the installer's **Return to official V15** can
+attempt an official firmware reinstall, not guarantee factory condition, data restoration, warranty coverage or recoverability.
+Keep the official package and backups of your data. Non-excludable statutory rights and liability are unaffected.
+The web installer and editor are in `web/` and are built into the site by `web/make_site.py` ([BUILDING.md](BUILDING.md));
+`tools/fm1_install.py` installs a package from a terminal. A public site under the Caravel name is not set up yet.
 
 - Build: [BUILDING.md](BUILDING.md); clone with the engines' submodule: `git clone --recurse-submodules https://github.com/bonszaimusic/caravel.git`
 - Documentation of what Caravel adds: [docs/](docs/README.md); engines: [docs/engines](docs/engines/README.md)
@@ -109,8 +118,10 @@ per-track channels, MIDI LEARN) and USB audio.
 - **Updates check the package's size on the FM-1**: a package made for another device is refused before anything is erased
 - **Second core (beta), off by default:** MENU > SYSTEM > 2ND CORE > ON (BETA), then restart: the FM-1's second core
   renders some of the parts, same sound, more headroom (#247)
-- **Felucca-Engines:** ANALOG, LOFI, TRIO, WHEEL and NOISE now live in [their own repository](https://github.com/hugelton/Felucca-Engines)
-  under the MIT licence (a git submodule here); Felucca itself stays GPL-3.0-only
+- **Felucca-Engines:** Felucca 1.6.1 moved ANALOG, LOFI, TRIO, WHEEL and NOISE to
+  [their own MIT repository](https://github.com/hugelton/Felucca-Engines) (a git submodule here).
+  Caravel uses its TRIO, WHEEL, NOISE and shared DSP, but local GPL-3.0-only, JIANT-derived ANALOG and LOFI variants in
+  `firmware/src/`; the unchanged submodule variants remain MIT. Felucca itself stays GPL-3.0-only.
 
 ## New in 1.6
 
@@ -136,8 +147,9 @@ development commits.
 
 ## Credits and licence
 
-Free software: [GPL-3.0-only](LICENSE), the Hügelton Sample Pack included; the bundled fonts and ported DSP keep their own licences,
-and five engines ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines), `firmware/engines/`) are MIT
+Free software: [GPL-3.0-only](LICENSE), the Hügelton Sample Pack and local JIANT-derived ANALOG / LOFI variants included.
+The unchanged [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) submodule (`firmware/engines/`) remains MIT;
+Caravel uses its TRIO, WHEEL, NOISE and shared DSP. Bundled fonts and ported DSP keep their own licences
 ([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)). Thanks to everyone whose work and contributions are in it: [CREDITS.md](CREDITS.md).
 
 M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by them or by Hügelton

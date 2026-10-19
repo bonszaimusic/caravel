@@ -33,10 +33,13 @@ jobs:
         run: python -m pip install Pillow fonttools
       - name: Install JieLi toolchain
         run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
-      - name: Download the JieLi AC79 SDK
+      - name: Download and verify the pinned JieLi AC79 SDK
         run: |
           git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
             https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          git --no-pager -C "$RUNNER_TEMP/ac79-sdk" rev-parse HEAD | grep -Fx 'd179b4484759423312073f5fbb232501aa491047'
+      - name: Release artifact helper tests (isolated synthetic fixtures)
+        run: python tests/release_artifacts_test.py
       - name: Build and test
         env:
           CC: cc -include stdint.h
@@ -53,11 +56,10 @@ jobs:
           export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
           sh build.sh --release "$VER"
           ls -l "build/release-$VER"
-      - name: Source archive (with the engines submodule)
-        run: |
-          git ls-files -z --recurse-submodules \
-            | tar --null -T - --transform "s,^,caravel-$VER/," -czf "build/release-$VER/caravel-$VER-source.tar.gz"
-          (cd "build/release-$VER" && sha256sum "caravel-$VER-source.tar.gz" >> SHA256SUMS)
+      - name: Verify actual release artifacts after the release build
+        env:
+          AC79_SDK: ${{ runner.temp }}/ac79-sdk
+        run: python tools/release_artifacts.py "$VER" --verify-only
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,16 +68,15 @@ jobs:
           Caravel $VER. What changed: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md).
 
           Installing custom firmware is at your own risk: no warranty, and a failed update can need a Transporter to recover
-          the FM-1. M-VAVE's updater takes you back. Caravel is not affiliated with or endorsed by Hügelton Instruments or M-VAVE.
+          the FM-1. Attempting to reinstall official firmware does not guarantee factory state, data, warranty or recovery. Caravel is not affiliated with or endorsed by Hügelton Instruments or M-VAVE.
 
           - \`caravel-$VER.fwsc\`: the installable package (app and loader)
           - \`caravel-$VER-app.bin\`: the firmware app alone
+          - \`caravel-$VER-loader.bin\`: the update loader (also contained in the package)
           - \`caravel-$VER-source.tar.gz\`: the complete source including the Felucca-Engines submodule (GitHub's own source archives leave it empty)
-          - \`SHA256SUMS\`, \`ATTRIBUTION.txt\`, \`LICENSE\`, \`LICENSING.md\`, \`LICENSES/\`: checksums and licence texts (the package contains Apache-2.0 SDK files)
+          - \`SHA256SUMS\`, \`release-build.json\`, \`ATTRIBUTION.txt\`, \`LICENSE\`, \`LICENSING.md\`, \`NOTICE\`, \`CREDITS.md\`, and the root-level licence \`*.txt\` files: checksums and notices/licence texts (SDK commit and byte identity are checked, not legal clearance)
           NOTES
           PRE=""; case "$VER" in *-*) PRE="--prerelease";; esac
+          # The verified directory is flat: GitHub attachment names match SHA256SUMS exactly.
           gh release create "$GITHUB_REF_NAME" --draft $PRE --title "Caravel $VER" --notes-file "$RUNNER_TEMP/notes.md" \
-            "build/release-$VER"/caravel-* "build/release-$VER/SHA256SUMS" \
-            "build/release-$VER/LICENSE" "build/release-$VER/LICENSING.md"
-          [ -f "build/release-$VER/ATTRIBUTION.txt" ] && gh release upload "$GITHUB_REF_NAME" "build/release-$VER/ATTRIBUTION.txt"
-          for f in "build/release-$VER"/LICENSES/*; do gh release upload "$GITHUB_REF_NAME" "$f"; done
+            "build/release-$VER"/*

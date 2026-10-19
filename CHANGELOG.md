@@ -6,9 +6,11 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
-## [0.1.0] — 2026-10-18 (first version under the name Caravel, not yet released)
+## [0.1.0] — 2026-10-19 (first version under the name Caravel, not yet released)
 
 ### Changed
+- **Release/source delivery:** complete source with pinned engine files, matching notices, build identity and checksums;
+  the installer and emulator use the selected release's source. Git-less source archives can rebuild the versioned binary.
 - **New name and version line**: Caravel 0.1.0, based on Felucca 1.6.1. Display names, USB manufacturer and product strings, installer,
   editor and emulator texts, package names (`caravel-X.Y.fwsc`), ABOUT / CREDITS, and the legal texts ([NOTICE](NOTICE),
   [LICENSING.md](LICENSING.md), [CREDITS.md](CREDITS.md)). Data formats and package markers are unchanged, and the editor, installer

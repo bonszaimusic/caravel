@@ -3,11 +3,15 @@
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 """Build Felucca: the app, the update loader and an installable .fwsc package.
 
-  tools/build.py [--release X.Y[-suffix]]
+  tools/build.py [--release VERSION | --binary-version VERSION]
 
 Outputs in build/: felucca.bin (app), loader/ota.bin (update loader),
 caravel.fwsc (package). A release build (--release X.Y) writes caravel-X.Y.fwsc and a folder
-release-X.Y/ with the package, the app, SHA256SUMS, the sample attribution and the licence files.
+release-X.Y/ with the package, app, loader, complete recursive source, build record,
+SHA256SUMS, sample attribution and all project notices/licence files. Release source must be clean.
+--binary-version uses the same version/product/compiler flags, package name, strict SDK hashes
+and output safety guard, but builds binaries only: no Git requirement, build record, source archive
+or verified release folder. Use it to rebuild binaries from an extracted source archive.
 See BUILDING.md for the toolchain and the SDK.
 
 The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
@@ -33,6 +37,7 @@ LDR = OUT / "loader"
 sys.path.insert(0, str(SRC / "tools"))
 import fm1pkg_make  # noqa: E402
 import lz4blk  # noqa: E402
+import release_artifacts  # noqa: E402
 
 APP_XIP = 0x02000120                # app.bin offset 0 in the XIP map; the SPL jumps here
 APP_SLOT = fm1pkg_make.APP_SLOT
@@ -43,14 +48,10 @@ CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wno-unused-fu
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 
 # SDK files of AC79NN_SDK_V1.2.1_2023-12-13 (the tested version)
-SDK_SHA256 = {
-    "uboot.boot": "4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
-    "cfg_tool.bin": "276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
-    "cfg/eq_cfg_hw.bin": "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
-}
+SDK_SHA256 = release_artifacts.SDK_SHA256
 
-PRODUCT = "FM-1_900"                # package identity; release builds are FM-1_9XY
-VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/felucca.c)
+PRODUCT = "FM-1_900"                # package identity; versioned builds are FM-1_9XY
+VERSION = None                      # versioned-build override (default: firmware/src/felucca.c)
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (1.6.1): the second core is built in, its entry and
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
 # (OFF by default: one core, as 1.6). FELUCCA_CPU2=0: none of it is built (1.6's one-core code and RAM)
@@ -374,24 +375,40 @@ def mmio_check():
 def main():
     global PRODUCT, VERSION
     ap = argparse.ArgumentParser()
-    ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string vX.Y")
+    modes = ap.add_mutually_exclusive_group()
+    modes.add_argument("--release", metavar="VERSION",
+                       help="verified release folder; requires committed, clean Git source")
+    modes.add_argument("--binary-version", metavar="VERSION",
+                       help="binary build only with release version/product; no Git or verified release folder")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
+    PRODUCT, VERSION = "FM-1_900", None
     name = "caravel.fwsc"
-    if a.release:                   # one digit each: the identity has room for two (X.Y.Z and X.Y.Z.W keep X.Y's)
-        m = re.fullmatch(r"(\d)\.(\d)(?:\.\d){0,2}(-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?", a.release)
-        if not m:
-            raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z, X.Y.Z.W or X.Y-suffix, one digit each")
-        PRODUCT = "FM-1_9" + m[1] + m[2]
-        VERSION = "v" + a.release.lower()      # e.g. v1.0, v1.1-rc1
-        name = f"caravel-{a.release}.fwsc"
+    snapshot = None
+    version = a.release if a.release is not None else a.binary_version
+    mode = "release" if a.release is not None else "binary-version"
+    if version is not None:         # X.Y.Z and X.Y.Z.W retain X.Y's package identity
+        try:
+            PRODUCT = release_artifacts.identity(version)
+            release_artifacts.guard_output_tree(SRC)
+            if a.release:
+                snapshot = release_artifacts.source_snapshot(SRC)
+        except release_artifacts.ReleaseError as error:
+            raise SystemExit(f"{mode}: {error}")
+        VERSION = "v" + version.lower()   # same canonical compiler override in both versioned modes
+        name = f"caravel-{version}.fwsc"
+        if a.release:
+            (OUT / f"release-{version}.build.json").unlink(missing_ok=True)
     if not (FW / "engines" / "src" / "felucca_engine.h").exists():
         raise SystemExit("firmware/engines is empty: the Felucca-Engines submodule "
                          "(git submodule update --init, or clone with --recurse-submodules)")
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
-            print(f"warning: SDK {rel} differs from AC79NN_SDK_V1.2.1; the package will not match the reference")
+            message = f"SDK {rel} differs from AC79NN_SDK_V1.2.1; the package will not match the reference"
+            if version is not None:
+                raise SystemExit(f"{mode}: {message}")
+            print(f"warning: {message}")
     OUT.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(2) as ex:
         gen, ldr = ex.submit(generate), ex.submit(build_loader)
@@ -417,24 +434,15 @@ def main():
     print(f"app      {OUT / 'felucca.bin'}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
     print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}")
-    if a.release:                   # what a release carries: the package, the app and every licence they need
-        rel = OUT / f"release-{a.release}"
-        shutil.rmtree(rel, ignore_errors=True)
-        (rel / "LICENSES").mkdir(parents=True)
-        app = f"caravel-{a.release}-app.bin"
-        (rel / name).write_bytes(pkg)
-        (rel / app).write_bytes(img)
-        (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n"
-                                                for n, b in ((name, pkg), (app, bytes(img)))))
-        for f in sorted((SRC / "LICENSES").glob("*.txt")):
-            shutil.copy(f, rel / "LICENSES" / f.name)
-        if not (rel / "LICENSES" / "MIT-Felucca-Engines.txt").exists():     # ANALOG LOFI TRIO WHEEL NOISE (engines/)
-            raise SystemExit("release: LICENSES/MIT-Felucca-Engines.txt is missing")
-        for doc in ("LICENSE", "LICENSING.md"):
-            shutil.copy(SRC / doc, rel / doc)
-        if att.exists():
-            shutil.copy(att, rel / "ATTRIBUTION.txt")
-        print(f"release  {rel}/")
+    if a.release:
+        try:
+            release_artifacts.record_build(SRC, a.release, snapshot, a.sdk)
+            rel = release_artifacts.release(SRC, a.release, sdk=a.sdk)
+        except release_artifacts.ReleaseError as error:
+            raise SystemExit(f"release: {error}")
+        print(f"release  {rel}/ (source, package, notices and checksums verified)")
+    elif a.binary_version:
+        print("binary build only: not a verified release folder; no build record, source archive or release assembly")
     return 0
 
 

@@ -201,6 +201,9 @@ CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 fail=0
 run() { label=$1; echo "== $label"; shift; "$@" || { rc=$?; echo "FAILED (exit $rc): $label"; fail=1; }; }
 
+run "release artifacts: offline synthetic fixture checks" python3 -B tests/release_artifacts_test.py
+run "site: exact release source, notices and navigation" python3 -B tests/site_release_test.py
+
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
 

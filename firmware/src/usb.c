@@ -7,7 +7,9 @@
  * MIDI out (the panel keys) comes from a ring the audio ISR fills.
  * SysEx F0 22 24 35 7D F7 (the stock soft key, tools/fm1_softkey.py) asks
  * the main loop to enter UBOOT. VID 0x1209 / PID 0x0001 is the pid.codes
- * TEST id: fine for the bench, must be replaced before any release.
+ * shared, non-unique TEST id, not allocated to Caravel. Do not use it on
+ * devices that will be redistributed (even free), sold or manufactured.
+ * Warned source/reference use and deployment-policy limits are in NOTICE.
  * FELUCCA_CDC=1 adds a CDC-ACM serial function (IAD composite: EP2 notify,
  * EP3 bulk data) for the console in console.c; FELUCCA_USB_LAYOUT picks how
  * the composite presents itself, usb_cdc_switch / FELUCCA_CDC_DEFAULT=0 leave

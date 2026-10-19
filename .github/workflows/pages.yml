@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 bonszaimusic
-#
-# The site on GitHub Pages: web installer, editor and browser emulator. It runs when a release is published (or by hand with
-# the version of an existing release) and puts that release's package on the site, so the installer installs exactly what
-# the release holds. Needs: Settings > Pages > Source: GitHub Actions, and a public repository (or a plan with private Pages).
+# Deployment is separately authorized. Build only from the selected published
+# release tag, with its verified package/source/notices; never relabel main.
 name: Pages
 
 on:
@@ -12,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version of an existing release, without the v (e.g. 0.1.0)'
+        description: 'Existing verified release version, without v (e.g. 0.1.0)'
         required: true
 
 permissions:
@@ -26,60 +24,87 @@ concurrency:
 
 jobs:
   site:
-    if: github.repository == 'bonszaimusic/caravel' && (github.event_name == 'workflow_dispatch' || !github.event.release.prerelease)
+    if: github.repository == 'bonszaimusic/caravel' && github.event.repository.private == false && (github.event_name == 'workflow_dispatch' || !github.event.release.prerelease)
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: recursive
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Version
+      - name: Select and validate the exact release tag
+        id: release
         env:
           INPUT_VERSION: ${{ inputs.version }}
           TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          VER="${INPUT_VERSION:-${TAG#v}}"
-          case "$VER" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "bad version: $VER"; exit 1;; esac
-          echo "VER=$VER" >> "$GITHUB_ENV"
-      - name: Release package
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          version = os.environ.get("INPUT_VERSION") or os.environ.get("TAG", "").removeprefix("v")
+          if not re.fullmatch(r"[0-9]\.[0-9](?:\.[0-9]){0,2}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?", version):
+              raise SystemExit("Invalid release version")
+          tag = "v" + version
+          result = subprocess.run(
+              ["gh", "release", "view", tag, "--repo", os.environ["GH_REPO"],
+               "--json", "tagName,isDraft,isPrerelease,publishedAt"],
+              check=True, capture_output=True, text=True)
+          metadata = json.loads(result.stdout)
+          if (metadata.get("tagName") != tag or metadata.get("isDraft") is not False
+                  or metadata.get("isPrerelease") is not False or not metadata.get("publishedAt")):
+              raise SystemExit("Selected release must match the exact tag and be published, non-draft and non-prerelease")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print("tag=v" + version, file=output)
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              print("VER=" + version, file=output)
+              print("RELEASE_TAG=v" + version, file=output)
+              print("EMU_VERSION=v" + version.lower(), file=output)
+          PY
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Download the complete selected release inventory
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p "$RUNNER_TEMP/release"
-          gh release download "v$VER" --pattern "caravel-$VER.fwsc" --dir "$RUNNER_TEMP/release"
-      - name: Install Python dependencies
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir "$RUNNER_TEMP/release"
+      - name: Verify checksums, source identity, notices and binary record
+        run: |
+          python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site \
+            --release-dir "$RUNNER_TEMP/release" --check-only
+      - name: Install header-generation dependencies
         run: python -m pip install Pillow fonttools
-      - name: Install JieLi toolchain
-        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
-      - name: Download the JieLi AC79 SDK
+      - name: Generate headers from the selected source (no target binary rebuild)
         run: |
-          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
-            https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
-      - name: Generate tables and fonts (the emulator builds from them)
-        env:
-          CC: cc -include stdint.h
-        run: |
-          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
-          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
-          sh build.sh
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "tools")
+          import build
+          build.generate()
+          diagnostics = build.mmio_check()
+          for diagnostic in diagnostics:
+              print(diagnostic, file=sys.stderr)
+          if diagnostics:
+              raise SystemExit("MMIO checks failed")
+          PY
       - name: Install Emscripten
         run: |
           git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
           "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
           "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
-      - name: Build the emulator and the site
+      - name: Build the selected-source emulator and verified site
         run: |
           . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
-          EMU_PREVIEW=0 EMU_VERSION="v$VER" sh web/emu/build.sh
-          python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site
-          mkdir -p site/emulator
-          cp -R build/emu/. site/emulator/
+          EMU_PREVIEW=0 sh web/emu/build.sh
+          python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site \
+            --release-dir "$RUNNER_TEMP/release" --emulator build/emu
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
