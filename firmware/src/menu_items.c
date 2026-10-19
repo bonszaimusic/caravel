@@ -116,7 +116,7 @@ static const char *const STYLE_N[2] = {"FLAT", "LINE"};
 typedef struct { uint8_t row; uint32_t bit; const char *name[2]; } menu_flag_t;
 static const menu_flag_t MENU_FLAGS[] = {
     {MI_EXTSTART, PREF_START_BAR, {"PULSE", "BAR"}},
-    {MI_FXHOLD, PREF_FX_HOLD, {"OFF", "ON"}},          /* ON, a sound load keeps the track's sends and INSERT (ui.c load_kept) */
+    {MI_FXHOLD, PREF_FX_HOLD, {"OFF", "ON"}},          /* ON, a factory preset load keeps the track's sends (ui.c load_kept) */
     {MI_LIVELOAD, PREF_FULL_LOAD, {"PATTERN", "FULL"}},
     {MI_LARGE, PREF_LARGE, {"OFF", "ON"}},            /* #15 / Discussion #80: ON, big knob labels and values (ui.c large_kind) */
     {MI_ACCEL, PREF_ACCEL, {"OFF", "ON"}},            /* #52: ui_input.c accel */

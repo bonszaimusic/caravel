@@ -9,13 +9,18 @@ unless it says so; host tests and simulations are not hardware measurements.
 ## [Unreleased]
 
 ### Added
-- **FX HOLD** (MENU > VOICES, last row; OFF by default): with ON, loading a sound (a factory or user preset, PRESETS, an engine change,
-  MIDI program change, the editor) keeps the track's four sends (DST CHO DLY REV) and its INSERT (TYPE, A B C, MIX); the rest of the
-  sound is still set from the preset, and the SLICER, ARP, SCL and the mix stay as they always did. OFF is the old behaviour (the preset's
-  sends, INSERT OFF). SOUND INIT, CLEAN INIT, project INIT and power-on always start from the preset's / default FX. The global DLY,
-  REVERB and CHORUS are never touched by a sound load. See [Loading sounds and the track's FX](docs/menus-and-pages.md#loading-sounds-and-the-tracks-fx).
-  Editor menu id 41 (OFF / ON, VOICES tab); it is a device setting stored in the settings byte that already holds 2ND CORE and EXT START
+- **FX HOLD** (MENU > VOICES, last row; OFF by default): with ON, loading a factory preset (PRESETS, an engine change, MIDI program
+  change, the editor) keeps the track's four sends (DST CHO DLY REV) instead of setting the preset's. The rest of the sound is still the
+  preset's; the SLICER, ARP, SCL and the mix stay as they always did. A user preset still loads its own sends and INSERT. SOUND INIT,
+  project INIT and power-on always start from the preset's sends; CLEAN INIT clears them. The global DLY, REVERB and CHORUS are never
+  touched by a sound load. See [Loading sounds and the track's FX](docs/menus-and-pages.md#loading-sounds-and-the-tracks-fx).
+  Editor menu id 41 (OFF / ON, VOICES tab); a device setting stored in the settings byte that already holds 2ND CORE and EXT START
   (bit 2), so user presets, projects and settings formats are unchanged. Host tests only, nothing tried on a real FM-1.
+
+### Changed
+- **A factory preset load keeps the track's INSERT** (TYPE, A B C, MIX) instead of switching it OFF: no factory preset has an INSERT, so
+  loading one no longer takes the track's away, like the SLICER. A user preset still loads the INSERT it was saved with; SOUND INIT,
+  CLEAN INIT, project INIT and power-on still start with the INSERT OFF.
 
 ## [0.1.0] — 2026-10-19 (first version under the name Caravel, not yet released)
 

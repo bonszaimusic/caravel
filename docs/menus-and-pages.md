@@ -33,24 +33,25 @@ FX, INSERT, INSERT 2, SLICER, DLY, REVERB, CHORUS, so FX and INSERT are neighbou
 
 ## Loading sounds and the track's FX
 
-A track's own FX are four sends (DST, CHO, DLY, REV, on the FX page) and its INSERT (TYPE and A B C, MIX). The delay, reverb and
-chorus themselves (DLY, REVERB, CHORUS pages) are global: one set for the whole project.
+A track's own FX are four sends (DST, CHO, DLY, REV, on the FX page) and its INSERT (TYPE and A B C, MIX). The sends say how much of the
+track goes to the one shared delay, reverb and chorus (DLY, REVERB, CHORUS pages, global for the whole project); DST is the track's own
+distortion. The INSERT is the track's own too.
 
-What a sound load does (a factory preset on PRESETS or EDIT KNOB 2, a user preset, an engine change, a MIDI program change, the editor):
+What a sound load does:
 
-| | FX HOLD OFF (default) | FX HOLD ON |
+| | factory preset (PRESETS, EDIT KNOB 2, engine change, MIDI program change, editor) | user preset |
 | --- | --- | --- |
-| Sends DST CHO DLY REV | the preset's, or the usual 0 / 24 / 28 / 36 if it has none | stay as they are |
-| INSERT (TYPE, A B C, MIX) | OFF and its defaults | stays as it is |
+| Sends DST CHO DLY REV | FX HOLD OFF (default): the preset's, or the usual 0 / 24 / 28 / 36 if it has none. FX HOLD ON: stay as they are | the saved ones |
+| INSERT (TYPE, A B C, MIX) | stays (no factory preset has one) | the saved one |
 | SLICER, ARP, SCL, LEN / DIV / SWG / GATE, LEVEL / PAN / MUTE | stay | stay |
 | Global DLY / REVERB / CHORUS, tempo, tuning | never touched | never touched |
-| Everything else of the sound (engine values, ENV, LFOs, matrix, ...) | the preset's or default | the preset's or default |
+| Everything else (engine values, ENV, LFOs, matrix, ...) | the preset's or default | the saved |
 
 **MENU > VOICES > FX HOLD** (HOME held, ALGORITHM to VOICES, the last row) switches it; it is a device setting kept with the other
-settings, not part of a project. A **user preset** still stores the track's FX when you save it, but under FX HOLD ON loading it does not
-apply them. **SOUND INIT**, **CLEAN INIT**, a new project (INIT) and power-on start from scratch whatever FX HOLD says: SOUND INIT gives
-the engine's first preset with its sends, CLEAN INIT no sends and INSERT OFF. Loading a **project** (or LIVE LOAD FULL) restores the FX it
-saved. SAVE held (undo) after a load still gives back the sound as it was. Automation and locks on the sends are not touched by FX HOLD.
+settings, not part of a project. **SOUND INIT**, a new project (INIT) and power-on start from scratch whatever FX HOLD says: the engine's
+first preset with its sends, INSERT OFF. **CLEAN INIT** clears the sends and the INSERT. Loading a **project** (or LIVE LOAD FULL) restores
+the FX it saved. SAVE held (undo) after a load gives back the sound as it was. Automation and locks on the sends are not touched.
+Before the FX HOLD change a factory preset load switched the INSERT OFF.
 
 ## SELECT
 

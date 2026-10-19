@@ -9862,8 +9862,9 @@ static int test_edit_quick_actions(void)
 
 
 #ifndef DRUMX_TEST_ONLY
-/* FX HOLD (MENU > VOICES, PREF_FX_HOLD, ui.c load_kept): a sound load keeps the track's sends and INSERT; off (the default) it
- * sets them as before; the global DLY / REVERB / CHORUS are never touched; the inits start from scratch either way */
+/* FX HOLD (MENU > VOICES, PREF_FX_HOLD, ui.c load_kept): a factory preset load always keeps the track's INSERT (no preset has
+ * one) and, with FX HOLD on, its sends too (off: the preset's); a user preset loads its own sends and INSERT; the global
+ * DLY / REVERB / CHORUS are never touched; the inits start from scratch either way */
 static void fx_mark(track_t *t)                       /* values no preset has: sends 71..74, an INSERT of every field */
 {
     uint32_t i;
@@ -9909,8 +9910,9 @@ static int test_fx_hold(void)
     song.g[G_DTIME] = 33; song.g[G_DMIX] = 41; song.g[G_RSIZE] = 55; song.g[G_CRATE] = 66; song.g[G_CDEPTH] = 77;
     for (i = 0; i < G_COUNT; i++) g[i] = (uint32_t)song.g[i];
     apply_preset_to(t, 2);
-    bad += check("FX HOLD off: a preset load sets the preset's sends and INSERT OFF (as before); the SLICER stays",
-                 fx_preset_sends(t, e, 2) && fx_insert_off(t) && t->p[P_SLCR] == SL_GATE && t->p[P_GLIDE] == TP[P_GLIDE].def);
+    bad += check("FX HOLD off: a preset load sets the preset's sends; the INSERT stays (no factory preset has one), as the SLICER",
+                 fx_preset_sends(t, e, 2) && t->p[P_ITYPE] == IT_FLANGER && t->p[P_IA] == 11 && t->p[P_IB] == 22 &&
+                 t->p[P_IC] == 33 && t->p[P_IMIX] == 44 && t->p[P_SLCR] == SL_GATE && t->p[P_GLIDE] == TP[P_GLIDE].def);
     menu_put(MI_FXHOLD, 1);
     bad += check("FX HOLD: ON is bit 2 of ui_prefs3 (a setting, kept by an export / import)", menu_get(MI_FXHOLD) == 1u && (ui_prefs3 & 4u));
     {
@@ -9921,7 +9923,7 @@ static int test_fx_hold(void)
     fx_mark(t);
     t->p[P_GLIDE] = 9;
     apply_preset_to(t, 3);
-    bad += check("FX HOLD on: a preset load keeps the sends and the INSERT, the rest of the sound is the preset's",
+    bad += check("FX HOLD on: a preset load keeps the sends (and the INSERT); the rest of the sound is the preset's",
                  fx_marked(t) && t->preset == 3u && t->p[P_GLIDE] == TP[P_GLIDE].def && t->p[P_SLCR] == SL_GATE &&
                  t->p[P_E0] == (int16_t)e->presets[3].e[0] && t->p[P_ATK] == e->presets[3].env[0]);
     ok = 1;
@@ -9940,15 +9942,17 @@ static int test_fx_hold(void)
                  up_used(9) && v[P_DIST] == 5 && v[P_REV] == 8 && v[P_ITYPE] == IT_FUZZ && v[P_IMIX] == 99);
     fx_mark(t);
     up_load(9);
-    bad += check("  .. a user preset load keeps the track's FX (the stored ones are not applied)", fx_marked(t) && t->user == 10u);
+    bad += check("  .. a user preset load sets its own sends and INSERT even so (a whole sound)",
+                 t->p[P_DIST] == 5 && t->p[P_REV] == 8 && t->p[P_ITYPE] == IT_FUZZ && t->p[P_IMIX] == 99 && t->user == 10u);
     menu_put(MI_FXHOLD, 0);
+    fx_mark(t);
     up_load(9);
-    bad += check("FX HOLD off: a user preset load sets the stored FX", t->p[P_DIST] == 5 && t->p[P_REV] == 8 && t->p[P_ITYPE] == IT_FUZZ && t->p[P_IMIX] == 99);
+    bad += check("FX HOLD off: the same", t->p[P_DIST] == 5 && t->p[P_REV] == 8 && t->p[P_ITYPE] == IT_FUZZ && t->p[P_IMIX] == 99);
     menu_put(MI_FXHOLD, 1);
     fx_mark(t);
     apply_preset_to(t, 1);
     undo_swap();
-    bad += check("  .. SAVE held (undo) brings the sound back, the FX are the same", fx_marked(t) && t->user == 10u);
+    bad += check("  .. SAVE held (undo) brings the sound back, the FX are the same", fx_marked(t));
     undo_swap();
     bad += check("  .. and again", fx_marked(t) && t->preset == 1u);
     fx_mark(t);

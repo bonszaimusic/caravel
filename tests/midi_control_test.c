@@ -841,8 +841,8 @@ static int pc_test(void)
     apply_preset_to(t, 3);
     ok = !memcmp(got.p, t->p, sizeof got.p) && !memcmp(got.step, was.step, sizeof got.step);
     ok &= got.p[P_LEVEL] == 90 && got.p[P_AMODE] == 2 && got.p[P_SLCR] == SL_GATE;
-    ok &= got.p[P_ITYPE] == TP[P_ITYPE].def && got.p[P_FTYPE] == TP[P_FTYPE].def && got.p[P_ESYNC] == TP[P_ESYNC].def;
-    bad += check("  as PRESETS loads it: steps, LEVEL, ARP, SLICER kept; INSERT, TYPE, ESYNC the preset's", ok);
+    ok &= got.p[P_ITYPE] == 1 && got.p[P_FTYPE] == TP[P_FTYPE].def && got.p[P_ESYNC] == TP[P_ESYNC].def;
+    bad += check("  as PRESETS loads it: steps, LEVEL, ARP, SLICER and the INSERT kept; TYPE, ESYNC the preset's", ok);
 
     /* a run of them: the last wins, one undo */
     midi_test_reset();

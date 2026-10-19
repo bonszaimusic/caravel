@@ -9,7 +9,7 @@ T1..T4's reservations: 1..5 voices each, at most eight in total. Reduce a track 
 to 2/2/2/2 and stays saved while AUTO is selected.
 
 The tab's last row, **FX HOLD**, is not a voice setting: select it with PRESETS and it is an ordinary OFF / ON row (OCT and the knobs then change it, not the
-reservations). With ON a sound load keeps the track's FX; see [Loading sounds and the track's FX](menus-and-pages.md#loading-sounds-and-the-tracks-fx).
+reservations). With ON a factory preset load keeps the track's sends; see [Loading sounds and the track's FX](menus-and-pages.md#loading-sounds-and-the-tracks-fx).
 
 In **FIXED**, idle reservations stay with their track. New notes, release tails, ARPs, UNISON and DRUM / DRUM-X hits replace only that track's own
 voices, within the engine's existing polyphony limit. FX do not use synth voices. The CPU overload protection can still fade voices to protect

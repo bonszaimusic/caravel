@@ -87,8 +87,8 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define PREF_Y 0xFF000000u
 #define PREF_CPU2_ON (0x01u << 24)
 #define PREF_START_BAR (0x02u << 24)
-#define PREF_FX_HOLD (0x04u << 24)               /* MENU > VOICES > FX HOLD ON: a sound load keeps the track's sends and INSERT
-                                                  * (ui.c load_kept); clear in every older setting = OFF, a load sets them */
+#define PREF_FX_HOLD (0x04u << 24)               /* MENU > VOICES > FX HOLD ON: a factory preset load keeps the track's sends
+                                                  * (ui.c load_kept); clear in every older setting = OFF, the preset's sends */
 #define PREF_FULL_LOAD (0x80u << 16)             /* LIVE LOAD: PATTERN (default) / FULL; settings, not a project value */
 /* MENU > CONTROL > SELECT: 0 BPM, 1 PAGE (1.5.5, #188), 2 MODW, 3 VEL (1.5.6, #84: ui_input.c sel_play), bit 4 and bit 6 of
  * ui_prefs2 (0 in every older setting = BPM; 1.5.5's PAGE keeps its bit; firmware before 1.5.6 reads MODW as BPM and
@@ -1304,18 +1304,22 @@ static int param_kept(uint32_t i)
            (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_SQNT;
 }
 
-/* FX HOLD (MENU > VOICES, PREF_FX_HOLD): the track's own FX as well, the four sends (DST CHO DLY REV) and the INSERT
- * (TYPE, A B C, MIX), stay when a sound is loaded (a factory or user preset, an engine jump, MIDI program change, the
- * editor): the sound changes, the track's FX chain does not. Off (the default, and every older setting) a load sets
- * them: the preset's sends and INSERT OFF, as before. The global DLY / REVERB / CHORUS (song.g) are no sound value and
- * no load touches them. A load that starts a sound from scratch (power-on, project INIT, SOUND INIT, CLEAN INIT) takes
- * the sends and the INSERT whatever the setting says: fx_fresh counts those */
+/* What a factory preset load (and an engine jump, MIDI program change, the editor) leaves of the track's own FX. The INSERT
+ * (TYPE, A B C, MIX) is not part of any factory preset, so it stays: the track's channel strip, as the SLICER. The four
+ * sends (DST CHO DLY REV) are the preset's (preset_t.fx) unless FX HOLD (MENU > VOICES, PREF_FX_HOLD) is on: then the
+ * track's own stay. A user preset is a whole sound with its own sends and INSERT (upreset.c up_store): loading it sets
+ * them, FX HOLD or not. The global DLY / REVERB / CHORUS (song.g) are no sound value and no load touches them. A load
+ * that starts a sound from scratch (power-on, project INIT, SOUND INIT) takes the sends and the INSERT whatever the
+ * setting says: fx_fresh counts those. (undo and CLEAN INIT keep to param_kept: SAVE held gives back what the load
+ * changed; CLEAN INIT clears the FX) */
 static uint8_t fx_fresh;
-static int param_fx(uint32_t i) { return (i >= P_DIST && i <= P_REV) || (i >= P_ITYPE && i <= P_IMIX); }
+static int param_send(uint32_t i) { return i >= P_DIST && i <= P_REV; }
+static int param_insert(uint32_t i) { return i >= P_ITYPE && i <= P_IMIX; }
 static int fx_hold(void) { return (ui_prefs3 & (PREF_FX_HOLD >> 24)) != 0u && !fx_fresh; }
-/* what a sound load leaves alone: param_kept, and with FX HOLD the track's FX. (undo and CLEAN INIT keep to
- * param_kept: SAVE held gives back what the load changed, which under FX HOLD is not the FX; CLEAN INIT clears them) */
-static int load_kept(uint32_t i) { return param_kept(i) || (fx_hold() && param_fx(i)); }
+static int load_kept(uint32_t i)
+{
+    return param_kept(i) || (!fx_fresh && param_insert(i)) || (fx_hold() && param_send(i));
+}
 
 /* a retired preset kept as an alias, so stored preset numbers stay valid: SAMPLE 1, once TRANH, is PIANO
  * (tools/gen_samples.py SMP_SET_ORIG). It loads as the original; browsing skips it. -> the preset k stands for.
