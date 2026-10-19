@@ -377,6 +377,10 @@ static void lfo_cards(const page_t *pg)
                                             dd->kind == DK_LFO ? TSEL->p[P_LSYNC] : 0);
             const aafont_t *vf = &AF_M;
             param_format(d, v, val, &unit);
+            if (rps[row] && rps[row]->graph == GR_MOD && col == 2u) {   /* MOD's DST: E1..E8 by the engine's own labels (mod.c mod_dst_name) */
+                str_cpy(val, mod_dst_name(TSEL, v), sizeof val);
+                unit = "";
+            }
             if ((ui_prefs & PREF_LARGE) && !icon && large_face_has(val) && text_w(&AF_L, val) <= 48)
                 vf = &AF_L;
             cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, d->label, disabled ? T_DIM : T_TEXT, T_SURF);

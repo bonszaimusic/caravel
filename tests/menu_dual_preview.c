@@ -137,6 +137,23 @@ int main(int argc, char **argv)
                 assert(TSEL->p[P_M1SRC + 3u * mod_ui_slot] != m0 && TSEL->p[P_LD_PIT] == d0);
                 mod_ui_slot = 0;
             }
+            {   /* MOD's DST card names the engine's own parameter (DRONE: SPREAD .. TONE), not E1 .. E8 */
+                char dst[16];
+                uint16_t keep = TSEL->eng_req;
+                set_engine_of(TSEL, ENGI_DRONE); TSEL->engine = TSEL->eng_req;
+                TSEL->p[P_M1SRC] = MS_LFO; TSEL->p[P_M1DST] = MD_E1; TSEL->p[P_M1AMT] = 64; mod_ui_slot = 0;
+                go_title("MOD"); frame();
+                const dual_t *dd = dual_of(cur_page(), 0);
+                const page_t *rp = dual_row_page(dd, 1);
+                int32_t v; const param_desc_t *d = dual_card(dd, rp, 1, 2, &v);
+                assert(d && v == MD_E1);
+                str_cpy(dst, mod_dst_name(TSEL, v), sizeof dst);
+                assert(str_eq(dst, "SPREAD"));
+                TSEL->p[P_M1SRC] = TSEL->p[P_M1DST] = TSEL->p[P_M1AMT] = 0;
+                set_engine_of(TSEL, keep); TSEL->engine = TSEL->eng_req;
+                snprintf(path0, sizeof path0, "%s/mod-drone-palette-%02u-%s.ppm", argv[1], palette, large ? "large" : "normal");
+                save_screen(path0);
+            }
             {   /* INSERT 2: KNOB 4 is FX HOLD, the device setting that MENU > VOICES has as well */
                 go_title("INSERT 2"); frame();
                 uint32_t h0 = menu_get(MI_FXHOLD) ? 1u : 0u;
