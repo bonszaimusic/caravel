@@ -136,7 +136,7 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
         midi_clock.tempo_n = 0;
         midi_clock.tempo_k = 1;
     } else if (++midi_clock.tempo_n == 6u) {
-        uint32_t *h = midi_clock.tempo_hist, k = midi_clock.tempo_k, dt = ms - h[0], j;
+        uint32_t *h = midi_clock.tempo_hist, k = midi_clock.tempo_k, dt = ms - h[0], j, cut = 0;
         midi_clock.tempo_n = 0;
         /* Six clocks are a quarter of a beat. Reject gaps and corrupt bursts. A stamp has 1 ms and a controller
          * byte ahead of a Clock on the wire delays it by up to 1 ms more, so six clocks alone read +-1..2 BPM:
@@ -146,8 +146,8 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
             k = 0;
         else if (k > 1u) {
             uint32_t mean = (h[0] - h[k - 1u]) / (k - 1u);
-            if (dt > mean + mean / 4u + 1u || dt + mean / 4u + 1u < mean)
-                k = 1u;
+            if (dt > mean + mean / 8u + 1u || dt + mean / 8u + 1u < mean)
+                k = 1u, cut = 1u;
         }
         for (j = 4u; j; j--)
             h[j] = h[j - 1u];
@@ -157,6 +157,8 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
             uint32_t periods = midi_clock.tempo_k - 1u, dtn = ms - h[periods];
             uint32_t old_beat = beat_samples(), new_beat = (uint32_t)FS * 4u * dtn / (periods * 1000u);
             uint32_t bpm10 = (150000u * periods + dtn / 2u) / dtn, shown = (uint32_t)song.g[G_BPM] * 10u;
+            if (cut)                                /* a step: this quarter-beat alone, the next window starts at this mark */
+                midi_clock.tempo_k = 1u;
             if (song.playing && new_beat != old_beat) {
                 uint32_t i;
                 /* Preserve each track's fractional step phase when the master
