@@ -4564,6 +4564,38 @@ static uint32_t gated(const track_t *t, uint32_t note)   /* voices of t sounding
 }
 static void blocks(uint32_t n) { while (n--) events_block(CTL); }
 static void tap_k(uint32_t k) { key_down(k); frame(); key_up(k); frame(); }
+/* SEQ held + F5 (CLEAR STEP) with step entry armed: the key reaches the main loop a few ms BEFORE the button, so step entry has already
+ * written an F into the cursor step; the layer takes it back and the tool clears the step: no F step is left behind (a user report) */
+static int test_clear_step_race(void)
+{
+    int bad = 0, ok = 1, add;
+    for (add = 0; add < 2; add++) {
+        track_t *t;
+        uint32_t i, F;
+        ui_power_on();
+        menu_put(MI_CHADD, (uint32_t)add);
+        t = TSEL;
+        t->p[P_VOICE] = V_POLY;
+        track_defaults_steps(t);
+        for (i = 0; i < NSTEP; i++) step_clear(&t->step[i]);
+        t->step[3] = (step_t){{50}, 1, ST_NOTE, 0, 100};
+        go_page(GR_ROLL); cursor_set(3); frames(8);
+        press(B_REC); frames(8);                         /* step entry armed */
+        F = white(TL_STEPCLR);
+        key_down(F); frame();                            /* the key first: written into the step (an F) */
+        ok &= t->step[3].n >= 1u && ui.entry_open;
+        btn_down(B_SEQ); frame();                        /* the button 16 ms later: the layer opens */
+        ok &= !t->step[3].n && ui.cursor == 4u && msg_is("STEP CLEARED");
+        frames(2); key_up(F); frame(); btn_up(B_SEQ); frame();
+        for (i = 0; i < NSTEP; i++)
+            ok &= !t->step[i].n;                         /* no F anywhere, the step is gone */
+        ok &= ui.cursor == 4u;
+        bad += check(add ? "SEQ + F5 with the key a frame early, CHORD ENTRY ADD: no F step, the step cleared" :
+                           "SEQ + F5 with the key a frame early, step entry armed: no F step, the step cleared", ok);
+        ok = 1;
+    }
+    return bad;
+}
 static int test_step_preview_chord_entry(void)
 {
     int bad = 0, ok;
@@ -9990,6 +10022,7 @@ int main(void)
     bad += test_step_rec();
     bad += test_step_rec();
     bad += test_step_preview_chord_entry();
+    bad += test_clear_step_race();
     bad += test_presets_knob();
     bad += test_midi();
     bad += test_save();
