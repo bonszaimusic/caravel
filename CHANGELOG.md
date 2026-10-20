@@ -6,6 +6,14 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.3.2] — unreleased
+
+### Added
+- **The eleven DRONE cell presets come with a slow movement**: two free-running LFOs (0.05 to 0.20 Hz) on two of the preset's values through the matrix, different for each preset (see [docs/engines/drone-cells.md](docs/engines/drone-cells.md)). The other presets and engines are unchanged. Host-tested only; not listened to on a device.
+
+### Fixed
+- **LATCH: the keys of latched notes stay lit** after their release (and with ARP, the arp's chord keys); they go dark when the latch ends. Host-tested only.
+
 ## [0.3.1] — 2026-10-20
 
 Includes everything of 0.3.0 and 0.2.0 (below), which were prepared but never published: this is the first release after 0.1.0.
