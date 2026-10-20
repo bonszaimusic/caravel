@@ -57,6 +57,8 @@ typedef struct {
     uint8_t idx;                 /* step 0..15 */
     uint8_t bit;                 /* this step's pattern bit (latched at its start) */
     uint8_t rec_on;              /* recording this step */
+    int32_t err;                 /* external clock: samples the pulse-locked clock is ahead of this one (+) or behind (-) */
+    uint32_t rem;                /* .. and the grid's remainder (seq.c midi_grid_advance) */
 } sl_t;
 static sl_t sl[NTRK];
 static uint8_t sl_lent;          /* perform.c has borrowed sl_buf: STUT plays live, records nothing */
@@ -67,6 +69,42 @@ static void slicer_start(void)   /* seq_start: the next block starts step 0 of e
     for (k = 0; k < NTRK; k++) {
         sl[k].idx = 15;
         sl[k].pos = sl[k].len = 0;
+        sl[k].err = 0;
+        sl[k].rem = 0;
+    }
+}
+
+/* External clock: the sequencer advances in the pulses' time (u grid units a block, seq.c MIDI_CLOCK_GRID a quarter), this
+ * clock in the audio's. Each block (seq.c, after the sequencer's tick) the units are turned into samples of musical time as
+ * midi_grid_advance does for a track's note value (the quarter cut to a multiple of the step's divisor, the remainder
+ * carried), against the n real ones; the difference is slewed into every step clock, SL_SLEW samples a block at most, so the
+ * SLICER stays on the sequencer's grid and the tempo estimate's small errors never add up. Not playing, or the internal
+ * clock: nothing to follow. */
+#define SL_SLEW 2
+#define SL_ERR_MAX 2205
+static void slicer_follow(uint32_t u, uint32_t n, int follow)
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++) {
+        sl_t *s = &sl[k];
+        uint32_t den = SL_DEN[(uint32_t)trk[k].p[P_SLRATE] % 6u], q = beat_samples() / den * den, num, m;
+        int32_t c;
+        if (!follow) {
+            s->err = 0;
+            s->rem = 0;
+            continue;
+        }
+        num = u * q + s->rem;                         /* u <= 12000, q <= 66150 */
+        m = num / 24000u;
+        s->rem = num % 24000u;
+        s->err = clamp(s->err + (int32_t)m - (int32_t)n, -SL_ERR_MAX, SL_ERR_MAX);
+        c = clamp(s->err, -SL_SLEW, SL_SLEW);
+        if (c < 0 && s->pos < (uint32_t)-c)         /* (at a step's start there is nothing to take back: next block) */
+            continue;
+        if (c > 0 && s->pos + (uint32_t)c > s->len)     /* (nothing beyond a step's end: the rest waits for the next block) */
+            c = s->len > s->pos ? (int32_t)(s->len - s->pos) : 0;
+        s->pos += (uint32_t)c;
+        s->err -= c;
     }
 }
 

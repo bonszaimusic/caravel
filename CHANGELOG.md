@@ -39,10 +39,11 @@ Includes everything of 0.2.0 (below), which was prepared but never published.
   served with 0.3.0 knows the new layout; the one of 0.2.0 does not.
 
 ### Fixed
-- **SLICER on the external clock stayed in time only for a while.** Its step length came from the whole BPM shown, while the sequencer
-  follows the measured beat: at 120.5 BPM shown as 120 the two parted by a 1/16 in about 30 s. The SLICER now takes the measured beat like
-  the sequencer's note values (internal clock: unchanged). Host-tested only (`tests/slicer_test.c`); the SLICER's free-running step clock can
-  still move against the pulse grid by the tempo estimate's small error over minutes.
+- **SLICER parting from the sequencer on the external clock.** The sequencer follows the clock pulses, the SLICER's step clock ran on
+  the audio's own time with a step length from the whole BPM shown, so the two moved apart (host model: 3..8 ms a minute, a 1/16 in
+  a few minutes). The step length now comes from the measured beat, and every block the SLICER's clock is moved towards the time the
+  sequencer has advanced (at most 2 samples a block), by the same arithmetic as the sequencer's note values: host model, 120 s at 63..174
+  BPM with CCs, no drift (< 0.05 ms a minute). Internal clock: unchanged. Host-tested only (`tests/slicer_test.c`, `tests/midi_clock_cc_test.c`).
 - **TRS MIDI clock with a controller on the same line: the BPM no longer jumps and the sequence holds its time better.** The tempo was
   measured over six Clock pulses with 1 ms stamps, so a steady 120..174 BPM read ±1..4 BPM, and every CC ahead of a Clock on the wire (up to
   3 bytes, ~1 ms) added to that; each such reading also re-scaled every track's phase and the gate/FX times. The tempo is now taken over the

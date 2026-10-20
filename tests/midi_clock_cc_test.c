@@ -101,7 +101,7 @@ static void sender(const scen_t *s)
 /* --- the receiver ----------------------------------------------------------------------------------- */
 typedef struct {
     double stamp_spread, bpm_lo, bpm_hi, shown_lo, shown_hi, err_lo, err_hi, slope, grid_lo, grid_hi;
-    double nominal_dev;
+    double nominal_dev, sl_lo, sl_hi, sl_slope;
     uint32_t clocks_sent, clocks_seen, cc_seen, drops;
 } res_t;
 
@@ -119,9 +119,12 @@ static void run(const scen_t *s, res_t *r)
     double ideal_first = 0, clk_period = 60e6 / (s->bpm * 24.0), warm_us = 4e6;
     double st_lo = 1e18, st_hi = -1e18, n_e = 0, sx = 0, sy = 0, sxx = 0, sxy = 0, blk_us = CTL * 1e6 / FS, next_blk = 0;
     uint32_t steps = 0, prev = 0, wi = 0, clocks_seen = 0, started = 0, first_seen = 0;
+    uint32_t sl_steps = 0, sl_prev = 0, sl_init = 0;
+    double sl_off = 0, sl_n = 0, sl_sx = 0, sl_sy = 0, sl_sxx = 0, sl_sxy = 0;
     memset(r, 0, sizeof *r);
     r->bpm_lo = r->shown_lo = r->err_lo = r->grid_lo = 1e9;
     r->bpm_hi = r->shown_hi = r->err_hi = r->grid_hi = -1e9;
+    r->sl_lo = 1e9; r->sl_hi = -1e9;
     sender(s);
     for (uint32_t i = 0; i < wire_n; i++) r->clocks_sent += wire[i].clock;
     ui_power_on(); ml_clear_all(); memset(&um, 0, sizeof um); memset((void *)um_ring, 0, sizeof um_ring); memset(&midi_clock, 0, sizeof midi_clock);
@@ -129,6 +132,7 @@ static void run(const scen_t *s, res_t *r)
     song.g[G_CLOCK] = 2; song.g[G_ROUTE] = ROUTE_TRACK; song.g[G_BPM] = 100;
     for (uint32_t k = 0; k < NTRK; k++) {
         trk[k].p[P_SLEN] = 64; trk[k].p[P_SDIV] = 2;
+        trk[k].p[P_SLCR] = 1; trk[k].p[P_SLPAT] = 1; trk[k].p[P_SLRATE] = 1; trk[k].p[P_SLDEPTH] = 127;   /* SLICER GATE, 1/16 */
         for (uint32_t i = 0; i < NSTEP; i++) trk[k].step[i] = (step_t){{(uint8_t)(60 + k)}, 1, ST_NOTE, 0, 100};
     }
     host_ticks = base_us; felucca_dbg.in_audio = 0;
@@ -161,8 +165,14 @@ static void run(const scen_t *s, res_t *r)
                     r->cc_seen++;
             }
             events_block(CTL);
+            slicer_track(&trk[0], 0, CTL);                    /* the audio block's step clock, after the tick as audio.c */
             double beats = seq_beats(&trk[0], &steps, &prev), now = (double)us - 0;
             if (!started && midi_clock.have_pulse) started = 1;
+            if (started) {                                    /* the SLICER's 1/16 step clock, unwrapped from the start */
+                if (!sl_init) { sl_init = 1; sl_prev = sl[0].idx; }
+                sl_steps += (sl[0].idx + 16u - sl_prev) & 15u;
+                sl_prev = sl[0].idx;
+            }
             if (started && now > warm_us) {
                 double want = (now - ideal_first) / (clk_period * 24.0);
                 double err_ms = (beats - want) * 60e3 / s->bpm;
@@ -174,6 +184,14 @@ static void run(const scen_t *s, res_t *r)
                 if (song.g[G_BPM] < r->shown_lo) r->shown_lo = song.g[G_BPM];
                 if (song.g[G_BPM] > r->shown_hi) r->shown_hi = song.g[G_BPM];
                 n_e += 1; sx += now; sy += err_ms; sxx += now * now; sxy += now * err_ms;
+                if (sl[0].len) {                                  /* SLICER beats against the sequencer's, from the warm-up on */
+                    double sb = ((double)sl_steps + (double)sl[0].pos / sl[0].len) * 0.25, d = (sb - beats) * 60e3 / s->bpm;
+                    if (!sl_n) sl_off = d;
+                    d -= sl_off;
+                    if (d < r->sl_lo) r->sl_lo = d;
+                    if (d > r->sl_hi) r->sl_hi = d;
+                    sl_n += 1; sl_sx += now; sl_sy += d; sl_sxx += now * now; sl_sxy += now * d;
+                }
             }
         }
     }
@@ -181,6 +199,7 @@ static void run(const scen_t *s, res_t *r)
     r->stamp_spread = (st_hi - st_lo) / 1000.0;
     r->slope = (n_e * sxy - sx * sy) / (n_e * sxx - sx * sx) * 60e6;      /* ms of error per minute */
     r->clocks_seen = clocks_seen;
+    r->sl_slope = (sl_n * sl_sxy - sl_sx * sl_sy) / (sl_n * sl_sxx - sl_sx * sl_sx) * 60e6;
     r->grid_lo = r->err_lo * s->bpm / 60e3 * MIDI_CLOCK_GRID;
     r->grid_hi = r->err_hi * s->bpm / 60e3 * MIDI_CLOCK_GRID;
     r->drops = um.drops;
@@ -193,6 +212,7 @@ static void report(const char *name, const scen_t *s, const res_t *r)
 {
     printf("%-34s stamp spread %4.2f ms | tempo %6.2f..%6.2f BPM (shown %3.0f..%3.0f) | seq err %+6.2f..%+6.2f ms = %+5.0f..%+5.0f units, %+5.2f ms/min\n",
            name, r->stamp_spread, r->bpm_lo, r->bpm_hi, r->shown_lo, r->shown_hi, r->err_lo, r->err_hi, r->grid_lo, r->grid_hi, r->slope);
+    printf("%-34s SLICER 1/16 against the sequencer: %+6.2f..%+6.2f ms, %+5.2f ms/min\n", "", r->sl_lo, r->sl_hi, r->sl_slope);
     (void)s;
 }
 
@@ -225,6 +245,19 @@ int main(int argc, char **argv)
             slope_ok &= fabs(r.slope) < 0.2;                            /* and no drift over 16 s */
             wire_ok &= r.drops == 0 && r.clocks_seen + 2u >= r.clocks_sent;
         }
+    {   /* the SLICER's step clock is free running audio time, the sequencer's follows the pulses: they must not part (a tempo that is not a whole BPM) */
+        static const double odd[] = {120.5, 97.3, 174.4, 63.7};
+        int sl_ok = 1;
+        for (uint32_t b = 0; b < 4; b++) {
+            scen_t s = {odd[b], 12000, 0, 0, 0, 120, 0};
+            char name[96];
+            run(&s, &r);
+            snprintf(name, sizeof name, "%5.1f BPM, CC every 12 ms, 120 s", odd[b]);
+            report(name, &s, &r);
+            sl_ok &= r.sl_hi - r.sl_lo < 4.5 && fabs(r.sl_slope) < 0.2;
+        }
+        bad += check("SLICER step clock stays with the sequencer over 120 s (< 3 ms peak to peak, no drift)", sl_ok);
+    }
     bad += check("measured tempo stays within 0.8 BPM of the sender at 60..174 BPM with and without CCs", tempo_ok);
     bad += check("the displayed BPM never leaves the sender's tempo", shown_ok);
     bad += check("sequencer position keeps within 3 ms peak to peak of the wall clock", seq_ok);
