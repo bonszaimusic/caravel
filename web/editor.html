@@ -9,39 +9,75 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Caravel Editor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 17'%3E%3Cpath fill='%23ffaa29' d='M11 0h2v1h-2zM11 1h1v1h-1zM11 2h2v1h-2zM7 3h9v1h-9zM19 3h1v1h-1zM7 4h9v1h-9zM19 4h1v1h-1zM7 5h7v1h-7zM15 5h7v1h-7zM7 6h7v1h-7zM15 6h8v1h-8zM7 7h7v1h-7zM15 7h8v1h-8zM6 8h8v1h-8zM15 8h8v1h-8zM2 9h21v1h-21zM27 9h1v1h-1zM2 10h21v1h-21zM25 10h2v1h-2zM2 11h5v1h-5zM11 11h1v1h-1zM19 11h1v1h-1zM24 11h2v1h-2zM2 12h22v1h-22zM3 13h20v1h-20zM4 14h18v1h-18zM7 15h13v1h-13z'/%3E%3C/svg%3E">
 <style>
   /* Fukiai: Hügelton Instruments' icon font (MIT, FUKIAI-LICENSE.txt). Icons are text in .ic spans;
      they stay hidden until the face has loaded (html.fk), so a missing font never shows boxes. */
   @font-face { font-family: "Fukiai"; src: url("fukiai.ttf") format("truetype"); font-display: block; unicode-range: U+EA00-EB09; }
-  :root { --bg: #fff; --fg: #000; --dim: #777; --line: #ccc; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #888; --line: #444; }
+/*LOOK-BEGIN*/
+  /* Caravel look: the firmware's AMBER palette (PAPER in light), the pixel ship, boxes with a tag on the border */
+  :root { --bg: #100c08; --box: #181208; --surf: #292010; --line: #3b2e18; --raise: #54411f; --ctl: #8a7347;
+          --text: #f7efde; --dim: #9a8a6b; --amb: #ffaa29; --cy: #63d7e6; --onamb: #1a1205;
+          --mono: ui-monospace, Menlo, Consolas, monospace; color-scheme: dark; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f6efe4; --box: #efe6d6; --surf: #e6d9c8; --line: #cdbda3; --raise: #b8a283; --ctl: #7a6540;
+          --text: #201a12; --dim: #625740; --amb: #963e10; --cy: #0b6a7a; --onamb: #fffaf0; color-scheme: light; }
   }
-  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #888; --line: #444; }
-  html { color-scheme: light dark; }
-  body { margin: 0; background: var(--bg); color: var(--fg);
+  :root[data-theme="light"] { --bg: #f6efe4; --box: #efe6d6; --surf: #e6d9c8; --line: #cdbda3; --raise: #b8a283; --ctl: #7a6540;
+          --text: #201a12; --dim: #625740; --amb: #963e10; --cy: #0b6a7a; --onamb: #fffaf0; color-scheme: light; }
+  :focus-visible { outline: 2px solid var(--cy); outline-offset: 2px; }
+  .ship { display: block; fill: currentColor; shape-rendering: crispEdges; }
+  .site { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 16px; background: var(--surf);
+          border-bottom: 1px solid var(--line); font: 600 12px/1.2 var(--mono); }
+  .site .logo { display: flex; align-items: center; gap: 10px; color: var(--amb); text-decoration: none; letter-spacing: .14em; font-size: 15px; font-weight: 700; }
+  .pill { font: 600 10px/1 var(--mono); letter-spacing: .06em; padding: 4px 8px; border: 1px solid var(--raise); border-radius: 99px; color: var(--dim); white-space: nowrap; }
+  .site nav { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; }
+  .site nav a { padding: 5px 10px; border-radius: 99px; color: var(--dim); text-decoration: none; letter-spacing: .08em; font-size: 11px; }
+  .site nav a:hover { color: var(--text); }
+  .site nav a[aria-current] { background: var(--amb); color: var(--onamb); }
+  .boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px 10px; margin: 0 0 22px; }
+  .box { position: relative; min-width: 0; box-sizing: border-box; border: 1px solid var(--line); background: var(--box); border-radius: 4px; padding: 18px 12px 12px; }
+  .box > .tag { position: absolute; top: -8px; left: 10px; padding: 0 6px; font: 700 10px/16px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+                background: var(--amb); color: var(--onamb); border-radius: 2px; }
+  .box.sec > .tag { background: var(--surf); color: var(--amb); box-shadow: inset 0 0 0 1px var(--raise); }
+  .btn, button { font: 600 12px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; border-radius: 3px; padding: 9px 18px; cursor: pointer;
+                 background: transparent; color: var(--amb); border: 1px solid var(--raise); }
+  .btn.primary, button.primary { background: var(--amb); color: var(--onamb); border-color: var(--amb); }
+  .btn:hover, button:hover { border-color: var(--amb); }
+  button:disabled { cursor: default; background: var(--surf); color: var(--dim); border-color: var(--ctl); }
+  /*LOOK-END*/
+  /* the sample trimmer's canvas reads --fg and --line (script): the accent and the hairline */
+  :root { --fg: var(--amb); }
+  body { margin: 0; background: var(--bg); color: var(--text);
          font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
          font-variant-numeric: tabular-nums; }
   main { max-width: 1100px; margin: 0 auto; padding: 16px; }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
-  h2 { font-size: 13px; font-weight: 600; margin: 0 0 4px; padding-bottom: 2px; border-bottom: 1px solid var(--fg); }
+  h1 { font: 700 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+  h2 { font: 700 10px/16px var(--mono); letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; color: var(--amb); }
   h3 { font-size: 11px; font-weight: 400; color: var(--dim); margin: 4px 0 0; }
   a { color: inherit; }
-  .lang { float: right; font-size: 12px; color: var(--dim); text-decoration: underline; background: none; padding: 0; }
-  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 2px 10px; cursor: pointer; }
-  button:disabled { opacity: .3; cursor: default; }
-  button.lang { color: var(--dim); background: none; }
+  button.lang { float: right; padding: 3px 9px; font-size: 11px; }
+  button { padding: 3px 10px; font-size: 11px; letter-spacing: .04em; text-transform: none; }
   select, input[type=text], input[type=number], input[type=search] {
-    font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 1px 3px; border-radius: 0; }
-  input[type=range] { width: 100%; margin: 0; accent-color: var(--fg); }
-  input[type=checkbox] { accent-color: var(--fg); margin: 0; }
+    font: inherit; color: var(--text); background: var(--surf); border: 1px solid var(--ctl); padding: 2px 4px; border-radius: 3px; }
+  input[type=range] { width: 100%; margin: 0; accent-color: var(--amb); }
+  input[type=checkbox] { accent-color: var(--amb); margin: 0; }
   .bar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 8px; }
   .dim { color: var(--dim); }
   #status { min-height: 1.4em; }
   section { margin: 12px 0; }
-  .groups { columns: 250px; column-gap: 20px; }
-  .group { break-inside: avoid; margin: 0 0 12px; }
+  /* a group is a box; its heading is the tag on the border (a group inside a group gets the outlined tag) */
+  .group { position: relative; min-width: 0; box-sizing: border-box; margin: 22px 0 0; padding: 18px 12px 12px;
+           border: 1px solid var(--line); background: var(--box); border-radius: 4px; }
+  .group > h2 { position: absolute; top: -8px; left: 10px; margin: 0; padding: 0 6px; background: var(--amb); color: var(--onamb); border-radius: 2px; }
+  .group .group > h2 { background: var(--surf); color: var(--amb); box-shadow: inset 0 0 0 1px var(--raise); }
+  .group > :last-child { margin-bottom: 0; }
+  .panel > .group:first-child, .panel > .dim + .group { margin-top: 18px; }
+  .groups, .libcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 22px 10px; align-items: start; margin-top: 18px; }
+  .groups > .group, .libcols > .group { margin: 0; }
+  .libcols { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
   .row { display: grid; grid-template-columns: 46px 1fr 70px; gap: 6px; align-items: center; min-height: 22px; }
+  .row > span:first-child { color: var(--dim); }
   .row .v { text-align: right; white-space: nowrap; }
   .row select { width: 100%; }
   .browser { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
@@ -53,7 +89,7 @@
   td.i { color: var(--dim); text-align: right; }
   #steps input[type=text] { width: 120px; }
   #steps input[type=number] { width: 48px; }
-  #steps .bad { outline: 1px solid var(--fg); text-decoration: underline wavy; }
+  #steps .bad { outline: 1px solid var(--amb); text-decoration: underline wavy; }
   .fm6ops { overflow-x: auto; }
   .fm6ops td, .fm6ops th { padding: 0 2px; }
   input.fm6n { width: 3.2em; }
@@ -67,32 +103,29 @@
     #steps th, #steps td { padding-right: 3px; }
   }
   .smp { margin: 0 0 14px; padding: 6px 0 0; border-top: 1px solid var(--line); }
-  .smp.over { outline: 1px solid var(--fg); outline-offset: 2px; }
+  .smp.over { outline: 1px solid var(--amb); outline-offset: 2px; }
   .smp .head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
   .smp .head b { font-weight: 600; min-width: 40px; }
   .smp canvas.trim { width: 100%; height: 56px; display: block; touch-action: none; cursor: ew-resize; }
   .smp progress.rec { width: 120px; }
-  .smp progress { width: 160px; height: 6px; accent-color: var(--fg); }
+  .smp progress { width: 160px; height: 6px; accent-color: var(--amb); }
   .smp table { margin: 4px 0; }
   .smp input.name { width: 80px; text-transform: uppercase; }
   .smp input.root { width: 48px; }
   .smp .bad { text-decoration: underline wavy; }
   footer { margin-top: 24px; font-size: 11px; color: var(--dim); }
-  .row.pushed .v { font-weight: 600; }
+  .row.pushed .v { font-weight: 600; color: var(--amb); }
   .row.modrow { grid-template-columns: 16px 1fr 1fr 1fr 52px; }
-  /* librarian: local library and the device's user bank side by side, stacked on a phone */
-  .libcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 8px 24px; margin-top: 6px; }
-  .libcols > div { min-width: 0; }
   .libcols .bar input[type=search] { flex: 1 1 120px; min-width: 0; }
-  .list { height: 260px; overflow: auto; border: 1px solid var(--line); resize: vertical; }
+  .list { height: 260px; overflow: auto; border: 1px solid var(--line); background: var(--bg); resize: vertical; }
   .list table { width: 100%; table-layout: fixed; }
   .list th { position: sticky; top: 0; background: var(--bg); padding: 1px 6px; }
   .list td { padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .list tr[data-id], .list tr[data-slot] { cursor: pointer; }
-  .list tr.sel td { background: var(--fg); color: var(--bg); }
+  .list tr.sel td { background: var(--amb); color: var(--onamb); }
   .list tr.empty td { color: var(--dim); }
-  .list tr.over td { outline: 1px dashed var(--fg); outline-offset: -1px; }
-  .list.over { outline: 1px solid var(--fg); }
+  .list tr.over td { outline: 1px dashed var(--amb); outline-offset: -1px; }
+  .list.over { outline: 1px solid var(--amb); }
   .list .none { padding: 6px; color: var(--dim); }
   .list col.n { width: 40px; } .list col.e { width: 72px; } .list col.d { width: 78px; }
   .ic { font-family: "Fukiai"; font-style: normal; font-weight: 400; font-synthesis: none; line-height: 1; margin-right: .3em; }
@@ -100,61 +133,72 @@
   /* wave choices: a page-drawn picker so the options can carry an icon (Chrome 135+); native menus get words only */
   @supports (appearance: base-select) {
     select.wave, select.wave::picker(select) { appearance: base-select; }
-    select.wave { padding: 1px 3px; min-block-size: 0; border: 1px solid var(--line); border-radius: 0; background: var(--bg); color: var(--fg); }
-    select.wave > button { font: inherit; background: none; color: inherit; padding: 0; text-align: start; }
-    select.wave::picker(select) { border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 0; }
+    select.wave { padding: 2px 4px; min-block-size: 0; border: 1px solid var(--ctl); border-radius: 3px; background: var(--surf); color: var(--text); }
+    select.wave > button { font: inherit; letter-spacing: 0; background: none; color: inherit; padding: 0; border: 0; text-align: start; }
+    select.wave::picker(select) { border: 1px solid var(--ctl); background: var(--box); color: var(--text); padding: 0; }
     select.wave option { padding: 1px 6px; min-block-size: 0; }
     select.wave option:checked { font-weight: 600; }
-    select.wave option:hover, select.wave option:focus-visible { background: var(--fg); color: var(--bg); }
+    select.wave option:hover, select.wave option:focus-visible { background: var(--amb); color: var(--onamb); }
     select.wave option::checkmark { display: none; }
   }
-  /* tabs: a wrapping row of plain buttons, the open one inverted; header stays at the top on wide screens */
+  /* tabs: a wrapping row of pills, the open one filled; the header stays at the top on wide screens */
   .top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0 0; }
   @media (max-width: 600px) { .top { position: static; } }
-  .tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--fg); margin: 6px 0 0; }
-  .tabs button { background: none; color: var(--dim); padding: 4px 10px; border: 1px solid transparent; border-bottom: 0; white-space: nowrap; }
-  .tabs button:hover { color: var(--fg); }
-  .tabs button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
-  .trackbar { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
-  .seg { display: inline-flex; flex-wrap: wrap; }
-  .seg button, button.tog { background: var(--bg); color: var(--fg); border: 1px solid var(--fg); padding: 1px 10px; }
-  .seg button + button { border-left: 0; }
-  .seg button[aria-pressed="true"], button.tog[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); margin: 8px 0 0; padding-bottom: 8px; }
+  .tabs button { color: var(--dim); border-color: var(--line); border-radius: 99px; padding: 4px 12px; white-space: nowrap; }
+  .tabs button:hover { color: var(--text); border-color: var(--amb); }
+  .tabs button[aria-selected="true"] { background: var(--amb); color: var(--onamb); border-color: var(--amb); }
+  .trackbar { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, button.tog { color: var(--text); border-color: var(--ctl); border-radius: 99px; padding: 2px 12px; }
+  .seg button[aria-pressed="true"], button.tog[aria-pressed="true"] { background: var(--amb); color: var(--onamb); border-color: var(--amb); }
   .panel { margin: 12px 0; }
   .hint { margin: 16px 0; color: var(--dim); }
-  /* sequencer: a step grid over the selected track (16 per row, 8 on a phone) */
+  /* sequencer: a step grid over the selected track (16 per row, 8 on a phone): a note is amber, a tie sits raised with a cyan underline */
   .grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; margin: 6px 0 12px; }
   @media (max-width: 600px) { .grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
-  .grid button { background: var(--bg); color: var(--fg); border: 1px solid var(--line); padding: 2px; min-width: 0; height: 52px;
-                 display: flex; flex-direction: column; justify-content: flex-start; gap: 1px; text-align: left; overflow: hidden; font-size: 10px; line-height: 1.15; }
+  .grid button { background: var(--surf); color: var(--text); border: 1px solid var(--line); border-radius: 2px; padding: 2px; min-width: 0; height: 52px;
+                 display: flex; flex-direction: column; justify-content: flex-start; gap: 1px; text-align: left; overflow: hidden;
+                 font: 500 10px/1.15 var(--mono); letter-spacing: 0; }
   .grid button .n { color: var(--dim); }
   .grid button .x { overflow: hidden; overflow-wrap: anywhere; flex: 1; }
-  .grid button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-  .grid button.on .n { color: inherit; opacity: .6; }
+  .grid button.on { background: var(--amb); color: var(--onamb); border-color: var(--amb); }
+  .grid button.on .n { color: inherit; opacity: .75; }
   .grid button.acc .x { font-weight: 700; }
-  .grid button.tie { border-style: dashed; border-color: var(--fg); }
-  .grid button.beat { border-left-color: var(--fg); }
-  #steps tr.hl td { outline: 1px solid var(--fg); }
+  .grid button.tie { background: var(--raise); border-color: var(--raise); box-shadow: inset 0 -3px 0 var(--cy); }
+  .grid button.tie .n { color: var(--text); }
+  .grid button.beat { border-left-color: var(--ctl); }
+  #steps tr.hl td { outline: 1px solid var(--cy); }
   /* mixer: four channel strips as on the device's TRACKS page */
   .mixer { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 640px; margin: 6px 0; }
-  .strip { border: 1px solid var(--line); padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-  .strip.sel { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
-  .strip .num { font-size: 18px; font-weight: 600; line-height: 1; }
+  .strip { border: 1px solid var(--line); background: var(--surf); border-radius: 3px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .strip.sel { border-color: var(--amb); box-shadow: inset 0 0 0 1px var(--amb); }
+  .strip .num { font: 700 18px/1 var(--mono); color: var(--amb); }
   .strip .snd { font-size: 11px; line-height: 1.3; width: 100%; text-align: center; overflow-wrap: anywhere; min-height: 2.6em; }
   .strip .rec { font-size: 11px; color: var(--dim); }
-  .strip .rec.on { color: var(--fg); font-weight: 600; }
+  .strip .rec.on { color: var(--amb); font-weight: 600; }
   .strip .rec:not(.on) .ic { visibility: hidden; }
   .strip input.fader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 150px; }
   .strip .v { font-size: 11px; white-space: nowrap; }
   .strip .pan { width: 100%; }
   .strip.muted .fader, .strip.muted .lv { opacity: .35; }
   .strip button { width: 100%; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .strip button.selb:disabled { opacity: 1; background: none; color: var(--dim); }
+  .strip button.selb:disabled { background: none; color: var(--dim); }
   #sysinfo th { padding-right: 16px; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
+<header class="site">
+  <a class="logo" href="../../" aria-label="Caravel"><svg class="ship" width="42" height="26" viewBox="0 0 28 17" aria-hidden="true"><path d="M11 0h2v1h-2zM11 1h1v1h-1zM11 2h2v1h-2zM7 3h9v1h-9zM19 3h1v1h-1zM7 4h9v1h-9zM19 4h1v1h-1zM7 5h7v1h-7zM15 5h7v1h-7zM7 6h7v1h-7zM15 6h8v1h-8zM7 7h7v1h-7zM15 7h8v1h-8zM6 8h8v1h-8zM15 8h8v1h-8zM2 9h21v1h-21zM27 9h1v1h-1zM2 10h21v1h-21zM25 10h2v1h-2zM2 11h5v1h-5zM11 11h1v1h-1zM19 11h1v1h-1zM24 11h2v1h-2zM2 12h22v1h-22zM3 13h20v1h-20zM4 14h18v1h-18zM7 15h13v1h-13z"/></svg>CARAVEL</a>
+  <span class="pill">v@VERSION@</span>
+  <nav aria-label="Caravel">
+    <a href="../installer/">INSTALL</a>
+    <a href="./" aria-current="page">EDITOR</a>
+    <a href="../../emulator/" data-site="emulator">EMULATOR</a>
+    <a href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener">DOCS</a>
+  </nav>
+</header>
 <main>
   <button class="lang" id="lang"></button>
   <h1>Caravel Editor</h1>
@@ -226,7 +270,7 @@
 
   <section class="panel" id="p-sequencer" data-tab="sequencer" data-dev hidden>
     <div class="groups" id="seqgroups"></div>
-    <div id="steps">
+    <div class="group" id="steps">
       <h2 data-t="steps" data-ic="note_eight"></h2>
       <p class="bar"><button id="reloadsteps" data-t="reload" data-ic="control_arrow_loop"></button>
         <button id="clearseq" data-t="clearSeq" data-ic="symbol_trash"></button>
@@ -234,7 +278,7 @@
       <div class="grid" id="stepgrid"></div>
       <div class="stepcols" id="steptables"></div>
     </div>
-    <div id="motion-panel" hidden style="margin-top:16px">
+    <div class="group" id="motion-panel" hidden>
       <h2 data-t="motion"></h2>
       <p class="bar"><label><input id="motion-on" type="checkbox"> <span data-t="motionOn"></span></label>
         <button id="motion-clear" data-t="motionClear"></button><span id="motion-count" class="dim"></span></p>
@@ -243,9 +287,11 @@
   </section>
 
   <section class="panel" id="p-tracks" data-tab="tracks" data-dev hidden>
-    <h2 data-t="mixer" data-ic="ui_slider_vertical"></h2>
-    <div class="mixer" id="mixer"></div>
-    <p class="dim" data-t="mixHelp"></p>
+    <div class="group">
+      <h2 data-t="mixer" data-ic="ui_slider_vertical"></h2>
+      <div class="mixer" id="mixer"></div>
+      <p class="dim" data-t="mixHelp"></p>
+    </div>
   </section>
 
   <!-- works without a device too (the device bank shows while connected) -->
@@ -257,7 +303,7 @@
       <div class="list" id="device-preset-list" style="margin-top:8px"></div>
     </div>
     <div class="libcols" id="libsec">
-      <div id="libpane">
+      <div class="group" id="libpane">
         <h2 data-t="library" data-ic="symbol_books"></h2>
         <div class="bar">
           <input type="search" id="libq" spellcheck="false">
@@ -283,7 +329,7 @@
           <span class="dim" id="libcount"></span>
         </p>
       </div>
-      <div>
+      <div class="group">
         <h2 data-t="bank" data-ic="port_disk"></h2>
         <p class="dim" id="bankhint"></p>
         <div id="bankpane" hidden>
@@ -306,22 +352,26 @@
   </section>
 
   <section class="panel" id="p-samples" data-tab="samples" data-dev hidden>
-    <h2 data-t="samples" data-ic="symbol_waves"></h2>
-    <p class="dim" data-t="smpHelp"></p>
-    <div id="smpslots"></div>
+    <div class="group">
+      <h2 data-t="samples" data-ic="symbol_waves"></h2>
+      <p class="dim" data-t="smpHelp"></p>
+      <div id="smpslots"></div>
+    </div>
   </section>
 
   <section class="panel" id="p-projects" data-tab="projects" data-dev hidden>
-    <h2 data-t="projects" data-ic="symbol_folder"></h2>
-    <p class="dim" data-t="projHelp"></p>
-    <div class="slots" id="slots"></div>
-    <div id="backup-panel" style="margin-top:16px">
+    <div class="group">
+      <h2 data-t="projects" data-ic="symbol_folder"></h2>
+      <p class="dim" data-t="projHelp"></p>
+      <div class="slots" id="slots"></div>
+    </div>
+    <div class="group" id="backup-panel">
       <h2 data-t="backupTitle"></h2>
       <p class="bar"><button id="backup-export" data-t="backupExport"></button>
         <button id="backup-import" data-t="backupImport"></button><input id="backup-file" type="file" accept=".json,application/json" hidden></p>
       <p class="dim" id="backup-help"></p>
     </div>
-    <div class="group" id="songchain" hidden style="margin-top:16px">
+    <div class="group" id="songchain" hidden>
       <h2 data-t="songTitle"></h2>
       <p class="dim" data-t="songHelp"></p>
       <p class="bar"><button id="songplay"></button><button id="songadd" data-t="songAdd"></button>
@@ -332,17 +382,17 @@
 
   <section class="panel" id="p-settings" data-tab="settings" data-dev hidden>
     <div class="groups" id="setgroups"></div>
-    <div class="group" id="device-live-load" hidden style="margin-top:12px">
+    <div class="group" id="device-live-load" hidden>
       <h2>LIVE LOAD</h2>
       <p class="dim" data-t="liveLoadHelp"></p>
       <label class="bar">LIVE LOAD <select id="live-load" aria-label="LIVE LOAD"><option value="0">PATTERN</option><option value="1">FULL</option></select></label>
     </div>
-    <div class="group" id="device-display" hidden style="margin-top:12px">
+    <div class="group" id="device-display" hidden>
       <h2 data-t="deviceDisplay"></h2>
       <p class="dim" data-t="deviceDisplayHelp"></p>
       <div id="device-display-controls"></div>
     </div>
-    <div class="group" style="margin-top:12px">
+    <div class="group">
       <h2 data-t="system" data-ic="symbol_cog"></h2>
       <table id="sysinfo"></table>
     </div>
