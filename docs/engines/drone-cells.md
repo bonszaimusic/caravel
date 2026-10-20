@@ -40,10 +40,13 @@ Lower COUPLE to reduce both effects; allow several seconds for activity to settl
 Indices 5..15, all cell modes, dry, with their own slow ADSR. The parameter sets were chosen
 by a measured search so that all eleven are at least **8 dB apart** in long-term spectrum
 (24 third-octave bands of one held C1, levels relative to the total, floor -60 dB, 30-60 s;
-closest pair SUB FOG / SWARM at 8.27 dB, guarded by the test `dc_preset_separation`; before
-the retune the closest pair was 1.6 dB). That is a measurement of spectral difference, not a
+before the retune the closest pair was 1.6 dB). That is a measurement of spectral difference, not a
 listening verdict; temporal character (beating, pulsing) is part of the design but not of
-that metric. Names describe the measured tendency:
+that metric. **Since 0.3.2 the parameter sets are the same but the sound changed** (see below), and
+the closest pair is now IRON BELLS / RUST at **4.2 dB** (SUB FOG / SWARM was the closest with 8.27 dB);
+the test `dc_preset_separation` therefore asks for 4 dB, a deliberate re-baseline, not a re-tune.
+Pairs below 6 dB are CELL AIR / SWARM, CELL RNG / IRON BELLS, CELL RNG / RUST and SWARM / MOON PULSE:
+the presets want a listening pass. Names describe the measured tendency:
 
 | # | Preset | Topology | Tendency |
 | ---: | --- | --- | --- |
@@ -69,7 +72,46 @@ deterministic drift triangles (a neighbor's phase for loudness). DRIFT 0 leaves 
 exactly constant; RATE sets the speed. A new phrase also starts its drift triangles at
 a different place, so repeated phrases are not identical. All of this is bounded by the
 same quarter-turn PM limit and adds no state, delay or divide. It is slow variation, not
-autonomous re-triggering.
+autonomous re-triggering. (0.3.2 adds a further, separate movement, BREATH, below.)
+
+## 0.3.2: wave shape, roughness, breathing, no whistle
+
+**Unreleased; host-tested only. The sound has not been heard on a real FM-1**, and the choice of the
+settings comes from a host prototype and listening to its renders, not from the device. No new
+parameter and no format change: the cell modes (TOPO 3..5) of the existing presets and projects simply
+sound different; TOPO 0..2 and the five original presets are bit-identical (golden renders unchanged).
+
+- **CHAR is also the wave shape (cell modes).** CHAR 0 is a pure sine, as before. Turning it up the
+  generator goes sine, then triangle (CHAR about 69), then a soft, rounded square (about 0.65 of the way at CHAR 89,
+  the value of GLASS CHOIR, at most 0.8 at CHAR 127; "SHARP"). The shape is computed from the
+  phase-modulated angle of the cell, so PM still colours it; the former soft-cubic CHAR blend follows on top. A little
+  level makeup keeps the loudness about the same. Measured on one uncoupled cell: the third harmonic is
+  -76 dB below the fundamental at CHAR 0, -50 dB at 30, -28 dB at 89, -25 dB at 127 (`dc_sharp`).
+- **Roughness (ROUGH).** How far a cell sits from the anchor cell 0 in pitch decides how it behaves: the
+  interval (from the real frequencies of the cells, SPREAD and DETUNE included, folded into one octave) is looked up in a
+  roughness table (unison and fifth 0, minor second and major seventh 1, tritone 0.8, the thirds and
+  sixth in between). A rough interval raises the cell's coupling to 1.6x COUPLE and its CHAR to 1.4x, a pure one lowers
+  them to 0.9x and 0.8x; cell 0 is unchanged. The roughness glides over about 23 ms. So a chord of pure intervals stays calm,
+  a cluster grows teeth. With SPREAD 0 and no DETUNE all intervals are unisons: pure.
+- **Breathing (BREATH).** Each cell's loudness also moves on a slow triangle of its own, 0.17, 0.23, 0.31 and
+  0.43 Hz, up to 25 % deep at DRIFT 127 and proportional to DRIFT below; DRIFT 0 is exactly neutral (as the
+  existing breathing above). The four rates do not line up, so the movement does not repeat quickly.
+  Note that GLASS CHOIR has DRIFT 53, so it breathes about 10 %, where the prototype used a fixed 25 %.
+- **Whistle fixed.** The cell loop has a one-sample delay; with CHAR and COUPLE up its loop gain
+  reached x1.5 near fs/4 (11 kHz), a steady whistle in GLASS CHOIR and STATIC. A one-pole low-pass (1/2 per sample) in the
+  feedback path removes it: the strongest 100 Hz band at 10.2-11.8 kHz is -58 dB (GLASS CHOIR) and -50 dB (STATIC)
+  below the whole spectrum, and was -18 and -11 dB without it (`dc_whistle`). The side effect is
+  that the cells are duller at high COUPLE: the test's brightness ratio to the legacy RING at COUPLE 127
+  went from 0.75 to 0.54, so its lower bound is now 0.5 (it was 0.6).
+
+How it was checked, and what that does not say. The same 66 s phrase as the host prototype's
+render (GLASS CHOIR, held anchor and added notes, `holds`, and flurries, `swarm`) was rendered with this
+firmware code and compared with the prototype's chosen variant (ROUGH, low-pass, BREATH, SHARP 650) in six bands against
+the total energy, 5 s windows: the mean band levels differ by at most 0.3 dB below 3 kHz, 0.7 dB at 3-6 kHz,
+2.4 dB at 6-12 kHz and 1.9 dB above 12 kHz (single windows up to 4.7 dB). It is brighter at the top than the prototype by that much.
+That is a comparison of two host renders, not a listening test and not a device measurement. The extra work in the cell renderer is
+about +24 % of its static loop cost on the target (1471 to 1824 in `tests/target_budget.py`; the slow quantities are updated every
+8th sample); the real CPU load of an FM-1 has not been measured.
 
 ## Controls and deliberate limits
 

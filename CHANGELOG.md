@@ -6,6 +6,34 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.3.2] — unreleased
+
+Host-tested only: the DRONE changes below were chosen from a host prototype and its renders; **the sound has not been heard on a real FM-1**
+and the CPU cost there is not measured. No new parameter, no format change.
+
+### Added
+- **DRONE cell modes (TOPO 3..5): CHAR is also the wave shape.** From a pure sine at CHAR 0 through a triangle (about CHAR 69) to a soft,
+  rounded square (0.65 of the way at CHAR 89, at most 0.8), computed from the cell's phase-modulated angle, with the old soft-cubic
+  CHAR blend on top. **Roughness:** a cell's coupling (x0.9..x1.6) and character (x0.8..x1.4) follow how far its pitch is from the anchor
+  cell (rough: minor second, major seventh, tritone; pure: unison, octave, fifth). **Breathing:** each cell's loudness also moves on its own
+  slow triangle (0.17..0.43 Hz, up to 25 % deep at DRIFT 127, proportional to DRIFT, exactly neutral at DRIFT 0). See
+  [docs/engines/drone-cells.md](docs/engines/drone-cells.md). Host tests: `tests/drone_cells_test.c` (one-sample oracle for the new arithmetic,
+  roughness table against exact logarithms, whistle band, harmonics against CHAR).
+
+### Changed
+- **The cell presets (DRONE 5..15) sound different**, with the same parameter values (their golden renders changed; the five original presets
+  and TOPO 0..2 are bit for bit as before). Their long-term spectra are closer together: the closest pair is IRON BELLS / RUST at 4.2 dB
+  (was SUB FOG / SWARM at 8.3), so the test `dc_preset_separation` now asks for 4 dB instead of 8, and the brightness check against the legacy RING
+  for 0.5 instead of 0.6 (0.54 at COUPLE 127, was 0.75). The cell state grew from 252 to 352 bytes per DRONE part (limit 12 888).
+  The cell renderer's static loop cost on the target is about 24 % higher (tests/target_budget.txt, 1471 to 1824).
+- **Build:** 13 more UI / editor source files are built for size (`-Oz`, `tools/size_fns.py`): the image is 4 048 B smaller, and the loop costs
+  checked in `tests/target_budget.py` do not move. This makes room for the DRONE changes (image 574 220 B of 581 564 B).
+
+### Fixed
+- **DRONE cell modes: a steady whistle near 11 kHz (a quarter of the sample rate) with high CHAR and COUPLE** (GLASS CHOIR, STATIC): the
+  cells' feedback loop has a one-sample delay and its gain reached x1.5 there. A one-pole low-pass in the feedback path removes it (the
+  strongest 100 Hz band at 10.2-11.8 kHz: -58 dB / -50 dB below the whole spectrum, was -18 / -11 dB). Cells are somewhat duller at high COUPLE.
+
 ## [0.3.1] — 2026-10-20
 
 Includes everything of 0.3.0 and 0.2.0 (below), which were prepared but never published: this is the first release after 0.1.0.

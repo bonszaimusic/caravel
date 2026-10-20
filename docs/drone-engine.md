@@ -78,7 +78,7 @@ All numeric controls are 0..127; topology is 0..2 in this original instrument
 | `P_E1` | DETUNE | 24 | Relative tuning factors `1 + fine/65536`, with integer `fine = value * {-3,-1,1,3} * 252 / 127`. At maximum the outside generators are approximately -20.1/+19.9 cents; inside generators about one third as far. |
 | `P_E2` | COUPLE | 12 | PM gain `clamp(value*256 + m->shape - 64*256, 0, 32512)` in Q15. PM phase offset is the resulting Q15 source times 32768 phase units (less than +/-0.25 cycle). |
 | `P_E3` | TOPO | 0 | `0=PAIRS`, `1=CHAIN`, `2=RING`; continuous route crossfade during changes. (`3..5` are the cell modes; this table describes `0..2`.) |
-| `P_E4` | CHAR | 18 | Q15 sine-to-soft-cubic blend, `value*258`. No hard clipping or wavefolder. |
+| `P_E4` | CHAR | 18 | Q15 sine-to-soft-cubic blend, `value*258`. No hard clipping or wavefolder. In the cell modes (TOPO 3..5) CHAR is also the wave shape, sine to triangle to a rounded square, and sets how rough off-interval cells sound (since 0.3.2, see the [cell guide](engines/drone-cells.md)); TOPO 0..2 are unchanged. |
 | `P_E5` | DRIFT | 32 | Q15 triangle drift amount `value*258`; frequency deviation up to approximately +/-1/256 (+/-6.8 cents), independently phased/rated for each generator. |
 | `P_E6` | RATE | 20 | Base drift phase increment `1461 + smoothed(value*258)*11/20`; generator multipliers `{8,9,10,11}/8`. At 44.1 kHz approximately 0.015..0.200 Hz for generator 0, up to 0.275 Hz for generator 3. The full range stays slow. |
 | `P_E7` | TONE | 76 | Q8 target `clamp(value*256 + m->cutoff, 0, 32512)`; one-pole coefficient `128 + smoothed_target*30000/32512` in Q15. Dark-to-open, nonresonant; not the host's calibrated cutoff-frequency scale. |
@@ -109,7 +109,7 @@ SLOW CHAIN, DARK RING, BEAT FIELD. Presets do not auto-latch a note.
 ## Memory, CPU2, reset and retrigger contract
 
 `drone_part_t` contains only 32-bit members: 104 bytes per part in the original
-instrument (252 bytes with the append-only cell state), drawn from
+instrument (352 bytes with the append-only cell state), drawn from
 `ENG_MEM((uint32_t)(t - trk))`, not a new global buffer. `.mem` advertises
 `sizeof(drone_part_t)`; `ENG_MEM_FITS("DRONE", sizeof(drone_part_t))` enforces
 fit in the existing 12888-byte per-part region without enlarging it. Each part
