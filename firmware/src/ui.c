@@ -1391,6 +1391,42 @@ static void fm4_load_preset(track_t *t, uint32_t k)
 
 static void set_engine_of(track_t *t, uint32_t ei);
 /* preset pi of the engine the track asked for: the sound only (not the steps, not param_kept) */
+/* Caravel 0.3.2: the eleven DRONE cell presets (5..15) come with a slow movement, two LFOs that run free (TRIG FREE, a note
+ * does not restart them) on two engine values through the matrix: LFO on engine value d1 by a1 %, LFO2 on d2 by a2 %. The
+ * rates (LFO_HZ_X100 steps) are 0.05 .. 0.20 Hz, periods of 5 to 20 s, and unrelated within a preset, so the movement does
+ * not repeat soon. The values are a first set chosen against each preset's character (docs/engines/drone-cells.md); the
+ * legacy presets 0..4 and every other engine load without any. d1, d2: 0 SPREAD, 1 DETUNE, 2 COUPLE, 4 CHAR, 5 DRIFT, 7 TONE */
+typedef struct { uint8_t lrate, l2rate, d1, d2; int8_t a1, a2; } drone_motion_t;
+static const drone_motion_t DRONE_MOTION[11] = {
+    { 2, 11, 2, 7,  12,  14},   /*  5 CELL AIR     coupling and tone breathe slowly */
+    { 0,  5, 7, 1,  10,  10},   /*  6 CELL CHN     tone opens and closes, the beating changes pace */
+    { 8, 15, 2, 7,  10,  12},   /*  7 CELL RNG     the ring's roughness swells */
+    { 5, 16, 7, 2,  10,   8},   /*  8 GLASS CHOIR  the shimmer moves */
+    { 0,  2, 1, 2,  12,   8},   /*  9 TIDE         the tide: detune and coupling */
+    { 5, 13, 0, 7,   8,  10},   /* 10 IRON BELLS   the bells' spacing and brightness */
+    { 0,  8, 7, 2,  14,   8},   /* 11 SUB FOG      the fog lifts and settles */
+    {16, 23, 2, 5,  10, -10},   /* 12 SWARM        restless, a little faster */
+    {11, 19, 7, 4,  10,  10},   /* 13 STATIC       the wire's brightness and character */
+    { 5, 13, 4, 2,  10,  10},   /* 14 RUST         grit and ring */
+    {26, 16, 2, 7,  12,  10},   /* 15 MOON PULSE   the pulse itself */
+};
+static void drone_motion_load(track_t *t, uint32_t pi)
+{
+    const drone_motion_t *m;
+    uint32_t k = trk_index(t);
+    if (pi < 5u || pi >= 5u + NELEM(DRONE_MOTION))
+        return;
+    m = &DRONE_MOTION[pi - 5u];
+    t->p[P_LRATE] = m->lrate;
+    t->p[P_LWAVE] = 0;                                /* SIN */
+    t->p[P_LTRIG] = 1;                                /* FREE */
+    t->p[P_M1SRC] = MS_LFO;  t->p[P_M1DST] = (int16_t)(MD_E1 + m->d1); t->p[P_M1AMT] = m->a1;
+    t->p[P_M2SRC] = MS_LFO2; t->p[P_M2DST] = (int16_t)(MD_E1 + m->d2); t->p[P_M2AMT] = m->a2;
+    lfo2_config[k].p[L2_RATE] = m->l2rate;            /* (lfo2_load has just cleared it: the other values stay default) */
+    lfo2_config[k].p[L2_WAVE] = 0;
+    lfo2_config[k].p[L2_TRIG] = 1;
+}
+
 static void apply_preset_to(track_t *t, uint32_t pi)
 {
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
@@ -1434,6 +1470,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
             t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
     }
     lfo2_load(trk_index(t), 0);
+    if (t->eng_req % NENGINES == ENGI_DRONE) drone_motion_load(t, pi);   /* (the cell presets' slow movement) */
     if (dx_track(t)) dx_reset(trk_index(t));
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);

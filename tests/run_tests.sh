@@ -283,6 +283,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "chord keys: diatonic and fixed chords, voicings, MONO root, releases, recording, ARP, MIDI IN, kits" "$OUT/chord_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/latch_test" tests/latch_test.c -lm
     run "LATCH: NEW / STACK on keys, chords, MIDI IN and the arp; the ways it ends; recording, kits, layout" "$OUT/latch_test"
+    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/drone_motion_test" tests/drone_motion_test.c -lm
+    run "DRONE cell presets: the slow movement (two free LFOs through the matrix); legacy presets and other engines without" "$OUT/drone_motion_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/speaker_test" tests/speaker_test.c -lm
     run "SPEAKER EQ: FLAT / LOWCUT / BASS+ responses, BASS+ harmonics of the bass, the sub cut, no offset after, headroom on a full-scale kick (#180)" "$OUT/speaker_test"
     run "DSP render (ANALOG preset 0)" "$OUT/hostsim" 0 0 1 "$OUT/render.wav"

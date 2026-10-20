@@ -20,6 +20,8 @@ and the CPU cost there is not measured. No new parameter, no format change.
   [docs/engines/drone-cells.md](docs/engines/drone-cells.md). Host tests: `tests/drone_cells_test.c` (one-sample oracle for the new arithmetic,
   roughness table against exact logarithms, whistle band, harmonics against CHAR).
 
+- **The eleven DRONE cell presets come with a slow movement**: two free-running LFOs (0.05 to 0.20 Hz) on two of the preset's values through the matrix, different for each preset (see [docs/engines/drone-cells.md](docs/engines/drone-cells.md)). The other presets and engines are unchanged. Host-tested only; not listened to on a device.
+
 ### Changed
 - **The cell presets (DRONE 5..15) sound different**, with the same parameter values (their golden renders changed; the five original presets
   and TOPO 0..2 are bit for bit as before). Their long-term spectra are closer together: the closest pair is IRON BELLS / RUST at 4.2 dB
@@ -33,6 +35,7 @@ and the CPU cost there is not measured. No new parameter, no format change.
 - **DRONE cell modes: a steady whistle near 11 kHz (a quarter of the sample rate) with high CHAR and COUPLE** (GLASS CHOIR, STATIC): the
   cells' feedback loop has a one-sample delay and its gain reached x1.5 there. A one-pole low-pass in the feedback path removes it (the
   strongest 100 Hz band at 10.2-11.8 kHz: -58 dB / -50 dB below the whole spectrum, was -18 / -11 dB). Cells are somewhat duller at high COUPLE.
+- **LATCH: the keys of latched notes stay lit** after their release (and with ARP, the arp's chord keys); they go dark when the latch ends. Host-tested only.
 
 ## [0.3.1] — 2026-10-20
 

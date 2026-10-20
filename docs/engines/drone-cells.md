@@ -113,6 +113,32 @@ That is a comparison of two host renders, not a listening test and not a device 
 about +24 % of its static loop cost on the target (1471 to 1824 in `tests/target_budget.py`; the slow quantities are updated every
 8th sample); the real CPU load of an FM-1 has not been measured.
 
+## Slow movement in the cell presets (Caravel 0.3.2)
+
+A factory load of the eleven cell presets (5..15) now also sets **two free-running LFOs** that move two of the preset's values slowly
+through the modulation matrix (slot 1: LFO, slot 2: LFO2; TRIG FREE, so a note does not restart them; LFO and LFO2 on SIN; no
+vibrato and no tremolo of their own). The rates are 0.05 to 0.20 Hz (periods of 5 to 20 s) and differ within a preset, so the movement does
+not repeat soon. Presets 0..4 and every other engine load without any LFO or matrix slot, as before; a reload gives the movement back
+(a factory preset sounds the same after any edit), and anything you change afterwards is yours (a user preset stores it).
+
+| # | Preset | LFO (Hz) on | by | LFO2 (Hz) on | by |
+| ---: | --- | --- | ---: | --- | ---: |
+| 5 | CELL AIR | COUPLE (0.06) | 12 % | TONE (0.09) | 14 % |
+| 6 | CELL CHN | TONE (0.05) | 10 % | DETUNE (0.07) | 10 % |
+| 7 | CELL RNG | COUPLE (0.08) | 10 % | TONE (0.11) | 12 % |
+| 8 | GLASS CHOIR | TONE (0.07) | 10 % | COUPLE (0.12) | 8 % |
+| 9 | TIDE | DETUNE (0.05) | 12 % | COUPLE (0.06) | 8 % |
+| 10 | IRON BELLS | SPREAD (0.07) | 8 % | TONE (0.10) | 10 % |
+| 11 | SUB FOG | TONE (0.05) | 14 % | COUPLE (0.08) | 8 % |
+| 12 | SWARM | COUPLE (0.12) | 10 % | DRIFT (0.17) | -10 % |
+| 13 | STATIC | TONE (0.09) | 10 % | CHAR (0.14) | 10 % |
+| 14 | RUST | CHAR (0.07) | 10 % | COUPLE (0.10) | 10 % |
+| 15 | MOON PULSE | COUPLE (0.20) | 12 % | TONE (0.12) | 10 % |
+
+These values are a first set chosen against each preset's tendency, checked by host tests only (`tests/drone_motion_test.c`: the settings,
+that the legacy presets and other engines are untouched, and that the movement changes the render) and not listened to on a device.
+Note that a value already at its limit (TONE 127 of GLASS CHOIR) can only move away from it, so that movement is one-sided.
+
 ## Controls and deliberate limits
 
 The eight stored parameter IDs remain unchanged. Performance knobs are still
