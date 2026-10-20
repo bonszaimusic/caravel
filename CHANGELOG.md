@@ -6,6 +6,11 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.3.1] — 2026-10-20
+
+### Changed
+- **New look for the web pages** (installer, editor, browser emulator and the site's start page): the dark amber theme of the firmware's AMBER palette (a warm paper theme when the browser asks for a light one), the pixel sailing ship of the device's header as logo and favicon, and pages built from boxes with a title tag on their border. The start page is now a small page with a box per tool instead of a redirect to the installer. Only layout and styling changed: every existing text, notice, licence link and function and the installer's protocol are as before (new are only a one-line tagline and the box titles); nothing new is loaded from other servers. Checked in a browser at phone and desktop width, light and dark; not tested with a real FM-1 or a real USB install.
+
 ## [0.3.0] — 2026-10-19
 
 Includes everything of 0.2.0 (below), which was prepared but never published.
