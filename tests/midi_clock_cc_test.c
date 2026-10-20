@@ -58,7 +58,7 @@ static uint32_t t5_nested_ticks;
 #include "../firmware/src/timer5.c"
 
 /* --- the sender ------------------------------------------------------------------------------------- */
-typedef struct { double bpm; uint32_t cc_us, mode, rs, burst, seconds, lose_ms; } scen_t;
+typedef struct { double bpm; uint32_t cc_us, mode, rs, burst, seconds, lose_ms; double sweep; } scen_t;      /* sweep: the tempo goes +-sweep (fraction) around bpm, 6 s a round */
 typedef struct { uint8_t v; double done_us; int clock; double ideal_us; } wbyte_t;
 
 static wbyte_t *wire;
@@ -77,7 +77,7 @@ static void sender(const scen_t *s)
         int clock_due = next_clk <= t, in_msg = mlen && mpos < mlen;
         if (clock_due && (!in_msg || s->mode == 1u)) {
             wire[wire_n++] = (wbyte_t){0xF8u, t + byte_us, 1, next_clk};
-            next_clk += clk_period;
+            next_clk += s->sweep ? 60e6 / (s->bpm * (1.0 + s->sweep * sin(6.283185307 * next_clk / 6e6)) * 24.0) : clk_period;
             t += byte_us;
         } else if (in_msg || (s->cc_us && next_cc <= t)) {
             if (!in_msg) {
@@ -256,7 +256,13 @@ int main(int argc, char **argv)
             report(name, &s, &r);
             sl_ok &= r.sl_hi - r.sl_lo < 4.5 && fabs(r.sl_slope) < 0.2;
         }
-        bad += check("SLICER step clock stays with the sequencer over 120 s (< 3 ms peak to peak, no drift)", sl_ok);
+        {   /* the tempo swept up and down by a quarter every 6 s (a fast BPM knob): the SLICER follows through it */
+            scen_t s = {120, 12000, 0, 0, 0, 120, 0, 0.25};
+            run(&s, &r);
+            report("120 BPM +-25 % every 6 s, CC 12 ms", &s, &r);
+            sl_ok &= r.sl_hi - r.sl_lo < 8.0 && fabs(r.sl_slope) < 0.3;
+        }
+        bad += check("SLICER step clock stays with the sequencer over 120 s (< 4.5 ms peak to peak, no drift)", sl_ok);
     }
     bad += check("measured tempo stays within 0.8 BPM of the sender at 60..174 BPM with and without CCs", tempo_ok);
     bad += check("the displayed BPM never leaves the sender's tempo", shown_ok);
