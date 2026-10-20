@@ -234,6 +234,32 @@ static uint32_t midi_leds(const track_t *t)
     return m;
 }
 
+/* LATCH (seq.c): the keys of the notes the selected track keeps sounding after their keys were let go, bit k = key k, the
+ * lowest key that gives a note as in midi_leds. Without ARP the notes in lat_stay; with ARP the arp's held list (t->held,
+ * which LATCH keeps). The keys still down are lit as ever (fm1_in.notes). Nothing to do with LATCH OFF */
+static uint32_t latch_leds(const track_t *t)
+{
+    uint32_t k, i, note, m = 0, seen[4] = {0, 0, 0, 0}, idx = trk_index(t);
+    if (latch_mode(t) == LT_OFF)
+        return 0;
+    for (k = 0; k < 27u; k++) {
+        note = kb_map(t, k);
+        if (note > 127u || ((seen[note >> 5] >> (note & 31u)) & 1u))
+            continue;                                   /* (silent, or a lower key gives it) */
+        seen[note >> 5] |= 1u << (note & 31u);
+        if (lat_get(lat_stay[idx], note)) {
+            m |= 1u << k;
+        } else if (t->p[P_AMODE]) {
+            for (i = 0; i < t->nheld; i++)
+                if (t->held[i] == note) {
+                    m |= 1u << k;
+                    break;
+                }
+        }
+    }
+    return m;
+}
+
 /* the keys of the notes the selected track's sequencer and ARP sound now (#38), bit k = key k: where the keys
  * play that note (kb_map: the octave, TRN, QNT, an engine's own map), the lowest key that gives it (QNT SNAP
  * rounds the keys above down onto it); a note no key plays is not shown. A snapshot of the ISR's seq_notes /
@@ -259,7 +285,7 @@ static uint32_t play_leds(void)
             }
         m |= hit << k;
     }
-    return m | midi_leds(t);
+    return m | midi_leds(t) | latch_leds(t);
 }
 
 /* Discussion #89: on SEQ > STEP (the piano roll; the DRUM grid has its own map) while stopped, the keys of the

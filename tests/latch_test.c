@@ -316,9 +316,35 @@ static int params(void)
     return bad;
 }
 
+/* the key LEDs show the latched notes after their keys are let go (ui_input.c latch_leds); LATCH OFF shows nothing more */
+static int latch_leds_lit(void)
+{
+    int bad = 0;
+    track_t *t = &trk[0];
+    reset();
+    t->p[P_LATCH] = LT_NEW;
+    key_down(K_C4); key_up(K_C4);
+    bad += check("LEDs: a latched key stays lit after its release", (key_leds(0) >> K_C4 & 1u) && !(fm1_in.notes >> K_C4 & 1u));
+    key_down(K_E4); key_down(K_G4); key_up(K_E4); key_up(K_G4);
+    bad += check("  a new set lights its keys, the old one is dark", (key_leds(0) & (1u << K_C4)) == 0u &&
+                 (key_leds(0) >> K_E4 & 1u) && (key_leds(0) >> K_G4 & 1u));
+    t->p[P_LATCH] = LT_STACK;
+    t->p[P_LATCH] = LT_NEW;
+    key_down(K_C4); key_up(K_C4);
+    t->p[P_LATCH] = LT_OFF;
+    blk();
+    bad += check("  LATCH OFF: the latched keys go dark with their notes", key_leds(0) == 0u);
+    t->p[P_AMODE] = 1;                                              /* with ARP the arp's held list is the latched set */
+    t->p[P_LATCH] = LT_NEW;
+    key_down(K_D4); key_up(K_D4);
+    bad += check("  with ARP the latched chord's key stays lit", (key_leds(0) >> K_D4 & 1u));
+    return bad;
+}
+
 int main(void)
 {
-    int bad = keys_new() + keys_stack() + voices_mono_panic_stop() + arp_latch() + midi_latch() + gesture() + rec_and_kits() + params();
+    int bad = keys_new() + keys_stack() + voices_mono_panic_stop() + arp_latch() + midi_latch() + gesture() + rec_and_kits() + params() +
+              latch_leds_lit();
     printf("%s\n", bad ? "LATCH TEST FAILED" : "latch test passed");
     return bad != 0;
 }

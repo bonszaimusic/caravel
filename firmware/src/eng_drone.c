@@ -14,6 +14,14 @@ typedef struct {
     int32_t pitch16[4], level[4], drive[4], activity[4], amp[4], cell_mix;
     int32_t cell_last;
     uint32_t cell_exit;
+    /* Append-only (0.3.2, cell modes only): per-cell interval roughness (Q15, smoothed), the PM feedback
+     * low-pass state and the phase of the slow loudness movement. The slow quantities (roughness, BREATH)
+     * are updated every 8th sample (slow counts samples, so any block split renders the same): fcpl is cell k's
+     * COUPLE factor, chrk its CHAR, bred the loudness taken away by BREATH. All zero on a fresh part. */
+    int32_t rough[4], pmlp[4];
+    uint32_t breath[4];
+    uint32_t slow;
+    int32_t fcpl[4], chrk[4], bred[4];
 } drone_part_t;
 ENG_MEM_FITS("DRONE", sizeof(drone_part_t));
 
@@ -35,6 +43,11 @@ static inline int32_t drone_div2s(int32_t d, uint32_t s)
 static inline int32_t drone_follow(int32_t a, int32_t b)
 {
     int32_t d = b - a, step = drone_div2s(d, 10);
+    return a + (step ? step : (d > 0) - (d < 0));
+}
+static inline int32_t drone_follow_s(int32_t a, int32_t b, uint32_t sh)   /* drone_follow with a time constant of 2^sh samples */
+{
+    int32_t d = b - a, step = drone_div2s(d, sh);
     return a + (step ? step : (d > 0) - (d < 0));
 }
 static void drone_controls(const track_t *t, const vmod_t *m, int32_t *c)
@@ -275,6 +288,42 @@ static inline int32_t drone_route(const int32_t *x, uint32_t k, int32_t topo)
     return topo <= 32768 ? a + mulq15(b - a, topo)
                         : b + mulq15(c - b, topo - 32768);
 }
+/* Interval roughness of the cells (ROUGH). Cents of 1 + i/16 for i = 0..16 (log2, rounded): the position of a
+ * frequency inside its octave, read with a linear interpolation (error < 1 cent). A cell's interval to the anchor
+ * cell 0 is the difference of two such positions, folded into one octave: no division, no float. */
+static inline int32_t drone_oct_cents(uint32_t f)
+{
+    static const uint16_t L[17] = {0, 105, 204, 298, 386, 471, 551, 628, 702, 773, 841, 906, 969, 1030, 1088, 1145, 1200};
+    uint32_t m = f << __builtin_clz(f | 1u);                 /* leading one at bit 31 */
+    uint32_t i = (m >> 27) & 15u, fr = (m >> 15) & 0xFFFu;
+    return L[i] + (int32_t)(((uint32_t)(L[i + 1] - L[i]) * fr) >> 12);
+}
+/* 0 = pure (unison, fifth) .. 1 = rough (minor second, major seventh), Q15, at 100 cent steps over one octave. */
+static int32_t drone_rough_of(int32_t cents)
+{
+    static const int16_t R[13] = {0, 32767, 19661, 9830, 8192, 6554, 26214, 3277, 9830, 9830, 19661, 32767, 0};
+    int32_t i = (cents * 5243) >> 19, fr = cents - i * 100;
+    return R[i] + (((R[i + 1] - R[i]) * fr * 41) >> 12);
+}
+static const uint16_t BREATH_INC[4] = {16556u, 22400u, 30191u, 41878u};   /* 0.17 .. 0.43 Hz at 44.1 kHz */
+/* Slow tick, every 8th sample: ROUGH (smoothed, with the time constant of 1024 samples as drone_follow), the
+ * per-cell COUPLE and CHAR factors that follow from it, and BREATH (each cell's loudness moves on its own slow
+ * triangle, 0.17 / 0.23 / 0.31 / 0.43 Hz, up to 25 % deep at DRIFT 127; DRIFT 0 takes nothing). A call of its
+ * own: the sample loop stays small, and the cost it is budgeted at (tests/target_budget.py) is the per-sample one. */
+static __attribute__((noinline)) void drone_slow_tick(drone_part_t *s, const int32_t *rough_goal, int32_t drift)
+{
+    int32_t bdepth = mulq15(8192, drift);
+    for (uint32_t k = 0; k < 4u; k++) {
+        s->breath[k] += 8u * BREATH_INC[k];
+        int32_t qb = (int32_t)(s->breath[k] >> 16);          /* triangle 0..32767 */
+        s->bred[k] = mulq15(bdepth, qb < 32768 ? qb : 65535 - qb);
+        if (!k) continue;
+        s->rough[k] = drone_follow_s(s->rough[k], rough_goal[k], 7);
+        s->fcpl[k] = 29491 + mulq15(22938, s->rough[k]);         /* COUPLE x0.9 .. x1.6 */
+        int32_t c = (s->ctrl[DR_CHAR] * (26214 + mulq15(19661, s->rough[k]))) >> 15;   /* CHAR x0.8 .. x1.4 */
+        s->chrk[k] = c > 32512 ? 32512 : c;
+    }
+}
 static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, int32_t *out,
                                                        uint32_t n, const vmod_t *m)
 {
@@ -300,6 +349,15 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
         if (s->ready == 1u) s->inc[k] = freq[k];
     }
     s->ready = 2u;
+    /* ROUGH: cell k's interval to the anchor cell 0, folded into one octave, sets how rough it sounds. */
+    int32_t rough_goal[4] = {0, 0, 0, 0};
+    {
+        int32_t c0 = drone_oct_cents((uint32_t)freq[0]);
+        for (uint32_t k = 1; k < 4u; k++) {
+            int32_t c = drone_oct_cents((uint32_t)freq[k]) - c0;
+            rough_goal[k] = drone_rough_of(c < 0 ? c + 1200 : c);
+        }
+    }
     for (uint32_t i = 0; i < n; i++) {
         int32_t next[4], pmsrc[4], activity[4], sum = 0;
         for (uint32_t c = 0; c < DR_NCTRL; c++)
@@ -316,6 +374,12 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
             uint32_t q = s->drift_phase[k] >> 16;
             tri[k] = q < 32768u ? (int32_t)q * 2 - 32768 : 98303 - (int32_t)q * 2;
         }
+        /* SHARP rides on CHAR: 0 is a pure sine, CHAR 89 reaches 0.65 (sine -> triangle at 0.5 -> a rounded
+         * square at 1), capped at 0.8. sh is Q15; drive and level makeup are the same for all four cells. */
+        int32_t sh = (int32_t)(((uint32_t)s->ctrl[DR_CHAR] * 60791u) >> 16);
+        if (sh > 26214) sh = 26214;
+        int32_t sdrive = sh > 16384 ? 32768 + 4 * (sh - 16384) : 0, scomp = 32768 - (sh >> 2);
+        if (!(s->slow++ & 7u)) drone_slow_tick(s, rough_goal, dmt);
         for (uint32_t k = 0; k < 4u; k++) {
             int32_t hold = drone_held(s, s->owner[k]) ? s->level[k] * 192 : 0;
             s->drive[k] = drone_cell_follow(s->drive[k], hold, 15, 2 + k);
@@ -329,17 +393,43 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
             int32_t src = drone_route(s->prev, k, s->ctrl[DR_TOPO]);
             int32_t cple = s->ctrl[DR_COUPLE] -
                            mulq15(s->ctrl[DR_COUPLE], mulq15(pmdep, 32767 - ((tri[k] + 32768) >> 1)));
+            int32_t chr = s->ctrl[DR_CHAR];
+            if (k) {
+                /* ROUGH: a cell off a pure interval to the anchor leans harder on its neighbours and is brighter. */
+                cple = (cple * s->fcpl[k]) >> 15;
+                if (cple > 32512) cple = 32512;
+                chr = s->chrk[k];
+            }
             int32_t pm = mulq15(src, cple);
-            int32_t x = sine_i(s->phase[k] + (uint32_t)pm * 32768u);
+            uint32_t ph = s->phase[k] + (uint32_t)pm * 32768u;
+            int32_t x = sine_i(ph);
+            if (sh) {
+                /* SHARP: triangle from the same (phase-modulated) angle, then a soft clip with drive 1..3. */
+                uint32_t qs = ((ph >> 16) + 16384u) & 0xFFFFu;
+                int32_t tw = qs < 32768u ? (int32_t)qs * 2 - 32768 : 98303 - (int32_t)qs * 2;
+                if (!sdrive) {
+                    x += mulq15(tw - x, sh * 2);
+                } else {
+                    int32_t y = (tw >> 1) * (sdrive >> 1) >> 13;
+                    y = y > 32767 ? 32767 : y < -32767 ? -32767 : y;
+                    x = y + drone_div2s(y - mulq15(mulq15(y, y), y), 1);   /* 1.5y - 0.5y^3: |x| <= 32768 */
+                }
+                x = mulq15(x, scomp);
+            }
             int32_t cube = mulq15(mulq15(x, x), x);
-            x += mulq15(drone_div2s(x - cube, 1), s->ctrl[DR_CHAR]);
+            x += mulq15(drone_div2s(x - cube, 1), chr);
             int32_t gain = 32767 - s->cell_mix + mulq15(drone_div2s(s->amp[k], 8), s->cell_mix);
             gain -= mulq15(gain, mulq15(swing, (tri[(k + 1u) & 3u] + 32768) >> 1)); /* exactly neutral at DRIFT 0 */
+            gain -= mulq15(gain, s->bred[k]);                                   /* BREATH: exactly neutral at DRIFT 0 */
             next[k] = mulq15(x, gain);
             /* PM source: the same amplitude weight with 2x makeup, saturating at
              * unity. A cell at about half level modulates its neighbors as a
              * legacy generator does; a silent cell still modulates nothing. */
             pmsrc[k] = mulq15(x, gain > 8191 ? 32767 : gain * 4);
+            /* PMLP: one pole (1/2 per sample) in the feedback path takes the loop gain away near fs/4,
+             * where the 1-sample delayed cell loop would whistle. */
+            s->pmlp[k] += (pmsrc[k] - s->pmlp[k]) >> 1;
+            pmsrc[k] = s->pmlp[k];
             sum += next[k];
             int32_t drift = mulq15(tri[k], s->ctrl[DR_DRIFT]);
             s->inc[k] = drone_follow(s->inc[k], freq[k]);

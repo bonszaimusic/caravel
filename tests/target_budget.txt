@@ -105,4 +105,7 @@ drone_render 828
 # Opt-in cell renderer and separately tracked unchanged legacy DSP.
 drone_legacy_render 788
 # Custom 25: PM makeup + DRIFT breathing (multiplies only; still ~3 divides per sample).
-drone_cell_render 1471
+# 0.3.2: SHARP wave shape (per cell: triangle from the PM angle, blend or soft clip), ROUGH factors, BREATH gain and the PM feedback
+# low-pass. The slow quantities (roughness smoothing, BREATH phase) run every 8th sample in drone_slow_tick, a call of its own that this
+# loop count does not include (66 instructions of code, run four times per call, i.e. roughly 100 per call or ~12 per sample on top); +24 % against 1471, still 3 divides.
+drone_cell_render 1824
