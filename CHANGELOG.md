@@ -6,7 +6,56 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
-## [0.2.0] — 2026-10-19
+## [0.3.0] — 2026-10-19
+
+Includes everything of 0.2.0 (below), which was prepared but never published.
+
+### Added
+- **FILTER for every track**: one bipolar knob, **FILT**, the fourth card of the INSERT 2 group (FX family, INSERT, the lower group): to the left a **low-pass**
+  (LP, down to 120 Hz), to the right a **high-pass** (HP, up to 3.8 kHz), **OFF** in the middle. It is the last stage of the track's chain (voices, DIST,
+  INSERT, SLICER, FILTER, then LEVEL, PAN and the sends), so the sends to the delay, reverb and chorus take the filtered sound, and every engine has it,
+  those without a filter of their own too (FM6, GRAIN, PHYS, WHEEL, SLICE, DRUM). 12 dB per octave, no resonance, so it cannot ring; the cutoff glides
+  (the whole range in about 48 ms) and the filter fades in and out in 2.9 ms. With SPREAD the left, right and side signals are filtered alike. OFF (the
+  default) runs nothing and the track is bit for bit as before. DRUM-X's per-lane image and lane sends are added after the strip and are not filtered (as they pass
+  DIST, the INSERT and the SLICER by). FILT can be recorded as automation or a lock (a filter sweep), learned to a CC (MIDI LEARN), and is part of
+  the track's FX: a factory preset load sets it OFF unless **FX HOLD** is on; a user preset stores it. It is **not** a modulation destination in
+  this version. See [docs/track-filter.md](docs/track-filter.md). Host tests only (`tests/trackfilter_test.c`: responses of 18 settings against the analytic ones,
+  smoothing, all settings on loud signals against a 64-bit shadow of the arithmetic, the chain order, stored data); no measurement on a real FM-1, and its CPU
+  cost there is not measured (the host's instructions: about 3 % of an 8-voice part).
+- The web editor has a **FILTER** page in its FX group and shows the card text (OFF, or the share with LP / HP).
+- CDC status: `clk_gap_min_ms` / `clk_gap_max_ms` / `clk_gap_odd` (the spread of the gaps between Clock stamps, cleared when printed) and
+  `uart_events` / `uart_noevent` (UART takes with and without a receive event pending) to capture real numbers from a device.
+
+### Changed
+- **The INSERT view**: the upper group is TYPE, MIX, **FX HOLD** and the type's curve (one card wide, 50 px); the lower group is INS A, INS B, INS C and **FILT**.
+  FX HOLD moved from the fourth card of INSERT 2 to the third card of INSERT (KNOB 3); it is the same device setting as MENU > VOICES > FX HOLD. The
+  footer of the lower group reads INSERT A-C FILT. FX HOLD now keeps the filter along with the sends and the INSERT.
+- **Storage (a new track parameter): 114 instead of 113 parameters.** FILT is parameter 105, just before the engine values, which moved from 105..112 to 106..113
+  (P_COUNT 114, P_E0 106; the editor protocol's `INFO` says so). Everything saved by 0.1.0 or 0.2.0 (projects with their automation, user presets, backups, the
+  editor's library files) loads with the filter OFF and everything else unchanged. **The other way round: 0.2.0 and 0.1.0 cannot open a project saved by
+  0.3.0** (their slot shows EMPTY; the saved copy stays until something is saved over it); a user preset saved by 0.3.0 loads there without the filter; MIDI
+  LEARN entries for FILT are ignored there. This is why the version is 0.3.0, not 0.2.1. The project format (FUN10, 3840 bytes) did not change, but it has one
+  spare byte left, and 114 parameters are the most its automation ids allow: a further common track parameter would need a new format. The web editor
+  served with 0.3.0 knows the new layout; the one of 0.2.0 does not.
+
+### Fixed
+- **SLICER parting from the sequencer on the external clock.** The sequencer follows the clock pulses, the SLICER's step clock ran on
+  the audio's own time with a step length from the whole BPM shown, so the two moved apart (host model: 3..8 ms a minute, more when the
+  tempo is turned). The step length now comes from the measured beat, and every block the SLICER's phase in its step is moved towards
+  the phase the sequencer's clock units give (at most 4 samples a block). Host model, 120 s at 63..174 BPM with CCs and with the tempo
+  swept +-25 % every 6 s: no drift (< 0.05 ms a minute at a steady tempo). Internal clock: unchanged. Host-tested only
+  (`tests/slicer_test.c`, `tests/midi_clock_cc_test.c`).
+- **TRS MIDI clock with a controller on the same line: the BPM no longer jumps and the sequence holds its time better.** The tempo was
+  measured over six Clock pulses with 1 ms stamps, so a steady 120..174 BPM read ±1..4 BPM, and every CC ahead of a Clock on the wire (up to
+  3 bytes, ~1 ms) added to that; each such reading also re-scaled every track's phase and the gate/FX times. The tempo is now taken over the
+  last 24 pulses (a tempo step or gap starts the window again), the BPM display moves only when the measured tempo is a whole BPM off, and the
+  clock's in-pulse interpolation runs at the measured tempo instead of the last single (1 ms rounded) pulse gap. Host model (20 s, 60..174 BPM,
+  CC every 5..12 ms or bursts): displayed BPM 172..176 → 174, sequencer position jitter up to 4.8 ms → 2.8 ms peak to peak. See
+  [external clock](docs/sequencer/external-clock.md). Host-tested only; the cause of a swing larger than this on the device is not established
+  (the new CDC counters below measure it).
+
+
+## [0.2.0] — 2026-10-19 (prepared, never published: its changes are part of 0.3.0)
 
 ### Added
 - **LATCH** (CHORD page, KNOB 3): OFF, NEW or STACK per track keeps the notes of the keys, the chord keys and MIDI IN sounding after release.

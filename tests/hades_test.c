@@ -96,7 +96,7 @@ static int had_controls(void)
 {
     int bad = 0, ok = 1; had_setup(); track_t *t = &trk[0];
     bad += check("HADES appended at 15, old IDs and parameter layout retained",
-                 ENGI_HADES == 15 && ENGI_SEM == 14 && P_COUNT == 113 && eng_ok(ENGI_HADES));
+                 ENGI_HADES == 15 && ENGI_SEM == 14 && P_COUNT == 114 && eng_ok(ENGI_HADES));
     for (uint32_t k = 0; k < 8; k++) {
         uint32_t id = P_E0 + k;
         ok &= ml_learn(20 + k, 0, id) == 1;

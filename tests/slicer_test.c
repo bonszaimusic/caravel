@@ -321,6 +321,30 @@ static int test_cost(void)
     return check(what, (on - off) / 4 < 60);
 }
 
+/* ------------------------------------------------- 6. external clock --- */
+/* on the external clock the step is the measured beat's, not the whole BPM shown: 120.5 BPM (21958 samples a beat) a 1/16
+ * is 5489 samples, as the sequencer's div_samples has it; with 120 shown the slicer drifted 0.4 % (a 1/16 in 30 s) */
+static int test_external_clock(void)
+{
+    track_t *t = &trk[0];
+    int ok;
+    set_slicer(t, SL_GATE, 1, 1, 127);
+    t->p[P_SSWING] = 0;
+    song.g[G_SWING] = 0;
+    song.g[G_BPM] = 120;
+    song.g[G_CLOCK] = 1;
+    midi_beat_samples = 21958u;
+    slicer_start();
+    slicer_track(t, 0, 8u);
+    ok = sl[0].len == div_samples(2u) && sl[0].len == 21958u / 4u;
+    song.g[G_CLOCK] = 0;
+    midi_beat_samples = 0;
+    slicer_start();
+    slicer_track(t, 0, 8u);
+    ok &= sl[0].len == (uint32_t)FS * 60u / 120u / 4u;
+    return check("external clock: the step is the measured beat / 4, the internal one the BPM's", ok);
+}
+
 /* ------------------------------------------------------------ demos --- */
 static void demo_song(const char *dir, const char *name, const int16_t (*s)[4], uint32_t solo)
 {
@@ -376,6 +400,7 @@ int main(int argc, char **argv)
 {
     int bad = 0;
     bad += test_clicks();
+    bad += test_external_clock();
     bad += test_timing();
     bad += test_sync();
     bad += test_off_stut();

@@ -238,7 +238,13 @@ static void con_status(void)
     con_kv("uart_rx_bytes", (int32_t)um.bytes);
     con_kv("uart_rx_msgs", (int32_t)um.msgs);
     con_kv("uart_rx_drops", (int32_t)um.drops);
+    con_kv("uart_events", (int32_t)fm1_uart1_events);      /* takes with RX / overtime pending */
+    con_kv("uart_noevent", (int32_t)fm1_uart1_noevent);    /* takes that returned a count with none pending */
 #endif
+    con_kv("clk_gap_min_ms", (int32_t)midi_clk_min);       /* Clock stamp gaps since the last status (cleared here) */
+    con_kv("clk_gap_max_ms", (int32_t)midi_clk_max);
+    con_kv("clk_gap_odd", (int32_t)midi_clk_odd);          /* gaps over a quarter off the pulse period */
+    midi_clk_min = midi_clk_max = midi_clk_odd = 0;
 #if FELUCCA_FLASH
     con_kv("flash", flash_ok);
 #endif

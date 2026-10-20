@@ -1771,7 +1771,11 @@ static void events_block(uint32_t n)
         uint32_t arp_n = clock_mode ? midi_grid_advance(&midi_arp_grid[i], seq_n, (uint32_t)trk[i].p[P_ARATE]) : n;
         arp_step(&trk[i], arp_n, clock_mode && song.playing ? arp_n : n);
     }
-    beat_pos += clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n; /* ARP LED beat */
+    {
+        uint32_t bn = clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n;
+        beat_pos += bn;                                /* ARP LED beat */
+        slicer_follow(seq_n, n, clock_mode && song.playing);
+    }
     if (beat_pos >= beat_samples()) {
         beat_pos -= beat_samples();
         beat_pos = beat_pos < beat_samples() ? beat_pos : 0u;

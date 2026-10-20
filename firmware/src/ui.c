@@ -1315,7 +1315,7 @@ static int param_kept(uint32_t i)
  * changed; CLEAN INIT clears the FX) */
 static uint8_t fx_fresh;
 static int param_send(uint32_t i) { return i >= P_DIST && i <= P_REV; }
-static int param_insert(uint32_t i) { return i >= P_ITYPE && i <= P_IMIX; }
+static int param_insert(uint32_t i) { return (i >= P_ITYPE && i <= P_IMIX) || i == P_FILT; }   /* (0.3.0: the track's FILTER is part of it) */
 static int fx_hold(void) { return (ui_prefs3 & (PREF_FX_HOLD >> 24)) != 0u && !fx_fresh; }
 static int load_kept(uint32_t i)
 {

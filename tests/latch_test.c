@@ -302,7 +302,7 @@ static int params(void)
     page_t pg;
     uint32_t i, on = 0;
     reset();
-    bad += check("layout unchanged: P_LATCH is P_ED_FX, P_COUNT 113, P_E0 105", P_LATCH == P_ED_FX && P_COUNT == 113 && P_E0 == 105);
+    bad += check("layout: P_LATCH is P_ED_FX (0.2.0), P_COUNT 114 and P_E0 106 with 0.3.0's FILTER", P_LATCH == P_ED_FX && P_COUNT == 114 && P_E0 == 106);
     bad += check("descriptor: LATCH, OFF NEW STACK, default OFF",
                  str_eq(TP[P_LATCH].label, "LATCH") && TP[P_LATCH].min == 0 && TP[P_LATCH].max == 2 && TP[P_LATCH].def == 0 &&
                  str_eq(TP[P_LATCH].names[0], "OFF") && str_eq(TP[P_LATCH].names[1], "NEW") && str_eq(TP[P_LATCH].names[2], "STACK"));

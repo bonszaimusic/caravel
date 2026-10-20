@@ -20,7 +20,7 @@ These pages show two groups of four parameters at once instead of one page and a
 | LANES (DRUM only) | LANES 2 | LANES 1-4 · LANES 5-8 |
 | FX | DLY | FX SENDS · DELAY |
 | REVERB | CHORUS | REVERB · CHORUS |
-| INSERT | INSERT 2 | INSERT TYPE / MIX (with the type's curve) · INSERT A / B / C |
+| INSERT | INSERT 2 | INSERT TYPE MIX HOLD (TYPE, MIX, FX HOLD and the type's curve) · INSERT A B C FILTER (INS A, INS B, INS C, FILT) |
 | SLICER | (its graph) | SLICER · the step pattern and what it does to a tone |
 | SCL | (its keys) | SCALE · the 12 keys: the scale lit, the root in the accent colour |
 | CHORD | (its keys) | CHORD KEYS · the chord each scale note plays (DIA3, DIA7) with the last one marked, and its notes on the keys |
@@ -35,7 +35,8 @@ and FM6 (the algorithm chart); on every other engine they use the two-group layo
 
 **The footer** shows the view and its number in its family: **LFO TOP 1/3**, **LFO BOTTOM 1/3**, **LFO2 TOP 2/3**, **LFO DEST 3/3**,
 **MOD 3/3**. The two groups of a pair count as one view; a family with one view shows no number (ENV TOP, ARP TOP). The FX family order is
-FX, DLY, REVERB, CHORUS, INSERT, INSERT 2, SLICER, so each pair is one view: FX SENDS 1/4, REVERB 2/4, INSERT 3/4, SLICER 4/4.
+FX, DLY, REVERB, CHORUS, INSERT, INSERT 2, SLICER, so each pair is one view: FX SENDS 1/4, REVERB 2/4, INSERT 3/4 (the lower group: INSERT A-C FILT 3/4),
+SLICER 4/4.
 
 **Who a group is for:** every group's header carries a small tag: **ALL** (accent colour) for the global pages (DELAY, REVERB, CHORUS), **T1** to
 **T4** for a page of the selected track (the FX sends, INSERT, SLICER, the LFOs, ENV, EDIT, ...). Changing the track changes the T groups;
@@ -49,33 +50,35 @@ with a picture) keeps its small cards and its full-height panel; the card row is
 page is, to say that KNOB 1-4 edit it. The LINE style (MENU > STYLE) has no frame: its rules do that job. The layers' maps and the name entry have no card row
 and no frame.
 
-**INSERT** shows TYPE and MIX in the upper group, with the curve of the chosen type beside them (a drive's transfer curve, the folder, the
-bit staircase, the swept effects' sweep); the type's own A, B and C are the lower group. **SLICER** keeps its four controls in the upper
+**INSERT** shows TYPE, MIX and **FX HOLD** in the upper group (KNOB 1 to 3), with the curve of the chosen type as the fourth card (a drive's
+transfer curve, the folder, the bit staircase, the swept effects' sweep); the type's own A, B and C and the track's **FILTER** are the lower group
+(KNOB 1 to 4; the FILT card is a low-pass to the left, OFF in the middle and a high-pass to the right, see [FILTER](track-filter.md)). Up to 0.2.0 FX HOLD was
+the fourth card of the lower group and the curve filled two cards of the upper one. **SLICER** keeps its four controls in the upper
 group; the lower block is a picture of the settings, not audio: the 16 steps of the pattern in groups of four with the playing step marked,
 and below them a tone as the SLICER shapes it (GATE: a closed step as loud as DEPTH leaves it; STUT: the repeated piece at DEPTH).
 
 ## Loading sounds and the track's FX
 
-A track's own FX are four sends (DST, CHO, DLY, REV, on the FX page) and its INSERT (TYPE and A B C, MIX). The sends say how much of the
-track goes to the one shared delay, reverb and chorus (DLY, REVERB, CHORUS pages, global for the whole project); DST is the track's own
-distortion. The INSERT is the track's own too.
+A track's own FX are four sends (DST, CHO, DLY, REV, on the FX page), its INSERT (TYPE and A B C, MIX) and its FILTER (FILT, on INSERT 2). The sends say how
+much of the track goes to the one shared delay, reverb and chorus (DLY, REVERB, CHORUS pages, global for the whole project); DST is the track's own
+distortion. The INSERT and the FILTER are the track's own too.
 
 What a sound load does:
 
 | | factory preset (PRESETS, EDIT KNOB 2, engine change, MIDI program change, editor) | user preset |
 | --- | --- | --- |
 | Sends DST CHO DLY REV | FX HOLD OFF (default): the preset's, or the usual 0 / 24 / 28 / 36 if it has none. FX HOLD ON: stay as they are | the saved ones |
-| INSERT (TYPE, A B C, MIX) | FX HOLD OFF (default): OFF (no factory preset has one). FX HOLD ON: stays as it is | the saved one |
+| INSERT (TYPE, A B C, MIX) and FILTER (FILT) | FX HOLD OFF (default): OFF (no factory preset has one). FX HOLD ON: stays as it is | the saved one |
 | SLICER, ARP, SCL, LEN / DIV / SWG / GATE, LEVEL / PAN / MUTE | stay | stay |
 | Global DLY / REVERB / CHORUS, tempo, tuning | never touched | never touched |
 | Everything else (engine values, ENV, LFOs, matrix, ...) | the preset's or default | the saved |
 
-**FX HOLD** is the fourth card (KNOB 4) of the INSERT A / B / C group in the FX family, and the last row of MENU > VOICES (HOME held, ALGORITHM to VOICES):
+**FX HOLD** is the third card (KNOB 3) of the INSERT TYPE / MIX group in the FX family (the fourth card of INSERT A / B / C up to 0.2.0), and the last row of MENU > VOICES (HOME held, ALGORITHM to VOICES):
 both switch the same setting. It is a device setting kept with the other settings, not part of a project and not of the track the group belongs to,
 although the group's tag says T1 to T4. **SOUND INIT**, a new project (INIT) and power-on start from scratch whatever FX HOLD says: the engine's
-first preset with its sends, INSERT OFF. **CLEAN INIT** clears the sends and the INSERT. Loading a **project** (or LIVE LOAD FULL) restores
+first preset with its sends, INSERT and FILTER OFF. **CLEAN INIT** clears the sends, the INSERT and the FILTER. Loading a **project** (or LIVE LOAD FULL) restores
 the FX it saved. SAVE held (undo) after a load gives back the sound as it was. Automation and locks on the sends are not touched.
-FX HOLD covers exactly the track's own FX that a factory preset load sets: the four sends and the INSERT. The SLICER stays whatever FX HOLD says.
+FX HOLD covers exactly the track's own FX that a factory preset load sets: the four sends, the INSERT and (0.3.0) the FILTER. The SLICER stays whatever FX HOLD says.
 
 ## The caravel
 
