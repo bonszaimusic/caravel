@@ -25,6 +25,10 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 import release_artifacts as release
 
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
+# the firmware's SHIP_BITS (firmware/src/ui_draw.c) as one path on a 28 x 17 grid: the logo and the favicon
+SHIP_PATH = ("M11 0h2v1h-2zM11 1h1v1h-1zM11 2h2v1h-2zM7 3h9v1h-9zM19 3h1v1h-1zM7 4h9v1h-9zM19 4h1v1h-1zM7 5h7v1h-7zM15 5h7v1h-7z"
+             "M7 6h7v1h-7zM15 6h8v1h-8zM7 7h7v1h-7zM15 7h8v1h-8zM6 8h8v1h-8zM15 8h8v1h-8zM2 9h21v1h-21zM27 9h1v1h-1zM2 10h21v1h-21z"
+             "M25 10h2v1h-2zM2 11h5v1h-5zM11 11h1v1h-1zM19 11h1v1h-1zM24 11h2v1h-2zM2 12h22v1h-22zM3 13h20v1h-20zM4 14h18v1h-18zM7 15h13v1h-13z")
 EMULATOR_FILES = ("index.html", "felucca.wasm", "worklet.js",
                   "fonts/DotGothic16-subset.woff", "fonts/OFL.txt")
 
@@ -45,6 +49,75 @@ def source_href(text, url):
     text, count = re.subn(pattern, lambda m: m[1] + markup.escape(url, quote=True) + m[2], text)
     release.require(count == 1, "template must contain one matching-source link")
     return text
+
+
+def site_chrome(text, version, emulator, label=""):
+    """Fill a page header: the version pill, and no EMULATOR link when the site has no emulator."""
+    release.require(text.count("@VERSION@") == 1, "page must contain one header version marker")
+    text = text.replace("@VERSION@", markup.escape(version.lower() + label))
+    link = r'\s*<a [^>]*data-site="emulator"[^>]*>[^<]*</a>'
+    if emulator:
+        return text
+    text, count = re.subn(link, "", text)
+    release.require(count == 1, "page must contain one emulator navigation link")
+    return text
+
+
+def look_css(installer):
+    """The shared palette / header / box rules, as the installer page carries them (the other pages repeat them)."""
+    found = re.search(r"/\*LOOK-BEGIN\*/\n(.*?)\n\s*/\*LOOK-END\*/", installer, flags=re.S)
+    release.require(found is not None, "installer template lost its shared look block")
+    return found[1]
+
+
+def landing(look, version, emulator, source_url, label=""):
+    """The site's start page: header, hero and a box per page. Self-contained (no external requests)."""
+    ver = markup.escape(version.lower() + label)
+    ship = SHIP_PATH
+    boxes = [("INSTALL", "webapp/installer/", "Install Caravel on the FM-1 over USB (Chrome or Edge)."),
+             ("EDITOR", "webapp/editor/", "Edit sounds, sequences, banks and samples from the computer.")]
+    if emulator:
+        boxes.append(("EMULATOR", "emulator/", "The same code the instrument runs, in the browser."))
+    cards = "".join(f'<section class="box sec"><span class="tag">{tag}</span><p><a href="{href}">{markup.escape(text)}</a></p></section>\n'
+                    for tag, href, text in boxes)
+    nav = "".join(f'<a href="{href}">{tag}</a>' for tag, href, _ in boxes)
+    return f"""<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caravel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 17'%3E%3Cpath fill='%23ffaa29' d='{ship}'/%3E%3C/svg%3E">
+<style>
+{look}
+  body {{ margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }}
+  main {{ max-width: 720px; margin: 0 auto; padding: 28px 16px 40px; }}
+  p {{ margin: 0 0 12px; }}
+  .box > :last-child {{ margin-bottom: 0; }}
+  .hero {{ grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 22px 16px 18px; }}
+  .hero .ship {{ color: var(--amb); flex: none; }}
+  .hero h1 {{ margin: 0; font: 700 28px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--amb); }}
+  .hero p {{ margin: 4px 0 0; color: var(--dim); }}
+  .box a {{ color: var(--amb); }}
+  .credits {{ margin: 0; color: var(--dim); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }}
+  .credits a {{ color: inherit; }}
+</style>
+<header class="site">
+  <a class="logo" href="./" aria-label="Caravel"><svg class="ship" width="42" height="26" viewBox="0 0 28 17" aria-hidden="true"><path d="{ship}"/></svg>CARAVEL</a>
+  <span class="pill">v{ver}</span>
+  <nav aria-label="Caravel">{nav}<a href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener">DOCS</a></nav>
+</header>
+<main>
+<div class="boxes">
+<section class="box hero">
+  <span class="tag">FM-1 firmware</span>
+  <svg class="ship" width="140" height="85" viewBox="0 0 28 17" aria-hidden="true"><path d="{ship}"/></svg>
+  <div><h1>Caravel</h1><p>Multi-engine synth firmware for the FM-1</p></div>
+</section>
+{cards}</div>
+<p class="credits">Caravel by bonszaimusic, based on Felucca 1.6.1 by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">H\u00fcgelton Instruments</a>. GPL-3.0, no warranty.<br>
+M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by H\u00fcgelton Instruments or M-VAVE.<br>
+<a href="firmware/LICENSING.md">LICENSING.md</a> \u00b7 <a href="firmware/NOTICE">NOTICE</a> \u00b7 <a href="firmware/CREDITS.md">CREDITS</a> \u00b7 <a href="firmware/LICENSE">GPL-3.0</a> \u00b7 <a href="{markup.escape(source_url, quote=True)}">Matching source</a> \u00b7 Felucca: <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener">github.com/hugelton/Felucca</a></p>
+</main>
+"""
 
 
 def checked_release(root, directory, version, package):
@@ -165,8 +238,11 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
     for mark in ("/*LIB*/", "/*META*/"):
         release.require(text.count(mark) == 1, "installer metadata/library marker count changed")
     text = source_href(text.replace("/*LIB*/", lib).replace("/*META*/", meta), source_url)
+    label = " \u00b7 preview" if preview else ""
+    look = look_css(text)
+    text = site_chrome(text, version, emulator, label)
     if preview:
-        text = text.replace('<h1>Caravel</h1>', '<h1>Caravel (local preview; not release-verified)</h1>')
+        text = text.replace('<h1>Caravel</h1>', '<h1>Caravel<small> (local preview; not release-verified)</small></h1>')
     with tempfile.TemporaryDirectory(prefix=".caravel-site-", dir=out.parent) as temp:
         stage = Path(temp)
         inst, ed, fw = stage / "webapp/installer", stage / "webapp/editor", stage / "firmware"
@@ -188,7 +264,8 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
             + "".join(f'<li><a href="{markup.escape(p.name, quote=True)}">{markup.escape(p.name)}</a></li>' for p in licenses)
             + '</ul><p><a href="../LICENSING.md">LICENSING.md</a> · <a href="../LICENSE">LICENSE</a> · '
               '<a href="../NOTICE">NOTICE</a> · <a href="../CREDITS.md">CREDITS</a></p>\n', encoding="utf-8")
-        shutil.copyfile(HERE / "editor.html", ed / "index.html")
+        (ed / "index.html").write_text(
+            site_chrome((HERE / "editor.html").read_text(encoding="utf-8"), version, emulator, label), encoding="utf-8")
         for filename in ("fukiai.ttf", "FUKIAI-LICENSE.txt", "fm1backup.js"):
             shutil.copyfile(HERE / filename, ed / filename)
         if emulator:
@@ -197,9 +274,7 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
             emulator_source = "../firmware/" + source if not preview else "https://github.com/bonszaimusic/caravel"
             (dest / "index.html").write_text(source_href(emulator_html, emulator_source), encoding="utf-8")
         (stage / "index.html").write_text(
-            '<!doctype html><meta charset="utf-8"><title>Caravel</title>'
-            '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-            '<a href="webapp/installer/">Caravel installer</a>\n', encoding="utf-8")
+            landing(look, version, emulator, "firmware/" + source if not preview else source_url, label), encoding="utf-8")
         stage.rename(out)
     print(f"site: {out}; version {version}; verified release: {not preview}; no deployment performed")
 
