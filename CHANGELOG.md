@@ -6,7 +6,7 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
-## [0.3.2] — unreleased
+## [0.3.2] — 2026-10-20
 
 Host-tested only: the DRONE changes below were chosen from a host prototype and its renders; **the sound has not been heard on a real FM-1**
 and the CPU cost there is not measured. No new parameter, no format change.
