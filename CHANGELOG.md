@@ -6,6 +6,16 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.3.3] — 2026-10-20
+
+### Fixed
+- **A click in the delay on the external clock.** The delay's TIME follows the tempo, and on an external clock the measured beat is
+  re-estimated every quarter note and moves by a few samples; the delay's read position jumped with it, which is a click in the echo
+  (host model: a beat step of 66 samples, 0.3 %, made the largest sample step of a held sine 47 times larger; now about 1.5 times).
+  Changes of up to 1024 samples now glide (the read goes between two samples, time constant 2^14 samples, a few cents of pitch while
+  it moves); a larger change (the TIME knob, a new note value) jumps as before. A steady beat is bit for bit as before. Host-tested
+  only (`tests/delay_ext_test.c`); the click was reported on a device with the clock from an Oxi One and the delay on.
+
 ## [0.3.2] — 2026-10-20
 
 Host-tested only: the DRONE changes below were chosen from a host prototype and its renders; **the sound has not been heard on a real FM-1**

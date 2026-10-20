@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Effects: per-track DIST and INSERT (1.5), then sends into three
  * shared buses (chorus, tempo delay, reverb). Mono buses, stereo dry mix. */
+#define DLY_SLEW_MAX 1024u          /* the delay time's changes up to this many samples glide (fx_buses), larger ones jump */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 fits from 41 BPM, 1/4D from 61, 1/2 from 81 */
 #define CHO_LEN 2048u
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
@@ -16,6 +17,7 @@ static union {                          /* ROOM's allpasses; SPRING's allpass ch
 #define rev_ap (rev_u.ap)
 static struct {
     uint32_t dly_w, cho_w, cho_ph;
+    uint32_t dly_cur;            /* the delay's TIME as it is read now, Q8 samples (0: not set yet): follows delay_samples() */
     int32_t dly_lp;
     uint16_t comb_i[4], ap_i[2];
     int32_t comb_lp[4];
@@ -580,7 +582,24 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         }
         fx.cho_w++;
         /* delay with a low-passed feedback */
-        x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
+        {   /* The TIME follows the tempo: on the external clock the measured beat is re-estimated every quarter note and
+             * moves by a few samples, and a read position that jumps is a click in the echo (tests/delay_ext_test.c).
+             * Small changes (up to DLY_SLEW_MAX samples: the estimate, a drifting tempo) are followed slowly, with the
+             * read between two samples (time constant 2^14 samples, a few cents of pitch while it moves); a larger one
+             * (the TIME knob, a new note value) jumps as it always did. */
+            int32_t dq = (int32_t)(dl << 8) - (int32_t)fx.dly_cur;
+            uint32_t ri, fr;
+            int32_t x0, x1;
+            if (!fx.dly_cur || dq > (int32_t)(DLY_SLEW_MAX << 8) || dq < -(int32_t)(DLY_SLEW_MAX << 8))
+                fx.dly_cur = dl << 8;
+            else if (dq)
+                fx.dly_cur = (uint32_t)((int32_t)fx.dly_cur + ((dq >> 14) ? (dq >> 14) : dq > 0 ? 1 : -1));
+            ri = fx.dly_cur >> 8;
+            fr = fx.dly_cur & 255u;
+            x0 = dly_buf[(fx.dly_w - ri) & (DLY_LEN - 1u)];
+            x1 = dly_buf[(fx.dly_w - ri - 1u) & (DLY_LEN - 1u)];
+            x = fr ? x0 + (((x1 - x0) * (int32_t)fr) >> 8) : x0;
+        }
         fx.dly_lp += mulq15(x - fx.dly_lp, col);
         dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
             (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);

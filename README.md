@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.3.2**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.3.3**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
