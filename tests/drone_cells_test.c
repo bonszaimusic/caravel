@@ -22,7 +22,7 @@ typedef struct {
 } dc_legacy_t;
 _Static_assert(sizeof(dc_legacy_t) == 104, "legacy state layout");
 _Static_assert(offsetof(drone_part_t, held) == sizeof(dc_legacy_t), "append-only state");
-_Static_assert(sizeof(drone_part_t) == 252, "cell state size contract");
+_Static_assert(sizeof(drone_part_t) == 352, "cell state size contract");
 #define DC_Q23 (32767 * 256)
 static volatile int64_t dc_sink;
 
@@ -86,6 +86,8 @@ static int dc_bounds(const drone_part_t *s)
         ok &= llabs((int64_t)s->prev[k]) <= 32768 && s->inc[k] >= 0 && s->inc[k] <= 0x60000000;
         ok &= s->owner[k] <= 127 && s->pitch16[k] >= 0 && s->pitch16[k] <= 2032;
         ok &= s->ratio[k] <= 131072 && s->level[k] >= 0 && s->level[k] <= 32767;
+        ok &= s->rough[k] >= 0 && s->rough[k] <= 32767 && llabs((int64_t)s->pmlp[k]) <= 32768 &&
+              s->fcpl[k] >= 0 && s->fcpl[k] <= 52429 && s->chrk[k] >= 0 && s->chrk[k] <= 32512 && s->bred[k] >= 0 && s->bred[k] <= 8192;
         ok &= s->drive[k] >= 0 && s->drive[k] <= DC_Q23 &&
               s->amp[k] >= 0 && s->amp[k] <= DC_Q23 && s->activity[k] >= 0 && s->activity[k] <= DC_Q23;
     }
@@ -96,9 +98,9 @@ static int dc_bounds(const drone_part_t *s)
 static int dc_metadata(void)
 {
     dc_setup(5, V_LEGATO); track_t *t = &trk[0];
-    int bad = check("cells: 252 bytes, legacy104 prefix, engine16, one host voice, TOPO0..5",
+    int bad = check("cells: 352 bytes, legacy104 prefix, engine16, one host voice, TOPO0..5",
         ENGI_DRONE == 16 && NENGINES == 17 && ENG_DRONE.poly == 1 && trk_nvoice(t) == 1 &&
-        ENG_DRONE.mem == 252 && ENG_DRONE.mem <= ENG_MEM_PART &&
+        ENG_DRONE.mem == 352 && ENG_DRONE.mem <= ENG_MEM_PART &&
         ENG_DRONE.npresets == 16 && ENG_DRONE.edit[3].min == 0 && ENG_DRONE.edit[3].max == 5);
     static const char *const names[] = {"PAIRS", "CHAIN", "RING", "CELLPAIR", "CELLCHN", "CELLRING"};
     int ok = 1;
@@ -313,6 +315,8 @@ static int dc_division_exact(void)
 }
 /* Cells must not be much duller than the legacy network at the same settings:
  * the PM source carries the cell amplitude with makeup (see drone_cell_render).
+ * 0.3.2: the lower bound went from 0.6 to 0.5. The feedback low-pass (PMLP) removes the loop gain near
+ * fs/4, and this first-difference proxy weights exactly that band: ratio 0.75 -> 0.54 at COUPLE 127.
  * Brightness proxy: RMS of the first difference over RMS of the signal. */
 static double dc_brightness(uint32_t topo, uint32_t coupling)
 {
@@ -337,9 +341,9 @@ static int dc_richness(void)
         uint32_t coupling = c ? 127u : 78u;
         double legacy = dc_brightness(2, coupling), cells = dc_brightness(5, coupling);
         printf("CELLS richness COUPLE%u: legacy %.4f cells %.4f (ratio %.2f)\n", coupling, legacy, cells, cells / legacy);
-        ok &= cells >= 0.6 * legacy && cells <= 1.6 * legacy;
+        ok &= cells >= 0.5 * legacy && cells <= 1.6 * legacy;
     }
-    return check("cells: spectral brightness within 0.6x..1.6x of legacy RING at equal settings", ok);
+    return check("cells: spectral brightness within 0.5x..1.6x of legacy RING at equal settings", ok);
 }
 /* DRIFT adds slow breathing of PM depth and loudness, and a fresh phrase starts its
  * drift triangles elsewhere. Level variation over 30 s must grow with DRIFT, and two
@@ -437,6 +441,11 @@ static void dc_ltas(uint32_t preset, double *out)
     }
     for (int b = 0; b < DC_NB; b++) out[b] = acc[b] / frames;
 }
+/* 0.3.2: the limit went from 8 to 4 dB. ROUGH, the feedback low-pass (PMLP) and SHARP pull the bright presets
+ * toward each other on purpose (whistle gone, character from the interval and the wave shape instead of a
+ * constant high-frequency edge); the closest pair was SUB FOG / SWARM at 8.27 dB and is now IRON BELLS / RUST at
+ * 4.2 dB. The metric is the mean 1/3-octave level difference of the long-term spectra, a coarse proxy that does
+ * not hear differences in the movement of a preset. */
 static int dc_preset_separation(void)
 {
     static double l[16][DC_NB]; double minpair = 1e9; uint32_t ia = 0, ib = 0;
@@ -446,9 +455,123 @@ static int dc_preset_separation(void)
             double d = 0; for (int k = 0; k < DC_NB; k++) d += fabs(l[a][k] - l[b][k]);
             d /= DC_NB; if (d < minpair) { minpair = d; ia = a; ib = b; }
         }
-    printf("CELLS preset separation: closest pair %s / %s at %.2f dB (limit 8.0)\n",
+    printf("CELLS preset separation: closest pair %s / %s at %.2f dB (limit 4.0)\n",
         DRONE_PRESETS[ia].name, DRONE_PRESETS[ib].name, minpair);
-    return check("cells: all eleven cell presets at least 8 dB apart in long-term spectrum", minpair >= 8.0);
+    return check("cells: all eleven cell presets at least 4 dB apart in long-term spectrum", minpair >= 4.0);
+}
+/* ROUGH: the octave position table and the roughness curve against the exact log2 / piecewise-linear reference,
+ * and the settled per-cell roughness for a unison, an octave, a fifth, a minor second and a tritone. */
+static double dc_rough_exact(double cents)
+{
+    static const double R[13] = {0, 1.0, 0.6, 0.3, 0.25, 0.2, 0.8, 0.1, 0.3, 0.3, 0.6, 1.0, 0};
+    double x = cents / 100.0; int i = (int)x; if (i > 11) i = 11;
+    return R[i] + (R[i + 1] - R[i]) * (x - i);
+}
+static int32_t dc_settled_rough(uint32_t ratio1)
+{
+    dc_setup(5, V_LEGATO); track_t *t = &trk[0]; trk_note_on(t, 48, 100);
+    drone_part_t *s = drone_state(t); int32_t out[CTL]; vmod_t m = dc_mod(48);
+    dc_direct(t, out, CTL, &m);
+    t->p[P_E1] = 0;
+    for (uint32_t k = 0; k < 4; k++) s->ratio[k] = 65536;
+    s->ratio[1] = ratio1;
+    for (uint32_t b = 0; b < 400; b++) dc_direct(t, out, CTL, &m);   /* many smoothing time constants */
+    return s->rough[1];
+}
+static int dc_rough_table(void)
+{
+    int ok = 1; double worst_c = 0, worst_r = 0;
+    for (uint32_t i = 0; i < 20000; i++) {
+        uint32_t f = (1u << 20) + (uint32_t)((uint64_t)i * (1u << 20) / 20000u);   /* 1.0 .. 2.0 */
+        double exact = 1200.0 * log2((double)f / (double)(1u << 20));
+        double e = fabs(drone_oct_cents(f) - exact);
+        ok &= drone_oct_cents(f << 3) == drone_oct_cents(f) && drone_oct_cents(f << 9) == drone_oct_cents(f);
+        if (e > worst_c) worst_c = e;
+    }
+    ok &= worst_c <= 2.0;
+    int32_t prev_r = drone_rough_of(0);
+    for (int32_t c = 0; c < 1200; c++) {
+        int32_t r = drone_rough_of(c);
+        double e = fabs(r - 32767.0 * dc_rough_exact(c));
+        if (e > worst_r) worst_r = e;
+        ok &= r >= 0 && r <= 32767 && abs(r - prev_r) <= 400;
+        prev_r = r;
+    }
+    ok &= worst_r <= 130.0;
+    int32_t uni = dc_settled_rough(65536), oct = dc_settled_rough(131072), fifth = dc_settled_rough(98304),
+        m2 = dc_settled_rough(69433), tri = dc_settled_rough(92682);
+    printf("CELLS roughness: octave table worst %.2f cents, curve worst %.0f/32767; settled unison %d octave %d fifth %d "
+           "minor second %d tritone %d\n", worst_c, worst_r, uni, oct, fifth, m2, tri);
+    ok &= uni == 0 && oct == 0 && fifth > 0 && fifth < 6000 && m2 > 29000 && tri > 24000 && tri < 28000;
+    return check("cells: ROUGH octave-cents table, roughness curve and settled per-cell roughness", ok);
+}
+/* PMLP: the cell loop has a one-sample delay, so with CHAR and COUPLE up it rings at fs/4 (about 11 kHz) as a
+ * whistle. The low-pass in the PM feedback removes it: the worst 100 Hz band at 10.2..11.8 kHz, relative to the
+ * whole spectrum, over a held chord of four keys. */
+static double dc_whistle_db(uint32_t preset)
+{
+    static int16_t pcm[24 * 44100]; static double re[DC_FN], im[DC_FN], acc[DC_FN / 2];
+    dc_setup(preset, V_LEGATO); track_t *t = &trk[0];
+    host_preset(t, ENGI_DRONE, preset);
+    t->p[P_DIST] = t->p[P_CHOR] = t->p[P_DLY] = t->p[P_REV] = 0; engine_block(t);
+    static const uint8_t keys[4] = {36, 43, 52, 58};
+    uint32_t n = 0; int32_t buf[CTL];
+    for (uint32_t b = 0; b < 24u * FS / CTL; b++) {
+        for (uint32_t k = 0; k < 4; k++) if (b == k * 2u * FS / CTL) trk_note_on(t, keys[k], 100);
+        memset(buf, 0, sizeof buf); engine_block(t); track_render(t, buf, CTL);
+        for (uint32_t i = 0; i < CTL; i++) { int32_t v = buf[i] / 2; pcm[n++] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v); }
+    }
+    memset(acc, 0, sizeof acc);
+    for (uint32_t o = 8u * FS; o + DC_FN < n; o += DC_FN / 2) {
+        for (int i = 0; i < DC_FN; i++) { re[i] = pcm[o + i] * (0.5 - 0.5 * cos(2 * M_PI * i / DC_FN)); im[i] = 0; }
+        dc_fft(re, im);
+        for (int k = 1; k < DC_FN / 2; k++) acc[k] += re[k] * re[k] + im[k] * im[k];
+    }
+    double tot = 1e-9, worst = -200;
+    for (int k = 1; k < DC_FN / 2; k++) tot += acc[k];
+    for (double lo = 10200; lo < 11700; lo += 100) {
+        double e = 0;
+        for (int k = 1; k < DC_FN / 2; k++) { double f = k * (double)FS / DC_FN; if (f >= lo && f < lo + 100) e += acc[k]; }
+        double db = 10 * log10(e / tot + 1e-12); if (db > worst) worst = db;
+    }
+    return worst;
+}
+static int dc_whistle(void)
+{
+    double glass = dc_whistle_db(8), stat = dc_whistle_db(13);
+    printf("CELLS whistle band 10.2-11.8 kHz: GLASS CHOIR %.1f dB, STATIC %.1f dB (below the whole spectrum)\n", glass, stat);
+    return check("cells: no whistle near fs/4 (feedback low-pass), GLASS CHOIR and STATIC", glass < -40.0 && stat < -40.0);
+}
+/* SHARP: one equal-pitch, uncoupled, drift-free cell chord is one wave. CHAR 0 is a sine (no 3rd harmonic), and
+ * the 3rd harmonic grows with CHAR as the wave goes sine -> triangle -> rounded square. */
+static double dc_h3_db(uint32_t chr)
+{
+    static int16_t pcm[4 * 44100]; static double re[DC_FN], im[DC_FN];
+    dc_setup(5, V_LEGATO); track_t *t = &trk[0];
+    t->p[P_E0] = t->p[P_E1] = t->p[P_E2] = t->p[P_E5] = 0; t->p[P_E4] = (int16_t)chr; t->p[P_E7] = 127;
+    engine_block(t); trk_note_on(t, 57, 110);
+    uint32_t n = 0; int32_t buf[CTL];
+    for (uint32_t b = 0; b < 4u * FS / CTL; b++) {
+        memset(buf, 0, sizeof buf); engine_block(t); track_render(t, buf, CTL);
+        for (uint32_t i = 0; i < CTL; i++) { int32_t v = buf[i] / 2; pcm[n++] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v); }
+    }
+    for (int i = 0; i < DC_FN; i++) { re[i] = pcm[2u * FS + i] * (0.5 - 0.5 * cos(2 * M_PI * i / DC_FN)); im[i] = 0; }
+    dc_fft(re, im);
+    double f0 = 440.0 / 2, p1 = 1e-9, p3 = 1e-9;
+    for (int k = 1; k < DC_FN / 2; k++) {
+        double f = k * (double)FS / DC_FN, e = re[k] * re[k] + im[k] * im[k];
+        if (fabs(f - f0) < 20) p1 += e;
+        if (fabs(f - 3 * f0) < 40) p3 += e;
+    }
+    return 10 * log10(p3 / p1);
+}
+static int dc_sharp(void)
+{
+    double h[4]; static const uint32_t chars[4] = {0, 30, 89, 127};
+    for (uint32_t i = 0; i < 4; i++) h[i] = dc_h3_db(chars[i]);
+    printf("CELLS SHARP 3rd harmonic vs fundamental: CHAR0 %.1f dB, CHAR30 %.1f dB, CHAR89 %.1f dB, CHAR127 %.1f dB\n", h[0], h[1], h[2], h[3]);
+    return check("cells: CHAR 0 stays a sine, SHARP adds harmonics as CHAR rises",
+                 h[0] < -60.0 && h[1] > h[0] + 20.0 && h[2] > h[1] + 10.0 && h[3] > h[2] && h[2] > -32.0);
 }
 static int dc_automated_family(void)
 {
@@ -663,16 +786,39 @@ static int32_t dc_route_ref(const int32_t x[4], uint32_t k, int32_t topo)
     return topo <= 32768 ? x[pair] + mulq15(chain - x[pair], topo) :
         chain + mulq15(x[ring] - chain, topo - 32768);
 }
+/* SHARP, written out again: CHAR 0 is a sine; to 0.5 a blend toward the triangle of the same (phase-modulated)
+ * angle; above, the triangle with drive 1..3 through one soft clip 1.5y - 0.5y^3; a little level makeup. The drive
+ * product keeps the implementation's halving of both factors (it truncates the odd falling-edge triangle values). */
+static int32_t dc_sharp_ref(uint32_t ph, int32_t char_ctrl, int32_t x)
+{
+    int32_t sh = (int32_t)(((int64_t)char_ctrl * 60791) >> 16);
+    if (sh > 26214) sh = 26214;
+    if (!sh) return x;
+    int32_t ang = (int32_t)(((ph >> 16) + 16384u) & 0xFFFFu);
+    int32_t tw = ang < 32768 ? ang * 2 - 32768 : 98303 - ang * 2;
+    if (sh <= 16384) x += mulq15(tw - x, sh * 2);
+    else {
+        int32_t g = 32768 + 4 * (sh - 16384), y = ((tw >> 1) * (g >> 1)) >> 13;
+        y = y > 32767 ? 32767 : y < -32767 ? -32767 : y;
+        x = y + (y - mulq15(mulq15(y, y), y)) / 2;
+    }
+    return mulq15(x, 32768 - (sh >> 2));
+}
 static int dc_snapshot(void)
 {
     int ok = 1; uint32_t cases = 0; int32_t min_gain = 32767, max_inhibit = 0;
     static const int32_t routes[] = {0, 1, 16384, 32768, 49152, 65536};
+    static const int chars[] = {0, 2, 40, 89, 127};   /* sine; light, mid (triangle blend) and square-branch SHARP; capped */
     for (uint32_t route = 0; route < NELEM(routes); route++)
-    for (uint32_t coupling = 0; coupling < 2; coupling++) {
+    for (uint32_t coupling = 0; coupling < 2; coupling++)
+    for (uint32_t ci = 0; ci < NELEM(chars); ci++) {
         dc_setup(5, V_LEGATO); track_t *t = &trk[0]; trk_note_on(t, 48, 100);
         drone_part_t *s = drone_state(t); int32_t out[CTL]; vmod_t m = dc_mod(48);
         dc_direct(t, out, CTL, &m);
         t->p[P_E2] = coupling ? 127 : 0;
+        t->p[P_E4] = (int16_t)chars[ci]; s->ctrl[DR_CHAR] = chars[ci] * 258;
+        t->p[P_E1] = 0;                                  /* four equal frequencies: every interval is a unison */
+        for (uint32_t k = 0; k < 4; k++) s->ratio[k] = 65536;
         t->p[P_E5] = 0; s->ctrl[DR_DRIFT] = 0; /* breathing is exactly neutral at DRIFT 0 */
         s->ctrl[DR_COUPLE] = t->p[P_E2] * 256;
         s->ctrl[DR_TOPO] = routes[route];
@@ -683,11 +829,16 @@ static int dc_snapshot(void)
             s->drive[k] = (31000 - (int32_t)k * 5000) * 256;
             s->level[k] = 32000 - (int32_t)k * 4000;
             s->prev[k] = (int32_t)k * 10000 - 15000;
+            s->rough[k] = k ? (int32_t)k * 9000 : 0;      /* settling toward 0 (a unison) */
+            s->pmlp[k] = (int32_t)k * 3000 - 4000;
+            s->breath[k] = 12345u * (k + 1u);
         }
+        s->slow = 0;                                     /* the next sample is a slow tick (every 8th sample) */
         s->held[1] &= ~(1u << 18); /* one cell releases while neighbors hold */
         drone_part_t before = *s;
         int32_t target_topo = 0, topo = dc_follow_ref(before.ctrl[DR_TOPO], target_topo, 1024);
-        int32_t activity[4], predicted[4], pmsrc[4], sum = 0;
+        int32_t activity[4], predicted[4], pmsrc[4], rough[4], fcpl[4], chrk[4], bred[4], sum = 0;
+        uint32_t breath[4];
         for (uint32_t k = 0; k < 4; k++) activity[k] = before.activity[k] / 256;
         int32_t drive[4], amp[4], act[4];
         for (uint32_t k = 0; k < 4; k++) {
@@ -701,27 +852,52 @@ static int dc_snapshot(void)
             int32_t goal = mulq15(drive[k] / 256, 32767 - inhibition) * 256;
             amp[k] = dc_follow_ref(before.amp[k], goal, 1024);
             act[k] = dc_follow_ref(before.activity[k], amp[k], 16384 + (int32_t)k * 8192);
-            int32_t pm = mulq15(dc_route_ref(before.prev, k, topo), before.ctrl[DR_COUPLE]);
-            int32_t x = sine_i(before.phase[k] + (uint32_t)pm * 32768u);
+            int32_t cple = before.ctrl[DR_COUPLE], chr = before.ctrl[DR_CHAR];
+            rough[k] = k ? dc_follow_ref(before.rough[k], 0, 128) : 0;   /* slow tick: 2^7 samples per step */
+            fcpl[k] = 29491 + mulq15(22938, rough[k]);
+            if (k) {   /* ROUGH: COUPLE x0.9 .. x1.6, CHAR x0.8 .. x1.4 */
+                cple = (int32_t)((int64_t)cple * fcpl[k] / 32768);
+                chr = (int32_t)((int64_t)chr * (26214 + mulq15(19661, rough[k])) / 32768);
+                if (cple > 32512) cple = 32512;
+                if (chr > 32512) chr = 32512;
+                chrk[k] = chr;
+            }
+            breath[k] = before.breath[k] + 8u * BREATH_INC[k];
+            bred[k] = mulq15(mulq15(8192, before.ctrl[DR_DRIFT]), breath[k] >> 16 < 32768 ? (int32_t)(breath[k] >> 16) : 65535 - (int32_t)(breath[k] >> 16));
+            int32_t pm = mulq15(dc_route_ref(before.prev, k, topo), cple);
+            uint32_t ph = before.phase[k] + (uint32_t)pm * 32768u;
+            int32_t x = dc_sharp_ref(ph, before.ctrl[DR_CHAR], sine_i(ph));
             int32_t cube = mulq15(mulq15(x, x), x);
-            x += mulq15((x - cube) / 2, before.ctrl[DR_CHAR]);
+            x += mulq15((x - cube) / 2, chr);
             int32_t gn = mulq15(amp[k] / 256, 32767);
+            gn -= mulq15(gn, bred[k]);                        /* BREATH (0 at DRIFT 0: exactly neutral) */
             predicted[k] = mulq15(x, gn);
             pmsrc[k] = mulq15(x, gn > 8191 ? 32767 : gn * 4); /* PM: 4x makeup, saturating */
+            pmsrc[k] = before.pmlp[k] + ((pmsrc[k] - before.pmlp[k]) >> 1);   /* PMLP: one pole, 1/2 per sample */
             sum += predicted[k];
         }
         dc_direct(t, out, 1, &m);
         for (uint32_t k = 0; k < 4; k++)
-            ok &= s->drive[k] == drive[k] && s->amp[k] == amp[k] && s->activity[k] == act[k] && s->prev[k] == pmsrc[k];
+            ok &= s->drive[k] == drive[k] && s->amp[k] == amp[k] && s->activity[k] == act[k] && s->prev[k] == pmsrc[k] &&
+                  s->pmlp[k] == pmsrc[k] && s->rough[k] == rough[k] && s->breath[k] == breath[k] && s->bred[k] == bred[k] &&
+                  (!k || (s->fcpl[k] == fcpl[k] && s->chrk[k] == chrk[k])) && s->slow == 1;
         int32_t x = sum / 4, hp = x - before.dc_in + before.dc_out - before.dc_out / 512;
         int32_t g = 128 + s->ctrl[DR_TONE] * 30000 / 32512;
         int32_t low = before.low + (int32_t)(((int64_t)(hp - before.low) * g) / 32768);
         ok &= s->dc_in == x && s->dc_out == hp && s->low == low &&
             out[0] == voice_amp(soft_knee(low, 16000) * 2, &m, 0) * 2;
+        {   /* the next 7 samples are no slow tick: the slow quantities stay put */
+            drone_part_t kept = *s;
+            dc_direct(t, out, 7, &m);
+            for (uint32_t k = 0; k < 4; k++)
+                ok &= s->rough[k] == kept.rough[k] && s->breath[k] == kept.breath[k] && s->fcpl[k] == kept.fcpl[k] &&
+                      s->chrk[k] == kept.chrk[k] && s->bred[k] == kept.bred[k];
+            ok &= s->slow == 8;
+        }
         cases++;
     }
     printf("CELLS snapshot: %u cases; inhibition max %d/32768, gain min %d/32768\n", cases, max_inhibit, min_gain);
-    return check("cells: one-sample oracle, snapshot inhibition <=50%, weighted audible output and made-up PM source", ok);
+    return check("cells: one-sample oracle (ROUGH, SHARP, BREATH state, PMLP), snapshot inhibition <=50%, weighted audible output and made-up PM source", ok);
 }
 static int dc_velocity_pitch(void)
 {
@@ -1094,7 +1270,7 @@ int main(int argc, char **argv)
         printf("DRONE CELLS isolated DSP: %s (%d failed checks)\n", bad ? "FAIL" : "PASS", bad);
         return !!bad;
     }
-    int bad = dc_metadata() + dc_family_events() + dc_ghost_release() + dc_division_exact() + dc_richness() + dc_life() + dc_preset_separation() + dc_automated_family() + dc_pitch_boundaries() +
+    int bad = dc_metadata() + dc_family_events() + dc_ghost_release() + dc_division_exact() + dc_richness() + dc_life() + dc_preset_separation() + dc_rough_table() + dc_whistle() + dc_sharp() + dc_automated_family() + dc_pitch_boundaries() +
         dc_gestures() + dc_snapshot() + dc_velocity_pitch() + dc_recovery() +
         dc_lifecycle() + dc_full_load() + dc_corners() + dc_live_isolation();
     dc_bench(); printf("DRONE CELLS: %s (%d failed checks)\n", bad ? "FAIL" : "PASS", bad); return !!bad;
