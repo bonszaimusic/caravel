@@ -53,6 +53,11 @@ int main(void)
         assert(settings_import(&q, sizeof q) == 1 && settings.palette == 5u);
         settings.magic = SETTINGS_MAGIC_OLD; settings.palette = 13; settings_init();   /* retained SET3 */
         assert(settings.magic == SETTINGS_MAGIC && settings.palette == 6u);
+        /* a device with no saved settings (bad magic) starts on AMBER (0.3.1), a saved choice is kept */
+        settings.magic = 0; settings.palette = UI_GREY_INDEX; settings_init();
+        assert(settings.magic == SETTINGS_MAGIC && settings.palette == UI_DEFAULT_INDEX && !strcmp(UI_PALETTES[UI_DEFAULT_INDEX].name, "AMBER"));
+        settings.palette = UI_GREY_INDEX; settings_init();
+        assert(settings.palette == UI_GREY_INDEX);
         p = original; assert(settings_import(&p, sizeof p) == 1); settings_init();
     }
 #ifdef FELUCCA_FAVORITES

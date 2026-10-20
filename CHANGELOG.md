@@ -6,6 +6,13 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.3.1] — 2026-10-20
+
+### Changed
+- **AMBER is the default colour theme.** A device without saved settings starts in AMBER (it was GREY); the ship mark and the web pages
+  use the same amber. A palette you chose and saved stays as it is: MENU > COLOR still lists all of them. Host-tested only
+  (`tests/settings_test.c`); not seen on a real FM-1.
+
 ## [0.3.0] — 2026-10-19
 
 Includes everything of 0.2.0 (below), which was prepared but never published.

@@ -125,7 +125,7 @@ static void settings_init(void)
         if (settings.magic != SETTINGS_MAGIC)
             ui_prefs_fresh();                  /* never saved (not just a bad palette) */
         settings.magic = SETTINGS_MAGIC;
-        settings.palette = UI_GREY_INDEX;      /* GREY (default; named MONO before 1.0.2) */
+        settings.palette = UI_DEFAULT_INDEX;   /* AMBER since Caravel 0.3.1 (GREY before; saved settings keep theirs) */
         settings.lowcut = 0;
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
     }
