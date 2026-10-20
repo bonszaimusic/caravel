@@ -31,6 +31,7 @@ int main(void)
     track_t *t = &trk[0];
     uint32_t pi;
     ui_power_on();
+    ok = 1;
     for (pi = 0; pi < 5u; pi++) {
         load(t, ENGI_DRONE, pi);
         ok &= matrix_off(t) && t->p[P_LRATE] == TP[P_LRATE].def && t->p[P_LTRIG] == TP[P_LTRIG].def;
