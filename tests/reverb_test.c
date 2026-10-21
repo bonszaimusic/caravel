@@ -65,7 +65,7 @@ static int32_t noise(int32_t amp)
 /* ------------------------------------------------- the buses before SPRING --- */
 static int16_t ref_dly[DLY_LEN], ref_cho[CHO_LEN], ref_comb[1116 + 1188 + 1277 + 1356], ref_ap[556 + 441];
 static struct {
-    uint32_t dly_w, cho_w, cho_ph;
+    uint32_t dly_w, cho_w, cho_ph, dly_cur;
     int32_t dly_lp;
     uint16_t comb_i[4], ap_i[2];
     int32_t comb_lp[4];
@@ -90,7 +90,20 @@ static void ref_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_
             y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
         }
         rf.cho_w++;
-        x = ref_dly[(rf.dly_w - dl) & (DLY_LEN - 1u)];
+        {   /* the delay's TIME glides on small changes (fx.c fx_buses, 0.3.3), as the firmware does */
+            int32_t dq = (int32_t)(dl << 8) - (int32_t)rf.dly_cur;
+            uint32_t ri2, fr;
+            int32_t x0, x1;
+            if (!rf.dly_cur || dq > (int32_t)(DLY_SLEW_MAX << 8) || dq < -(int32_t)(DLY_SLEW_MAX << 8))
+                rf.dly_cur = dl << 8;
+            else if (dq)
+                rf.dly_cur = (uint32_t)((int32_t)rf.dly_cur + ((dq >> 14) ? (dq >> 14) : dq > 0 ? 1 : -1));
+            ri2 = rf.dly_cur >> 8;
+            fr = rf.dly_cur & 255u;
+            x0 = ref_dly[(rf.dly_w - ri2) & (DLY_LEN - 1u)];
+            x1 = ref_dly[(rf.dly_w - ri2 - 1u) & (DLY_LEN - 1u)];
+            x = fr ? x0 + (((x1 - x0) * (int32_t)fr) >> 8) : x0;
+        }
         rf.dly_lp += mulq15(x - rf.dly_lp, col);
         ref_dly[rf.dly_w & (DLY_LEN - 1u)] = (int16_t)clamp((dly_in[i] >> 1) + mulq15(rf.dly_lp, fb), -32768, 32767);
         rf.dly_w++;
