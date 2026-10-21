@@ -172,8 +172,12 @@ class SiteReleaseTest(unittest.TestCase):
         self.assertFalse(self.out.exists())
 
     def test_wrong_version_is_rejected(self):
-        with self.assertRaisesRegex(R.ReleaseError, "product/version"):
+        # Different versions now share Caravel's fixed FM-1_999 identity.
+        # The verified release directory still must match the requested
+        # version; a 0.1.0 download cannot stand in for 0.2.0.
+        with self.assertRaisesRegex(R.ReleaseError, "missing required file.*caravel-0\\.2\\.0\\.fwsc"):
             SITE.main(self.package, "0.2.0", self.out, release_dir=self.release)
+        self.assertFalse(self.out.exists())
 
     def test_package_outside_verified_directory_is_rejected(self):
         elsewhere = self.root.parent / "copied-package.fwsc"

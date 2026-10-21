@@ -47,6 +47,8 @@ jobs:
         env:
           CC: cc -include stdint.h
         run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
           sh build.sh --binary-version 0.3.4
           python3 web/make_site.py build/caravel-0.3.4.fwsc 0.3.4 build/preview-site --preview
       - name: Upload private Chrome browser preview
