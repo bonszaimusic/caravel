@@ -50,7 +50,7 @@ LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 # SDK files of AC79NN_SDK_V1.2.1_2023-12-13 (the tested version)
 SDK_SHA256 = release_artifacts.SDK_SHA256
 
-PRODUCT = "FM-1_900"                # package identity; versioned builds are FM-1_9XY
+PRODUCT = "FM-1_900"                # unversioned dev identity; versioned builds use FM-1_999
 VERSION = None                      # versioned-build override (default: firmware/src/felucca.c)
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (1.6.1): the second core is built in, its entry and
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
@@ -387,7 +387,7 @@ def main():
     snapshot = None
     version = a.release if a.release is not None else a.binary_version
     mode = "release" if a.release is not None else "binary-version"
-    if version is not None:         # X.Y.Z and X.Y.Z.W retain X.Y's package identity
+    if version is not None:         # All versioned builds use Caravel's fixed identity
         try:
             PRODUCT = release_artifacts.identity(version)
             release_artifacts.guard_output_tree(SRC)

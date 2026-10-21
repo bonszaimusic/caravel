@@ -21,6 +21,8 @@ still pending: read the notes below first.
 
 ## Which release
 
+Beginning with 0.3.4, Caravel uses the fixed package identity `FM-1_999`. Previous releases retain their old identities. Testing the new identity and installing/leaving the preview on real hardware are still pending.
+
 Every release on [GitHub Releases](https://github.com/bonszaimusic/caravel/releases) has the package `caravel-X.Y.Z.fwsc`, the
 firmware app alone (`caravel-X.Y.Z-app.bin`), the update loader, the complete source (`caravel-X.Y.Z-source.tar.gz`) and
 `SHA256SUMS` with the licence texts. To install a specific version, take the package of that release. The latest release is the
@@ -78,11 +80,20 @@ stopped, 5 timeout (no loader or no restart), 6 wrong model or another identity 
 
 ## Your own build
 
-A package built from the source ([BUILDING.md](../BUILDING.md)) installs the same way. To use the web installer for it, build a local
-copy of the site and open it from `localhost` (Web MIDI needs a secure context):
+A package built from source ([BUILDING.md](../BUILDING.md)) installs the same way. For an **unreleased test package**, generate a local browser preview and serve it over `localhost` (Web MIDI needs a secure context):
 
-```
-python3 web/make_site.py build/caravel.fwsc dev /tmp/caravel-site
+```sh
+./build.sh --binary-version 0.3.4
+python3 web/make_site.py build/caravel-0.3.4.fwsc 0.3.4 /tmp/caravel-site --preview
 cd /tmp/caravel-site && python3 -m http.server 8000
-# open http://localhost:8000/webapp/installer/
+# open http://localhost:8000/webapp/installer/ in Chrome
 ```
+
+Or download the private CI artifact named `caravel-0.3.4-browser-preview-...` from the development pull request, extract it and run:
+
+```sh
+cd preview-site && python3 -m http.server 8000
+# open http://localhost:8000/webapp/installer/ in Chrome
+```
+
+Connect the FM-1 via USB and back up projects/settings before attempting to flash. This is an unverified preview, not a release. The public web installer continues to offer only the latest **published** version.

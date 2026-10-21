@@ -43,6 +43,26 @@ jobs:
           export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
           sh build.sh
           sh tests/run_tests.sh
+      - name: Build versioned Caravel 0.3.4 private test package
+        env:
+          CC: cc -include stdint.h
+        run: |
+          sh build.sh --binary-version 0.3.4
+          python3 web/make_site.py build/caravel-0.3.4.fwsc 0.3.4 build/preview-site --preview
+      - name: Upload private Chrome browser preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: caravel-0.3.4-browser-preview-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: build/preview-site/
+      - name: Upload private 0.3.4 firmware package
+        uses: actions/upload-artifact@v4
+        with:
+          name: caravel-0.3.4-fwsc-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: build/caravel-0.3.4.fwsc
       - name: Upload the installable package and licences
         uses: actions/upload-artifact@v4
         with:

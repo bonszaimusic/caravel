@@ -68,8 +68,8 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 
 ## Verified local release artifacts
 
-`./build.sh --release 0.1.0` builds identity `FM-1_901` and version `v0.1.0`, then
-assembles and checks `build/release-0.1.0/`. This production mode requires clean,
+`./build.sh --release 0.3.4` builds identity `FM-1_999` and version `v0.3.4`, then
+assembles and checks `build/release-0.3.4/`. This production mode requires clean,
 committed source and initialized submodules at their recorded pins. It rejects
 unexpected SDK bytes and unsafe build-output links before writing.
 

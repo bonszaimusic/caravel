@@ -6,6 +6,12 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.3.4] — unreleased
+
+### Changed
+- **Fixed firmware identity `FM-1_999`.** Release and versioned test packages retain the same identity across versions, rather than deriving it from the major/minor version (`FM-1_903` for 0.3.x). This permits a distinct identity for The Firmware Hub. Unversioned development builds keep their `FM-1_900` test identity; the update loader's own marker is unchanged.
+- **Private browser test package.** Private CI builds a 0.3.4 `.fwsc` and a Chrome preview website served locally at `localhost`; neither is a verified public release. Hardware flashing, MIDI identity and firmware-switch tests are still pending.
+
 ## [0.3.3] — 2026-10-20
 
 ### Fixed
