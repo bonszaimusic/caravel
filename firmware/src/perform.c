@@ -311,6 +311,11 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
     uint32_t held = perf_kill ? 0u : (perf_held | perf_latched | perf_motion[0] | perf_motion[1] |
         perf_motion[2] | perf_motion[3] | (perf_solo ? (~(uint32_t)perf_solo & 15u) << PF_M1 : 0u)) & perf_avail();
     uint32_t q, k, ph0, bnd;
+    /* Track mute uses the same 128-sample output ramp as performance mute.
+     * Keep held voices/LATCH state alive; new triggers are still suppressed.
+     * Persistent track mute also remains effective during perf_kill. */
+    held |= ((uint32_t)!!trk[0].p[P_MUTE] | (uint32_t)!!trk[1].p[P_MUTE] << 1 |
+             (uint32_t)!!trk[2].p[P_MUTE] << 2 | (uint32_t)!!trk[3].p[P_MUTE] << 3) << PF_M1;
     int32_t m;
     if (!held && !pf.busy && !(perf_k[0] | perf_k[1] | perf_k[2])) {   /* idle: the clock only */
         pf.ph += n;
