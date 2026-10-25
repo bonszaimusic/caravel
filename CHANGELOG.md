@@ -6,11 +6,59 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
-## [0.3.4] — unreleased
+## [0.5.0] - prepared, not published
+
+### Added
+- **A performance HOME for each track:** up to 32 rows of four references. Turn a
+  parameter on its normal page, hold GLO and tap HOME to add it. SELECT chooses
+  the active row; ALGO chooses the track. The active row is large and its neighbour
+  stays compact. Both rows retain their K1-K4 order. HOME > EDIT CELLS provides
+  source navigation, reordering, removal, target selection and one-step HOME undo.
+- **Four macros per track, four routes per macro.** MACRO and MACRO MAP are in the
+  ENV page family. Each route offsets a continuous parameter on its own track;
+  amount is signed, zero is neutral, and offsets do not overwrite the sound's base.
+- **Pair Morph:** one pair of eligible pitched tracks shares note gestures while
+  retaining both sound engines. PAIR in the ENV family provides PARTNER, ON/OFF,
+  MORPH and optional MOTION. The partner adopts A's voice mode. SPREAD must be off;
+  fixed voice reservations and unsupported key-map engines are refused with a
+  reason. HOME can hold the Pair controls and shows both preset names and live mix.
+- **Performance project storage:** HPM1/10,000-byte WORK and A-D snapshots retain
+  sounds, HOME, macros, performance events and Pair state together. Full USB
+  backups and the command-line .hpm tool support the extension. Live saves commit
+  after STOP. Existing native projects remain importable.
+- **Bounded, opt-in USB diagnostics** for audio timing and overload counters.
+- **Graphical tutorials:** six illustrated chapters using real firmware frames,
+  with HOME setup, Pair, macros, saving, second core and held-note muting.
 
 ### Changed
-- **Fixed firmware identity `FM-1_999`.** Release and versioned test packages retain the same identity across versions, rather than deriving it from the major/minor version (`FM-1_903` for 0.3.x). This permits a distinct identity for The Firmware Hub. Unversioned development builds keep their `FM-1_900` test identity; the update loader's own marker is unchanged.
-- **Private browser test package.** Private CI builds a 0.3.4 `.fwsc` and a Chrome preview website served locally at `localhost`; neither is a verified public release. Hardware flashing, MIDI identity and firmware-switch tests are still pending.
+- HOME prioritises active values, preset name, track and Pair state. Automatic
+  SOUND/FX/MACRO/PAIR/MIX row labels describe assignments. A sound-change star
+  compares the current sound to the saved preset; performance level/pan/mute and
+  running modulation phases do not mark the sound as edited.
+- New performance backups retain the user-preset slot reference. Older backups
+  cannot reconstruct a previously lost name; keep user banks with the performance.
+- **Second core remains opt-in, OFF by default, and needs a restart.** The worker
+  renders complete engine jobs; track effects and shared buses stay on core 0.
+  HOME reports actual 1C/2C status. Render comparisons are equal; no universal
+  CPU percentage or guaranteed three-track capacity is promised.
+- The fixed **FM-1_999** identity and private preview build path prepared in 0.3.4
+  are carried forward. Unversioned builds keep FM-1_900. The loader marker is
+  unchanged. 0.3.4 was not published separately.
+
+### Fixed
+- **Track Mute also ramps already sounding LATCH voices down** (issue #2). Held
+  voices may resume when unmuted. LATCH is preserved, new triggers remain blocked,
+  and existing global effect tails decay normally.
+- The external-clock delay-time glide from **0.3.3 remains included**. The 0.3.4
+  identity branch adds no separate delay-DSP patch.
+
+### Compatibility and validation
+- Sound presets are not complete performance projects. Use matching tools for
+  complete backups; older firmware cannot restore the HOME/Macro/Pair layer.
+- The maintainer reports the D3 hardware test passed. That is evidence for the
+  tested D3 package, not an installation test of the 0.5.0-labelled package.
+- CPU GUARD and the separate V11 silent-FX experiment are not included.
+- Release publication remains pending the private development checks and review.
 
 ## [0.3.3] — 2026-10-20
 

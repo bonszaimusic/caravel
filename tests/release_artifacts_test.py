@@ -430,6 +430,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
 
     def build_context(self, release=True, binary_version=None, extra_args=()):
         stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.dict(os.environ, {"FELUCCA_PERF_HW":"0", "CARAVEL_DUALCORE_D1":"0"}))
         for name, value in (("SRC", self.root), ("FW", self.root / "firmware"), ("OUT", self.root / "build"),
                             ("GEN", self.root / "build/gen"), ("LDR", self.root / "build/loader")):
             stack.enter_context(mock.patch.object(B, name, value))

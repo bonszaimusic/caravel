@@ -1,0 +1,35 @@
+<section id="pair-panel" style="max-width:880px;margin:24px auto;padding:24px;border:1px solid #74756b;border-radius:16px;background:#1a211e;color:#ecf1e8;font:15px system-ui">
+ <h2 style="margin-top:0">Engine Pair Morph <small style="color:#bdd99a">· isolated prototype</small></h2>
+ <p>Complete Caravel C/WASM emulator. Pair configuration below; use the original panel and keys above to play and edit either engine.</p>
+ <p style="color:#d8c497">POLY / MONO / LEGATO / UNISON · 14 melodische Engines · alle DRONE-Topologien · one pair · CPU2 off. Prepare resets the working session. Snapshots use their own EPM2 format (EPM1 loads too).</p>
+ <fieldset id="pair-controls" disabled style="border:0;padding:0;display:grid;gap:16px">
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+   <label>Member A <select id="pair-a"><option value="0">T1</option><option value="1">T2</option><option value="2">T3</option><option value="3">T4</option></select></label>
+   <label>Engine A <select id="pair-ea"><option value="0">ANALOG</option><option value="12">FM6</option><option value="2">PHASE</option><option value="3">LOFI</option><option value="4">SAMPLE</option><option value="5">VOICE</option><option value="6">TRIO</option><option value="7">WHEEL</option><option value="8">GRAIN</option><option value="9">PHYS</option><option value="11">NOISE</option><option value="14" selected>SEM</option><option value="15">HADES</option><option value="16">DRONE</option></select></label>
+   <label>Member B <select id="pair-b"><option value="2">T3</option><option value="0">T1</option><option value="1">T2</option><option value="3">T4</option></select></label>
+   <label>Engine B <select id="pair-eb"><option value="0">ANALOG</option><option value="12">FM6</option><option value="2">PHASE</option><option value="3">LOFI</option><option value="4">SAMPLE</option><option value="5">VOICE</option><option value="6">TRIO</option><option value="7">WHEEL</option><option value="8">GRAIN</option><option value="9">PHYS</option><option value="11">NOISE</option><option value="14">SEM</option><option value="15">HADES</option><option value="16" selected>DRONE</option></select></label>
+   <button id="pair-enable">Vorhandene Tracks paaren</button>
+   <button id="pair-prepare">Prepare pair / reset session</button>
+  </div>
+  <div><button id="pair-page">PAIR auf Gerätebildschirm</button> <button id="pair-select-a">Select A</button> <button id="pair-select-b">Select B</button> <button id="pair-panic">Panic</button> <button id="pair-disable">Disable pair</button></div>
+  <label style="display:grid;gap:6px">Shared PAIR MORPH <input aria-label="PAIR MORPH" id="pair-morph" type="range" min="0" max="32767" value="16384" style="width:100%"></label>
+  <label style="padding:14px;background:#26312b;border-radius:10px"><input id="pair-motion" type="checkbox"> <strong>MORPH MOTION</strong> · Kurve + begrenzte Klangbewegung<br><small>SEM: kleine Filterbewegung bei mäßiger Resonanz · DRONE: wärmerer TONE. Keine zusätzliche Kopplung, kein Pegelboost in der Mitte.</small></label>
+  <p>V6: Aktives Pair auf HOME → K1 MORPH, K2 MOTION, K3 PAIR LEVEL, K4 PAN. Einrichtung: HOME → MIXER → CLOCK → PAIR; K1 Partner, K2 ON. Der Zieltrack übernimmt den Voice-Modus. Die Prozentwerte zeigen Live-Mischgewichte und ergeben zusammen 100 %.</p>
+  <output id="pair-state" aria-live="polite">Switch on the emulator, then prepare a pair.</output>
+  <div style="display:flex;gap:18px;flex-wrap:wrap">
+   <label>Shared level <input id="pair-level" type="range" min="0" max="127" value="104"></label>
+   <label>Shared pan <input id="pair-pan" type="range" min="-64" max="63" value="0"></label>
+   <label><input id="pair-mute" type="checkbox"> Shared mute</label>
+   <label>LATCH <select id="pair-latch"><option value="0">Off</option><option value="1">New</option><option value="2">Stack</option></select></label>
+  </div>
+  <div style="padding:16px;background:#26312b;border-radius:10px;display:flex;gap:18px;flex-wrap:wrap">
+   <label>Selected engine · LFO1 rate <input id="pair-rate1" type="range" min="0" max="127" value="40"></label>
+   <label>LFO1 → PAIR <input id="pair-depth1" type="range" min="-64" max="63" value="0"></label>
+   <label>LFO2 rate <input id="pair-rate2" type="range" min="0" max="127" value="40"></label>
+   <label>LFO2 → PAIR <input id="pair-depth2" type="range" min="-64" max="63" value="0"></label>
+  </div>
+  <div><button id="pair-demo">Create shared sequence + morph lane</button> <span>Press PLAY on the device. Sequence editing uses member A; live recording from either member uses A.</span></div>
+  <div><button id="pair-save">Download pair snapshot</button> <label>Restore snapshot <input id="pair-load" type="file" accept=".epm"></label></div>
+  <output id="pair-result" aria-live="polite"></output>
+ </fieldset>
+</section>

@@ -163,6 +163,9 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
+#if FELUCCA_PERF_HW
+    hp_init();
+#endif
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
     for (ms = 0; ms < ((ui_prefs & PREF_ANIM_OFF) ? 400u : SPL_ANIM_MS); ms += 10u) {   /* the splash, with its ship sailing (MENU > ANIM
                                                                                           * OFF: the plain 400 ms); the pot followed (MIDI IN plays under it) */

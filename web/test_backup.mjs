@@ -103,5 +103,20 @@ ok([0, 1, 2, 6].every((id) => target.objs.get(id).every((v, i) => v === objs.fin
 const failing = device([], { failChunk: 2 });
 ok(await athrows(() => restoreBackup(failing.request, file)) && failing.log.includes("abort 2") && !failing.log.includes(0), "backup: a refused chunk aborts that object and stops before the live music");
 
+{ // HPM1 performance capsules span 40 transport chunks rather than legacy 3840 bytes.
+  const hpm = [0, 2, 3, 4, 5].map(id => [id, rnd(10000, id + 20)]);
+  const big = await captureBackup(device([...hpm, [1, rnd(1200, 31)]]).request, "0.5.0");
+  const dest = device([]); await restoreBackup(dest.request, big);
+  ok(hpm.every(([id, bytes]) => dest.objs.get(id).length === 10000 &&
+    dest.objs.get(id).every((v, i) => v === bytes[i])), "backup: 10000-byte WORK and all A-D capsules restore byte for byte");
+  ok(await athrows(() => captureBackup(device([[0, rnd(10001, 1)]]).request, "0.5.0")),
+    "backup: oversized performance capsule is refused");
+  ok(await athrows(() => captureBackup(device([[0, rnd(10000, 1)], [1, rnd(3841, 2)]]).request, "0.5.0")),
+    "backup: settings retain their separate legacy bound");
+  const corrupt = JSON.parse(JSON.stringify(big)); corrupt.objects[5].crc ^= 1;
+  const untouched = device([]);
+  ok(await athrows(() => restoreBackup(untouched.request, corrupt)) && untouched.log.length === 0,
+    "backup: a corrupt large capsule is rejected before any write");
+}
 console.log(fails ? `BACKUP WEB TESTS FAILED (${fails})` : "backup web tests passed");
 process.exit(fails ? 1 : 0);

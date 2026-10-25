@@ -94,7 +94,13 @@ static uint32_t up_gen;                      /* bumped on every user bank change
  * ui_prefs2 (0 in every older setting = BPM; 1.5.5's PAGE keeps its bit; firmware before 1.5.6 reads MODW as BPM and
  * VEL as PAGE (its bit 4), before 1.5.5 both as BPM). Bit 7: Custom LIVE LOAD FULL. */
 enum { SEL_BPM, SEL_PAGE, SEL_MODW, SEL_VEL, SEL_N };
-static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >> 5) & 2u); }
+static uint32_t sel_mode(void) {
+#if FELUCCA_HOME_PERF
+    return SEL_PAGE; /* Fixed navigation; preserve legacy preference bits for older builds. */
+#else
+    return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >> 5) & 2u);
+#endif
+}
 /* Settings that were never saved start on SELECT PAGE (Custom); saved settings keep their bits, so an older 0 stays BPM
  * and a BPM chosen in the menu survives a reboot (no format change). */
 static void ui_prefs_fresh(void) { ui_prefs2 = (uint8_t)(ui_prefs2 | (PREF_SEL_PAGE >> 16)); }
@@ -178,7 +184,11 @@ static struct {
     uint8_t hot_col, hot_t;      /* column whose knob was just turned (drawn white) */
     uint8_t menu;                /* 0 off, 1 list, 2 about + credits, 3 info (1.2) (HOME held) */
     uint8_t menu_sel;            /* MENU: the row (menu_items.c MI_*; its tab MI_TAB), kept while the device runs */
-    uint8_t menu_row[6];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
+    uint8_t menu_row[6
+#if FELUCCA_HOME_PERF
++1
+#endif
+];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
     uint16_t menu_scroll;        /* continuous ABOUT + CREDITS position, pixels */
     uint32_t menu_sig, home_t0;  /* HOME press time (btn_hold) */
     uint8_t force;               /* full redraw pending */
@@ -397,9 +407,18 @@ static uint32_t large_kind(void)
         return LK_OFF;
     if (ui.layer)
         return LK_LABEL;
+#if FELUCCA_PAIR_MORPH
+    if (ui.home && ep.on) return LK_LABEL;
+#endif
     if (ui.home)                                        /* (HOME > TRACKS: its rows need the panel, the cards as on */
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
     g = cur_page()->graph;
+#if FELUCCA_HOME_PERF
+    if (g == GR_MACRO || g == GR_MACROMAP || g == GR_HOMEEDIT) return LK_LABEL;
+#endif
+#if FELUCCA_PAIR_MORPH
+    if (g == GR_PAIR) return LK_LABEL;
+#endif
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
            g == GR_SLICES || g == GR_EVENTS ? LK_LABEL : LK_TALL;
 }
@@ -531,6 +550,10 @@ static int lock_page_ok(uint32_t i)
 }
 static uint32_t lock_id(uint32_t k)
 {
+#if FELUCCA_HOME_PERF
+    if (!ui.plk_src) return hp_lock_id(k);
+#endif
+
     uint32_t id = ui.plk_src && lock_page_ok(ui.plk_src - 1u) ? PAGES[ui.plk_src - 1u].id[k & 3u]
                                                                : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
     return id < P_COUNT && motion_param(id) ? id : 0xFFu;
@@ -782,8 +805,21 @@ static void note_name(char *b, uint32_t n)
  * to 1.4.1 the last); HOME: home_tap). From another
  * family the family's page shown last (SAVE: USER); one that is not the family's any more (a page that moved, as GLOBAL
  * and SYSTEM in 1.2), or not shown for this track, gives the family's first */
+#if FELUCCA_HOME_PERF
+/* Logical order without renumbering saved PAGES references from V1..V3. */
+static uint32_t hp_global_page(uint32_t at,int32_t dir) {
+    uint8_t pages[3];uint32_t n=0,pos=0;
+    static const char*const names[]={"MIXER","CLOCK","SONG"};
+    for(uint32_t j=0;j<3;j++)for(uint32_t i=0;i<NPAGES;i++)if(PAGES[i].fam==FAM_GLO&&str_eq(PAGES[i].title,names[j]))pages[n++]=i;
+    for(uint32_t i=0;i<n;i++)if(pages[i]==at)pos=i;
+    return pages[clamp((int32_t)pos+dir,0,(int32_t)n-1)];
+}
+#endif
 static void open_family(uint32_t fam)
 {
+#if FELUCCA_HOME_PERF
+    if(fam==FAM_GLO){ui.page=hp_global_page(ui.fam_last[FAM_GLO],0);ui.fam_last[FAM_GLO]=ui.page;ui.home=0;page_entered();return;}
+#endif
     if (!ui.home && cur_page()->fam == fam) {          /* same button again: next page */
         uint32_t n, i = ui.page;
         for (n = 0; n < NPAGES; n++) {
@@ -821,6 +857,9 @@ static void go_home(void)
  * (ui_input) */
 static void home_tap(void)
 {
+#if FELUCCA_HOME_PERF
+    go_home();
+#else
     uint32_t i = ui.page + 1u;
     if (ui.home) {
         ui.fam_last[FAM_TRK] = 0;                     /* (open_family: the family's first, the MIXER) */
@@ -830,6 +869,7 @@ static void home_tap(void)
     } else {
         go_home();
     }
+#endif
 }
 
 /* MENU > CONTROL > SELECT PAGE (1.5.5, Discussion #188): the SELECT knob steps the pages of the family shown, a detent
@@ -837,10 +877,14 @@ static void home_tap(void)
  * HOME, MIXER and CLOCK are one round, as HOME's taps go. A family of one page (GLO's SONG) stays */
 static void page_turn(int32_t dir)
 {
+#if FELUCCA_HOME_PERF
+    if(!ui.home&&cur_page()->fam==FAM_GLO){ui.page=hp_global_page(ui.page,dir);ui.fam_last[FAM_GLO]=ui.page;page_entered();return;}
+#endif
     uint32_t fam = ui.home ? (uint32_t)FAM_TRK : cur_page()->fam, i, m = 0, at = 0;
     uint8_t ring[NPAGES + 1u];                          /* the round: page indices, 0xFF HOME */
-    if (fam == FAM_TRK)
-        ring[m++] = 0xFFu;
+#if !FELUCCA_HOME_PERF
+    if (fam == FAM_TRK)ring[m++] = 0xFFu;
+#endif
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == fam && page_visible(i)) {
             if (!ui.home && i == ui.page)
@@ -849,7 +893,11 @@ static void page_turn(int32_t dir)
         }
     if (m < 2u)
         return;
+#if FELUCCA_HOME_PERF
+    i = ring[clamp((int32_t)at+(dir>0?1:-1),0,(int32_t)m-1)];
+#else
     i = ring[(at + (dir > 0 ? 1u : m - 1u)) % m];
+#endif
     if (i == 0xFFu) {
         go_home();
         return;
@@ -1410,21 +1458,32 @@ static const drone_motion_t DRONE_MOTION[11] = {
     { 5, 13, 4, 2,  10,  10},   /* 14 RUST         grit and ring */
     {26, 16, 2, 7,  12,  10},   /* 15 MOON PULSE   the pulse itself */
 };
-static void drone_motion_load(track_t *t, uint32_t pi)
+static __attribute__((noinline)) void drone_motion_values(int16_t *p, lfo2_config_t *c, uint32_t pi)
 {
     const drone_motion_t *m;
-    uint32_t k = trk_index(t);
     if (pi < 5u || pi >= 5u + NELEM(DRONE_MOTION))
         return;
     m = &DRONE_MOTION[pi - 5u];
-    t->p[P_LRATE] = m->lrate;
-    t->p[P_LWAVE] = 0;                                /* SIN */
-    t->p[P_LTRIG] = 1;                                /* FREE */
-    t->p[P_M1SRC] = MS_LFO;  t->p[P_M1DST] = (int16_t)(MD_E1 + m->d1); t->p[P_M1AMT] = m->a1;
-    t->p[P_M2SRC] = MS_LFO2; t->p[P_M2DST] = (int16_t)(MD_E1 + m->d2); t->p[P_M2AMT] = m->a2;
-    lfo2_config[k].p[L2_RATE] = m->l2rate;            /* (lfo2_load has just cleared it: the other values stay default) */
-    lfo2_config[k].p[L2_WAVE] = 0;
-    lfo2_config[k].p[L2_TRIG] = 1;
+    p[P_LRATE] = m->lrate;
+    p[P_LWAVE] = 0;                                /* SIN */
+    p[P_LTRIG] = 1;                                /* FREE */
+    p[P_M1SRC] = MS_LFO;  p[P_M1DST] = (int16_t)(MD_E1 + m->d1); p[P_M1AMT] = m->a1;
+    p[P_M2SRC] = MS_LFO2; p[P_M2DST] = (int16_t)(MD_E1 + m->d2); p[P_M2AMT] = m->a2;
+    c->p[L2_RATE] = m->l2rate;            /* (lfo2_load has just cleared it: the other values stay default) */
+    c->p[L2_WAVE] = 0;
+    c->p[L2_TRIG] = 1;
+}
+
+static __attribute__((noinline)) void preset_sound_values(uint32_t eng,uint32_t pi,int16_t*p,lfo2_config_t*l2)
+{
+ const engine_t*e=ENGINES[eng%NENGINES];const preset_t*v=&e->presets[pi%e->npresets];
+ for(uint32_t i=0;i<P_E0;i++)p[i]=TP[i].def;
+ for(uint32_t i=0;i<8;i++)p[P_E0+i]=v->e[i];
+ p[P_ATK]=v->env[0];p[P_DEC]=v->env[1];p[P_SUS]=v->env[2];p[P_REL]=v->env[3];
+ p[P_ED_FLT]=v->fenv;p[P_VOICE]=v->mono?V_LEGATO:V_POLY;
+ static const uint8_t fx[]={0,24,28,36};
+ for(uint32_t i=0;i<4;i++)p[P_DIST+i]=v->fx[i]?v->fx[i]-1:fx[i];
+ memset(l2,0,sizeof*l2);if(eng==ENGI_DRONE)drone_motion_values(p,l2,pi);
 }
 
 static void apply_preset_to(track_t *t, uint32_t pi)
@@ -1452,25 +1511,10 @@ static void apply_preset_to(track_t *t, uint32_t pi)
     }
     pi = preset_orig(e, pi % e->npresets);
     t->preset = (uint8_t)pi;
-    for (i = 0; i < P_E0; i++)                        /* the rest of the sound to its defaults: a preset */
-        if (!load_kept(i))                            /* sounds the same after any edit */
-            t->p[i] = TP[i].def;
-    for (i = 0; i < 8u; i++)
-        t->p[P_E0 + i] = (int16_t)e->presets[pi].e[i];
-    t->p[P_ATK] = e->presets[pi].env[0];
-    t->p[P_DEC] = e->presets[pi].env[1];
-    t->p[P_SUS] = e->presets[pi].env[2];
-    t->p[P_REL] = e->presets[pi].env[3];
-    t->p[P_ED_FLT] = e->presets[pi].fenv;
-    t->p[P_VOICE] = e->presets[pi].mono ? V_LEGATO : V_POLY;   /* mono presets keep the legato feel */
-    if (!fx_hold()) {   /* the sends (FX HOLD: the track's own stay) */
-        static const uint8_t FX_DEF[4] = {0, 24, 28, 36};
-        const preset_t *pr = &e->presets[pi];
-        for (i = 0; i < 4u; i++)
-            t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
-    }
-    lfo2_load(trk_index(t), 0);
-    if (t->eng_req % NENGINES == ENGI_DRONE) drone_motion_load(t, pi);   /* (the cell presets' slow movement) */
+    int16_t values[P_COUNT];lfo2_config_t l2;
+    preset_sound_values(t->eng_req,pi,values,&l2);
+    for(i=0;i<P_COUNT;i++)if(!load_kept(i))t->p[i]=values[i];
+    lfo2_load(trk_index(t),&l2);
     if (dx_track(t)) dx_reset(trk_index(t));
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);
@@ -1847,6 +1891,9 @@ static void track_select(uint32_t i)
     if (i >= NTRK || i == song.sel)
         return;
     song.sel = (uint8_t)i;
+#if FELUCCA_HOME_PERF
+    hp_editor_sync();
+#endif
     ui.entry_open = 0;
     ui.hot_t = 0;
     ui.ev_keep = 0;                              /* (AUTOMATION: a row kept at its default was the other track's) */

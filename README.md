@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.3.4** (development; latest public release: 0.3.3).
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.5.0 in preparation** (latest public release: 0.3.3).
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -20,6 +20,16 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 
 Sounds of the SEM and HADES engines on the FM-1 (recorded before the rename). More videos on the maintainer's channel:
 [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+
+## New performance workflow in 0.5.0
+
+**[Illustrated tutorials](docs/tutorials/README.md)** - [PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) - [Release notes](RELEASE-NOTES.md)
+
+Custom HOME rows, four macros per track and Pair Morph put the performance controls
+under K1-K4. SELECT chooses the row; ALGO chooses the track. The active row is large,
+the other compact; both preset names and morph state remain visible in a Pair.
+
+![Performance HOME](docs/tutorials/img/home-active-1.png)
 
 ## A look at the screen
 
@@ -89,8 +99,6 @@ file formats are the ones of Felucca 1.6.1 and its Custom additions, so Felucca 
 Caravel-only parameters need Caravel or newer. **0.3.0 adds one track parameter (the FILTER)**: it opens everything saved before with the filter OFF, but 0.2.0
 and 0.1.0 cannot open a project saved by 0.3.0 (user presets still load there, without the filter): see [docs/track-filter.md](docs/track-filter.md). The web editor and installer accept devices named Felucca as well as Caravel.
 Identifiers in the source (`FELUCCA_*`, `felucca.c`, the `firmware/engines/` submodule) keep their names.
-
-**Firmware identity:** Versioned Caravel builds from 0.3.4 use the fixed firmware identity `FM-1_999` regardless of their version. Releases through 0.3.3 used `FM-1_903`; this does not change project or preset file formats. The 0.3.4 hardware update path and return to other firmware are not yet verified.
 
 ## Installing
 

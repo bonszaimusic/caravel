@@ -23,9 +23,30 @@ static int32_t cv_trk(int32_t x, int32_t y, uint32_t size, uint32_t k, uint16_t 
     const aag_t *g = &f->g[glyph(f, (uint8_t)s[0])];
     int32_t in = size > 16u ? 2 : 0, w = (int32_t)size - 2 * in;
     int32_t nud = k == 0u ? 1 : 0;   /* the 1's ink centred looks right of centre (its flag): nudged left 1 px (2 looked left) */
+#if FELUCCA_PAIR_MORPH
+    int linked = pair_member(&trk[k]);
+    uint16_t digit = linked ? T_INK : under;
+    if (linked) fill = T_THEME;                       /* same pair colour; selection is a separate border */
+#endif
     cv_rrect(x + in, y + in, w, w, -(w / 4), fill, under);
     GFX_HOOK_ALIGN(x + in - nud, y + in, x + in + w - nud, y + in + w, AL_HV, "track cushion digit");   /* (the 1: measured against its nudge) */
-    cv_text_on(x + in + (w - g->bw) / 2 - g->bx - nud, y + in + (w - g->bh) / 2 - g->by, f, s, under, fill);   /* its ink centred */
+#if FELUCCA_PAIR_MORPH
+    if (linked && k == song.sel) {
+        cv_rrect(x + in, y + in, w, w, -(w / 4), T_ACCENT, under);
+        cv_rrect(x + in+1, y + in+1, w-2, w-2, -((w-2)/4), fill, T_ACCENT);
+    }
+    cv_text_on(x + in + (w - g->bw) / 2 - g->bx - nud,
+               y + in + (w - g->bh) / 2 - g->by - (linked ? 2 : 0), f, s, digit, fill);
+    if (linked) {
+        /* Two interlocked rings, inside the existing icon cell; visible in monochrome too. */
+        int32_t lx=x+in+w-9, ly=y+in+w-6;
+        cv_rrect(lx,ly+2,6,4,1,digit,fill); cv_rect(lx+1,ly+3,4,2,fill);
+        cv_rrect(lx+3,ly,6,4,1,digit,fill); cv_rect(lx+4,ly+1,4,2,fill);
+        cv_line_t(lx+3,ly+3,lx+5,ly+2,digit,1);
+    }
+#else
+    cv_text_on(x + in + (w - g->bw) / 2 - g->bx - nud, y + in + (w - g->bh) / 2 - g->by, f, s, under, fill);
+#endif
     GFX_HOOK_ITEM(x + in, y + in, x + in + w, y + in + w);
     return (int32_t)size;
 }

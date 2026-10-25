@@ -362,6 +362,9 @@ static void draw_head(void)
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
                    (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u;   /* (1.5.5) */
+#if FELUCCA_PAIR_MORPH
+    if (pair_member(TSEL)) sig += (ep.a + ep.b * 4u + 1u) * 2654435761u;
+#endif
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
@@ -396,6 +399,9 @@ static void draw_head(void)
     ui.head_sig = sig;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
+#if FELUCCA_PAIR_MORPH
+    if (!pair_member(TSEL))
+#endif
     ship_draw(HEAD_SHIP_X, (H_HEAD - SHIP_H) / 2, 1, ux.surf != ux.bg ? T_SURF : T_RAISE);   /* (behind everything else) */
     cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
                                                        * a MIDI IN note into it, #208: lit) */
@@ -408,6 +414,13 @@ static void draw_head(void)
         rx += 1;                                       /* (the REC mark's cell after it, its ink 3 px on) */
     }
     draw_rec_mark(rx, T_BG);
+#if FELUCCA_PAIR_MORPH
+    /* Short partner badge in the ship's slot, clear of project/REC and transport. */
+    if (pair_member(TSEL) && !msg) {
+        char pb[] = "=T1"; pb[2] += song.sel == ep.a ? ep.b : ep.a;
+        cv_text(53, HEAD_SY, &AF_S, pb, T_ACCENT);
+    }
+#endif
     if (centre) {
         int32_t ib[4], lx = g.bx + g.b[2];             /* lx: the right end of the BPM (and its lock) */
         uint32_t id = song.playing ? (chain.running ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;
@@ -881,6 +894,16 @@ static void sound_name(const track_t *t, char *b)
 
 static void draw_foot(void)
 {
+#if FELUCCA_PAIR_MORPH
+    if (ui.home && ep.on && !ui.layer) {
+        char pair_label[32];
+        cv_begin(240,H_FOOT,T_BG);
+        perf_format(pair_label,sizeof pair_label,"PAIR T%u + T%u",ep.a+1,ep.b+1);
+        cv_text(8,0,&AF_M,pair_label,T_THEME);
+        cv_text(8,20,&AF_S,"K1 MORPH / EDIT: ENGINE",T_MID);
+        cv_blit(0,Y_FOOT);return;
+    }
+#endif
     char s[48], pn[16], ti[20], ln[24];
     const track_t *t = TSEL;
     uint32_t sig;
@@ -1032,14 +1055,33 @@ static void engine_columns(void)
 #include "ui_drumx.c"
 #include "ui_lfo2.c"
 
+#if FELUCCA_PAIR_MORPH
+#include "../../experiments/engine-pair-morph/pair_ui.c"
+#if FELUCCA_HOME_PERF
+#include "../../experiments/home-perf/home_ui.c"
+#endif
+
+#endif
+
 static void draw_columns(void)
 {
+#if FELUCCA_PAIR_MORPH
+#if !FELUCCA_HOME_PERF
+    if (ui.home && ep.on) { pair_ui_home_cards(); return; }
+#endif
+    if (!ui.home && cur_page()->graph == GR_PAIR) { pair_ui_cards(); return; }
+#endif
     if (!ui.home && dual_page(cur_page())) { lfo_cards(cur_page()); return; }
     if (!ui.home && dx_page(cur_page()->graph)) { dx_cards(cur_page()); return; }
     uint32_t c;
     char val[12];
     const char *unit;
     (void)motion_mask(song.sel, card_mot_mask);       /* (PLAY OFF: no scan) */
+
+#if FELUCCA_HOME_PERF
+    if (ui.home) return;
+    if (cur_page()->graph==GR_MACRO || cur_page()->graph==GR_MACROMAP || cur_page()->graph==GR_HOMEEDIT) { hp_page_cards(); return; }
+#endif
     if (ui.home) {
         for (c = 0; c < 4u; c++) {
             int16_t *vp;
@@ -1684,6 +1726,10 @@ static void ui_draw(void)
 }
 static void ui_draw_page(uint32_t counting)
 {
+#if FELUCCA_PAIR_MORPH
+    static uint8_t previous_pair_on;
+    if(previous_pair_on!=ep.on) {ui.force=1;previous_pair_on=ep.on;}
+#endif
     if (ui.uboot) {
         draw_uboot();
         draw_head();
@@ -1731,6 +1777,10 @@ static void ui_draw_page(uint32_t counting)
         ui.force = 0;
         return;
     }
+
+#if FELUCCA_HOME_PERF
+    if (ui.home) { hp_draw_home(); ui.force=0; if(ui.msg_t)ui.msg_t--; if(ui.hot_t)ui.hot_t--; return; }
+#endif
     if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
                                                          * FELUCCA_FM4: any track): EDIT 1 */
         ui.page = (uint8_t)page_first(FAM_EDIT);

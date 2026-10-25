@@ -21,8 +21,6 @@ still pending: read the notes below first.
 
 ## Which release
 
-Beginning with 0.3.4, Caravel uses the fixed package identity `FM-1_999`. Previous releases retain their old identities. Testing the new identity and installing/leaving the preview on real hardware are still pending.
-
 Every release on [GitHub Releases](https://github.com/bonszaimusic/caravel/releases) has the package `caravel-X.Y.Z.fwsc`, the
 firmware app alone (`caravel-X.Y.Z-app.bin`), the update loader, the complete source (`caravel-X.Y.Z-source.tar.gz`) and
 `SHA256SUMS` with the licence texts. To install a specific version, take the package of that release. The latest release is the
@@ -80,20 +78,20 @@ stopped, 5 timeout (no loader or no restart), 6 wrong model or another identity 
 
 ## Your own build
 
-A package built from source ([BUILDING.md](../BUILDING.md)) installs the same way. For an **unreleased test package**, generate a local browser preview and serve it over `localhost` (Web MIDI needs a secure context):
+A package built from the source ([BUILDING.md](../BUILDING.md)) installs the same way. To use the web installer for it, build a local
+copy of the site and open it from `localhost` (Web MIDI needs a secure context):
 
-```sh
-./build.sh --binary-version 0.3.4
-python3 web/make_site.py build/caravel-0.3.4.fwsc 0.3.4 /tmp/caravel-site --preview
+```
+python3 web/make_site.py build/caravel.fwsc dev /tmp/caravel-site
 cd /tmp/caravel-site && python3 -m http.server 8000
-# open http://localhost:8000/webapp/installer/ in Chrome
+# open http://localhost:8000/webapp/installer/
 ```
 
-Or download the private CI artifact named `caravel-0.3.4-browser-preview-...` from the development pull request, extract it and run:
+## 0.5.0 in preparation
 
-```sh
-cd preview-site && python3 -m http.server 8000
-# open http://localhost:8000/webapp/installer/ in Chrome
-```
-
-Connect the FM-1 via USB and back up projects/settings before attempting to flash. This is an unverified preview, not a release. The public web installer continues to offer only the latest **published** version.
+Versioned builds use the fixed FM-1_999 identity prepared in 0.3.4; existing
+published releases retain their original packages and identities. HPM1 performance
+projects need matching backup tools. Preserve a pre-upgrade backup for downgrades.
+The loader marker remains unchanged. Test the final version label and USB identity
+before publication; D3 hardware acceptance does not automatically certify every
+version-labelled rebuild.

@@ -435,6 +435,10 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
 
 #include "editor_drumx.c"
 #include "editor_lfo2.c"
+#if FELUCCA_PERF_HW
+#include "../../experiments/home-perf/editor_diag.c"
+_Static_assert(PD_WORDS*5u+10u <= sizeof ed_out,"diagnostic response capacity");
+#endif
 
 static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
 {
@@ -451,6 +455,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         (cmd >= ED_FM6B_BEGIN && cmd <= ED_FM6B_END))
         autosave_hold();                                /* (a transfer: no autosave meanwhile, project.c) */
     ed_begin(cmd);
+#if FELUCCA_PERF_HW
+    if(ed_diag_handle(cmd,a,na)){ed_send();return;}
+#endif
     if (ed_ui_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_backup_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_fm6_handle(cmd, a, na)) { ed_send(); return; }
@@ -479,7 +486,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         break;
     }
     case ED_INFO:
-        ed_str(BRAND_UPPER " " FELUCCA_VERSION, 24);
+        ed_str(BRAND_UPPER " " FELUCCA_VERSION, 32); /* retain the complete diagnostic build version */
         ed_b(NENGINES);
         ed_b(P_COUNT);
         ed_b(G_COUNT);
@@ -508,6 +515,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0x59); ed_b(1); ed_b(L2_N); /* independent LFO2: commands 88..90 */
         ed_b(0x58); ed_b(1); ed_b(ML_N); /* DRUM-X + Learn2: commands 82..86 */
         ed_b(0x45); ed_b(1); ed_b(ED_PAL_N);   /* 1.6: CUSTOM, the user's palette: 5 colours (cmds 80, 81; editor_palette.c) */
+#if FELUCCA_PERF_HW
+        ed_b(0x44);ed_b(1);ed_b(91); /* optional live performance diagnostics */
+#endif
         break;
     case ED_GET:
     case ED_SET:

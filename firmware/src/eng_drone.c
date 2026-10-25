@@ -358,39 +358,66 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
             rough_goal[k] = drone_rough_of(c < 0 ? c + 1200 : c);
         }
     }
+    /* Events and ownership cannot change inside this render block. A control
+     * already at its exact endpoint also remains there until the next block.
+     * Preserve every sample update for controls still moving. */
+    uint8_t moving[DR_NCTRL];
+    uint32_t nmoving = 0, moving_mask = 0;
+    int32_t fixed_route = s->ctrl[DR_TOPO] == target[DR_TOPO] ? s->ctrl[DR_TOPO] / 32768 : -1;
+    static const uint8_t routes[3][4] = {{1,0,3,2},{4,0,1,2},{3,0,1,2}};
+    int32_t hold_goal[4];
+    for (uint32_t c = 0; c < DR_NCTRL; c++)
+        if (s->ctrl[c] != target[c]) {moving[nmoving++] = (uint8_t)c; moving_mask |= 1u << c;}
+    for (uint32_t k = 0; k < 4u; k++)
+        hold_goal[k] = drone_held(s, s->owner[k]) ? s->level[k] * 192 : 0;
+    uint32_t rate = 1461u + (uint32_t)s->ctrl[DR_RATE] * 11u / 20u;
+    int32_t dmt = s->ctrl[DR_DRIFT], swing = mulq15(dmt, 22938), pmdep = mulq15(dmt, 19660);
+    int32_t sh = (int32_t)(((uint32_t)s->ctrl[DR_CHAR] * 60791u) >> 16);
+    if (sh > 26214) sh = 26214;
+    int32_t sdrive = sh > 16384 ? 32768 + 4 * (sh - 16384) : 0, scomp = 32768 - (sh >> 2);
+    int32_t tone_g = 128 + s->ctrl[DR_TONE] * 30000 / 32512;
     for (uint32_t i = 0; i < n; i++) {
         int32_t next[4], pmsrc[4], activity[4], sum = 0;
-        for (uint32_t c = 0; c < DR_NCTRL; c++)
-            s->ctrl[c] = drone_follow(s->ctrl[c], target[c]);
+        for (uint32_t c = 0; c < nmoving; c++) {
+            uint32_t j = moving[c];
+            s->ctrl[j] = drone_follow(s->ctrl[j], target[j]);
+        }
         s->cell_mix = drone_follow(s->cell_mix, 32767);
-        /* ctrl[DR_RATE] is constant over the sample: one divide, not four. */
-        uint32_t rate = 1461u + (uint32_t)s->ctrl[DR_RATE] * 11u / 20u;
+        if (moving_mask & (1u << DR_RATE)) rate = 1461u + (uint32_t)s->ctrl[DR_RATE] * 11u / 20u;
         for (uint32_t k = 0; k < 4u; k++) activity[k] = drone_div2s(s->activity[k], 8);
         /* Life: DRIFT also lets each cell's PM depth (down to 0.4x COUPLE, never above)
          * and loudness (down to 0.3x, from its neighbor's phase) breathe on the existing
          * deterministic drift triangles. DRIFT 0 leaves both exactly constant. */
-        int32_t tri[4], dmt = s->ctrl[DR_DRIFT], swing = mulq15(dmt, 22938), pmdep = mulq15(dmt, 19660);
+        int32_t tri[4];
+        if (moving_mask & (1u << DR_DRIFT)) {
+            dmt = s->ctrl[DR_DRIFT]; swing = mulq15(dmt, 22938); pmdep = mulq15(dmt, 19660);
+        }
         for (uint32_t k = 0; k < 4u; k++) {
             uint32_t q = s->drift_phase[k] >> 16;
             tri[k] = q < 32768u ? (int32_t)q * 2 - 32768 : 98303 - (int32_t)q * 2;
         }
         /* SHARP rides on CHAR: 0 is a pure sine, CHAR 89 reaches 0.65 (sine -> triangle at 0.5 -> a rounded
          * square at 1), capped at 0.8. sh is Q15; drive and level makeup are the same for all four cells. */
-        int32_t sh = (int32_t)(((uint32_t)s->ctrl[DR_CHAR] * 60791u) >> 16);
-        if (sh > 26214) sh = 26214;
-        int32_t sdrive = sh > 16384 ? 32768 + 4 * (sh - 16384) : 0, scomp = 32768 - (sh >> 2);
+        if (moving_mask & (1u << DR_CHAR)) {
+            sh = (int32_t)(((uint32_t)s->ctrl[DR_CHAR] * 60791u) >> 16);
+            if (sh > 26214) sh = 26214;
+            sdrive = sh > 16384 ? 32768 + 4 * (sh - 16384) : 0; scomp = 32768 - (sh >> 2);
+        }
         if (!(s->slow++ & 7u)) drone_slow_tick(s, rough_goal, dmt);
         for (uint32_t k = 0; k < 4u; k++) {
-            int32_t hold = drone_held(s, s->owner[k]) ? s->level[k] * 192 : 0;
+            int32_t hold = hold_goal[k];
             s->drive[k] = drone_cell_follow(s->drive[k], hold, 15, 2 + k);
             /* Snapshot activity -> at most half-scale inhibition. No physical
              * energy model: a bounded, contractive competition law, not P3. */
-            int32_t neighbor = clamp(drone_route(activity, k, s->ctrl[DR_TOPO]), 0, 32767);
+            uint32_t from = fixed_route >= 0 ? routes[fixed_route][k] : 4u;
+            int32_t neighbor = clamp(fixed_route >= 0 ? (from < 4u ? activity[from] : 0)
+                : drone_route(activity, k, s->ctrl[DR_TOPO]), 0, 32767);
             int32_t inhibition = drone_div2s(mulq15(neighbor, s->ctrl[DR_COUPLE]), 1);
             int32_t goal = mulq15(drone_div2s(s->drive[k], 8), 32767 - inhibition) * 256;
             s->amp[k] = drone_follow(s->amp[k], goal);
             s->activity[k] = drone_cell_follow(s->activity[k], s->amp[k], 13, 2 + k);
-            int32_t src = drone_route(s->prev, k, s->ctrl[DR_TOPO]);
+            int32_t src = fixed_route >= 0 ? (from < 4u ? s->prev[from] : 0)
+                : drone_route(s->prev, k, s->ctrl[DR_TOPO]);
             int32_t cple = s->ctrl[DR_COUPLE] -
                            mulq15(s->ctrl[DR_COUPLE], mulq15(pmdep, 32767 - ((tri[k] + 32768) >> 1)));
             int32_t chr = s->ctrl[DR_CHAR];
@@ -443,8 +470,8 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
         int32_t hp = x - s->dc_in + s->dc_out - drone_div2s(s->dc_out, 9);
         s->dc_in = x;
         s->dc_out = hp;
-        int32_t g = 128 + s->ctrl[DR_TONE] * 30000 / 32512;
-        int64_t lp = (int64_t)(hp - s->low) * g; /* shift form of a 64-bit divide */
+        if (moving_mask & (1u << DR_TONE)) tone_g = 128 + s->ctrl[DR_TONE] * 30000 / 32512;
+        int64_t lp = (int64_t)(hp - s->low) * tone_g; /* shift form of a 64-bit divide */
         s->low += (int32_t)((lp + ((lp >> 63) & 32767)) >> 15);
         s->cell_last = soft_knee(s->low, 16000) * 2; /* pre-host-amp declick endpoint */
         out[i] += voice_amp(s->cell_last, m, i) * 2;

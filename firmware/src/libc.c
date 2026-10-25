@@ -84,3 +84,27 @@ static uint32_t rng(void)
     rng_state ^= rng_state << 5;
     return rng_state;
 }
+
+#if FELUCCA_PAIR_MORPH || FELUCCA_HOME_PERF
+#include <stdarg.h>
+/* The performance UI needs only strings and decimal integers, no hosted libc. */
+static int perf_format(char *out,unsigned cap,const char *fmt,...) {
+ va_list ap;va_start(ap,fmt);unsigned n=0;
+ while(*fmt){
+  const char *word;char num[12];
+  if(*fmt!='%'){if(n+1<cap)out[n]=*fmt;n++;fmt++;continue;}
+  fmt++;int plus=*fmt=='+';if(plus)fmt++;
+  if(*fmt=='s'){word=va_arg(ap,const char*);fmt++;}
+  else if(*fmt=='u'||*fmt=='d'){
+   int sign=*fmt=='d';uint32_t v=sign?(uint32_t)va_arg(ap,int):va_arg(ap,unsigned);fmt++;
+   unsigned len=0,start=0;int neg=sign&&(int32_t)v<0;if(neg)v=0u-v;
+   if(neg||plus)num[start++]=neg?'-':'+';
+   do{num[start+len++]=(char)('0'+v%10u);v/=10u;}while(v);
+   for(unsigned i=0;i<len/2;i++){char c=num[start+i];num[start+i]=num[start+len-1-i];num[start+len-1-i]=c;}
+   num[start+len]=0;word=num;
+  }else{num[0]=*fmt?*fmt++:'%';num[1]=0;word=num;}
+  while(*word){if(n+1<cap)out[n]=*word;n++;word++;}
+ }
+ va_end(ap);if(cap)out[n<cap?n:cap-1]=0;return (int)n;
+}
+#endif

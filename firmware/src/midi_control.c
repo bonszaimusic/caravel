@@ -293,6 +293,10 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
         if (i < ML_LEGACY_N && e >> 9 == 119u && virtual_target(ml_virtual[i])) e = (e & 511u) | (uint32_t)ml_virtual[i] << 9;
         if ((e >> 9) && (e & 127u) == cc) {
             id = ml_id(e >> 9);
+#if FELUCCA_HOME_PERF
+            if (hp_virtual(id)) hp_midi(&trk[(e >> 7) & 3u],id,value);
+            else
+#endif
             if (lfo2_target(id)) {
                 uint32_t k = (e >> 7) & 3u;
                 const param_desc_t *d = lfo2_desc(id);
@@ -424,6 +428,15 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
 {
     if (song.g[G_ROUTE] != 1 && !midi_in_block(ch))
         return;
+#if FELUCCA_PAIR_MORPH
+    if (st == 0xB0u && d1 == 119u && pair_member(midi_track(ch))) {
+#if FELUCCA_HOME_PERF
+        if(midi_learned(d1,d2))return;
+#endif
+        ep.base = (int32_t)d2 * 32767 / 127;
+        return;
+    }
+#endif
     if (st == 0x90u || st == 0x80u)
         midi_note_event(ch, d1, st == 0x90u ? d2 : 0);
     else if (st == 0xE0u) {

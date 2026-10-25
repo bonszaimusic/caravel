@@ -32,7 +32,13 @@
 #define FELUCCA_VERSION "WEB"
 #endif
 
-static uint8_t nor[0x100000];            /* the SPI NOR (erased: 0xFF) */
+static uint8_t nor[
+#if FELUCCA_HOME_PERF && !FELUCCA_PERF_HW
+0x140000
+#else
+0x100000
+#endif
+];            /* the SPI NOR (erased: 0xFF) */
 #define SMP_USER_XIP(k) ((const uint8_t *)nor + SMP_USER_BASE + (k) * SMP_USER_SIZE)   /* eng_sample.c */
 #define main hostsim_main
 #include "../../tests/hostsim.c"
@@ -178,8 +184,15 @@ static int st_read(uint32_t off, void *dst, uint32_t n)
     memcpy(dst, nor + off, n);
     return 0;
 }
+#if defined(WEB_FLASH_TEST)
+static int web_flash_fail_after=-1;
+static int web_flash_fault(void){if(web_flash_fail_after<0)return 0;if(!web_flash_fail_after)return 1;web_flash_fail_after--;return 0;}
+#endif
 static int st_erase(uint32_t off)
 {
+#if defined(WEB_FLASH_TEST)
+    if(web_flash_fault())return -8;
+#endif
     if (off >= sizeof nor || 4096u > sizeof nor - off)
         return -8;
     memset(nor + (off & ~4095u), 0xFF, 4096);
@@ -188,6 +201,9 @@ static int st_erase(uint32_t off)
 }
 static int st_prog(uint32_t off, const void *src, uint32_t n)       /* NOR: a write only clears bits */
 {
+#if defined(WEB_FLASH_TEST)
+    if(web_flash_fault())return -8;
+#endif
     const uint8_t *s = src;
     uint32_t i;
     if (off >= sizeof nor || n > sizeof nor - off)
@@ -205,6 +221,14 @@ static void fl_plain_window_init(void) {}
 #include "../../firmware/src/storage.c"
 #include "../../firmware/src/upreset.c"
 #include "../../firmware/src/project.c"
+#if FELUCCA_HOME_PERF
+#if FELUCCA_PERF_HW
+#include "../../experiments/home-perf/home_store_hw.c"
+#else
+#include "../../experiments/home-perf/home_store.c"
+#endif
+#endif
+
 
 /* ------------------------------------------------- main.c and its HAL --- */
 #if FELUCCA_CPU2
@@ -280,6 +304,10 @@ static void web_power_on(void)
     kb_boot_hold = 1;                     /* main.c (#137): the keys silent under the splash */
     audio_init();
     boot_leds();                          /* main.c: the power-on LED sweep, from the scan's start */
+
+#if FELUCCA_HOME_PERF
+    hp_init();
+#endif
     autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c) */
     web_boot_ms = fm1_ms + 430u;         /* main.c: 30 + 400 ms before the first frame */
     web_booted = 1;
@@ -535,3 +563,11 @@ EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return song.playing; }
 EXPORT uint32_t web_sample_rate(void) { return FS; }
 
+
+#if FELUCCA_PAIR_MORPH
+#include "../../experiments/engine-pair-morph/pair_web.c"
+#if FELUCCA_HOME_PERF
+#include "../../experiments/home-perf/home_web.c"
+#endif
+
+#endif

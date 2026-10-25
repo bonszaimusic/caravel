@@ -129,6 +129,10 @@ static void ml_name(char *b)
     b[0] = 'T';
     b[1] = (char)('1' + ui.ml.trk);
     b[2] = ' ';
+#if FELUCCA_HOME_PERF
+    if (hp_virtual(ui.ml.id)) str_cpy(b+3,hp_vdesc(ui.ml.id)->label,9);
+    else
+#endif
     if (lfo2_target(ui.ml.id)) { str_cpy(b + 3, "L2 ", 4); str_cpy(b + 6, lfo2_desc(ui.ml.id)->label, 6); }
     else if (dx_target(ui.ml.id)) dx_short_name(b + 3, ui.ml.id);
     else str_cpy(b + 3, track_desc(&trk[ui.ml.trk % NTRK], ui.ml.id)->label, 9);

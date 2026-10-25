@@ -1,0 +1,24 @@
+<section id="pair-panel" class="home-panel" aria-label="Pair Zusatzbedienung">
+<h2>PAIR · Zusatzbedienung</h2>
+<p>Auf dem Gerät über ENV → PAIR: K1 Partner, K2 PAIR ON/OFF, K3 MORPH, K4 MOTION. Ein Pair pro Projekt; gemeinsame Noten und Performance-Steuerung. Stoppen und Noten loslassen, bevor du paarst.</p>
+<fieldset id="pair-controls" disabled>
+<div class="pair-buttons"><label>Track A <select id="pair-a"><option value="0">T1</option><option value="1">T2</option><option value="2">T3</option><option value="3">T4</option></select></label><label>Track B <select id="pair-b"><option value="2">T3</option><option value="0">T1</option><option value="1">T2</option><option value="3">T4</option></select></label><button id="pair-enable">Vorhandene Tracks paaren</button><button id="pair-page">PAIR-Seite öffnen</button></div>
+<p id="pair-state" role="status" aria-live="polite">Zuerst den Emulator einschalten.</p>
+<div class="pair-buttons"><button id="pair-select-a">Track A auswählen</button><button id="pair-select-b">Track B auswählen</button><button id="pair-panic">Alle Noten beenden</button><button id="pair-disable">Pair auflösen</button></div>
+<label style="display:block">MORPH · links A / rechts B<input aria-label="Pair Morph: links A, rechts B" id="pair-morph" type="range" min="0" max="32767" value="16384" style="width:100%"></label>
+<label><input id="pair-motion" type="checkbox"> MOTION · zusätzliche begrenzte Klangbewegung beim Morphen</label>
+<details><summary>Pair-Pegel, LFOs und Testsequenz</summary>
+<p>Pegel, Pan, Mute und Latch gelten für das Pair. LFO-Werte gehören zum ausgewählten Mitglied. Zum Bearbeiten Track A oder B auswählen. Die Sequenz wird auf A bearbeitet.</p>
+<div class="pair-buttons"><label>Pegel <input id="pair-level" type="range" min="0" max="127" value="104"></label><label>Pan <input id="pair-pan" type="range" min="-64" max="63" value="0"></label><label><input id="pair-mute" type="checkbox"> Mute</label><label>Latch <select id="pair-latch"><option value="0">OFF</option><option value="1">NEW</option><option value="2">STACK</option></select></label></div>
+<div class="pair-buttons"><label>LFO1 Rate <input id="pair-rate1" type="range" min="0" max="127" value="40"></label><label>LFO1 → Morph <input id="pair-depth1" type="range" min="-64" max="63" value="0"></label><label>LFO2 Rate <input id="pair-rate2" type="range" min="0" max="127" value="40"></label><label>LFO2 → Morph <input id="pair-depth2" type="range" min="-64" max="63" value="0"></label></div>
+<button id="pair-demo">Sequenz von A durch Demo ersetzen …</button>
+</details>
+<details><summary>Neue Testsession und alte Pair-Dateien</summary>
+<p>Neue Testsession ersetzt den gesamten aktuellen Arbeitsstand einschließlich HOME und Macros. Für deine bestehenden Sounds die Aktion „Vorhandene Tracks paaren“ oben verwenden. Pair unterstützt 14 melodische Engines, AUTO-Stimmen, kein SPREAD, kein DRUM/DRUM-X oder SLICE. Beide Engines laufen auch an den Morph-Endpunkten.</p>
+<div class="pair-buttons"><label>Neue Engine A <select id="pair-ea">@ENGINE_OPTIONS_A@</select></label><label>Neue Engine B <select id="pair-eb">@ENGINE_OPTIONS_B@</select></label><button id="pair-prepare">Neue Testsession starten …</button></div>
+<p>Alte .epm-Dateien enthalten keine HOME-Belegung oder Macros. Für vollständige Projekte A–D und .hpm oben verwenden.</p>
+<div class="pair-buttons"><button id="pair-save">Alte Pair-Datei ohne HOME sichern</button><label class="home-file">Alte .epm importieren …<input id="pair-load" type="file" accept=".epm"></label></div>
+</details>
+<p id="pair-result" role="status" aria-live="polite"></p>
+</fieldset>
+</section>

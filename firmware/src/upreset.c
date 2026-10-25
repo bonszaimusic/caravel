@@ -437,6 +437,10 @@ static int up_store_cat(uint32_t k, const char *name, uint32_t cat)
     up_set_name(&r, k, name);
     for (i = 0; i < P_COUNT; i++)
         up_set_value(&r, i, motion_base_value(TSEL, i));
+#if FELUCCA_PAIR_MORPH
+    for (uint32_t k = 0; k < NMSLOT; k++)
+        if (r.ver >= 4u && r.packed[P_M1DST+3*k] == MD_PAIR + 64) up_set_value(&r, P_M1DST+3*k, MD_OFF);
+#endif
     up_pat_from(&r, TSEL->step);
     up_set_cat(&r, cat ? cat : track_cat(TSEL));
     if (drum_track(TSEL)) {                             /* a DRUM track that strikes a lane: its grid */

@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-3.0-only
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const listeners={},sent=[],globalListeners={};
+const k={role:3,hit:{addEventListener(t,fn){listeners[t]=fn;},setPointerCapture(){}}};
+const context=vm.createContext({Math,addEventListener(t,fn){globalListeners[t]=fn;},turn(_k,n){sent.push(n);}});
+vm.runInContext(fs.readFileSync('experiments/engine-pair-morph/knob_drag.js','utf8'),context);
+context.bindKnob(k);
+const e=(x,y,id=1)=>({clientX:x,clientY:y,pointerId:id,button:0,preventDefault(){},stopPropagation(){}});
+listeners.pointerdown(e(0,0));
+for(const [x,y] of [[8,0],[12,30],[16,-30],[24,60],[32,-60],[40,120]])listeners.pointermove(e(x,y));
+assert.ok(sent.length>0&&sent.every(n=>n>0),'a rightward gesture cannot reverse when its vertical noise changes');
+assert.equal(sent.reduce((a,b)=>a+b,0),5,'detents depend on total locked-axis distance, not the event count');
+listeners.pointermove(e(-100,0,2));assert.equal(sent.reduce((a,b)=>a+b,0),5,'other fingers cannot move the active knob');
+listeners.lostpointercapture(e(0,0));listeners.pointermove(e(400,0));assert.equal(sent.reduce((a,b)=>a+b,0),5,'lost capture cancels dragging');
+sent.length=0;listeners.pointerdown(e(0,0));
+for(const [x,y] of [[0,-8],[100,-16],[-100,-24],[300,-32]])listeners.pointermove(e(x,y));
+assert.ok(sent.every(n=>n>0));assert.equal(sent.reduce((a,b)=>a+b,0),4,'upward dragging locks vertical axis');
+globalListeners.blur();listeners.pointermove(e(0,-200));assert.equal(sent.reduce((a,b)=>a+b,0),4);
+console.log('knob drag: monotonic diagonal drags, event-rate independence, pointer ownership, capture loss and blur passed');
