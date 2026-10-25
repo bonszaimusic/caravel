@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Track Mute now ramps already sounding voices down, including LATCH-held notes.
+  Existing held voices resume on unmute; LATCH settings/state remain intact. New
+  triggers stay blocked while muted. Global effect tails continue to decay.
+
 What Caravel adds to Felucca and what it fixes in Felucca's own behaviour. Caravel is a fork of Felucca by Leo Kuroshita and
 Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of **Felucca 1.5**, the first recorded commit builds on
 **Felucca 1.5.1**, and the 1.6 and **1.6.1** sources were taken in later. Everything below is on top of Felucca 1.6.1; Felucca's own
