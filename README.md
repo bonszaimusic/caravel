@@ -50,7 +50,7 @@ Free and open source for the M-VAVE FM-1.
 
 **[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
 
-[Release notes](RELEASE-NOTES.md)
+[Changelog](CHANGELOG.md)
 
 ## A look at the screen
 
