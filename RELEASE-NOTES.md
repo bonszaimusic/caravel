@@ -1,6 +1,6 @@
 # Caravel 0.5.0 - Build your performance
 
-Prepared release notes; 0.5.0 is not published yet.
+Release 0.5.0, 25 October 2026.
 
 Bring the controls you need onto HOME, combine movements with four macros per
 track, and morph between two linked sounds with Pair Morph. The active HOME row
@@ -19,7 +19,7 @@ Before upgrading, make a complete backup with matching tools. A-D projects inclu
 HOME, macros and Pair; individual sound presets do not. Older firmware cannot
 restore the new performance layer. A downgrade needs its own compatible backup.
 
-The D3 candidate passed the maintainer's hardware test. The final version-labelled
-package, hosted CI and publication review are separate checks. No fixed CPU saving
+The D3 candidate passed the maintainer's hardware test. Firmware functionality is
+identical in 0.5.0; the version label changes. Release packaging is checked separately. No fixed CPU saving
 or guaranteed track count is advertised. CPU GUARD and the V11 silent-FX experiment
 are outside this release.

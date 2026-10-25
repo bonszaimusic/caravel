@@ -2,8 +2,7 @@
 
 [Download the six-page PDF](Caravel-0.5.0-Quickstart.pdf). Every screen below comes
 from the actual firmware renderer; explanatory labels are outside the display.
-This is documentation for 0.5.0 in preparation. The latest published version stays
-0.3.3 until release approval.
+These tutorials describe Caravel 0.5.0.
 
 ## 1. Read and play HOME
 
@@ -70,5 +69,5 @@ and Pair events use a bounded performance pool and are not shown in the native
 event-list editor. Performance locks use assigned HOME cells; not every HOME target
 gains automation. No freely named rows/cells, cross-track macro routes, CPU GUARD,
 or V11 silent-FX experiment are included. No universal CPU percentage is promised.
-The maintainer reports D3 passed hardware testing; the final 0.5.0-labelled package
-still requires its install/version acceptance check.
+The maintainer reports D3 passed hardware testing. The 0.5.0 firmware retains
+that functional code and changes its version label; packaging is checked separately.

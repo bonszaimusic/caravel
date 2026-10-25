@@ -2,11 +2,9 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.5.0 in preparation** (latest public release: 0.3.3).
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.5.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
-
-These links become available after the first successful GitHub Pages deployment.
 
 Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
 [Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
@@ -16,10 +14,14 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 
 ## Watch and listen
 
-[![M-VAVE FM-1: Hades & SEM-Inspired Sounds (YouTube)](https://img.youtube.com/vi/rfY23zoBgzQ/hqdefault.jpg)](https://youtu.be/rfY23zoBgzQ)
+<table>
+<tr>
+<td width="50%" align="center"><a href="https://www.youtube.com/watch?v=rfY23zoBgzQ"><img src="https://img.youtube.com/vi/rfY23zoBgzQ/hqdefault.jpg" width="420" alt="M-VAVE FM-1: Hades and SEM-inspired sounds"></a><br><strong>SEM &amp; HADES</strong><br>Sound showcase (recorded before the Caravel rename)</td>
+<td width="50%" align="center"><a href="https://www.youtube.com/watch?v=N08Vx3x7fLE"><img src="https://img.youtube.com/vi/N08Vx3x7fLE/hqdefault.jpg" width="420" alt="M-VAVE FM-1 Caravel: Lyra Inspired Drone Engine Demo"></a><br><strong>DRONE</strong><br>Lyra-inspired DRONE engine demo</td>
+</tr>
+</table>
 
-Sounds of the SEM and HADES engines on the FM-1 (recorded before the rename). More videos on the maintainer's channel:
-[BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
 
 ## New performance workflow in 0.5.0
 

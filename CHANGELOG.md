@@ -6,7 +6,7 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
-## [0.5.0] - prepared, not published
+## [0.5.0] - 2026-10-25
 
 ### Added
 - **A performance HOME for each track:** up to 32 rows of four references. Turn a
@@ -55,10 +55,11 @@ unless it says so; host tests and simulations are not hardware measurements.
 ### Compatibility and validation
 - Sound presets are not complete performance projects. Use matching tools for
   complete backups; older firmware cannot restore the HOME/Macro/Pair layer.
-- The maintainer reports the D3 hardware test passed. That is evidence for the
-  tested D3 package, not an installation test of the 0.5.0-labelled package.
+- The maintainer reports the D3 hardware test passed. The 0.5.0 firmware sources
+  retain that functional code; only the version label/comment changes.
 - CPU GUARD and the separate V11 silent-FX experiment are not included.
-- Release publication remains pending the private development checks and review.
+- Full hosted CI passed for the functional candidate, including the inherited
+  regression suite, installer preview and browser emulator build.
 
 ## [0.3.3] — 2026-10-20
 
