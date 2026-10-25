@@ -23,15 +23,34 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 
 More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
 
-## New performance workflow in 0.5.0
+## 🚢 Caravel 0.5.0 — Two synth engines. One performance.
 
-**[Illustrated tutorials](docs/tutorials/README.md)** - [PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) - [Release notes](RELEASE-NOTES.md)
+**[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
 
-Custom HOME rows, four macros per track and Pair Morph put the performance controls
-under K1-K4. SELECT chooses the row; ALGO chooses the track. The active row is large,
-the other compact; both preset names and morph state remain visible in a Pair.
+**Deep HADES bass. Drifting DRONE atmospheres. Warm SEM pads. Shimmering FM bells.
+Now explore what happens between them.**
 
-![Performance HOME](docs/tutorials/img/home-active-1.png)
+Caravel brings hands-on live sound design to your **M-VAVE FM-1**. Pair two engines,
+shape their sounds together and turn a single gesture into a dramatic transformation.
+
+- 🎚️ **Pair Morph — explore the space between engines.** Play two engines from the same
+  notes and blend between their sounds in real time. Find a beautiful halfway point—or
+  take the audience on the whole journey.
+- 🎛️ **Custom HOME — build your own performance surface.** Bring your favourite controls
+  together, with large active values and preset names that stay visible.
+- ✨ **Assignable macros — make one knob move your sound.** Map up to four parameters
+  to each of four macros per track. Open the filter and bring in the reverb together,
+  with the combinations and amounts you choose.
+
+**Build the sound. Find the unexpected. Play the transformation.**
+
+Free and open source for the M-VAVE FM-1.
+
+<a href="docs/tutorials/img/home-active-1.png"><img src="docs/tutorials/img/home-active-1.png" width="300" alt="Performance HOME with paired presets, morph position and large active controls"></a>
+
+**[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
+
+[Release notes](RELEASE-NOTES.md)
 
 ## A look at the screen
 
