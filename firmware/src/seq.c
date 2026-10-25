@@ -228,6 +228,15 @@ static void arp_drop(track_t *t, uint32_t note);
 static int lat_sounds(const track_t *t, uint32_t n)
 {
     uint32_t i;
+#if FELUCCA_PAIR_MORPH
+    if (ep.cells && pair_member(t)) {
+        /* One CELL host pitch represents many physical keys. LATCH belongs to
+         * the shared gesture, regardless of which member owns the input. */
+        for (i = 0; i < ep.key_count; i++)
+            if (ep.keys[i] == n) return 1;
+        return 0;
+    }
+#endif
     if (trk_vmode(t) == V_POLY) {
         for (i = 0; i < NVOICE; i++)
             if (t->v[i].active && t->v[i].gate && t->v[i].note == n)
@@ -328,7 +337,12 @@ static void arp_remove(track_t *t, uint32_t note)
 #define ND_NONE 0u                      /* track_t nd_late / nd_early: nothing latched (seq_tick; else its seq_pos + 1) */
 static void rec_note(track_t *t, uint32_t note, uint32_t vel);
 static void rec_release(track_t *t, uint32_t note);
-static int rec_on(const track_t *t) { return (((song.rec & ~step_record_mask) >> trk_index(t)) & 1u) && song.playing && !chain.running; }
+static int rec_on(const track_t *t) {
+#if FELUCCA_PAIR_MORPH
+    if (pair_member(t)) return (song.rec & ~step_record_mask & ((1u << ep.a) | (1u << ep.b))) && song.playing && !chain.running;
+#endif
+    return (((song.rec & ~step_record_mask) >> trk_index(t)) & 1u) && song.playing && !chain.running;
+}
 
 #include "motion.c"
 
@@ -584,6 +598,9 @@ static void arp_step(track_t *t, uint32_t n, uint32_t gate_n)
 {
     uint32_t period;
     int32_t sw;
+#if FELUCCA_PAIR_MORPH
+    if (pair_follower(t)) return;
+#endif
     if (t->arp_note) {
         if (t->arp_off <= gate_n)
             arp_off(t);
@@ -955,6 +972,10 @@ static void keyboard_block(void)
             continue;
         if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
             kb_trk[k] = song.sel;
+#if FELUCCA_PAIR_MORPH
+            kb_trk[k] = (uint8_t)(pair_owner(&trk[kb_trk[k]]) - trk);
+#endif
+
             if (kb_asleep) {                      /* (SCREEN OFF: the wake press is swallowed) */
                 kb_note[k] = KB_SILENT;
                 continue;
@@ -1362,6 +1383,10 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
 static void seq_tick(track_t *t, uint32_t n)
 {
     uint32_t period, len, top;
+#if FELUCCA_PAIR_MORPH
+    if (pair_follower(t)) return;
+#endif
+
     if (song.g[G_CLOCK])
         n = midi_grid_advance(&midi_seq_grid[trk_index(t)], n, (uint32_t)t->p[P_SDIV]);
     if (t->seq_n && !t->seq_hold) {
@@ -1428,7 +1453,12 @@ static int midi_in_block(uint32_t ch) { return midi_slot(ch) >= 0; }   /* ch is 
 static track_t *midi_track(uint32_t ch)
 {
     int32_t k = midi_slot(ch);
+#if FELUCCA_PAIR_MORPH
+    return pair_owner(k >= 0 ? &trk[k] : TSEL);
+#endif
+#if !FELUCCA_PAIR_MORPH
     return k >= 0 ? &trk[k] : TSEL;
+#endif
 }
 
 #include "midi_control.c"
@@ -1633,6 +1663,10 @@ static void events_block(uint32_t n)
 {
     uint32_t i, pr, lr, seq_n = n;
     voice_policy_sync();
+#if FELUCCA_PAIR_MORPH
+    pair_validate();
+    panic_req |= pair_cleanup_pending; pair_cleanup_pending = 0;
+#endif
     uint32_t clock_mode = (uint32_t)song.g[G_CLOCK];
     if (midi_clock.mode != clock_mode) {
         seq_stop();
@@ -1674,8 +1708,16 @@ static void events_block(uint32_t n)
             midi_route_block();
     }
     pr = panic_req;
+#if FELUCCA_PAIR_MORPH
+    if (ep.on && (pr & ((1u << ep.a) | (1u << ep.b)))) pr |= (1u << ep.a) | (1u << ep.b);
+#endif
+
     panic_req = 0;
     lr = latch_req;
+#if FELUCCA_PAIR_MORPH
+    if (ep.on && (lr & ((1u << ep.a) | (1u << ep.b)))) lr |= 1u << ep.a;
+#endif
+
     latch_req = 0;
     if (midi_in_overflow) {                            /* a lost note-off must never leave a held note */
         midi_resync_cancel();

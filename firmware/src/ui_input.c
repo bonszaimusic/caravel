@@ -68,12 +68,18 @@ static int mom_down(void)                              /* LFO held where its tur
  * goes as ever: the column picks, steps, acts) */
 static int mom_turn(uint32_t k, int32_t s)
 {
+#if FELUCCA_PAIR_MORPH
+    if (ui.home && ep.on) return 0;  /* HOME now controls pair state, never a hidden engine parameter. */
+#endif
     const page_t *pg = cur_page();
     const param_desc_t *d;
     int16_t *vp = 0;
     uint32_t i, g;
     const track_t *t = ui.home ? home_trk(k) : TSEL;     /* (HOME LEVELS: KNOB k is track k's) */
     if (ui.home) {
+#if FELUCCA_HOME_PERF
+        hp_turn(k,s,1); return 1;
+#endif
         d = home_param(k, &vp);
     } else if (pg->scope == SC_TRK && !lock_held()) {  /* MIXER (#195): the selected track's LEVEL PAN REV MUTE */
         static const uint8_t MIX_ID[4] = {P_LEVEL, P_PAN, P_REV, P_MUTE};   /* (tracks_edit's knobs) */
@@ -526,6 +532,9 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
  * track itself is ALGORITHM's, on every page). Pattern length stays on SEQ. */
 static void tracks_edit(uint32_t slot, int32_t steps)
 {
+#if FELUCCA_HOME_PERF
+ hp_touch(slot);
+#endif
     track_t *t = TSEL;
     int16_t *vp;
     const param_desc_t *d;
@@ -797,6 +806,10 @@ static void lock_turn(uint32_t k, int32_t s, uint64_t held)
 {
     track_t *t = TSEL;
     uint32_t id = lock_id(k), i;
+#if FELUCCA_HOME_PERF
+    if (!ui.plk_src) { hp_lock_turn(k,s,held); return; }
+#endif
+
     const param_desc_t *d;
     if (chain_busy()) {
         ui_message("STOP TO EDIT");
@@ -992,6 +1005,18 @@ static void step_edit(uint32_t slot, int32_t steps)
 
 static void edit_param(uint32_t slot, int32_t steps)
 {
+#if FELUCCA_HOME_PERF
+    if(cur_page()->graph==GR_MACRO || cur_page()->graph==GR_MACROMAP || cur_page()->graph==GR_HOMEEDIT) { hp_page_knob(slot,steps); return; }
+    hp_touch(slot);
+#endif
+
+#if FELUCCA_PAIR_MORPH
+    if (cur_page()->graph == GR_PAIR) {
+#if FELUCCA_HOME_PERF
+ if(slot>=2 && pair_member(TSEL)){hp_ref_t r={.kind=HP_PAIR,.track=song.sel,.id=slot,.engine=255};hp_set(r,param_turn(hp_desc(r),hp_get(r),steps),1);ml_knob(TSEL,HP_VFIRST+4+slot);return;}
+#endif
+ pair_ui_knob(slot, steps); return; }
+#endif
     int16_t *vp;
     const page_t *pg = cur_page();
     const param_desc_t *d;
@@ -1603,6 +1628,12 @@ static void ui_input(void)
     uint32_t oct;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
+#if FELUCCA_HOME_PERF
+    if(hp_combo_pending){
+        if(fm1_in.buttons & ((1u<<panel.btn[B_GLO])|(1u<<panel.btn[B_HOME])))return;
+        hp_combo_pending=0;ui.home_t0=0;ui.pg_down&=~(1u<<panel.btn[B_GLO]);ui.ly=ui.layer=ui.lock=0;ui.ly_t0=0;
+    }
+#endif
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
     if (chain.live_notice) {
         uint32_t launched;
@@ -1650,6 +1681,15 @@ static void ui_input(void)
         pressed &= ~(1u << panel.btn[B_OCTUP]);
         ui_message("KEPT");
     }
+
+#if FELUCCA_HOME_PERF
+    if (!ui.menu && !ui.confirm && !name_on() &&
+        (fm1_in.buttons & (1u << panel.btn[B_GLO])) && (pressed & (1u << panel.btn[B_HOME]))) {
+        hp_add_last(); hp_combo_pending=1; ui.home_t0=0; ui.pg_down &= ~(1u<<panel.btn[B_GLO]);
+        ui.ly=ui.layer=ui.lock=0; ui.ly_t0=0;
+        return;
+    }
+#endif
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
@@ -1660,8 +1700,21 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on);
-    oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
+    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on
+#if FELUCCA_HOME_PERF
+        || hp_oct_button(B_OCTDN) || hp_oct_button(B_OCTUP)
+#endif
+    );
+    oct = layer_oct(pressed, oct);
+#if FELUCCA_HOME_PERF
+    if(!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && oct) {
+        uint32_t g=cur_page()->graph;
+        if(g==GR_HOMEEDIT){if(oct&1u)go_home();else if(oct&2u)hp_editor_apply();oct=0;}
+        else if(g==GR_MACRO&&(oct&2u)){hp_open_graph(GR_MACROMAP);oct=0;}
+        else if(g==GR_MACROMAP&&(oct&1u)){hp_open_graph(GR_MACRO);oct=0;}
+    }
+#endif
+                      /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();
     glo = lay && ui.ly == LAYER_GLO;                    /* GLO held: SELECT is the tempo, BPM LOCK or not (#58) */
@@ -1852,7 +1905,11 @@ static void ui_input(void)
         case B_OCTDN:
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
-            if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
+            if (act_cols() || layer_set_open() || ui.ml.on
+#if FELUCCA_HOME_PERF
+                || hp_oct_button(b)
+#endif
+               )   /* action pages: enter / back (below); SET layers: OCT-; */
                 break;                                  /* MIDI LEARN: clear / done (below) */
             if ((fm1_in.buttons & both) == both) {
                 song.octave = 0;
@@ -1914,6 +1971,11 @@ static void ui_input(void)
     if (!lay && (s = panel_enc(EN_ALGO)) != 0)     /* ALGORITHM: the selected track, on every page */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
+#if FELUCCA_HOME_PERF
+        if (!glo && !lay && ui.home) { hp_row_turn(s); }
+        else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
+        else
+#endif
         if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE) {   /* MENU > SELECT PAGE (1.5.5, #188): the pages, a detent
@@ -1959,6 +2021,14 @@ static void ui_input(void)
             ui.hot_t = 40;
         }
         if (ui.home) {
+#if FELUCCA_HOME_PERF
+            hp_turn(k,s,0); continue;
+#endif
+#if FELUCCA_PAIR_MORPH
+#if !FELUCCA_HOME_PERF
+            if (ep.on) { pair_ui_home_knob(k,s); continue; }
+#endif
+#endif
             int16_t *vp;
             const param_desc_t *d = home_param(k, &vp);
             *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min));

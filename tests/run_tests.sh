@@ -281,6 +281,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "scales: white-key mapping and note lifecycle" "$OUT/scale_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/chord_test" tests/chord_test.c -lm
     run "chord keys: diatonic and fixed chords, voicings, MONO root, releases, recording, ARP, MIDI IN, kits" "$OUT/chord_test"
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/track_mute_test" tests/track_mute_test.c -lm
+    run "track mute: held LATCH/ARP voices, SPREAD, SLICER, sends and ramps" "$OUT/track_mute_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/latch_test" tests/latch_test.c -lm
     run "LATCH: NEW / STACK on keys, chords, MIDI IN and the arp; the ways it ends; recording, kits, layout" "$OUT/latch_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/drone_motion_test" tests/drone_motion_test.c -lm

@@ -184,7 +184,11 @@ static void menu_head(void)
  *                   CLOSE is in the header: the four would not fit in S (cv_key_row drops words, from the last)
  * Drawn in two bands (the canvas holds 124 rows) split in a gap between two rows; while the tabs slide only their
  * strip (24..58) is drawn again */
-static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_MIDI, ICON_X_COG, ICON_X_SPEAKER};
+static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_MIDI, ICON_X_COG, ICON_X_SPEAKER
+#if FELUCCA_HOME_PERF
+ ,ICON_X_KNOB
+#endif
+};
 #define MT_Y 29                                        /* the tab bar */
 #define MT_H 24
 #define MT_IW 20                                       /* six tabs: 16 px icon with 2 px padding on each side */
@@ -314,7 +318,7 @@ static void menu_row(uint32_t k, uint32_t row)
         cv_text_r(MR_VR, vy, &AF_M, b, val, bg);
         return;
     }
-    if (row >= MI_VALUES) {                            /* CALIBRATION, ABOUT: OCT+ opens them */
+    if (row >= MI_VALUES && !menu_valued(row)) {                            /* CALIBRATION, ABOUT: OCT+ opens them */
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row chevron centred up/down");
         cv_icon_in(MR_VR - 12, y, 0, h, 12, ICON_X_RIGHT, sel ? T_INK : T_MID, bg);
         return;
@@ -405,6 +409,9 @@ static uint32_t menu_split(uint32_t n)
 }
 static void draw_menu(void)
 {
+#if FELUCCA_HOME_PERF
+    static const khint_t HP_KEYS[3]={{KC_ALGO,"TAB"},{KC_PRESETS,"ROW"},{KC_OCTUP,"APPLY"}};
+#endif
     static const khint_t VOICE_KEYS[3] = {{KC_ALGO, "TAB"}, {KC_K14, "TRACKS"}, {KC_OCTPM, "MODE"}};
     static const khint_t KEYS[3][3] = {{{KC_ALGO, "TAB"}, {KC_PRESETS, "ROW"}, {KC_OCTPM, "VALUE"}},
                                        {{KC_ALGO, "TAB"}, {KC_PRESETS, "ROW"}, {KC_OCTUP, "OPEN"}},
@@ -422,6 +429,9 @@ static void draw_menu(void)
           (song.mch[0] | (uint32_t)song.mch[1] << 8 | (uint32_t)song.mch[2] << 16 | (uint32_t)song.mch[3] << 24) *
           2246822519u +                                   /* (1.5.5: T1..T4 CHANNEL) */
           (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) + (ui.menu == 3 ? info_sig() * 2654435761u : 0u);
+#if FELUCCA_HOME_PERF
+    sig+=hp_default*3037u+hp_apply_armed*8191u;
+#endif
     if (!ui.force && sig == ui.menu_sig) {
         if (ui.menu == 1 && mt.pos != pos0) {          /* only the tabs slid: their strip */
             cv_begin(240, MP_Y - H_HEAD, T_BG);
@@ -480,8 +490,20 @@ static void draw_menu(void)
         for (k = 0; k < n; k++)
             if (mr_y(k) + mr_h() > top_y && mr_y(k) - 1 < top_y + (int32_t)cv_h)
                 menu_row(k, first + k);
+#if FELUCCA_HOME_PERF
+        if(pass && menu_tab()==MTAB_HP){
+            char b[48];perf_format(b,sizeof b,"HOME T%u / %s",song.sel+1,menu_vname(MI_HPDEFAULT,hp_default));
+            cv_text(8,159,&AF_S,b,T_ACCENT);
+            cv_text(8,176,&AF_S,hp_default==0?"EMPTY: ONE EMPTY ROW":hp_default==1?"ENGINE: FOUR ENGINE KNOBS":"PERFORM: ENGINE + LEVEL/FX",T_MID);
+            cv_text(8,193,&AF_S,hp_apply_armed?"OCT+ REPLACE / OCT- CANCEL":"APPLY REPLACES THIS TRACK ONLY",hp_apply_armed?T_ACCENT:T_MID);
+        }
+#endif
         if (pass)
-            cv_key_row(8, 232, MK_Y, menu_voice_row() ? VOICE_KEYS :
+            cv_key_row(8, 232, MK_Y,
+#if FELUCCA_HOME_PERF
+                       ui.menu_sel==MI_HPAPPLY ? HP_KEYS :
+#endif
+                       menu_voice_row() ? VOICE_KEYS :
                        KEYS[ui.menu_sel == MI_LCLEAR ? 2 : !menu_valued(ui.menu_sel)], 3, 7u, T_BG);
         cv_oy = 0;
         cv_blit(0, (uint32_t)top_y);
@@ -496,6 +518,9 @@ static void enc_drop(void)                             /* knob turns nobody take
 
 static void menu_close(void)
 {
+#if FELUCCA_HOME_PERF
+ hp_apply_armed=0;
+#endif
     settings_save();                                   /* palette / panel table, if changed */
     ui.menu = 0;
     ui.force = 1;
@@ -508,12 +533,23 @@ static void menu_close(void)
  * (ui_input.c). Custom: with SELECT on PAGE, SELECT walks the rows a detent each and on into the next tab. */
 static void menu_move(int32_t s)                       /* PRESETS: the next / previous row of the tab */
 {
-    uint32_t t = menu_tab(), f = mtab_first(t), n = mtab_rows(t), k = (ui.menu_sel - f + (s > 0 ? 1u : n - 1u)) % n;
+#if FELUCCA_HOME_PERF
+ hp_apply_armed=0;
+#endif
+    uint32_t t=menu_tab(),f=mtab_first(t),n=mtab_rows(t);
+#if FELUCCA_HOME_PERF
+    uint32_t k=clamp((int32_t)(ui.menu_sel-f)+s,0,(int32_t)n-1);
+#else
+    uint32_t k=(ui.menu_sel-f+(s>0?1u:n-1u))%n;
+#endif
     ui.menu_sel = (uint8_t)(f + k);
     ui.menu_row[t] = (uint8_t)k;
 }
 static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / previous tab, at its last row */
 {
+#if FELUCCA_HOME_PERF
+    hp_apply_armed=0;
+#endif
     uint32_t t = menu_tab(), k;
     ui.menu_row[t] = (uint8_t)(ui.menu_sel - mtab_first(t));
     t = (t + (s > 0 ? 1u : MTAB_COUNT - 1u)) % MTAB_COUNT;
@@ -522,6 +558,9 @@ static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / 
 }
 static void menu_walk(int32_t s)                       /* SELECT (MENU > SELECT PAGE): a detent a row, on into the next tab */
 {
+#if FELUCCA_HOME_PERF
+    hp_apply_armed=0;
+#endif
     uint32_t t = menu_tab(), f = mtab_first(t), n = mtab_rows(t), k = ui.menu_sel - f;
     for (int32_t i = s > 0 ? s : -s; i > 0; i--) {
         if (s > 0 ? k + 1u < n : k > 0u) {
@@ -554,8 +593,12 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         menu_move(s);
     if ((s = panel_enc(EN_ALGO)) != 0)
         menu_tab_go(s);
-    if ((s = panel_enc(EN_SELECT)) != 0 && sel_mode() == SEL_PAGE)
-        menu_walk(s);                                  /* (other SELECT modes: nothing here, as before) */
+    if ((s=panel_enc(EN_SELECT))!=0&&sel_mode()==SEL_PAGE)
+#if FELUCCA_HOME_PERF
+        menu_move(s);
+#else
+        menu_walk(s);
+#endif
     if (menu_voice_row() && (up || dn)) {
         menu_put(MI_VMODE, up ? 1u : 0u);              /* OCT+ FIXED, OCT- AUTO; knobs stay assigned to tracks */
         up = dn = 0;
@@ -569,6 +612,9 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
             }
         } else s += d;
     }
+#if FELUCCA_HOME_PERF
+    if(dn){hp_apply_armed=0;ui.force=1;}
+#endif
     if (menu_valued(ui.menu_sel)) {
         /* a step (OCT+ the next value, OCT- the previous); COLOR previews the palette, STYLE is drawn so from the next
          * frame (FX LATCH: the latched effects are off while the menu is up) */
@@ -576,6 +622,14 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         if (s)
             menu_put(ui.menu_sel, menu_step(ui.menu_sel, s));
     } else if (up) {
+#if FELUCCA_HOME_PERF
+        if(ui.menu_sel==MI_HPAPPLY) {
+            if(!hp_apply_armed){hp_apply_armed=1;ui_message("OCT+ AGAIN: REPLACE HOME");}
+            else {hp_apply_template(song.sel,hp_default);hp_apply_armed=0;ui_message("HOME SET APPLIED");}
+            ui.force=1;
+        } else if(ui.menu_sel==MI_HPEDIT){settings_save();ui.menu=0; hp_open_editor();}
+        else
+#endif
         if (ui.menu_sel == MI_LCLEAR) {                 /* LEARN CLEAR (1.5): every learned CC; no dialog (the menu has
                                                          * none: every other row's change is undone the same way) */
             ui_message(ml_clear_all() ? "LEARN CLEARED" : "NOTHING LEARNED");

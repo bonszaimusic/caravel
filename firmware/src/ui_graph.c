@@ -10,6 +10,9 @@
 #define PANEL_X0 10                                  /* the graphs' inner area: x 10..230 */
 #define PANEL_W 220
 #define GOY 11                                       /* graphs drawn on a 100 px scale sit at y 11..111 */
+#if FELUCCA_PAIR_MORPH
+static void pair_ui_graph(void);
+#endif
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
@@ -1734,6 +1737,9 @@ static void draw_tracks(void)
         sig = str_hash(1u + sel + st * 2u + (mute && arm) * 16u + hot * 32u, b) + lvl * 7919u +
               ts.meter[c] * 131u + (uint32_t)(pan + 128) * 104729u + (uint32_t)rv * 1299709u + mute * 3u + sk * 0x9E37u +
               lit * 15485863u;                         /* (1.5.5: MIDI IN lights the cushion) */
+#if FELUCCA_PAIR_MORPH
+        sig ^= pair_member(t) ? 0x6A09E667u : 0u;     /* pairing changes must invalidate every member's cushion */
+#endif
         if (!ui.force && sig == ts.col[c])
             continue;
         ts.col[c] = sig;
@@ -1835,19 +1841,30 @@ static void home_track_row(uint32_t c)
     uint16_t cn = sel ? (mute ? ux_mix(T_THEME, T_INK, 55) : T_INK) : mute ? T_DIM : T_THEME;   /* a note */
     uint16_t ca = sel || mute ? cn : T_ACCENT, cs = sel ? half : T_RAISE;   /* accented; a stub */
     uint16_t cp = sel ? ux_mix(T_THEME, T_INK, 20) : T_RAISE, cpl = sel ? T_INK : mute ? T_MID : T_TEXT;   /* playing */
+#if FELUCCA_PAIR_MORPH
+    char b[24];
+#else
     char b[16];
+#endif
     pg = song.playing ? t->seq_idx / 16u : sel ? ui.cursor / 16u : 0u;
     if (pg >= np)
         pg = np - 1u;
     p0 = pg * 16u;
     ph = song.playing && t->seq_idx / 16u == pg ? t->seq_idx % 16u : 0xFFu;
     trk_short_name(c, b);
+#if FELUCCA_PAIR_MORPH
+    if (pair_member(t)) perf_format(b, sizeof b, "%s =%u %u%%", ENGINES[t->engine]->name,
+        (unsigned)(c == ep.a ? ep.b+1 : ep.a+1), (unsigned)(ep.weight[c == ep.b][CTL-1]*100+16383)/32767);
+#endif
     m = mute ? 0 : meter_px(t->peak);
     t->peak = 0;
     if (m < ts.meter[c] - 1)
         m = ts.meter[c] - 1;                         /* (falls as the MIXER's) */
     sig = str_hash(1u + sel + mute * 2u + large * 4u + t->eng_req * 8u, b) + steps_hash(t) * 31u + pg * 7919u +
           ph * 104729u + len * 1299709u + lit * 15485863u;   /* (1.5.5: MIDI IN lights the cushion) */
+#if FELUCCA_PAIR_MORPH
+    sig ^= pair_member(t) ? 0x6A09E667u : 0u;
+#endif
     if (!ui.force && sig == ts.col[c]) {
         if (m != ts.meter[c]) {                      /* the meter alone: its slot */
             ts.meter[c] = (uint8_t)m;
@@ -2252,6 +2269,12 @@ static void graph_song(void)
 }
 static void draw_graph(void)
 {
+#if FELUCCA_HOME_PERF
+    if (!ui.home && (cur_page()->graph==GR_MACRO || cur_page()->graph==GR_MACROMAP || cur_page()->graph==GR_HOMEEDIT)) { hp_page_graph(); return; }
+#endif
+#if FELUCCA_PAIR_MORPH
+    if ((ui.home && ep.on) || (!ui.home && cur_page()->graph == GR_PAIR)) { pair_ui_graph(); return; }
+#endif
     const page_t *pg = cur_page();
     const track_t *t = TSEL;
     uint16_t c = ACC;

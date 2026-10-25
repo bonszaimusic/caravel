@@ -18,7 +18,10 @@ static pthread_mutex_t c1h_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t c1h_cv = PTHREAD_COND_INITIALIZER;
 static void (*c1h_fn)(uint32_t);
 static uint32_t c1h_arg, c1h_job, c1h_done, c1h_up, c1h_blocks, c1h_taken;
-static int c1h_off;                                 /* 1: no second core (the reference renders) */
+#ifndef C1_HOST_OFF
+#define C1_HOST_OFF 0
+#endif
+static int c1h_off = C1_HOST_OFF;                                 /* 1: no second core (the reference renders) */
 
 static void *c1h_main(void *x)
 {

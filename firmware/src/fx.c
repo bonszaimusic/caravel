@@ -707,6 +707,22 @@ static __attribute__((noinline)) void ins_drive(ins_t *s, const track_t *t, int3
     uint32_t hold = INS_HOLD[clamp(t->p[P_IB], 0, 127) >> 3];
     int32_t a = t->p[P_IA], g = 4096 + a * a * 3;       /* DRIVE, Q12: 1x .. 12.8x, gentle at first */
     int32_t k = ins_lpk(crush ? t->p[P_IC] : t->p[P_IB]), lvl = crush ? 4096 : LEVEL_Q12[t->p[P_IC] & 127];
+    if (ty == IT_SOFT && s->w == 32768 && tw == 32768) {
+        for (i = 0; i < n; i++) {
+            int32_t x = b[i], v, y;
+            s->hp += ((x << 8) - s->hp) >> 8;
+            v = clamp(x - (s->hp >> 8), -230000, 230000);
+            y = softclip(((v >> 3) * g) >> 9) << 4;
+            v = mulq16(y - s->lp1, (uint32_t)k);
+            y = v + s->lp1; s->lp1 = y + v;
+            v = mulq16(y - s->lp2, (uint32_t)k);
+            y = v + s->lp2; s->lp2 = y + v;
+            y = (((y + 8) >> 4) * lvl) >> 12;
+            s->dc += ((y << 8) - s->dc) >> 9;
+            b[i] = y - (s->dc >> 8);
+        }
+        return;
+    }
     for (i = 0; i < n; i++) {
         int32_t x = b[i], y, v;
         s->w += clamp(tw - s->w, -SL_SLOPE, SL_SLOPE);
@@ -878,6 +894,16 @@ static inline int32_t tf_sample(int32_t x, int32_t *z, uint32_t g, uint32_t hp)
     }
     return (y + 128) >> 8;
 }
+/* A separate block kernel keeps the mutually exclusive fast/transition loops
+ * individually visible to the existing static loop-budget checker. One call
+ * per block, never per sample; full wet is exactly pf_mix(x,y,32768)==y. */
+static __attribute__((noinline)) void tf_wet_block(tfilt_t *s, int32_t *b, int32_t *d, uint32_t n, uint32_t hp)
+{
+    for (uint32_t j = 0; j < n; j++) {
+        b[j] = tf_sample(b[j], s->z, s->g, hp);
+        if (d) d[j] = tf_sample(d[j], s->z + 2, s->g, hp);
+    }
+}
 /* the filter at rest at once (nothing sounds: P_FILT turned to 0 while the part was silent, its fade never ran) */
 static __attribute__((noinline)) void tf_rest(track_t *t)
 {
@@ -920,6 +946,11 @@ static __attribute__((noinline)) void track_filter(track_t *t, int32_t *b, int32
     i = s->cut >> 8;
     f = s->cut & 255;
     s->g = (uint32_t)((int32_t)TF_G[i] + (((int32_t)TF_G[i < TF_ROWS ? i + 1 : TF_ROWS] - (int32_t)TF_G[i]) * f >> 8));   /* between two rows */
+    /* Fully wet at entry stays fully wet for this block. Keep the original
+     * slew path for startup, bypass and LP/HP transitions. */
+    if (s->w == 32768 && tw == 32768)
+        tf_wet_block(s, b, d, n, hp);
+    else
     for (uint32_t j = 0; j < n; j++) {
         int32_t x = b[j];
         s->w += clamp(tw - s->w, -SL_SLOPE, SL_SLOPE);
@@ -1020,7 +1051,7 @@ static __attribute__((noinline)) void drumx_mix(const track_t *t, uint32_t n SM_
         SM(v)[i] += ((DX_SIDE(t).send[2][i] >> 2) * lvl) >> 10;
     }
 }
-static void mix_part(track_t *t, uint32_t n SM_DECL)
+static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
 {
     int32_t *b = SM(b);
     uint32_t i;
@@ -1028,6 +1059,10 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     uint32_t nr;
 #endif
     dx_side_begin(t, n);
+
+#if FELUCCA_HOME_PERF
+    hp_begin(t);
+#endif
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
     T_SPREAD(t) = !dx_track(t) && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
 #if FELUCCA_CPU2
@@ -1047,6 +1082,10 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
             tf_rest(t);                                 /* FILT 0 while silent: likewise */
         if (MOD(t).on)
             mod_end(t);
+
+#if FELUCCA_HOME_PERF
+        hp_end(t);
+#endif
         return;
     }
     if (T_SPREAD(t))
@@ -1064,6 +1103,13 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     if (!T_SPREAD(t)) {                                /* (the mix's values read after the calls: none is held over
                                                          * them, no spill in the loop: the ISR's cost as before 1.5) */
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
+#if FELUCCA_PAIR_MORPH
+        if (pair_mix_member(t)) {
+            pair_apply_gain(t, b, n);
+            lvl = LEVEL_Q12[ep.level & 127]; pan = ep.pan;
+        }
+#endif
+
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax = c > d ? c : d;
@@ -1089,6 +1135,10 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         perf_throw(t, b, SM(d), SM(v), n);              /* perform.c: REV / ECHO THROW (1.5.1), the sends towards full */
     if (MOD(t).on)
         mod_end(t);                                     /* the stored values back */
+#if FELUCCA_HOME_PERF
+    hp_end(t);
+#endif
+
 }
 
 /* the HOME oscilloscope (ui_graph.c graph_scope): every other sample of the left channel. MENU > DISPLAY > SCOPE (1.2,
@@ -1122,6 +1172,21 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
         out[2u * i] = l;
         out[2u * i + 1u] = r;
     }
+}
+
+static void mix_part(track_t *t, uint32_t n SM_DECL)
+{
+#if FELUCCA_PERF_HW
+    pd_stamp_t start;if(pd_active)start=pd_stamp();
+#endif
+    mix_part_inner(t,n
+#if FELUCCA_CPU2
+        ,sm
+#endif
+    );
+#if FELUCCA_PERF_HW
+    if(pd_active)pd_track_done((uint32_t)(t-trk),start);
+#endif
 }
 
 /* ---- the second core (hal/fm1_cpu1.h; after Jangada's, github.com/zednaked/jangada, GPL-3.0) renders some of
@@ -1188,19 +1253,33 @@ static void mix_block(int32_t *out, uint32_t n)
     for (i = 0; i < n; i++)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
     events_block(n);
+#if FELUCCA_PAIR_MORPH
+    pair_mix_begin(n);
+#endif
     perf = perf_begin(n);                               /* the FX hold layer at work (perform.c) */
 #if FELUCCA_CPU2
     uint32_t m = C1_ON() ? C1_SPLIT() & ((1u << NPART) - 1u) : 0u;
-    if (m && !C1_RUN(c1_parts, m | n << 8))
+#if FELUCCA_PERF_HW
+    pd_worker_mask=m;
+#endif
+    if (m && !C1_RUN(c1_parts, m | n << 8)) {
         m = 0;
+#if FELUCCA_PERF_HW
+        pd_worker_mask=0;
+#endif
+    }
     c1_blocks += m != 0;
     for (i = 0; i < NPART; i++)
         if (!(m >> i & 1u))
             mix_part(&trk[i], n, &mx[0]);
     if (m) {
         const mixsum_t *sm = &mx[1];
-        if (C1_WAIT())                                  /* it stopped answering (held from now on): its parts here */
+        if (C1_WAIT()) {                                /* held: complete on core 0 */
+#if FELUCCA_PERF_HW
+            pd_worker_mask=0;
+#endif
             c1_parts(m | n << 8);
+        }
         for (i = 0; i < n; i++) {
             mix_l[i] += sm->l[i];
             mix_r[i] += sm->r[i];
@@ -1209,11 +1288,21 @@ static void mix_block(int32_t *out, uint32_t n)
             send_r[i] += sm->v[i];
         }
     }
+#if FELUCCA_PERF_HW
+    pd_worker_mask=0;
+    if(pd_active)for(i=0;i<3;i++) {
+        pd.engine[i].sum+=pd.worker_engine[i].sum;
+        pd.engine[i].calls+=pd.worker_engine[i].calls;
+        if(pd.worker_engine[i].max>pd.engine[i].max)pd.engine[i].max=pd.worker_engine[i].max;
+        memset(&pd.worker_engine[i],0,sizeof pd.worker_engine[i]);
+    }
+#endif
     for (i = 0; i < NPART; i++)                         /* the LFOs' blocks, part by part (voice.c) */
         track_lfo_end(&trk[i]);
 #else
-    for (i = 0; i < NPART; i++)                         /* (one core: as 1.6) */
+    for (i = 0; i < NPART; i++) {                       /* one core */
         mix_part(&trk[i], n);
+    }
 #endif
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);

@@ -48,6 +48,8 @@ jobs:
           export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
           export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
           sh build.sh
+          python3 experiments/dualcore-d1/check_layout.py
+          python3 tools/check_050.py
           sh tests/run_tests.sh
       - name: Release build
         shell: bash

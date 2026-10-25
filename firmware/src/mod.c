@@ -52,7 +52,11 @@
  * Nothing active (every slot with SRC, DST or AMT at 0): no work, and the sound is bit-identical. */
 enum { MS_OFF, MS_LFO, MS_ENV, MS_VEL, MS_KEY, MS_RAND, MS_MODW, MS_AT, MS_EXPR, MS_SH, MS_SLEW, MS_LFO2, MS_SH2, MS_SLEW2, MS_N };
 enum { MD_OFF, MD_PITCH, MD_CUT, MD_SHP, MD_AMP, MD_PAN, MD_DIST, MD_CHO, MD_DLY, MD_REV, MD_RATE, MD_VIB, MD_E1,
-       MD_DEPTH = MD_E1 + 8, MD_VEL, MD_TIME, MD_MORPH, MD_PD_FB, MD_N };   /* (append-only: the stored values keep their meaning) */
+       MD_DEPTH = MD_E1 + 8, MD_VEL, MD_TIME, MD_MORPH, MD_PD_FB,
+#if FELUCCA_PAIR_MORPH
+       MD_PAIR,
+#endif
+       MD_N };   /* (append-only: the stored values keep their meaning) */
 _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST == MS_* / MD_*");
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
 #define NMSLOT 4u
@@ -212,6 +216,9 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
         int32_t a = p[P_M1AMT + 3u * k], x;
         if (!s || !d || !a || s >= MS_N || d >= MD_N || (uint32_t)(d - MD_DEPTH) <= 2u)
             continue;
+#if FELUCCA_PAIR_MORPH
+        if (d == MD_PAIR) continue; /* aggregate exactly once, before the pair mix */
+#endif
         if (d <= MD_AMP) {                              /* per voice */
             mw->amp |= d == MD_AMP;
             if (MS_VOICE(s)) {

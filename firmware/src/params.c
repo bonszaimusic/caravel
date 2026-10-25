@@ -70,7 +70,11 @@ static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2
  * (1.5.6, #213: at the note) after DEPTH */
 static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW", "LFO2", "S&H2", "SLEW2"};
 static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
-                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB"};
+                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB"
+#if FELUCCA_PAIR_MORPH
+                                     , "PAIR"
+#endif
+};
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
                                              "DRUM", "NOISE", "FM6",
 #if FELUCCA_SLICE
@@ -239,7 +243,11 @@ static const param_desc_t L2_DESC[L2_N] = {
     PE("SYNC", N_LSYNC, 0), PE("TRIG", N_LTRIG, 0), PE("POL", N_LPOL, 0),
 };
 static const param_desc_t *lfo2_desc(uint32_t id) { return lfo2_target(id) ? &L2_DESC[id - L2_FIRST] : 0; }
-static int virtual_target(uint32_t id) { return lfo2_target(id) || dx_target(id); }
+static int virtual_target(uint32_t id) { return lfo2_target(id) || dx_target(id)
+#if FELUCCA_HOME_PERF
+ || hp_virtual(id)
+#endif
+; }
 static int32_t lfo2_get(uint32_t k, uint32_t id) { return k < NTRK && lfo2_target(id) ? lfo2_config[k].p[id - L2_FIRST] : 0; }
 static void lfo2_set(uint32_t k, uint32_t id, int32_t value)
 {
@@ -330,7 +338,11 @@ static const uint8_t DTIME_ORDER[13] = {9, 8, 7, 6, 12, 0, 10, 1, 11, 4, 2, 5, 3
 /* UI order only: the append-only source/destination IDs remain unchanged in sounds and MIDI. */
 static const uint8_t MSRC_ORDER[] = {0, 1, 9, 10, 11, 12, 13, 2, 3, 4, 5, 6, 7, 8};
 static const uint8_t MDST_ORDER[] = {0, 1, 2, 3, 4, 5, 23, 24, 10, 11, 20,
-                                      12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 6, 7, 8, 9};
+                                      12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 6, 7, 8, 9
+#if FELUCCA_PAIR_MORPH
+                                      , 25
+#endif
+};
 static const uint8_t *enum_order(const param_desc_t *d)
 {
     return d->names == N_MSRC ? MSRC_ORDER : d->names == N_MDST ? MDST_ORDER :
@@ -484,7 +496,14 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DXKIT, GR_DXMOT, GR_DXSOUND, GR_DXSOUND2, GR_DXMODE, GR_DXLAYER, GR_LFO2, GR_LFO2SYNC, GR_LFOSYNC };   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DXKIT, GR_DXMOT, GR_DXSOUND, GR_DXSOUND2, GR_DXMODE, GR_DXLAYER, GR_LFO2, GR_LFO2SYNC, GR_LFOSYNC
+#if FELUCCA_PAIR_MORPH
+       , GR_PAIR
+#if FELUCCA_HOME_PERF
+       , GR_MACRO, GR_MACROMAP, GR_HOMEEDIT
+#endif
+#endif
+};
 
 typedef struct {
     const char *title;
@@ -496,6 +515,11 @@ static const page_t PAGES[] = {
     {"ENV", FAM_ENV, SC_TRACK, GR_ADSR, {P_ATK, P_DEC, P_SUS, P_REL}},
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_NONE, {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},   /* (P_ED_FX: no longer a sound parameter, LATCH is on the CHORD page);
                                                                              * 1.5: ESYNC, ENV's times as note values */
+#if FELUCCA_HOME_PERF
+    {"PAIR", FAM_ENV, SC_TRACK, GR_PAIR, {0xFF,0xFF,0xFF,0xFF}},
+    {"MACRO", FAM_ENV, SC_TRACK, GR_MACRO, {0xFF,0xFF,0xFF,0xFF}},
+    {"MACRO MAP", FAM_ENV, SC_TRACK, GR_MACROMAP, {0xFF,0xFF,0xFF,0xFF}},
+#endif
     {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
     {"LFO SYNC", FAM_LFO, SC_TRACK, GR_LFOSYNC, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
     {"LFO2", FAM_LFO, SC_TRACK, GR_LFO2, {0xFF, 0xFF, 0xFF, 0xFF}},
@@ -556,8 +580,28 @@ static const page_t PAGES[] = {
                                                                              * list, PLAY and CLEAR (ui_events.c) */
     /* HOME's pages (1.2): HOME tapped on HOME the MIXER (up to 1.1.5 GLO's; LEVEL PAN REV MUTE), again CLOCK (up to 1.1.5
      * GLO > GLOBAL; its TUNE is MENU > AUDIO's now), again HOME (ui.c home_tap) */
-    {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},
-    {"CLOCK", FAM_TRK, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, 0xFF}},
+    {"MIXER",
+#if FELUCCA_HOME_PERF
+    FAM_GLO,
+#else
+    FAM_TRK,
+#endif
+    SC_TRK, GR_TRK, {0, 1, 2, 3}},
+    {"CLOCK",
+#if FELUCCA_HOME_PERF
+    FAM_GLO,
+#else
+    FAM_TRK,
+#endif
+    SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, 0xFF}},
+#if FELUCCA_PAIR_MORPH
+#if !FELUCCA_HOME_PERF
+    {"PAIR", FAM_TRK, SC_TRACK, GR_PAIR, {0xFF, 0xFF, 0xFF, 0xFF}},
+#endif
+#endif
+#if FELUCCA_HOME_PERF
+    {"HOME EDIT", FAM_TRK, SC_TRACK, GR_HOMEEDIT, {0xFF,0xFF,0xFF,0xFF}},
+#endif
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */

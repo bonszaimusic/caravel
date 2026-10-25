@@ -14,6 +14,12 @@ static const char H_EDIT[] = "[K1-4]SOUND[EDIT]HOLD: ENGINES";
 static const char H_LANES[] = "[K1-4]LANE LEVELS[EDIT]HOLD: MUTES";
 static const char H_FMOP[] = "[K1]OPERATOR[SAVE]HOLD: UNDO";
 static const struct { const char *title, *hint; } HELP_PAGE[] = {
+#if FELUCCA_HOME_PERF
+    {"PAIR", "[K1]PARTNER[K2]ON[K3]MORPH"},
+    {"MACRO", "[K1-4]PLAY[OCT+]MAP"},
+    {"MACRO MAP", "[K2]SLOT[K3]PARAM[K4]AMOUNT"},
+    {"HOME EDIT", "[K1]ROW[K2]CELL[OCT+]DO"},
+#endif
     {"ENV", "[K1-4]A D S R[ENV]ENV DEST"},
     {"ENV DEST", "[K1-4]ENV AMOUNTS[ENV]ENV"},
     {"LFO", "[K1-4]SHAPE[LFO]HOLD: MOMENTARY"},
@@ -79,6 +85,11 @@ static const char *help_page(void)
 {
     uint32_t i;
     const char *t;
+#if FELUCCA_HOME_PERF
+    if(ui.home)return "[K1-4]ROW[SELECT]ROW[ALGO]TRACK";
+    if(str_eq(cur_page()->title,"MIXER"))return "[K4]MUTE[SELECT]PAGE";
+    if(str_eq(cur_page()->title,"ENV DEST"))return "[K1-4]ENV AMOUNTS[ENV]PAIR";
+#endif
     if (ui.home)
         return home_levels() ? H_LEVELS : H_HOME;
     if (grid_on() && !detail_on())

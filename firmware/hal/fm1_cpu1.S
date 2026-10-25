@@ -19,11 +19,12 @@ fm1_c1_entry:
 	reti = fm1_c1_main
 	rti
 
-	.section .bss.c1stack,"aw",@nobits
+	.section .c1_stack,"aw",@nobits
+/* D1: unused space in the existing RAMTEXT region, no flash load image. */
 	.balign 8
 	.globl _c1_ustack
 _c1_ustack:			/* after rti the core runs on this one: the render's (filled with a mark at start) */
-	.space 4096		/* FM1_C1_STACK_WORDS (fm1_cpu1.h) */
+	.space 4096		/* FM1_C1_STACK_WORDS; marked explicitly before startup, no zero init needed */
 _c1_ustack_top:
 _c1_sstack:			/* exceptions only (no interrupts on this core) */
 	.space 256

@@ -13,6 +13,10 @@ static const uint8_t ED_BK_IDS[13] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34};
 #define ED_BK_MAX ((uint32_t)sizeof proj_wire_u.raw)
 #define ED_BK_RAW (proj_wire_u.raw)  /* reuse the existing serialized main-loop scratch */
 _Static_assert(sizeof proj_wire_u.raw >= sizeof(upf_t) && sizeof proj_wire_u.raw >= sizeof(fm6_bank_t), "backup staging");
+#if FELUCCA_PERF_HW
+/* A stable working snapshot while slot GETs reuse hp_io / proj_wire. */
+static hp_store_t ed_bk_performance __attribute__((section(".pool")));
+#endif
 static persist_t ed_bk_settings __attribute__((section(".pool")));
 static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id, ed_bk_gen;
 static uint32_t ed_bk_len, ed_bk_crc, ed_bk_pos, ed_bk_ms, ed_bk_usb;
@@ -34,9 +38,18 @@ static void ed_bk_pack(const uint8_t *p, uint32_t n)
 static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
 {
     *len = 0;
-    if (id == 0u) { *len = sizeof(project_store_t); return ED_BK_RAW; }
+    if (id == 0u) {
+#if FELUCCA_PERF_HW
+        *len=sizeof ed_bk_performance;return (const uint8_t*)&ed_bk_performance;
+#else
+        *len = sizeof(project_store_t); return ED_BK_RAW;
+#endif
+    }
     if (id == 1u) { *len = sizeof ed_bk_settings; return (const uint8_t *)&ed_bk_settings; }
     if (id >= 2u && id <= 5u) {
+#if FELUCCA_PERF_HW
+        const hp_store_t*p=hp_slot(id-2u);if(p){*len=sizeof*p;return (const uint8_t*)p;}
+#endif
         if (project_used(id - 2u)) *len = sizeof proj_slot[0];
         return (const uint8_t *)&proj_slot[id - 2u];
     }
@@ -62,8 +75,14 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
 static uint32_t ed_bk_capture(void)
 {
     if (ed_flash_stop()) return 3;
+#if FELUCCA_PERF_HW
+    hp_capture(&ed_bk_performance);
+    ed_bk_performance.crc=hp_hash((const uint8_t*)&ed_bk_performance+32,sizeof ed_bk_performance-32);
+    ed_bk_performance.reserved[0]=hp_hash(&ed_bk_performance,20);
+#else
     project_capture(&proj_scratch);
     if (!proj_pack((project_store_t *)ED_BK_RAW, &proj_scratch)) return 2;
+#endif
     ed_bk_gen = ++proj_wire_gen;
 #if FELUCCA_FLASH
     ed_bk_settings = persist_saved;                 /* fields absent from this build survive */
@@ -94,6 +113,16 @@ static uint32_t ed_bk_commit(void)
     uint32_t obj;
     if (ed_bk_pos != ed_bk_len || st_crc32(raw, ed_bk_len) != ed_bk_crc) return 2;
     if (ed_bk_id == 0u || (ed_bk_id >= 2u && ed_bk_id <= 5u)) {
+#if FELUCCA_PERF_HW
+        if(ed_bk_len==sizeof(hp_store_t)){
+            if(!hp_capsule_ok(&hp_io))return 2;
+            if(ed_bk_id==0u)return hp_restore(&hp_io)?0u:2u;
+            if(!proj_import(&proj_scratch,&hp_io.native,sizeof hp_io.native))return 2;
+            if(!hp_project_import(ed_bk_id-2u,&hp_io))return 4;
+            if(proj_cur==ed_bk_id-2u)proj_cur=PROJ_NO_SLOT;
+            sync_reload=1;ui.force=1;return 0;
+        }
+#endif
         if (ed_bk_len && !proj_import(&proj_scratch, raw, (int)ed_bk_len)) return 2;
         if (ed_bk_len) {                            /* an older format becomes FUN10 inside its ranges */
             proj_bound(&proj_scratch);
@@ -102,7 +131,11 @@ static uint32_t ed_bk_commit(void)
         }
         if (ed_bk_id == 0u) {
             if (!ed_bk_len) return 2;
-            return project_restore_runtime(&proj_scratch) ? 2u : 0u;
+            uint32_t rc=project_restore_runtime(&proj_scratch) ? 2u : 0u;
+#if FELUCCA_HOME_PERF
+            if(!rc)hp_init(); /* Native archives contain no performance extension. */
+#endif
+            return rc;
         }
         obj = OBJ_PROJECT0 + ed_bk_id - 2u;
     } else if (ed_bk_id == 1u) {
@@ -140,6 +173,9 @@ static uint32_t ed_bk_commit(void)
     (void)obj;
 #endif
     if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
+#if FELUCCA_HOME_PERF
+        if(hp_forget(ed_bk_id-2u))return 4; /* Do not resurrect an older capsule over the imported native slot. */
+#endif
         memset(&proj_slot[ed_bk_id - 2u], 0, sizeof proj_slot[0]);
         if (proj_cur == ed_bk_id - 2u)
             proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */
@@ -149,6 +185,9 @@ static uint32_t ed_bk_commit(void)
         memcpy(&ed_bk_settings, raw, ed_bk_len);
         settings_import(&ed_bk_settings, ed_bk_len);
         panel_init(); settings_init(); palette_apply();
+#if FELUCCA_PERF_HW
+        hp_default=hp_pref_value(); /* Restored start template must not be overwritten by the live preference. */
+#endif
 #if FELUCCA_FLASH
         persist_saved = ed_bk_settings; persist_pending = 0;
 #endif
@@ -164,7 +203,11 @@ static uint32_t ed_bk_commit(void)
 /* a project object's length: FUN10 (today's, 1.2), FUN9 (1.1), FUN8 (before the DRUM lane levels, 1.0.x), FUN7 */
 static int proj_store_len(uint32_t len)
 {
-    return len == sizeof(project_store_t) || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
+    return
+#if FELUCCA_PERF_HW
+        len==sizeof(hp_store_t)||
+#endif
+        len == sizeof(project_store_t) || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
 }
 static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 {
@@ -219,7 +262,11 @@ static int ed_backup_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
         uint32_t len = 0, off = n >= 6u ? ed_bk_r32(a + 1) : 0u;
         uint32_t count = n == 8u ? (uint32_t)a[6] | (uint32_t)a[7] << 7 : 0u;
         const uint8_t *p = n ? ed_bk_object(a[0], &len) : 0;
-        uint32_t rc = (!ed_bk_valid || ed_bk_usb != usb.resets || (n && !a[0] && ed_bk_gen != proj_wire_gen)) ? 5u : transport_busy() ? 3u :
+        uint32_t rc = (!ed_bk_valid || ed_bk_usb != usb.resets
+#if !FELUCCA_PERF_HW
+                       || (n && !a[0] && ed_bk_gen != proj_wire_gen)
+#endif
+                       ) ? 5u : transport_busy() ? 3u :
             n != 8u || a[5] > 15u || !p || !count || count > 256u || off > len || count > len - off ? 1u : 0u;
         ed_b(n ? a[0] : 127u); ed_b(rc); ed_bk_u32(off); ed_b(rc ? 0u : count & 127u); ed_b(rc ? 0u : count >> 7);
         if (!rc) ed_bk_pack(p + off, count);

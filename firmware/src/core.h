@@ -399,7 +399,15 @@ typedef struct {
 
 static track_t trk[NTRK];        /* the instrument: four parts */
 static song_t song;
-#define TSEL (&trk[song.sel])    /* the selected track */
+#if FELUCCA_PAIR_MORPH
+#include "../../experiments/engine-pair-morph/pair_state.h"
+#endif
+
+#define TSEL (&trk[song.sel])
+#if FELUCCA_HOME_PERF
+#include "../../experiments/home-perf/home_state.h"
+#endif
+    /* the selected track */
 /* MIDI IN TRACK: track i's channel 0..15, MCH_OMNI or MCH_OFF (song.mch), and set */
 static inline uint32_t mch_get(uint32_t i)
 {
@@ -432,3 +440,7 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 struct { uint32_t magic, failed, pending; } bootguard __attribute__((section(".noinit")));
 
 
+
+#if FELUCCA_PERF_HW
+#include "../../experiments/home-perf/perf_diag.h"
+#endif

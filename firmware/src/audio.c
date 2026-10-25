@@ -106,6 +106,10 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
     if (p & FM1_AUDIO_HALF) {
         uint32_t half = fm1_audio_free_half(), b, us;
         int32_t *o = &abuf[half * HALF_WORDS];
+#if FELUCCA_PERF_HW
+        pd_begin_half(fm1_ms,shed_count);
+        pd_stamp_t pd_outer;if(pd_active)pd_outer=pd_stamp();
+#endif
         if (shed_req) {
             shed_req = 0;
             shed_voice();
@@ -129,7 +133,11 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             song.cpu_q8 = load / CPU_AVG;
             audio_cpu_rem = load % CPU_AVG;
         }
-        if (fm1_audio_free_half() != half)
+        uint32_t late=fm1_audio_free_half()!=half;
+#if FELUCCA_PERF_HW
+        if(pd_active){pd_stamp_t end=pd_stamp();pd_finish_half(fm1_ms,end.clock-pd_outer.clock,end.nested-pd_outer.nested,late,shed_count);}
+#endif
+        if (late)
             felucca_dbg.late++;                         /* the DMA moved on while we rendered */
         felucca_dbg.halves++;
         felucca_dbg.last_us = us;

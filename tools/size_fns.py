@@ -7,7 +7,9 @@ the main loop) keeps -Os. The JieLi clang 4 has no '#pragma clang attribute' and
 attribute is an error on variables, so build.py compiles felucca.c to LLVM IR without the
 optimizer, this script adds 'minsize' to those definitions, and the IR is then compiled at -Os
 (without the edit, that round trip is byte-identical to compiling felucca.c directly).
+The opt-in PERF_HW build uses the separate selective policy documented below.
   size_fns.py IN.ll OUT.ll"""
+import os
 import re
 import sys
 from pathlib import Path
@@ -52,6 +54,12 @@ def size_names():
     names = set()
     for f in SIZE_FILES:
         names.update(definitions((SRC / f).read_text()))
+    # Opt-in performance UI/store code follows the same main-loop-only policy.
+    # ISR reachability below still protects pair DSP, macro mixing and sequencing.
+    for folder in ("home-perf", "engine-pair-morph"):
+        for path in (_ROOT / "experiments" / folder).glob("*.c"):
+            if "test" not in path.stem:
+                names.update(definitions(path.read_text()))
     return names
 
 
@@ -77,15 +85,34 @@ def main(src, dst):
     ir = Path(src).read_text()
     isr = isr_reach(ir)
     names, hit = size_names() - isr, set()
+    if os.environ.get("FELUCCA_PERF_HW") == "1":
+        # Full -Os does not fit. Retain V4's compact policy outside DRONE/VA
+        # and the explicit performance-audio helpers. No engine is removed.
+        audio = {"hp_begin", "hp_end", "pair_mix_begin", "pair_tone_begin",
+                 "pair_motion_weights", "pair_power_gain", "pair_apply_gain"}
+        for filename in ("eng_drone.c", "eng_hades.c", "eng_sem.c", "va_blocks.c"):
+            audio.update(definitions((SRC / filename).read_text()))
+        # Include signatures with attributes before their return type, too.
+        audio.update(m.group(2) for m in IR_DEF.finditer(ir)
+                     if m.group(2).startswith(("drone_", "hades_", "sem_", "va_")))
+        # V9 candidate: retain normal -Os inlining in the common hot FX path.
+        audio.update({"track_filter", "tf_wet_block", "tf_sample", "tf_pole", "pf_mix", "mulq16",
+                      "track_dist", "ins_drive", "ins_shape", "softclip",
+                      "master_out", "dc_block", "lowcut1"})
+        if os.environ.get("CARAVEL_DUALCORE_D1")=="1":
+            # Cold setup paths need no hot-loop inlining policy.
+            audio -= {n for n in audio if n.endswith(("_init", "_reset", "_note_on", "_note_off")) or n in {"drone_cell_seed","drone_motion_values","drone_motion_load"}}
+        names = {m.group(2) for m in IR_DEF.finditer(ir)} - audio
 
     def mark(m):
         if m.group(2) not in names:
             return m.group(0)
         hit.add(m.group(2))
-        return m.group(1) + " minsize" + m.group(3)
+        extra = " noinline" if os.environ.get("CARAVEL_DUALCORE_D1")=="1" and m.group(2) not in isr and (m.group(2) == "sound_name" or m.group(2).startswith(("ui_", "draw_", "gfx_", "menu_", "ed_", "proj_", "settings_", "storage_", "hp_", "up_", "con_", "upf_", "fvb_", "layer_", "lcell", "pat_", "cv_", "text_"))) else ""
+        return m.group(1) + " minsize" + extra + m.group(3)
     Path(dst).write_text(IR_DEF.sub(mark, ir))
-    print(f"size: {len(hit)} main-loop functions built for size ({len(names) - len(hit)} not in this build; "
-          f"{len(size_names() & isr)} reached from an interrupt kept -Os)")
+    print(f"size: {len(hit)} functions explicitly built for size ({len(names) - len(hit)} not in this build; "
+          f"{len(hit & isr)} interrupt-reachable control/helpers included)")
     return 0
 
 

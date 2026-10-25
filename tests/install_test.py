@@ -284,8 +284,8 @@ def errors():
 
 def against_js():
     clean = ROOT / "build/caravel.fwsc"
-    if not shutil.which("node") or not clean.exists():
-        print("logical image vs fm1pkg.js: skipped (needs node and build/caravel.fwsc)")
+    if not shutil.which("node") or not clean.exists() or not (ROOT / "web/fm1pkg.js").exists():
+        print("logical image vs fm1pkg.js: skipped (needs node, web/fm1pkg.js and build/caravel.fwsc)")
         return
     js = ("import { logicalImage, productOf } from %r; import { readFileSync } from 'node:fs';"
           "const p = readFileSync(process.argv[1]); process.stderr.write(productOf(p));"

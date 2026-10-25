@@ -1,0 +1,6 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Tutorial screen captures from the actual firmware renderer; no drawn UI substitutes. */
+#include "../experiments/home-perf/captured_controls.h"
+static void shot(const char*name){char path[256];snprintf(path,sizeof path,"build/release-prep/%s.ppm",name);FILE*f=fopen(path,"wb");CHECK(f);fprintf(f,"P6\n240 240\n255\n");for(unsigned i=0;i<240*240;i++){uint16_t c=(web_fb[i]>>8)|(web_fb[i]<<8);unsigned char p[]={((c>>11)&31)*255/31,((c>>5)&63)*255/63,(c&31)*255/31};fwrite(p,1,3,f);}fclose(f);}
+static void ready(const char*n){ui.msg_t=ui.hot_t=0;ui.force=1;run_ms(60);shot(n);}
+int main(void){web_nor_erase();web_boot();run_ms(1400);normal_off();CHECK(web_pair_prepare(0,1,ENGI_HADES,ENGI_DRONE));apply(&trk[0],&captured[0]);apply(&trk[1],&captured[1]);hp_apply(0,2);go_home();ready("home-active-1");hp_row_turn(1);ready("home-active-2");hp_open_graph(GR_PAIR);ready("pair");hp_open_editor();hp_edit_row=0;hp_edit_col=0;ready("home-editor");CHECK(web_home_macro_route(0,0,0,P_FILT,32));CHECK(web_home_macro_route(0,0,1,P_REV,16));hp_macro_sel=hp_route_sel=0;hp.macro[0][0].base=50;hp_open_graph(GR_MACROMAP);ready("macro-map");hp_open_graph(GR_MACRO);ready("macros");web_buttons(1u<<B_SAVE);run_ms(100);ready("save");web_buttons(0);run_ms(180);return 0;}

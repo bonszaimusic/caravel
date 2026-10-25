@@ -831,7 +831,13 @@ static uint8_t proj_cur = PROJ_NO_SLOT;      /* the slot the music was loaded fr
                                               * renames the music too); PROJ_NO_SLOT none (the editor's restore) */
 static union {                               /* serialized main-loop work; no retained expansion */
     project_store_t s;
-    uint8_t raw[3840];                         /* (the staging of a backup object, up to a storage object: editor_backup.c) */
+    uint8_t raw[
+#if FELUCCA_PERF_HW
+    10000
+#else
+    3840
+#endif
+    ];                         /* (the staging of a backup object, up to a storage object: editor_backup.c) */
 } proj_wire_u __attribute__((section(".pool")));
 #define proj_wire (proj_wire_u.s)
 static uint8_t proj_wire_gen;                /* +1 whenever proj_wire is rewritten (a backup's runtime copy lives there) */
@@ -942,6 +948,16 @@ static void project_capture(project_t *p)
         else fm6_pack(fm6_patch[i], p->fm6[i]);
     }
     memcpy(p->name, proj_name, str_len(proj_name));
+#if FELUCCA_PAIR_MORPH
+    for (uint32_t t = 0; t < NTRK; t++)
+        for (uint32_t k = 0; k < NMSLOT; k++)
+            if (p->t[t].p[P_M1DST + 3*k] == MD_PAIR) p->t[t].p[P_M1DST + 3*k] = MD_OFF;
+    for (uint32_t i = 0; i < p->motion.count; i++) {
+        motion_event_t *e = &p->motion.event[i];
+        for (uint32_t k = 0; k < NMSLOT; k++)
+            if (!MOTION_IS_FX(e) && MOTION_ID(e) == P_M1DST + 3*k && e->value == MD_PAIR) e->value = MD_OFF;
+    }
+#endif
     p->sum = proj_sum(p);
 }
 
@@ -949,6 +965,10 @@ static void project_capture(project_t *p)
  * The current name becomes the saved one */
 static int project_save_as(uint32_t slot, const char *name)
 {
+#if FELUCCA_HOME_PERF
+    return hp_project_save(slot,name);
+#endif
+
     project_t *p = &proj_scratch;
     if (chain_busy()) {                                /* SONG plays from its own frozen pattern cache */
         ui_message("STOP SONG FIRST");
@@ -1002,6 +1022,9 @@ static int project_save(uint32_t slot) { return project_save_as(slot, 0); }
  * preserve both the RAM snapshot and the previous durable copy, then retry. */
 static void project_save_poll(void)
 {
+#if FELUCCA_PERF_HW
+    return; /* Combined native + performance commit is owned by hp_autosave_poll. */
+#endif
 #if FELUCCA_FLASH
     uint32_t mask = project_ram_mask(), slot;
     if (!mask || !flash_ok || transport_busy() ||
@@ -1077,6 +1100,10 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
  * an empty slot), 2 failed (the slot as it was) */
 static int project_rename(uint32_t slot, const char *name)
 {
+#if FELUCCA_PERF_HW
+    int hp_rc=hp_project_rename(slot&3u,name);
+    if(hp_rc>=0)return hp_rc; /* Legacy native slots use the original rename below. */
+#endif
     project_t *p = &proj_scratch;
     if (transport_busy()) {
         ui_message("STOP TO SAVE");
@@ -1110,6 +1137,13 @@ static int project_rename(uint32_t slot, const char *name)
  * preferences are untouched. Engines switch through their usual release fade. */
 static void project_init_runtime(void)
 {
+#if FELUCCA_HOME_PERF
+    hp_init();
+#endif
+
+#if FELUCCA_PAIR_MORPH
+    pair_disable();
+#endif
     mom_back(0);
     fm1_irq_off();
     seq_stop();
@@ -1190,7 +1224,10 @@ static int project_erase(uint32_t slot)
         return 2;
     }
 #endif
-    memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
+#if FELUCCA_HOME_PERF
+    if(hp_forget(slot)){ui_message("ERASE ERROR");return 2;}
+#endif
+    memset(&proj_slot[slot],0,sizeof proj_slot[slot]);
     if (proj_cur == slot)
         proj_cur = PROJ_NO_SLOT;
     for (k = 0; k < NTRK; k++)
@@ -1213,6 +1250,10 @@ static int project_restore_runtime(const project_t *input)
     project_t *p = &proj_scratch;
     uint32_t i, k;
     if (!proj_ok(input) || !proj_engines_ok(input)) return 1;
+#if FELUCCA_PAIR_MORPH
+    pair_disable();
+#endif
+
     mom_back(0);                                  /* (ui_input.c MOMENTARY: the values as they were, then the load) */
     memset(drum_mute, 0, sizeof drum_mute);       /* (1.4.1: the DRUM lanes' mutes, performance state) */
     if (p != input) memcpy(p, input, sizeof *p);
@@ -1296,12 +1337,20 @@ static int project_restore_runtime(const project_t *input)
 }
 static void project_load(uint32_t slot)
 {
+#if FELUCCA_HOME_PERF
+    if(hp_project_load(slot)) return;
+    hp_init();
+#endif
+
 #if FELUCCA_FLASH
     if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
 #endif
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
     if (!project_restore_runtime(&proj_scratch)) {
+#if FELUCCA_HOME_PERF
+        for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);
+#endif
         proj_cur = (uint8_t)(slot & 3u);
         pat_from_set((slot & 3u) + 1u);
     }
@@ -1612,6 +1661,10 @@ static void autosave_hold(void) { as.t = fm1_ms; }   /* the editor's transfers: 
 /* main loop, every pass (after settings_poll) */
 static void autosave_poll(void)
 {
+#if FELUCCA_HOME_PERF
+    hp_autosave_poll(); return;
+#endif
+
 #if FELUCCA_FLASH
     uint32_t sig;
     if (!flash_ok || fm1_ms - as.poll < AS_POLL_MS)
@@ -1643,6 +1696,10 @@ static void autosave_poll(void)
  * The music now (restored or not) is what is saved: nothing is written until it changes. 1 = restored */
 static int autosave_boot(int allowed)
 {
+#if FELUCCA_HOME_PERF
+    if(hp_autosave_boot(allowed)) return 1;
+#endif
+
     int rc = 0;
 #if FELUCCA_FLASH
     if (flash_ok && allowed && !(ui_prefs & PREF_RESTORE_OFF)) {
@@ -1652,6 +1709,9 @@ static int autosave_boot(int allowed)
         if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
             proj_bound(&proj_scratch);
             if (!project_restore_runtime(&proj_scratch)) {
+#if FELUCCA_HOME_PERF
+                for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);
+#endif
                 ui_message("RESTORED");
                 rc = 1;
             }

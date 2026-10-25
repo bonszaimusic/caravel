@@ -55,7 +55,13 @@ VERSION = None                      # versioned-build override (default: firmwar
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (1.6.1): the second core is built in, its entry and
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
 # (OFF by default: one core, as 1.6). FELUCCA_CPU2=0: none of it is built (1.6's one-core code and RAM)
+# 0.5.0 production profile: the hardware-tested D3 features. Setting CPU2=0
+# omits the worker but retains HOME/PAIR/storage. Native legacy tests set their
+# own compile-time options and remain independent from this target profile.
+for _feature in ("FELUCCA_HOME_PERF", "FELUCCA_PAIR_MORPH", "FELUCCA_PERF_HW"):
+    os.environ.setdefault(_feature, "1")
 CPU2 = os.environ.get("FELUCCA_CPU2") != "0"
+os.environ.setdefault("CARAVEL_DUALCORE_D1", "1" if CPU2 else "0")
 
 
 def toolchain():
@@ -193,9 +199,11 @@ def ld_regions():
 
 def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
+    # Explicit function attributes in size_fns.py restore DRONE/VA -Os
+    # inlining while retaining V4's compact policy elsewhere.
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -403,6 +411,11 @@ def main():
         m = re.search(r'^#define FELUCCA_VERSION "([^"]+)"', (FW / "src" / "felucca.c").read_text(encoding="utf-8"), re.M)
         if m and not m[1].endswith("-dev"):
             VERSION = m[1] + "-dev"
+    if os.environ.get("FELUCCA_PERF_HW")=="1":
+        if os.environ.get("FELUCCA_HOME_PERF")!="1" or os.environ.get("FELUCCA_PAIR_MORPH")!="1":
+            raise SystemExit("Performance storage requires HOME_PERF=1 and PAIR_MORPH=1")
+        if CPU2 and os.environ.get("CARAVEL_DUALCORE_D1")!="1":
+            raise SystemExit("Performance + CPU2 requires the validated dual-core path")
     if not (FW / "engines" / "src" / "felucca_engine.h").exists():
         raise SystemExit("firmware/engines is empty: the Felucca-Engines submodule "
                          "(git submodule update --init, or clone with --recurse-submodules)")
@@ -410,7 +423,7 @@ def main():
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
             message = f"SDK {rel} differs from AC79NN_SDK_V1.2.1; the package will not match the reference"
-            if version is not None:
+            if version is not None or os.environ.get("FELUCCA_PERF_HW")=="1":
                 raise SystemExit(f"{mode}: {message}")
             print(f"warning: {message}")
     OUT.mkdir(parents=True, exist_ok=True)
@@ -420,6 +433,10 @@ def main():
         ota = ldr.result()
     img, syms, dis, rt = build_app()
     errors, notes = check(img, syms, dis, rt)
+    if os.environ.get("FELUCCA_PERF_HW") == "1":
+        subprocess.run([sys.executable, SRC / "tools/check_perf_audio.py", OUT / "felucca.dis"], check=True)
+        subprocess.run([sys.executable, SRC / "tests/target_budget.py", OUT / "felucca.dis",
+                        SRC / "tests/target_budget.txt"], check=True)
     hal_err = mmio_check()
     errors += hal_err
     if not hal_err:

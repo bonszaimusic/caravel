@@ -91,7 +91,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.addCleanup(mock.patch.stopall)
         mock.patch.object(R, "SDK_SHA256", hashes).start()
         mock.patch.object(B, "SDK_SHA256", hashes).start()
-        self.app = b"TEST ONLY synthetic app\0v0.1.0\0FM-1_901\0" + bytes(128)
+        self.app = b"TEST ONLY synthetic app\0v0.1.0\0FM-1_999\0" + bytes(128)
         self.ota = B.ldr_wrap(b"TEST ONLY loader\0FELUCCA-LOADER-1\0" + bytes(256))
         put(self.root, "build/felucca.bin", self.app)
         put(self.root, "build/loader/ota.bin", self.ota)
@@ -99,7 +99,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.snapshot = R.source_snapshot(self.root)
         R.record_build(self.root, VERSION, self.snapshot, self.sdk)
 
-    def write_package(self, app=None, ota=None, product="FM-1_901"):
+    def write_package(self, app=None, ota=None, product="FM-1_999"):
         with mock.patch.object(P, "SDK", self.sdk):
             data = P.ufw(P.flash_image(self.app if app is None else app, P.KEY),
                          self.ota if ota is None else ota, product)
@@ -407,7 +407,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
     def test_build_record_metadata_is_verified(self):
         path = self.root / "build/release-0.1.0.build.json"
         record = json.loads(path.read_bytes())
-        for field, value in (("source_default_version", "v9.9.9"), ("product", "FM-1_999"),
+        for field, value in (("source_default_version", "v9.9.9"), ("product", "FM-1_903"),
                              ("firmware_version_override", "v9.9.9"),
                              ("sdk_reference", {**R.SDK_REFERENCE, "commit": "0" * 40})):
             with self.subTest(field=field):
@@ -423,10 +423,14 @@ class ReleaseArtifactsTest(unittest.TestCase):
         for path in ("/absolute", "../escape", "a/../b", "a//b", "a\\b", "a\nb"):
             with self.assertRaises(R.ReleaseError):
                 R.safe_path(path)
-        self.assertEqual(R.identity("1.2.3-rc1"), "FM-1_912")
+        self.assertEqual(R.identity("1.2.3-rc1"), "FM-1_999")
+        # Firmware identity is independent of the release version.
+        for version in ("0.3.4", "0.9.9", "1.0.0", "9.9.9-rc2"):
+            self.assertEqual(R.identity(version), "FM-1_999")
 
     def build_context(self, release=True, binary_version=None, extra_args=()):
         stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.dict(os.environ, {"FELUCCA_PERF_HW":"0", "CARAVEL_DUALCORE_D1":"0"}))
         for name, value in (("SRC", self.root), ("FW", self.root / "firmware"), ("OUT", self.root / "build"),
                             ("GEN", self.root / "build/gen"), ("LDR", self.root / "build/loader")):
             stack.enter_context(mock.patch.object(B, name, value))
@@ -535,7 +539,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
                 function.assert_not_called()
             for function in (B.generate, B.build_app, B.build_loader, B.check, B.mmio_check):
                 function.assert_called_once()
-            self.assertEqual(B.PRODUCT, "FM-1_901")
+            self.assertEqual(B.PRODUCT, "FM-1_999")
             self.assertEqual(B.VERSION, "v0.1.0")
             self.assertIn("binary build only: not a verified release folder", context.output.getvalue())
         self.assertEqual((self.root / "build/caravel-0.1.0.fwsc").read_bytes(), expected_package)
@@ -561,7 +565,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
                 self.assertEqual(B.main(), 0)
             packages.append((self.root / "build/caravel-0.1.0.fwsc").read_bytes())
         self.assertEqual(commands[0], commands[1])
-        self.assertIn('-DFELUCCA_ID="FM-1_901"', commands[1][-1])
+        self.assertIn('-DFELUCCA_ID="FM-1_999"', commands[1][-1])
         self.assertIn('-DFELUCCA_VERSION="v0.1.0"', commands[1][-1])
         self.assertEqual(packages[0], packages[1])
 
@@ -584,12 +588,12 @@ class ReleaseArtifactsTest(unittest.TestCase):
                 mock.patch.object(R, "source_snapshot") as snapshot, \
                 mock.patch.object(R, "record_build") as record, mock.patch.object(R, "release") as release:
             self.assertEqual(B.main(), 0)
-            self.assertEqual(B.PRODUCT, "FM-1_912")
+            self.assertEqual(B.PRODUCT, "FM-1_999")
             self.assertEqual(B.VERSION, "v1.2.3-rc1")
             for function in (snapshot, record, release):
                 function.assert_not_called()
         package = (self.root / "build/caravel-1.2.3-RC1.fwsc").read_bytes()
-        self.assertEqual(R.fm1_install.product_of(package), "FM-1_912")
+        self.assertEqual(R.fm1_install.product_of(package), "FM-1_999")
 
     def test_binary_version_argument_rejection_precedes_build(self):
         cases = (

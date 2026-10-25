@@ -11,6 +11,11 @@
  * over one block (stage 4: the envelope goes to 0, the block's amplitude ramp
  * declicks it); one of the part's own is restarted in place, as before. Extra UNISON
  * voices only start when there is room. */
+#if FELUCCA_PAIR_MORPH
+#define trk_note_on trk_note_on_raw
+#define trk_note_off trk_note_off_raw
+#define trk_all_off trk_all_off_raw
+#endif
 static uint32_t vage;                                   /* voice ages: one clock for every part */
 static uint32_t voice_policy_active;                   /* applied at an audio control boundary */
 static int32_t lfo_wave(track_t *t, uint32_t ph)
@@ -156,6 +161,9 @@ static uint32_t trk_nvoice(const track_t *t)
 {
     uint32_t c = ENGINES[t->engine]->poly;
     c = c && c < NVOICE ? c : NVOICE;
+#if FELUCCA_PAIR_MORPH
+    if (pair_member(t) && t->p[P_VOICE] == V_UNISON && ep.live_slots && c > ep.live_slots) c = ep.live_slots;
+#endif
     if (voice_policy_active & VOICE_POLICY_FIXED) {
         uint32_t cap = voice_policy_cap(voice_policy_active, (uint32_t)(t - trk));
         if (cap < c) c = cap;
@@ -229,6 +237,10 @@ static void voice_kill(voice_t *v)                      /* fade out over the nex
     v->gate = 0;
     v->stage = 4;
     voice_kills++;
+#if FELUCCA_PAIR_MORPH
+    pair_stolen(v);
+#endif
+
 }
 
 /* Changing the preference never edits voices from the UI / second core.
@@ -279,6 +291,9 @@ static voice_t *voice_reuse(track_t *t, voice_t *v)
  * in place instead. */
 static voice_t *voice_alloc(track_t *t, uint32_t note)
 {
+#if FELUCCA_PAIR_MORPH
+    if (ep_alloc && t == ep_alloc_track) return ep_alloc;
+#endif
     uint32_t i, np = trk_nvoice(t), best = np, low = np, nfree = 0;
     int32_t bd = 0x7FFFFFFF;
     if (t->engine == ENGI_DRUM) {
@@ -496,6 +511,9 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
     {
         uint32_t sounding = (t->mono_note || (eng_idx(t->engine) == ENGI_DRONE && drone_cells(t))) &&
                             t->v[0].active && t->v[0].gate, want;
+#if FELUCCA_PAIR_MORPH
+        if(pair_member(t)) sounding=t->v[0].active && t->v[0].gate; /* paired MIDI note zero is a normal held key */
+#endif
         mono_remove(t, note);
         if (t->nmono >= 8u)
             mono_remove(t, t->mono_stack[0]);
@@ -568,6 +586,9 @@ static void trk_all_off(track_t *t)
     if (eng_idx(t->engine) == ENGI_DRONE) drone_gesture_clear(t);
     for (i = 0; i < NVOICE; i++) {
         t->v[i].gate = 0;
+#if FELUCCA_PAIR_MORPH
+        if(t->v[i].active && t->v[i].stage==4) continue; /* cleanup must not turn a bounded fade back into long release */
+#endif
         t->v[i].stage = t->v[i].active ? 3 : 0;
     }
     t->nmono = 0;
@@ -756,6 +777,10 @@ __attribute__((noinline)) /* Keep the voice loop shared by both cores and out of
 #endif
 static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 {
+#if FELUCCA_PAIR_MORPH
+    int16_t tone_keep = 0;
+    uint32_t tone_id = pair_tone_begin(t, &tone_keep);
+#endif
     const engine_t *e = ENGINES[t->engine];
     const int16_t *p = t->p;
     uint32_t i;
@@ -859,7 +884,13 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         m.shape = (64 << 8) + ((lfo * p[P_LD_SHP]) >> 7) + ((m.envq15 * p[P_ED_SHP]) >> 7);
         if (MOD(t).on)                                  /* the modulation matrix (mod.c) */
             mod_voice(t, v, &m, v->fine + tune_fine + bend_fine);
+#if FELUCCA_PERF_HW
+        pd_stamp_t pd_start;if(pd_active)pd_start=pd_stamp();
+#endif
         e->render(t, v, T_SPREAD(t) > v->side ? SPREAD_BUF(t) : out, n, &m);   /* (SPREAD: the left ones) */
+#if FELUCCA_PERF_HW
+        if(pd_active)pd_engine_done((uint32_t)(t-trk),t->engine,pd_start);
+#endif
         nr++;
     }
     if (T_SPREAD(t))
@@ -869,6 +900,16 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
             t->p[P_E0 + i] = pe_new[i];
         t->xf--;
     }
+#if FELUCCA_PAIR_MORPH
+    if (tone_id) t->p[tone_id] = tone_keep;           /* restore before mod_end / UI / project capture */
+#endif
     return nr;
 }
 
+
+#if FELUCCA_PAIR_MORPH
+#undef trk_note_on
+#undef trk_note_off
+#undef trk_all_off
+#include "../../experiments/engine-pair-morph/pair_voice.c"
+#endif

@@ -162,6 +162,7 @@ int main(int argc, char **argv)
 {
     size_t olen;
     static uint8_t user[0x1000];
+    static uint8_t perf[0x14000];
     uint8_t *old, head[0x4000];
     uint32_t ofo, nfo, i;
     int bad = 0, rc;
@@ -185,6 +186,11 @@ int main(int argc, char **argv)
         memcpy(nor + 0xA0F00, r, sizeof r);
         memcpy(user, nor + 0xA0000, sizeof user);
     }
+    /* Performance V4 uses payloads outside every sector's F00..FFF scan tail.
+     * Preserve all bytes even when the updater clears a genuine record in E8F00. */
+    for(i=0;i<sizeof perf;i++)perf[i]=((i&4095u)>=0xF00u)?255:(uint8_t)(i*29u+17u);
+    /* The original stock-loader scenario owns E8000; test the later sectors here. */
+    memcpy(nor+0xE9000,perf+0x1000,sizeof perf-0x1000);
     /* 1.6.1: flash.bin must be exactly this board's [0, app area end): a package with another board's size (an
      * SMK-37's app area ends at 0x9D000, the FM-1's at 0x93000; one byte short too) is refused before any erase */
     {
@@ -226,10 +232,18 @@ int main(int argc, char **argv)
                  record_cleared && nor[0xE4F06] == 0xFF && nor[0xE8F06] == 0xFF);
     bad += check("user data in Felucca's store that looks like a record is kept", !memcmp(nor + 0xA0000, user, sizeof user));
     bad += check("no write outside the allowed windows", bad_range == 0);
+    bad += check("data E9000..FBFFF survives clearing stock E8F00 record",!memcmp(nor+0xE9000,perf+0x1000,sizeof perf-0x1000));
     /* same package again: nothing to erase */
     erases = 0; requests = 0;
     rc = ldr_session();
     bad += check("re-run with the same package erases nothing", rc == 0 && erases == 0);
+    /* An actual V4 image has erased scan tails, including E8F00. A custom
+     * E4F00 update must preserve the entire performance allocation. */
+    memcpy(nor+0xE8000,perf,sizeof perf);
+    uint8_t record[112]={0};record[2]=0x0D;record[3]=0x5A;record[4]=0x01;record[5]=0x5A;record[6]=0x41;record[7]=0x54;
+    ota_wr16(record,ota_crc16(record+2,78,0));memcpy(nor+0xE4F00,record,112);
+    rc=ldr_session();
+    bad += check("V4 E8000..FBFFF survives custom E4F00 update",rc==0&&!memcmp(nor+0xE8000,perf,sizeof perf));
     /* a package for another chip key is refused before any erase */
     {
         uint8_t save = logical[nfo + 0x4000 + 5];

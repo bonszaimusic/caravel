@@ -17,7 +17,7 @@ VERSION=$(sed -n 's/^#define FELUCCA_VERSION "\([^"]*\)".*/\1/p' firmware/src/fe
 if [ -n "${EMU_VERSION:-}" ]; then VERSION="${EMU_VERSION}"; fi
 mkdir -p build/emu/fonts
 # shellcheck disable=SC2086
-emcc ${EMU_OPT:--O2} -ffp-contract=off -std=gnu99 -w ${EMU_CFLAGS:-} \
+emcc -DFELUCCA_HOME_PERF=1 -DFELUCCA_PAIR_MORPH=1 -DFELUCCA_PERF_HW=1 -DFELUCCA_CPU2=0 ${EMU_OPT:--O2} -ffp-contract=off -std=gnu99 -w ${EMU_CFLAGS:-} \
     "-DFELUCCA_VERSION=\"$VERSION\"" -Ibuild/gen -Ifirmware/src \
     --no-entry -sSTANDALONE_WASM -sSTACK_SIZE=1048576 -sINITIAL_MEMORY=33554432 -sFILESYSTEM=0 \
     -o build/emu/felucca.wasm web/emu/felucca_web.c

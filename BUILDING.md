@@ -68,8 +68,8 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 
 ## Verified local release artifacts
 
-`./build.sh --release 0.1.0` builds identity `FM-1_901` and version `v0.1.0`, then
-assembles and checks `build/release-0.1.0/`. This production mode requires clean,
+`./build.sh --release 0.5.0` builds identity `FM-1_999` and version `v0.5.0`, then
+assembles and checks `build/release-0.5.0/`. This production mode requires clean,
 committed source and initialized submodules at their recorded pins. It rejects
 unexpected SDK bytes and unsafe build-output links before writing.
 
@@ -219,3 +219,12 @@ cd /tmp/felucca-site && python3 -m http.server 8000
 
 Installing firmware is at your own risk. If an install fails and the FM-1 no longer
 starts, recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
+
+## 0.5.0 target profile
+
+Ordinary target builds enable HOME, Pair, hardware performance storage and the
+validated worker path. The device setting still defaults to second core OFF.
+Native legacy tests choose their compile-time flags separately. The browser
+emulator uses the same HOME/Pair/storage paths with CPU2=0; its timing cannot
+measure FM-1 CPU load. Run `python3 tools/check_050.py` after the target build,
+in addition to the inherited test suite. Existing RAM/POOL reserve limits remain.

@@ -86,3 +86,12 @@ python3 web/make_site.py build/caravel.fwsc dev /tmp/caravel-site
 cd /tmp/caravel-site && python3 -m http.server 8000
 # open http://localhost:8000/webapp/installer/
 ```
+
+## 0.5.0 in preparation
+
+Versioned builds use the fixed FM-1_999 identity prepared in 0.3.4; existing
+published releases retain their original packages and identities. HPM1 performance
+projects need matching backup tools. Preserve a pre-upgrade backup for downgrades.
+The loader marker remains unchanged. Test the final version label and USB identity
+before publication; D3 hardware acceptance does not automatically certify every
+version-labelled rebuild.

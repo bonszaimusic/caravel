@@ -220,6 +220,10 @@ static void motion_begin(void)
 }
 static void motion_end(void)
 {
+#if FELUCCA_HOME_PERF
+    hp_motion_stop();
+#endif
+
     for (uint32_t k = 0; k < NTRK; k++) { motion_restore(&trk[k]); motion_fx_reset(&trk[k]); }
     motion_base_valid = 0;
 }
@@ -235,6 +239,9 @@ static void motion_set_enabled(track_t *t, uint32_t on)
 }
 static void motion_clear(track_t *t)
 {
+#if FELUCCA_HOME_PERF
+ hp_motion_clear(t);
+#endif
     uint32_t f = motion_guard(), k = trk_index(t), i, n = 0;
     motion_restore(t);
     for (i = 0; i < motion.count; i++)
@@ -357,6 +364,10 @@ static __attribute__((noinline)) void motion_unlock(track_t *t, uint32_t step, c
 static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, const motion_store_t *m, uint32_t play)
 {
     uint32_t k = trk_index(t), i, w, any = 0;
+#if FELUCCA_HOME_PERF
+    hp_motion_step(t, step);
+#endif
+
     if (!((m->on >> k) & 1u)) return;
     if (!((motion_base_valid >> k) & 1u)) {
         memcpy(motion_base[k], t->p, sizeof t->p);

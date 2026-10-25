@@ -55,7 +55,7 @@ export function bkManifest(a) {
     const p = 3 + i * 11;
     if (a[p] !== id) throw new Error("Unexpected archive object");
     const size = bkR32(a, p + 1), crc = bkR32(a, p + 6);
-    if (size > (id >= 32 ? 81920 : 3840) || (!size && crc)) throw new Error("Archive object too large");
+    if (size > (id >= 32 ? 81920 : (id === 0 || id >= 2 && id <= 5) ? 10000 : 3840) || (!size && crc)) throw new Error("Archive object too large");
     return { id, size, crc };
   });
 }
@@ -66,7 +66,7 @@ export function readBackup(file) {
   if (!file || file.format !== "felucca-backup" || file.version !== 1 || !ids)
     throw new Error("Not a complete Felucca backup");
   const objects = file.objects.map((o, i) => {
-    if (!o || o.id !== ids[i] || !Number.isInteger(o.size) || o.size < 0 || o.size > (o.id >= 32 ? 81920 : 3840) ||
+    if (!o || o.id !== ids[i] || !Number.isInteger(o.size) || o.size < 0 || o.size > (o.id >= 32 ? 81920 : (o.id === 0 || o.id >= 2 && o.id <= 5) ? 10000 : 3840) ||
         !Number.isInteger(o.crc) || o.crc < 0 || o.crc > 0xffffffff || typeof o.data !== "string" ||
         o.data.length !== 4 * Math.ceil(o.size / 3) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(o.data))
       throw new Error("Invalid backup object");
