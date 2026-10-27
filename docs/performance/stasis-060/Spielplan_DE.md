@@ -1,12 +1,24 @@
-# Variante 4b — stärkerer und längerer Höhepunkt
+# Caravel 0.6.0 — STASIS 060 — Spielplan
 
-Die bewährte erste Hälfte bleibt erhalten. Danach folgen weitere Reglerfahrten einzeln nacheinander. Die Zeiten beziehen sich auf den Start der 30-Sekunden-Hörprobe beziehungsweise der beiliegenden MIDI-Datei. Zwischen den Fahrten stehen die Regler still.
+Ein ruhiger Anfang wächst schrittweise zum Höhepunkt und klingt mit SLICER und STASIS aus. Alle Zeiten beziehen sich auf den Start der 30-Sekunden-Performance beziehungsweise der MIDI-Datei; im 42-Sekunden-Short beginnt sie bei Videosekunde 6. Zwischen den Fahrten stehen die Regler still.
 
 ## 1. Grundsetup vor dem Start
 
 Track 1 und 2 bilden das SEM-Paar, Track 3 spielt die Drone. MIDI IN auf CH1–4 stellen, Clock intern auf 90 BPM. Die Noten-Datei sendet nur auf Kanal 1 und Kanal 3: Track 2 bekommt seine Noten über das Pair. Zusätzliche Clock-/Start-/Stop-Sendungen des MIDI-Abspielprogramms ausschalten. Die Datei über einen MIDI-Ausgang auf Caravel leiten; ein normaler Audio-Player spielt die enthaltenen Noten nicht auf dem FM-1.
 
-Das beiliegende HOME_Setup.caravel enthält das vollständige Startsetup des nativen Emulators. Es ist kein als direkt installierbar geprüftes Hardwareprojekt. Für den manuellen Aufbau die folgenden Werte setzen; die nativen Presets sind jeweils Ausgangspunkte.
+Das beiliegende **Caravel_060_STASIS_HOME.hpm** enthält das vollständige Startprojekt **STASIS 060** mit Sounds, HOME-Reihen und Pair-Zustand für alle vier Tracks. Es speichert keine Reglerfahrten und keine eingefrorene Audio-Textur.
+
+**Über USB laden:** Caravel 0.6.0 starten, Wiedergabe stoppen und andere MIDI-Editoren schließen. Das komplette ZIP entpacken. Python 3 installieren und im entpackten Ordner ausführen:
+
+```sh
+python3 -m pip install mido python-rtmidi
+python3 caravel_backup.py ports
+python3 caravel_backup.py import D Caravel_060_STASIS_HOME.hpm
+```
+
+Der Import fragt vor dem Schreiben nach und ersetzt den gewählten gespeicherten Slot D mit einem Projekt für alle vier Tracks. Ein vorhandenes Projekt gegebenenfalls vorher separat sichern. Anschließend am FM-1 **SAVE → PROJECT → D** öffnen und laden. Der Import installiert keine Firmware und lädt nicht automatisch das Arbeitsprojekt. Bei mehreren Ports die `--input`- und `--output`-Optionen des Importwerkzeugs verwenden.
+
+Das exakte HPM wurde mit dem Firmware-Code über simulierten USB-Import, Flash-Rücklesen und Projektladen geprüft. Ein Import am physischen FM-1 wurde hier nicht getestet. Für den manuellen Aufbau folgen die Werte; die nativen Presets sind jeweils Ausgangspunkte.
 
 | Einstellung | Track 1 | Track 2 | Track 3 |
 | --- | --- | --- | --- |
@@ -39,11 +51,11 @@ PAIR: Partner Track 2, PAIR ON, MORPH **100 % Track 2**, MOTION OFF. LATCH und A
 | 2 | Track 1 SLCR | PAT | RATE | DEPTH |
 | 3 | Track 1 CUT | Track 2 REV | Track 1 REV | Track 3 DIST |
 
-Die ausführliche Einrichtung über Quellenregler, GLO+HOME und EDIT CELLS steht in Caravel_HOME_Performance_Bank.md. SELECT wechselt die Reihe. Während der vier Fahrten bleibt Track 1 ausgewählt.
+Diese drei Reihen sind bereits im HPM enthalten. SELECT wechselt die Reihe; während der Performance bleibt Track 1 ausgewählt. Zum eigenen Aufbau einen Quellenregler bewegen, GLO halten und HOME antippen. Die STASIS-Aktionen HOLD und BLEND werden auf den tatsächlichen FX-Seiten bedient.
 
 ## 3. Das wird wann gedreht
 
-Bis einschließlich Sekunde 21 ist der Klang gegenüber Variante 4 unverändert. Derselbe konstante Exportpegel wird verwendet. Die neue zweite Hälfte steht darunter; der MASTER-Anstieg ist Teil der tatsächlichen nativen Performance.
+Die Bewegungen folgen einzeln aufeinander. Ab Sekunde 21 wird der Höhepunkt weiter verstärkt; der MASTER-Anstieg ist Teil der tatsächlichen nativen Performance. Die Renderaufnahme verwendet zusätzlich nur eine konstante Export-Pegelanhebung.
 
 | Zeit | Seite / Regler | Start → Ziel |
 | --- | --- | --- |
@@ -78,4 +90,4 @@ Nach dem kurzen Absetzen der Terz tritt F bei 21,7 s kräftiger wieder ein. Die 
 
 ## 5. Dateien und Grenzen
 
-Das HOME-Startsetup ist unverändert zur Variante 4. Die Aufnahme wurde mit dem originalen Caravel-DSP nativ gerendert, nicht auf einem FM-1 aufgenommen. Der manuelle Spielplan und MIDI-Ablauf wurden noch nicht an Hardware getestet. Die genaue Renderquelle und die Zeitdaten stehen im Paket; eine Handbewegung muss nicht die digitale S-Kurve samplegenau treffen.
+Das HPM speichert das Startsetup; die MIDI-Datei speichert ausschließlich die Noten und Textmarken. Die Aufnahme wurde mit dem originalen Caravel-DSP nativ gerendert, nicht auf einem FM-1 aufgenommen. Der manuelle Spielplan und MIDI-Ablauf wurden noch nicht an Hardware getestet. Eine Handbewegung muss die digitale S-Kurve nicht samplegenau treffen.
