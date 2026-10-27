@@ -27,6 +27,8 @@ More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
 
 **[STASIS tutorials](https://bonszaimusic.github.io/caravel/tutorials/)** · **[Listen to the examples](https://bonszaimusic.github.io/caravel/sounds/)** · **[Four-page PDF guide](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf)** · **[Changelog](CHANGELOG.md)**
 
+**[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/)** — the HOME project from the feature Short, with two paired SEM tracks, a driven Drone, MIDI notes and English/German play guides. Load the starting project, then follow the individual moves.
+
 Play a chord, hold its texture, and keep performing over it. STASIS captures the
 internal REV send and turns it into a slowly moving stereo wash. The captured
 sound can stay while you change instruments or play something new.

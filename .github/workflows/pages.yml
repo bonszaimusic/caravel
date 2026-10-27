@@ -5,6 +5,13 @@
 name: Pages
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/performance/**'
+      - 'web/performance_pages.py'
+      - 'tests/performance_site_test.py'
+      - '.github/workflows/pages.yml'
   release:
     types: [published]
   workflow_dispatch:
@@ -24,7 +31,7 @@ concurrency:
 
 jobs:
   site:
-    if: github.repository == 'bonszaimusic/caravel' && github.event.repository.private == false && (github.event_name == 'workflow_dispatch' || !github.event.release.prerelease)
+    if: github.repository == 'bonszaimusic/caravel' && github.event.repository.private == false && (github.event_name != 'release' || !github.event.release.prerelease)
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     environment:
@@ -42,6 +49,11 @@ jobs:
           python3 - <<'PY'
           import json, os, re, subprocess
           version = os.environ.get("INPUT_VERSION") or os.environ.get("TAG", "").removeprefix("v")
+          if not version:
+              version = subprocess.run(
+                  ["gh", "release", "view", "--repo", os.environ["GH_REPO"],
+                   "--json", "tagName", "--jq", ".tagName"],
+                  check=True, capture_output=True, text=True).stdout.strip().removeprefix("v")
           if not re.fullmatch(r"[0-9]\.[0-9](?:\.[0-9]){0,2}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?", version):
               raise SystemExit("Invalid release version")
           tag = "v" + version
@@ -114,6 +126,18 @@ jobs:
           python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site \
             --release-dir "$RUNNER_TEMP/release" --emulator build/emu
           if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-site site; fi
+      - name: Read current performance website content
+        if: env.VER == '0.6.0'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
+          path: build/site-content
+          persist-credentials: false
+      - name: Add performance downloads without changing release artifacts
+        if: env.VER == '0.6.0'
+        run: |
+          python3 build/site-content/tests/performance_site_test.py
+          python3 build/site-content/web/performance_pages.py --site site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
