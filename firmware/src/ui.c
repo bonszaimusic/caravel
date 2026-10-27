@@ -7,6 +7,11 @@
 static int project_save(uint32_t slot);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
+static int autosave_boot(int allowed);
+static uint32_t project_compat_warning(void);
+static int project_compat_save_blocked(uint32_t slot);
+static void project_compat_confirm(void);
+static void project_compat_cancel(void);
 static void project_init_runtime(void);
 static uint32_t project_pattern_queue(uint32_t slot);
 static int project_used(uint32_t slot);
@@ -245,7 +250,7 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND, CF_INIT_PROJECT };
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND, CF_INIT_PROJECT, CF_COMPAT_PROJECT };
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -462,6 +467,9 @@ static int more_slot_ok(uint32_t id)
 }
 static int page_visible(uint32_t i)
 {
+#if CARAVEL_REVERB_MINIMAL
+    if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
+#endif
     if (str_eq(PAGES[i].title, "SEM MODE")) return TSEL->eng_req == ENGI_SEM;
     if (str_eq(PAGES[i].title, "MORE")) return TSEL->eng_req != ENGI_SEM;          /* SEM MODE has its SPREAD: nothing else is left */
     if (PAGES[i].graph >= GR_DXKIT && PAGES[i].graph <= GR_DXLAYER) return dx_track(TSEL);
@@ -581,6 +589,9 @@ static void page_entered(void)
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
     ui.act = pg->graph == GR_USER ? 4u : 0u;     /* the save screen is ready for OCT+ */
+#if CARAVEL_REVERB_MINIMAL
+    if (!ui.home && pg->graph == GR_STLAYER) ui.act = 4u;
+#endif
     ui.tl_clean = 0;
     help_start();
     ui.force = 1;
@@ -1920,6 +1931,9 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     uint32_t c, m = 0;
     if (ui.home)
         return 0;
+#if CARAVEL_REVERB_MINIMAL
+    if (pg->graph == GR_STLAYER) return 8u;
+#endif
     if (pg->graph == GR_EVENTS) return 16u;     /* AUTOMATION: no knob is an action; OCT+ by the row (ev_oct) */
     if (pg->graph == GR_TOOLS) return 15u;
     if (pg->graph == GR_SLOTS) return 14u;
@@ -1952,6 +1966,10 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
 {
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
     uint32_t id = cur_page()->id[c & 3u];
+#if CARAVEL_REVERB_MINIMAL
+    if (cur_page()->graph == GR_STLAYER)
+        return stasis_layer_can_cancel() ? "CANCEL" : song.g[G_STMODE] == 1 ? "BLEND" : "ADD";
+#endif
     if (cur_page()->graph == GR_EVENTS) return ev_act_name();
     if (cur_page()->graph == GR_SLOTS && c == 1u) return ui.proj_erase ? "ERASE" : "INIT";
     if (cur_page()->graph == GR_TOOLS) {
@@ -1978,6 +1996,10 @@ static int act_ready(void)
     uint32_t c = act_col(), s = song.sel, id;
     if (!c--)
         return 0;
+#if CARAVEL_REVERB_MINIMAL
+    if (cur_page()->graph == GR_STLAYER)
+        return stasis_layer_can_start() || stasis_layer_can_cancel();
+#endif
     if (cur_page()->graph == GR_EVENTS) return ev_act_ready();
     if (cur_page()->graph == GR_TOOLS)                  /* one case per column: CLEAR PAT, INIT, DELETE ROW, CLEAR SONG */
         return !chain_busy() && (c == 0u ? !seq_is_empty(TSEL) || motion_count(TSEL) : c == 1u ? 1 :

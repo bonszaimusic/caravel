@@ -6,6 +6,35 @@ Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of
 release notes are in its wiki. Features that come from other people's work name their authors. Nothing here is tested on a real FM-1
 unless it says so; host tests and simulations are not hardware measurements.
 
+## [0.6.0] - 2026-10-27
+
+### Added
+- STASIS: fixed-pitch granular capture from the internal reverb send, LIVE/HOLD,
+  foreground texture strength and a combined MOTN filter/reflection/damping macro.
+- Unified REVERB page, CAPT/STR/MOTN modulation destinations, HOLD-to-LIVE fading
+  and STOP release with a natural HALL tail.
+- STASIS LAYER page: bounded ADD overdubs and timed BLEND transitions into a held
+  texture, with explicit OCT+ start/cancel, silent-input protection and seamless
+  incremental commits. Two 0.743-second capture banks share the existing 128-KiB
+  audio allocation. Layer mode, amount and time use retired global IDs.
+- Compatibility warning before loading projects that require omitted SLICE,
+  ROOM or SPRING. CANCEL preserves the current session; TEST converts only the
+  working copy. Original slots and incompatible last-session autosaves are protected;
+  save an audition as a copy. SLICE parameters stay intact in stored originals.
+
+### Validation scope
+- The 0.6.0 target profile contains HALL/STASIS; SLICE, ROOM and SPRING are omitted.
+  Ordinary tempo DELAY is suspended while STASIS uses the shared delay buffer.
+- Full host, golden audio, MIDI, storage, UI, sanitizer, dual-core and web suites
+  passed automated validation. Legacy ROOM/SLICE assertions use their complete host reference
+  configuration; exact reduced-profile checks run separately. No golden or CPU
+  baseline is automatically rewritten.
+- Publication includes illustrated STASIS tutorials, a four-page PDF and three
+  original sound examples rendered by the actual native firmware DSP. The report
+  checks individual machine-readable results and rejects missing/failed cases.
+- FM-1 listening, real-time CPU/stability and physical USB/OTA acceptance remain
+  hardware checks, not claims made by host simulation.
+
 ## [0.5.0] - 2026-10-25
 
 ### Added
@@ -260,3 +289,4 @@ Includes everything of 0.2.0 (below), which was prepared but never published.
   older firmware cannot read PER6 or PER7 records, so back up before going back to Felucca.
 - Sounds and projects with LFO2, DRONE cells, DRUM-X, MORPH or PHS FB need Caravel; existing Felucca projects and sounds load unchanged.
 - Menu ids 32 and up are Caravel's (FX TRACK, LIVE LOAD, 2ND CORE, EXT START, voice reservations); 0..31 follow Felucca 1.6.
+

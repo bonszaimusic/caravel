@@ -137,6 +137,7 @@ static uint32_t ed_bk_commit(void)
 #endif
             return rc;
         }
+        if (project_compat_save_blocked(ed_bk_id - 2u)) return 4;
         obj = OBJ_PROJECT0 + ed_bk_id - 2u;
     } else if (ed_bk_id == 1u) {
         const persist_t *p = (const persist_t *)raw;

@@ -1,8 +1,61 @@
-# Caravel 0.5.0 - Performance quickstart
+# Caravel 0.6.0 - STASIS and performance tutorials
 
-[Download the six-page PDF](Caravel-0.5.0-Quickstart.pdf). Every screen below comes
-from the actual firmware renderer; explanatory labels are outside the display.
-These tutorials describe Caravel 0.5.0.
+[STASIS PDF guide](Caravel-0.6.0-STASIS-Guide.pdf) ·
+[Listen to the examples](https://bonszaimusic.github.io/caravel/sounds/) ·
+[Earlier six-page performance PDF](Caravel-0.5.0-Quickstart.pdf).
+Every screenshot comes from the actual firmware renderer. The performance
+features introduced in 0.5.0 remain available in 0.6.0.
+
+## Capture and hold a texture
+
+Set a track's REV send around 85-90%. Open FX > REVERB and choose TYPE STASIS.
+With CAPT LIVE, play for at least about 0.6 s, then choose HOLD. The captured
+sound continues after note release or after muting its source track. STR sets
+foreground texture strength; MOTN animates reflection choices, filtering and
+HALL damping without sweeping the grain playback speed. STOP releases HOLD.
+
+![STASIS HOLD](img/stasis-hold.png)
+
+## Add a new sound
+
+Leave CAPT HOLD and open FX > LAYER. Choose MODE ADD and set AMT; 25% means
+25% new recording plus 75% old texture. Play the new sound through REV send
+for about 0.6 s, then press OCT+. MIX takes 200 ms; STORE finishes the merge
+in about 0.75 s. READY means another addition is possible. Turning through
+the controls never triggers recording. Layers merge and cannot be removed
+individually. Both operations end with CAPT HOLD still active.
+
+![ADD controls](img/add-ready.png)
+
+## Blend into a destination texture
+
+Choose MODE BLEND and TIME 1-30 s (default 6 s). AMT is ignored. Play the
+destination sound with REV send for about 0.6 s, then press OCT+. A snapshot
+of that sound gradually replaces the old texture, then stays held. Each
+press performs one transition. WAIT preserves the original while no recent
+input is available. OCT+ cancels WAIT or fades MIX back to the original.
+STORE completes before another operation. STOP and HOLD > LIVE release the
+audible mixture normally.
+
+![BLEND in progress](img/blend-mix.png)
+
+## Upgrade existing projects safely
+
+0.6.0 contains HALL and STASIS. ROOM, SPRING and the SLICE engine are omitted;
+the separate SLICER track effect remains. Incompatible projects show the actual
+substitutions before loading. OCT- CANCEL preserves the current working session;
+OCT+ TEST loads a converted working copy. Source slots remain protected for the
+session: save the audition to another slot. RESTORE LAST protects occupied slots,
+so use an empty slot for its copy. Export a complete backup before upgrading.
+
+![Project compatibility warning](img/stasis-compat.png)
+
+STASIS uses the internal REV send, not external microphone or USB audio input.
+Ordinary tempo DELAY is suspended while STASIS owns its buffer. Project saves
+retain MODE/AMT/TIME, not captured audio; textures are volatile RAM. See the
+[versioned release notes](../../RELEASE-NOTES.md) for the validation scope.
+
+## Performance workflow
 
 ## 1. Read and play HOME
 

@@ -3262,15 +3262,15 @@ static int test_layer(void)
     turn(EN_K1, 1);
     ok &= song.g[G_RTYPE] == 1 && str_eq(GP[G_RTYPE].names[song.g[G_RTYPE]], "SPRING");
     turn(EN_K1, 5);
-    ok &= song.g[G_RTYPE] == 2;
-    turn(EN_K1, -1);
+    ok &= song.g[G_RTYPE] == 3 && str_eq(GP[G_RTYPE].names[3], "STASIS");
+    turn(EN_K1, -2);
     ok &= song.g[G_RTYPE] == 1;
     song.playing = 0;
     project_save(2);
     turn(EN_K1, -1);
     ok &= song.g[G_RTYPE] == 0;
     project_load(2);
-    bad += check("REVERB page: TYPE HALL (power-on) / ROOM / SPRING on KNOB 1 (SIZE, DAMP beside it); a project keeps SPRING",
+    bad += check("REVERB page: TYPE HALL (power-on) / ROOM / SPRING / STASIS on KNOB 1 (SIZE, DAMP beside it); a project keeps SPRING",
                  ok && song.g[G_RTYPE] == 1);
     go_title("CHORUS");
     bad += check("  CHORUS page: CRT CDP", cur_page()->fam == FAM_FX && cur_page()->id[0] == G_CRATE &&
@@ -10114,3 +10114,4 @@ int main(void)
 
 
 #endif
+

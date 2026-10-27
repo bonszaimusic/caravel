@@ -867,6 +867,8 @@ static void project_ram_notice(void)
     str_cpy(ui.msg2, "STOP TO SAVE", sizeof ui.msg2);
 }
 
+#include "project_compat.c"
+
 static void proj_steps(step_t *s)            /* a loaded sequence stays inside its fixed fields */
 {
     uint32_t i, j;
@@ -891,6 +893,10 @@ static void proj_bound(project_t *q)
             if (s->probability >= COND_FIRST + NCOND) s->probability = 0;
         }
         for (i = 0; i < P_COUNT; i++) {
+            /* Keep disabled SLICE's source settings intact in saved-slot caches and exports. */
+#if !FELUCCA_SLICE
+            if (q->t[t].engine == 13u && i >= P_E0) continue;
+#endif
             const param_desc_t *d = param_desc_of(q->t[t].engine % NENGINES, i);
             q->t[t].p[i] = (int16_t)param_fit(d, q->t[t].p[i]);   /* (a retired KIT: the kit it plays) */
         }
@@ -965,6 +971,7 @@ static void project_capture(project_t *p)
  * The current name becomes the saved one */
 static int project_save_as(uint32_t slot, const char *name)
 {
+    if (project_compat_save_blocked(slot)) return 1;
 #if FELUCCA_HOME_PERF
     return hp_project_save(slot,name);
 #endif
@@ -989,6 +996,7 @@ static int project_save_as(uint32_t slot, const char *name)
         proj_cur = (uint8_t)(slot & 3u);
         pat_from_set((slot & 3u) + 1u);
         project_ram_notice();
+        project_compat_saved();
         return 0;
     }
 
@@ -1004,6 +1012,7 @@ static int project_save_as(uint32_t slot, const char *name)
         proj_cur = (uint8_t)(slot & 3u);
         pat_from_set((slot & 3u) + 1u);
         ui_message("SAVED");
+        project_compat_saved();
         return 0;
     }
 #endif
@@ -1013,6 +1022,7 @@ static int project_save_as(uint32_t slot, const char *name)
     proj_cur = (uint8_t)(slot & 3u);
     pat_from_set((slot & 3u) + 1u);
     ui_message("SAVED (RAM)");
+    project_compat_saved();
     return 0;
 }
 static int project_save(uint32_t slot) { return project_save_as(slot, 0); }
@@ -1137,6 +1147,7 @@ static int project_rename(uint32_t slot, const char *name)
  * preferences are untouched. Engines switch through their usual release fade. */
 static void project_init_runtime(void)
 {
+    project_compat_state.trial = project_compat_state.hold_autosave = 0;
 #if FELUCCA_HOME_PERF
     hp_init();
 #endif
@@ -1208,6 +1219,7 @@ static void project_init_runtime(void)
  * header's slot letter goes). 0 erased, 1 refused (playing, an empty slot), 2 failed (the slot as it was) */
 static int project_erase(uint32_t slot)
 {
+    if (project_compat_save_blocked(slot)) return 1;
     uint32_t k;
     slot &= 3u;
     if (transport_busy()) {                            /* (a flash erase silences the audio: project_save_as) */
@@ -1250,6 +1262,11 @@ static int project_restore_runtime(const project_t *input)
     project_t *p = &proj_scratch;
     uint32_t i, k;
     if (!proj_ok(input) || !proj_engines_ok(input)) return 1;
+    uint32_t compat = project_compat_flags(input);
+    if (compat && project_compat_state.approved != compat) {
+        ui_message("LOAD FROM SLOT FIRST");
+        return 1; /* USB/current-session restores cannot bypass the dialog. */
+    }
 #if FELUCCA_PAIR_MORPH
     pair_disable();
 #endif
@@ -1257,6 +1274,14 @@ static int project_restore_runtime(const project_t *input)
     mom_back(0);                                  /* (ui_input.c MOMENTARY: the values as they were, then the load) */
     memset(drum_mute, 0, sizeof drum_mute);       /* (1.4.1: the DRUM lanes' mutes, performance state) */
     if (p != input) memcpy(p, input, sizeof *p);
+    /* Only the approved working copy is converted. Stored originals stay intact. */
+#if !FELUCCA_SLICE
+    if (compat & 1u) for (uint32_t t = 0; t < NTRK; t++)
+        if (p->t[t].engine == 13u) p->t[t].engine = 0;
+#endif
+#if CARAVEL_REVERB_MINIMAL
+    if (compat & 6u) p->g[G_RTYPE] = 2;
+#endif
     proj_drums_to_part(p);                              /* a RAM slot of firmware before 1.0 */
     proj_phys(p);                                       /* .. before PHYS lost DUST and DRUM */
     proj_fm4(p);                                        /* .. that had DIGITAL tracks */
@@ -1331,7 +1356,14 @@ static int project_restore_runtime(const project_t *input)
     undo_depth--;
     sync_reload = 1;
     ui.force = 1;
-    ui_message("LOADED");
+    project_compat_state.trial = project_compat_state.hold_autosave = (uint8_t)compat;
+    if (compat && project_compat_state.source < 4u) project_compat_state.protected_slots |= 1u << project_compat_state.source;
+    /* RESTORE LAST has no reliable source-slot identity: only empty slots are
+     * safe copy destinations. Do not overwrite any occupied project. */
+    if (compat && project_compat_state.source == 4u)
+        for (uint32_t s = 0; s < 4u; s++)
+            if (proj_slot[s].align) project_compat_state.protected_slots |= 1u << s;
+    ui_message(compat ? "TEST LOADED / SAVE A COPY" : "LOADED");
     memset(snd_said, 0, sizeof snd_said);               /* a missing sample is said again, after LOADED */
     return 0;
 }
@@ -1339,16 +1371,17 @@ static void project_load(uint32_t slot)
 {
 #if FELUCCA_HOME_PERF
     if(hp_project_load(slot)) return;
-    hp_init();
 #endif
 
 #if FELUCCA_FLASH
     if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
 #endif
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
+    if (project_compat_request(&proj_scratch, slot & 3u)) return;
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
     if (!project_restore_runtime(&proj_scratch)) {
 #if FELUCCA_HOME_PERF
+        hp_init();
         for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);
 #endif
         proj_cur = (uint8_t)(slot & 3u);
@@ -1469,6 +1502,7 @@ static uint32_t project_pattern_queue(uint32_t slot)
     if (slot >= 4u || !proj_import(p, &proj_slot[slot], sizeof(project_store_t))) return 1;
     if (chain.running || chain.armed) return 2;
     if (!song.playing) return 4;
+    if (full && project_compat_flags(p)) return 5; /* stop, then confirm a test load */
     proj_bound(p);
     for (k = 0; k < NTRK; k++)
         if (!full && p->t[k].engine != trk[k].eng_req) return 3;
@@ -1664,6 +1698,7 @@ static void autosave_poll(void)
 #if FELUCCA_HOME_PERF
     hp_autosave_poll(); return;
 #endif
+    if (project_compat_state.hold_autosave) return;
 
 #if FELUCCA_FLASH
     uint32_t sig;
@@ -1698,6 +1733,7 @@ static int autosave_boot(int allowed)
 {
 #if FELUCCA_HOME_PERF
     if(hp_autosave_boot(allowed)) return 1;
+    if (ui.confirm == CF_COMPAT_PROJECT) return 0;
 #endif
 
     int rc = 0;
@@ -1707,6 +1743,7 @@ static int autosave_boot(int allowed)
         proj_wire_gen++;
         n = st_load(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire);
         if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
+            if (project_compat_request(&proj_scratch, 4)) return 0;
             proj_bound(&proj_scratch);
             if (!project_restore_runtime(&proj_scratch)) {
 #if FELUCCA_HOME_PERF

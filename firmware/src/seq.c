@@ -1028,6 +1028,9 @@ static uint32_t seq_loop_len(const track_t *t)
 }
 static void seq_start(void)
 {
+#if CARAVEL_REVERB_MINIMAL
+    stasis_transport_start();      /* PLAY starts fresh recording after STOP's tail */
+#endif
     uint32_t i;
     midi_grid_reset();
     memset(seq_extend_end, 0, sizeof seq_extend_end);
@@ -1069,6 +1072,9 @@ static void seq_release(track_t *t)
 static __attribute__((noinline)) void seq_stop(void)
 {
     uint32_t i;
+#if CARAVEL_REVERB_MINIMAL
+    stasis_transport_stop();       /* STOP must release held STASIS independently of transport */
+#endif
     midi_resync_cancel();
     memset(seq_extend_end, 0, sizeof seq_extend_end);
     memset(seq_extend_target, 0, sizeof seq_extend_target);

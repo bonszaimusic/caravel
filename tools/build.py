@@ -55,11 +55,15 @@ VERSION = None                      # versioned-build override (default: firmwar
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (1.6.1): the second core is built in, its entry and
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
 # (OFF by default: one core, as 1.6). FELUCCA_CPU2=0: none of it is built (1.6's one-core code and RAM)
-# 0.5.0 production profile: the hardware-tested D3 features. Setting CPU2=0
+# 0.6.0 production profile: D3 HOME/PAIR plus HALL/STASIS, with SLICE omitted.
+# Native legacy tests set their own compile flags and retain the full reference.
+# Setting CPU2=0
 # omits the worker but retains HOME/PAIR/storage. Native legacy tests set their
 # own compile-time options and remain independent from this target profile.
 for _feature in ("FELUCCA_HOME_PERF", "FELUCCA_PAIR_MORPH", "FELUCCA_PERF_HW"):
     os.environ.setdefault(_feature, "1")
+os.environ.setdefault("CARAVEL_REVERB_MINIMAL", "1")
+os.environ.setdefault("FELUCCA_SLICE", "0")
 CPU2 = os.environ.get("FELUCCA_CPU2") != "0"
 os.environ.setdefault("CARAVEL_DUALCORE_D1", "1" if CPU2 else "0")
 
@@ -203,7 +207,7 @@ def build_app():
     # inlining while retaining V4's compact policy elsewhere.
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1", "CARAVEL_REVERB_MINIMAL"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")

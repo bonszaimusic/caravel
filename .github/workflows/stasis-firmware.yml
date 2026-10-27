@@ -1,0 +1,158 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Private experimental FM-1 test binary. Builds on an isolated STASIS branch;
+# not a public release and not accepted until real hardware load measurements.
+name: STASIS Experimental Firmware
+
+on:
+  push:
+    branches: [experiment/stasis-texture-v0]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: stasis-firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install build dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi pi32v2 toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Fetch and hash-verify pinned JieLi AC79 SDK files
+        shell: bash
+        run: |
+          # Only three SDK binaries are used by our package builder. Gitee
+          # full-repository git clones can stall indefinitely: first try raw
+          # downloads; independently verify exact versioned SHA-256 hashes.
+          set -eu
+          root="$RUNNER_TEMP/ac79-sdk/cpu/wl82/tools"
+          base="https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/raw/AC79NN_SDK_V1.2.1_2023-12-13/cpu/wl82/tools"
+          mkdir -p "$root/cfg"
+          ok=1
+          for f in uboot.boot cfg_tool.bin cfg/eq_cfg_hw.bin; do
+            curl -fLsS --connect-timeout 8 --max-time 25 --retry 2 --retry-delay 2 \
+              -o "$root/$f" "$base/$f" || ok=0
+          done
+          if [ "$ok" -eq 1 ] && python3 - <<'PY'
+          import hashlib, pathlib, os
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"ac79-sdk/cpu/wl82/tools"
+          expected={
+              "uboot.boot":"4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
+              "cfg_tool.bin":"276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
+              "cfg/eq_cfg_hw.bin":"41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
+          }
+          assert all((root/name).exists() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+                     for name,sha in expected.items()), "SDK raw downloads did not match locked hashes"
+          print("SDK binaries match pinned SHA-256 fingerprints")
+          PY
+          then
+            echo "Using verified pinned SDK binaries"
+          else
+            echo "Raw SDK unavailable/mismatched; retrying bounded full-repo clone"
+            rm -rf "$RUNNER_TEMP/ac79-sdk"
+            timeout 240 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 clone \
+              --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          fi
+      - name: Compile experimental target and verify flash/RAM/POOL budget
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          CARAVEL_REVERB_MINIMAL: '1'
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh --binary-version 0.6.0
+          test -s build/caravel-0.6.0.fwsc
+          test -s build/felucca.bin
+          python3 experiments/dualcore-d1/check_layout.py
+      - name: Validate STASIS HOLD/LIVE tails, MOD and STOP in the host DSP
+        run: |
+          mkdir -p build/host
+          cc -O2 -w -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0 -DSTASIS_FULL_PROFILE=1 \
+            -Ibuild/gen -Ifirmware/src -o build/host/stasis_final_test tests/stasis_test.c -lm
+          build/host/stasis_final_test
+          cc -O2 -w -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
+            -Ibuild/gen -Ifirmware/src -o build/host/stasis_layer_test tests/stasis_layer_test.c -lm
+          build/host/stasis_layer_test
+          cc -O2 -w -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
+            -Ibuild/gen -Ifirmware/src -o build/host/project_compat_test tests/project_compat_test.c -lm
+          build/host/project_compat_test
+      - name: Verify D3 baseline hardware-facing host regression
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
+        run: python3 tools/check_050.py
+      - name: Produce private browser-assisted firmware installer
+        run: |
+          python3 web/make_site.py build/caravel-0.6.0.fwsc 0.6.0 build/stasis-install-preview --preview
+          cat > build/STASIS-EXPERIMENTAL-READ-ME.txt <<'TXT'
+          CARAVEL FM-1 STASIS — EXPERIMENTAL TARGET BUILD
+          This is actual FM-1 firmware, not the browser emulator.
+          Profile: CARAVEL_REVERB_MINIMAL=1, FELUCCA_SLICE=0
+          Reverbs: HALL and STASIS only. ROOM, SPRING, ABYSS omitted.
+          STASIS on FX > REVERB: TYPE, CAPT, STR, MOTN
+          FX > LAYER: MODE ADD/BLEND, AMT, TIME, OCT+ to run/cancel.
+          Play the new sound through REV SEND for ~0.6 s before OCT+.
+          ADD mixes AMT of that sound into HOLD; BLEND replaces it over TIME.
+          WAIT preserves the original while no current input is available.
+          Both operations finish in HOLD; the final STORE phase takes ~0.75 s.
+          CAPT HOLD -> LIVE fades the captured texture before recording again.
+          MOD targets: CAPT, STR, MOTN (four track-level MOD slots).
+          STOP releases HOLD and lets the long HALL tail decay.
+          Tempo DELAY cannot run simultaneously with STASIS.
+          SLICE engine disabled in this experimental binary to save flash.
+          This package is NOT HARDWARE VALIDATED. BACK UP projects/settings
+          and do not flash on a production unit until CPU and stability checks
+          on the FM-1 are accepted by its owner.
+          TXT
+          sha256sum build/caravel-0.6.0.fwsc build/felucca.bin \
+            > build/stasis-sha256sums.txt
+      - name: Upload installable PRIVATE EXPERIMENTAL package and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: Caravel-0.6.0-STASIS-FM1-EXPERIMENTAL-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            build/caravel-0.6.0.fwsc
+            build/felucca.bin
+            build/loader/ota.bin
+            build/STASIS-EXPERIMENTAL-READ-ME.txt
+            build/stasis-sha256sums.txt
+            LICENSE
+            LICENSING.md
+            LICENSES/
+            assets/samples-cc0/ATTRIBUTION.txt
+      - name: Upload private web installer preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: Caravel-0.6.0-STASIS-private-installer-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: build/stasis-install-preview/
+      - name: Report validation scope
+        if: success()
+        run: |
+          {
+            echo '### STASIS experimental FM-1 firmware compiled and packaged'
+            echo 'Passed: linker XIP/POOL budgets, STASIS DSP host test, D3 host checks.'
+            echo 'NOT passed on actual FM-1 yet: subjective sound, worst-case CPU, USB MIDI/OTA installation.'
+            echo 'The artifact is actual flashable firmware, NOT a verified release.'
+            echo 'The standard Caravel main branch remains unchanged.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+

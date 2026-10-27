@@ -21,7 +21,7 @@ static struct {
     int32_t dly_lp;
     uint16_t comb_i[4], ap_i[2];
     int32_t comb_lp[4];
-    uint8_t rtype;                       /* the reverb model running (G_RTYPE: 0 ROOM, 1 SPRING, 2 HALL) */
+    uint8_t rtype;                       /* persisted: 0 ROOM, 1 SPRING, 2 HALL, 3 STASIS */
     uint16_t sp_w;                       /* SPRING: the loop's write index (SP_MASK) */
     int32_t sp_lp, sp_hp, sp_he, sp_size;   /* .. its loop low-pass, low cut (and its remainder), the loop
                                              * length (Q8, glides) */
@@ -241,6 +241,9 @@ static uint32_t delay_samples(void)
     return s < 16u ? 16u : s >= DLY_LEN ? DLY_LEN - 1u : s;
 }
 
+#if !CARAVEL_REVERB_MINIMAL
+/* In the experimental minimal-FX build the classic ROOM and SPRING DSP
+ * disappear; their persisted numeric IDs still fall back to HALL. */
 /* ROOM (G_RTYPE 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out */
 static __attribute__((noinline)) void rev_room(const int32_t *rev_in, int32_t *out, uint32_t n)
 {
@@ -316,6 +319,8 @@ static __attribute__((noinline)) void rev_spring(const int32_t *rev_in, int32_t 
         out[i] += (t0 + (((t1 - t0) * f) >> 8)) * 4 + ln[(wp - (uint32_t)L3) & SP_MASK] * 2;
     }
 }
+
+#endif /* !CARAVEL_REVERB_MINIMAL */
 
 /* HALL's helpers: m / 2^sh rounded towards zero (a product that feeds back must not floor: a loop of floors
  * holds an offset and a little noise for ever) */
@@ -406,11 +411,17 @@ static __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *o
 {
     int16_t *b = rev_comb, *a = rev_ap;
     uint32_t i, k, s, m, d;
-    int32_t kd = HL_KD(song.g[G_RDAMP]);
+    /* STASIS needs its own long, dark hall envelope; SIZE and DAMP remain
+     * unchanged for the conventional HALL selection. */
+    int32_t size = song.g[G_RTYPE] == 3 ? 115 : song.g[G_RSIZE];
+    int32_t damp = song.g[G_RTYPE] == 3
+        ? clamp(50 + osc_sine(hl.ph) * (int32_t)clamp(song.g[G_DRREV], 0, 127) / 400000, 36, 64)
+        : song.g[G_RDAMP];
+    int32_t kd = HL_KD(damp);
     int32_t xp = hl.x, hp = hl.hp, he = hl.he, mp = hl.m, sp = hl.s;
     (void)n;
-    if (hl.sz != song.g[G_RSIZE] + 1)
-        hall_gains(song.g[G_RSIZE]);
+    if (hl.sz != size + 1)
+        hall_gains(size);
     for (i = 0; i < HL_NC; i++) {
         int32_t x = (xp + 2 * rev_in[2u * i] + rev_in[2u * i + 1u]) >> 2, v;   /* every other sample, 1 2 1 */
         xp = rev_in[2u * i + 1u];
@@ -534,6 +545,192 @@ static int32_t part_buf[CTL];                            /* a part's block (mix_
 #define SM1_b part_buf
 #endif
 
+/* STASIS V0.6: MOTN couples fixed-pitch grain-tap crossfades, LP filter and HALL damping. STOP releases HOLD and fades cloud to HALL tail.
+ * CAPT is the ONLY recording hold control. EVOLVE drives spectral-source
+ * wandering and stereo movement; STR changes textured wet prominence. MORPH
+ * crossfades in reverse grains. Their IDs are preserved for saved projects.
+ * A continuous last-second send buffer feeds two long crossfaded stereo
+ * grain pairs; low-pass and a seven-second HALL diffusion stage spread the
+ * texture into a slowly changing, sustained sound. This uses the ordinary
+ * tempo-delay's 128 KiB pool allocation, so the normal delay is suspended.
+ *
+ * CAPT is now a retroactive hold: it freezes already recorded sound.
+ * CAPT=0 returns to LIVE, CAPT=1 holds. If the ring is not full enough,
+ * holding automatically begins after its safe prefill threshold. No other
+ * freeze switch exists: CAPT LIVE/HOLD owns the recording write head.
+ */
+#define ST_RING_LEN (CARAVEL_REVERB_MINIMAL ? DLY_LEN / 2u : DLY_LEN)
+#define ST_RING_MASK (ST_RING_LEN - 1u)
+#define ST_GRAIN_LEN 8192u               /* 186 ms windows, four times V0.1 */
+#define ST_HALF (ST_GRAIN_LEN / 2u)
+#define ST_LAG 12288u                   /* ~279ms back; unity-rate forward head never reads future */
+#define ST_OFFSET 1901u
+#define ST_DRIFT 1024u                  /* slow, smooth ±1k-sample source scan */
+#define ST_MIN_VALID (ST_LAG + ST_OFFSET + 544u + ST_DRIFT + ST_GRAIN_LEN + 128u)
+_Static_assert(ST_LAG > 2560u + 256u && ST_MIN_VALID < (FS * 3u / 4u) &&
+               ST_MIN_VALID < ST_RING_LEN &&
+               (ST_GRAIN_LEN & (ST_GRAIN_LEN - 1u)) == 0u,
+               "STASIS grain window must fit a 0.75 s captured history");
+static struct {
+    uint32_t w, valid, phase, drift_ph, delay_fill, evolve_q8;
+    uint32_t gr_l[2], gr_r[2];        /* fixed taps for overlapping playback heads */
+    int32_t stop_gain, release_gain;   /* independent STOP and HOLD->LIVE envelopes */
+    int32_t smooth_l, smooth_r;
+    uint8_t cap_prev, auto_hold, cap_pending, delay_dirty, gr_ready, stopping, releasing;
+} st __attribute__((section(".pool")));
+
+#include "stasis_layer.c"
+
+/* Read one captured source sample per output sample: grain playback pitch
+ * never depends on MOTN. Taps are changed only at zero-crossfade weight. */
+static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
+{
+    st.gr_l[head] = (st.w - ST_LAG - tap_l) & ST_RING_MASK;
+    st.gr_r[head] = (st.w - ST_LAG - ST_OFFSET - tap_r) & ST_RING_MASK;
+}
+static inline void stasis_transport_stop(void)
+{
+    if (song.g[G_RTYPE] != 3u) return;
+    song.g[G_DRLVL] = 0;               /* CAPT shows LIVE */
+    st.cap_prev = st.auto_hold = st.cap_pending = st.releasing = 0;
+    st.stopping = 1;
+    stasis_layer_stop();
+    st.stop_gain = 32768;              /* wet grains fade; HALL naturally decays */
+}
+static inline void stasis_transport_start(void)
+{
+    if (song.g[G_RTYPE] != 3u) return;
+    st.stopping = 0;
+    st.stop_gain = st.release_gain = 32768;
+    st.releasing = 0;
+    st.gr_ready = 0;
+    st.valid = 0;                      /* no stale STOP tail in the next performance */
+    st.smooth_l = st.smooth_r = 0;     /* don't resurrect old grains on new PLAY */
+    stasis_layer_reset();
+}
+
+/* Independent STASIS texture: the raw short grains never substitute for the
+ * long decay; they slowly excite HALL. No new audio delay buffers required.
+ * Wet stereo adds a quiet textured layer over the already diffused tail. */
+static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_t *wet, uint32_t n)
+{
+    int32_t hall_in[CTL], mid[CTL], side[CTL];
+#if CARAVEL_REVERB_MINIMAL
+    uint32_t i, strength = (uint32_t)clamp(mod_stasis.strength, 0, 127);
+    uint32_t target = (uint32_t)clamp(mod_stasis.motion, 0, 127) << 8u;
+#else
+    uint32_t i, strength = (uint32_t)clamp(song.g[G_RSIZE], 0, 127);
+    uint32_t target = (uint32_t)clamp(song.g[G_DRREV], 0, 127) << 8u;
+#endif
+    int32_t err = (int32_t)target - (int32_t)st.evolve_q8;
+    st.evolve_q8 = (uint32_t)((int32_t)st.evolve_q8 +
+        (err / 384 ? err / 384 : err > 0 ? 1 : err < 0 ? -1 : 0));
+    uint32_t motion = st.evolve_q8 >> 8u;
+#if CARAVEL_REVERB_MINIMAL
+    uint32_t cap = mod_stasis.capt;
+#else
+    uint32_t cap = song.g[G_DRLVL] != 0;
+#endif
+    int32_t sine_l = osc_sine(st.drift_ph);
+    int32_t sine_r = osc_sine(st.drift_ph + 0x50000000u);
+    /* Macro modulation calculated once per 32-sample block, not per sample.
+     * Stereo pole cutoff ~1.5..10 kHz, moving in opposing directions. */
+    int32_t cut_l = clamp(17000 + sine_l * (int32_t)motion / 300, 6500, 28000);
+    int32_t cut_r = clamp(17000 + sine_r * (int32_t)motion / 300, 6500, 28000);
+    /* Variable echo taps: no pitch sweep because tap changes are only made
+     * at a silent-grain crossfade boundary. */
+    uint32_t tap_l = 256u + (uint32_t)(((uint32_t)(sine_l + 32768) * motion * 28u) >> 16u);
+    uint32_t tap_r = 256u + (uint32_t)(((uint32_t)(sine_r + 32768) * motion * 28u) >> 16u);
+    int32_t layer_gain = (int32_t)((strength * 2304u + 63u) / 127u);
+    int32_t hall_gain = (int32_t)((strength * 1024u + 63u) / 127u);
+    if (cap && !st.cap_prev && !st.stopping) {
+        /* Retake HOLD without erasing the previous sound. */
+        if (!st.releasing) stasis_layer_reset();
+        st.releasing = 0;
+        st.cap_pending = st.valid < ST_MIN_VALID;
+        st.auto_hold = !st.cap_pending;
+    }
+    if (!cap && st.cap_prev && !st.stopping) {
+        /* Keep the ring unchanged while the old held texture fades into
+         * HALL. Resume writing new LIVE audio only after that fade. */
+        st.cap_pending = 0;
+        st.releasing = st.auto_hold != 0u;
+        if (!st.releasing) st.auto_hold = 0;
+    }
+    st.cap_prev = (uint8_t)cap;
+    stasis_layer_block(rev_in, n);
+    for (i = 0; i < n; i++) {
+        stasis_layer_tick(rev_in[i]);
+        uint32_t p = st.phase & (ST_GRAIN_LEN - 1u);
+        uint32_t q = (p + ST_HALF) & (ST_GRAIN_LEN - 1u);
+        uint32_t weight = p < ST_HALF ? p : ST_GRAIN_LEN - p;
+        if (!st.auto_hold && !st.stopping) {
+            int32_t v = clamp(rev_in[i] >> 2, -32768, 32767);
+            dly_buf[st.w++ & ST_RING_MASK] = (int16_t)v;
+            if (st.valid < ST_RING_LEN) st.valid++;
+            if (st.cap_pending && st.valid >= ST_MIN_VALID) {
+                st.cap_pending = 0;
+                st.auto_hold = 1;
+            }
+        }
+        if (st.valid >= ST_MIN_VALID && !st.gr_ready) {
+            st.phase = p = 0; q = ST_HALF; weight = 0;
+            st_grain_start(0, tap_l, tap_r);
+            st_grain_start(1, tap_l + 743u, tap_r + 421u);
+            st.gr_ready = 1;
+        }
+        if (st.gr_ready) {
+            /* Two heads 180 degrees apart. Reposition only where gain is 0. */
+            if (p == 0) st_grain_start(0, tap_l, tap_r);
+            if (p == ST_HALF) st_grain_start(1, tap_l + 743u, tap_r + 421u);
+            int32_t la = stasis_read(st.gr_l[0] + p);
+            int32_t lb = stasis_read(st.gr_l[1] + q);
+            int32_t ra = stasis_read(st.gr_r[0] + p);
+            int32_t rb = stasis_read(st.gr_r[1] + q);
+            int32_t left = (la * (int32_t)weight + lb * (int32_t)(ST_HALF - weight)) >> 12u;
+            int32_t right = (ra * (int32_t)weight + rb * (int32_t)(ST_HALF - weight)) >> 12u;
+            st.smooth_l += ((left - st.smooth_l) * cut_l) >> 15u;
+            st.smooth_r += ((right - st.smooth_r) * cut_r) >> 15u;
+        } else {
+            st.smooth_l -= st.smooth_l >> 4u;
+            st.smooth_r -= st.smooth_r >> 4u;
+        }
+        int32_t gain = 32768;
+        if (st.stopping) {
+            st.stop_gain -= (st.stop_gain + 8191) >> 13u;
+            if (st.stop_gain < 0) st.stop_gain = 0;
+            gain = st.stop_gain;
+        } else {
+            if (st.releasing) {
+                st.release_gain -= (st.release_gain + 8191) >> 13u;
+                if (st.release_gain < 96) {
+                    st.release_gain = 0;
+                    st.releasing = st.auto_hold = 0;
+                    st.gr_ready = 0;
+                    st.valid = 0;      /* new live capture, no frozen taps */
+                    st.smooth_l = st.smooth_r = 0;
+                    stasis_layer_reset();
+                }
+            } else if (st.release_gain < 32768) {
+                st.release_gain += 32; /* soft return if HOLD is re-engaged */
+                if (st.release_gain > 32768) st.release_gain = 32768;
+            }
+            gain = st.release_gain;
+        }
+        mid[i] = (((st.smooth_l + st.smooth_r) >> 1u) * gain) >> 15u;
+        side[i] = (((st.smooth_l - st.smooth_r) >> 1u) * gain) >> 15u;
+        hall_in[i] = clamp(rev_in[i] + ((mid[i] * hall_gain) >> 8u), -262143, 262143);
+        st.phase++;
+    }
+    st.drift_ph += (motion * 190u) * n;  /* slow linked filter/tap motion */
+    rev_hall(hall_in, wet, n);
+    for (i = 0; i < n; i++) {
+        wet[i] += (mid[i] * layer_gain) >> 8u;
+        rev_side[i] += (side[i] * layer_gain) >> 8u;
+    }
+    hl.side = 1;
+}
+
 /* the model changed (to rt): the old one's block fades out (HALL's stereo difference with it), its buffers are
  * cleared, the new one starts from silence */
 static __attribute__((noinline)) void rev_switch(const int32_t *rev_in, int32_t *wet, uint32_t n, int32_t rt)
@@ -542,12 +739,19 @@ static __attribute__((noinline)) void rev_switch(const int32_t *rev_in, int32_t 
     uint32_t i;
     for (i = 0; i < n; i++)
         t[i] = 0;
-    if (fx.rtype == 2u)
+    if (fx.rtype == 3u)
+        stasis_block(rev_in, t, n);
+    else if (fx.rtype == 2u)
         rev_hall(rev_in, t, n);
+#if !CARAVEL_REVERB_MINIMAL
     else if (fx.rtype)
         rev_spring(rev_in, t, n);
     else
         rev_room(rev_in, t, n);
+#else
+    else
+        rev_hall(rev_in, t, n);
+#endif
     for (i = 0; i < n; i++, g -= d) {
         wet[i] += mulq16(t[i], (uint32_t)g);
         rev_side[i] = mulq16(rev_side[i], (uint32_t)g);   /* (HALL only: hl.side set) */
@@ -565,6 +769,37 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     int32_t dmix = song.g[G_DMIX] * 258;
     int32_t cdepth = song.g[G_CDEPTH] * 6, rt;
     uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
+    rt = song.g[G_RTYPE];
+    rt = rt >= 0 && rt <= 3 ? rt : 2;
+#if CARAVEL_REVERB_MINIMAL
+    if (rt == 3u)
+        mod_stasis_update(); /* shared FX: after track renders, only once per block */
+#endif
+#if CARAVEL_REVERB_MINIMAL
+    if (rt < 2)
+        rt = 2; /* old ROOM / SPRING projects play HALL, but remain stored unchanged */
+#endif
+    if (rt == 3u && fx.rtype != 3u) {
+        stasis_layer_reset();
+        st.w = st.valid = st.phase = st.drift_ph = 0u;
+#if CARAVEL_REVERB_MINIMAL
+        st.evolve_q8 = (uint32_t)clamp(mod_stasis.motion, 0, 127) << 8u;
+#else
+        st.evolve_q8 = (uint32_t)clamp(song.g[G_DRREV], 0, 127) << 8u;
+#endif
+        st.gr_ready = st.stopping = 0;
+        st.stop_gain = st.release_gain = 32768;
+        st.releasing = 0;
+        st.smooth_l = st.smooth_r = 0;
+        st.auto_hold = st.cap_pending = 0u;
+        st.cap_prev = 0u;                 /* CAPT already ON is honored on entry */
+        st.delay_dirty = 1u;
+    } else if (rt != 3u && fx.rtype == 3u) {
+        /* Previous STASIS audio is not a tempo-delay tail: suppress reads
+         * until the conventional delay line has been refilled. */
+        fx.dly_w = fx.dly_cur = fx.dly_lp = 0;
+        st.delay_fill = 0;
+    }
     if (pf.ew1 && fb < THR_FB)
         fb += mulq16(THR_FB - fb, (uint32_t)pf.ew1 << 1);   /* ECHO THROW (perform.c): more feedback while held, 0.7
                                                              * at most (the loop's gain below 1: it never runs away) */
@@ -581,6 +816,10 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
         }
         fx.cho_w++;
+        if (rt == 3u) {
+            wet[i] = y;
+            continue; /* STASIS owns dly_buf: ordinary DELAY is unavailable */
+        }
         /* delay with a low-passed feedback */
         {   /* The TIME follows the tempo: on the external clock the measured beat is re-estimated every quarter note and
              * moves by a few samples, and a read position that jumps is a click in the echo (tests/delay_ext_test.c).
@@ -599,25 +838,33 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             x0 = dly_buf[(fx.dly_w - ri) & (DLY_LEN - 1u)];
             x1 = dly_buf[(fx.dly_w - ri - 1u) & (DLY_LEN - 1u)];
             x = fr ? x0 + (((x1 - x0) * (int32_t)fr) >> 8) : x0;
+            if (st.delay_dirty && st.delay_fill <= ri)
+                x = 0; /* do not replay captured STASIS ring after mode exit */
         }
         fx.dly_lp += mulq15(x - fx.dly_lp, col);
         dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
             (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
         fx.dly_w++;
+        if (st.delay_dirty) {
+            if (++st.delay_fill >= DLY_LEN)
+                st.delay_dirty = 0;
+        }
         y += mulq15(x << 1, dmix);
         wet[i] = y;
     }
-    rt = song.g[G_RTYPE];
-    rt = rt == 1 || rt == 2 ? rt : 0;
     hl.side = 0;
     if (rt != fx.rtype)
         rev_switch(rev_in, wet, n, rt);
-    else if (rt == 2)
+    else if (rt == 3u)
+        stasis_block(rev_in, wet, n);
+    else if (rt == 2u)
         rev_hall(rev_in, wet, n);
+#if !CARAVEL_REVERB_MINIMAL
     else if (rt)
         rev_spring(rev_in, wet, n);
     else
         rev_room(rev_in, wet, n);
+#endif
 }
 
 /* after the buses: HALL's stereo difference to the left and from the right of the dry mix (the wet bus adds the

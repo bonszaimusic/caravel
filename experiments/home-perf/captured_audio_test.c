@@ -21,7 +21,11 @@ static void apply(track_t *t,const settings_t *s){
 }
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);unsigned cases=0;
+ /* Identity comparisons run each capture mode in a fresh process. Running
+  * them consecutively advances oscillator/noise phases and HALL tails. */
+ const char *capture_mode=getenv("CAPTURE_DIAGNOSTICS");
  for(unsigned rev=0;rev<2;rev++)for(unsigned variant=0;variant<4;variant++)for(unsigned capture=0;capture<2;capture++){
+  if(capture_mode && capture!=(unsigned)atoi(capture_mode))continue;
   normal_off();CHECK(web_pair_prepare(0,1,captured[rev].eng,captured[1-rev].eng));
   apply(&trk[0],&captured[rev]);apply(&trk[1],&captured[1-rev]);ep.base=14706;ep.motion=0;
   if(variant==1)trk[0].p[P_FILT]=trk[1].p[P_FILT]=0;

@@ -6,7 +6,10 @@ What Caravel adds to Felucca 1.6.1 and how it works. The list of changes is in [
 [../NOTICE](../NOTICE), [../LICENSING.md](../LICENSING.md) and [../CREDITS.md](../CREDITS.md). Hardware acceptance on a real FM-1 is pending
 for everything here unless a guide says otherwise; host tests are not hardware measurements.
 
-- **[0.5.0 illustrated performance tutorials](tutorials/README.md)**: HOME, Pair Morph, macros, saving, second core and held-note muting.
+- **[0.6.0 illustrated STASIS and performance tutorials](tutorials/README.md)**:
+  HOLD, ADD/BLEND, safe project loading, HOME, Pair Morph, macros and saving.
+- **[Original STASIS sound examples](https://bonszaimusic.github.io/caravel/sounds/)**:
+  native firmware DSP renders with cue times, not recordings of an FM-1.
 - [Installing Caravel](installing.md): web installer, command line, a specific release, going back to the official firmware.
 - [Pages, groups and the settings menu](menus-and-pages.md): two parameter groups per screen, numbered footer, SELECT, MORE, EDIT and CLEAR STEP.
 - [Per-track voice reservations](voice-reservations.md)
@@ -18,3 +21,4 @@ for everything here unless a guide says otherwise; host tests are not hardware m
   track, external MIDI clock.
 - [Editor protocol](../web/EDITOR_PROTOCOL.md)
 - [Building](../BUILDING.md), [contributing](../CONTRIBUTING.md)
+

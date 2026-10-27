@@ -68,8 +68,8 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 
 ## Verified local release artifacts
 
-`./build.sh --release 0.5.0` builds identity `FM-1_999` and version `v0.5.0`, then
-assembles and checks `build/release-0.5.0/`. This production mode requires clean,
+`./build.sh --release 0.6.0` builds identity `FM-1_999` and version `v0.6.0`, then
+assembles and checks `build/release-0.6.0/`. This production mode requires clean,
 committed source and initialized submodules at their recorded pins. It rejects
 unexpected SDK bytes and unsafe build-output links before writing.
 
@@ -142,6 +142,17 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `c
 
 `FELUCCA_USB_LAYOUT` (`0` to `3`, default `0`) picks other USB descriptor layouts for testing; see
 `firmware/src/usb.c`.
+
+
+## Build profiles and machine-readable metadata
+
+The 0.6.0 release profile is tracked in [metadata/build-profiles.json](metadata/build-profiles.json).
+Target builds default to `CARAVEL_REVERB_MINIMAL=1` and `FELUCCA_SLICE=0`: HALL/STASIS
+with HOME, Pair, macros and performance storage. The public emulator explicitly
+uses the same effect/engine profile. Native legacy goldens retain their separate
+full ROOM/SPRING/SLICE reference. STASIS shares the ordinary delay allocation;
+tempo DELAY cannot run with it. See [the STASIS guide](docs/tutorials/README.md)
+for controls, safe project substitutions and the remaining hardware checks.
 
 ## Samples
 
@@ -220,10 +231,11 @@ cd /tmp/felucca-site && python3 -m http.server 8000
 Installing firmware is at your own risk. If an install fails and the FM-1 no longer
 starts, recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
 
-## 0.5.0 target profile
+## 0.6.0 target profile
 
 Ordinary target builds enable HOME, Pair, hardware performance storage and the
 validated worker path. The device setting still defaults to second core OFF.
+HALL/STASIS and the SLICE-off engine selection are the production defaults.
 Native legacy tests choose their compile-time flags separately. The browser
 emulator uses the same HOME/Pair/storage paths with CPU2=0; its timing cannot
 measure FM-1 CPU load. Run `python3 tools/check_050.py` after the target build,

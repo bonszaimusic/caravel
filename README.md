@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.5.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.6.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -23,7 +23,35 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 
 More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
 
-## 🚢 Caravel 0.5.0 — Two synth engines. One performance.
+## Caravel 0.6.0 - Hold a sound. Build a texture.
+
+**[STASIS tutorials](https://bonszaimusic.github.io/caravel/tutorials/)** · **[Listen to the examples](https://bonszaimusic.github.io/caravel/sounds/)** · **[Four-page PDF guide](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf)** · **[Changelog](CHANGELOG.md)**
+
+Play a chord, hold its texture, and keep performing over it. STASIS captures the
+internal REV send and turns it into a slowly moving stereo wash. The captured
+sound can stay while you change instruments or play something new.
+
+- **HOLD:** freeze recently played sound. STR brings the texture forward; MOTN
+  moves reflections, filters and reverb damping without sweeping playback speed.
+- **ADD:** mix a new captured sound into the held texture. Choose its share with
+  AMT, then press OCT+. Repeat to build a combined layer with bounded gain.
+- **BLEND:** transition into a new captured texture over 1-30 seconds, then hold
+  the destination. OCT+ cancels WAIT or returns MIX smoothly to the original.
+
+<img src="docs/tutorials/img/stasis-hold.png" width="240" alt="Actual STASIS HOLD display"> <img src="docs/tutorials/img/blend-mix.png" width="240" alt="Actual BLEND transition display">
+
+**0.6.0 profile:** HALL and STASIS; ROOM, SPRING and the SLICE engine are omitted.
+The separate SLICER track effect remains. Old projects using omitted features
+offer **CANCEL / TEST** with explicit substitutions, protect their source slot,
+and can be saved as a separate copy. Ordinary tempo DELAY is suspended while
+STASIS is active. Captured audio is volatile RAM and is not stored in projects.
+
+The original sound examples use the actual native firmware DSP and are labelled
+as renders, not FM-1 recordings. Automated target, audio, MIDI, UI/storage, web,
+ASan/UBSan and ThreadSanitizer checks gate publication. Actual FM-1 worst-case
+load and long-term stability remain separate hardware checks.
+
+## Performance controls retained from 0.5.0
 
 **[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
 
@@ -50,7 +78,7 @@ Free and open source for the M-VAVE FM-1.
 
 **[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
 
-[Changelog](CHANGELOG.md)
+[Release notes](RELEASE-NOTES.md)
 
 ## A look at the screen
 
@@ -86,7 +114,7 @@ The screens are drawn by the firmware's own drawing code (AMBER palette, 240 x 2
 | FM6 | electric pianos, bells, FM basses and pads |
 | PHYS | mallets, plucks, hand drums, metallic textures |
 | VOICE | sung vowels, choirs, vocal leads |
-| SAMPLE, GRAIN, SLICE | instrument samples and your own, granular clouds, sliced loops |
+| SAMPLE, GRAIN | instrument samples and your own, granular clouds |
 | DRUM (with DRUM-X) | drum kits and percussion |
 | NOISE | wind, rain, risers, effects |
 
@@ -199,3 +227,4 @@ Instruments.
 
 Copyright (C) 2026 bonszaimusic (Caravel and its changes to Felucca)<br>
 Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca 1.6.1, the base of this work)
+

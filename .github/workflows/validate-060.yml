@@ -1,0 +1,354 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: Caravel 0.6.0 Complete Validation
+on:
+  push:
+    branches: [main, experiment/stasis-texture-v0]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: all-060-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install Pillow fonttools
+      - run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Fetch and hash-verify pinned JieLi AC79 SDK files
+        shell: bash
+        run: |
+          # Only three SDK binaries are used by our package builder. Gitee
+          # full-repository git clones can stall indefinitely: first try raw
+          # downloads; independently verify exact versioned SHA-256 hashes.
+          set -eu
+          root="$RUNNER_TEMP/ac79-sdk/cpu/wl82/tools"
+          base="https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/raw/AC79NN_SDK_V1.2.1_2023-12-13/cpu/wl82/tools"
+          mkdir -p "$root/cfg"
+          ok=1
+          for f in uboot.boot cfg_tool.bin cfg/eq_cfg_hw.bin; do
+            curl -fLsS --connect-timeout 8 --max-time 25 --retry 2 --retry-delay 2 \
+              -o "$root/$f" "$base/$f" || ok=0
+          done
+          if [ "$ok" -eq 1 ] && python3 - <<'PY'
+          import hashlib, pathlib, os
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"ac79-sdk/cpu/wl82/tools"
+          expected={
+              "uboot.boot":"4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
+              "cfg_tool.bin":"276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
+              "cfg/eq_cfg_hw.bin":"41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
+          }
+          assert all((root/name).exists() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+                     for name,sha in expected.items()), "SDK raw downloads did not match locked hashes"
+          print("SDK binaries match pinned SHA-256 fingerprints")
+          PY
+          then
+            echo "Using verified pinned SDK binaries"
+          else
+            echo "Raw SDK unavailable/mismatched; retrying bounded full-repo clone"
+            rm -rf "$RUNNER_TEMP/ac79-sdk"
+            timeout 240 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 clone \
+              --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          fi
+      - name: Build actual reduced 0.6.0 target, then prepare full host fixtures
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          CARAVEL_REVERB_MINIMAL: '1'
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh --binary-version 0.6.0
+          cp build/caravel-0.6.0.fwsc build/caravel.fwsc
+          mkdir -p build/validation-sdk
+          cp -R "$AC79_SDK/cpu" build/validation-sdk/
+          FELUCCA_SLICE=1 python3 tools/gen_samples.py build/gen/felucca_samples.h
+          python3 tools/validate_all.py inventory
+          python3 tools/validate_report_060.py --self-test
+          python3 web/stasis_pages.py --check-source
+          git rev-parse HEAD > build/validation-source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-060-inputs
+          retention-days: 7
+          path: |
+            build/gen/
+            build/caravel.fwsc
+            build/caravel-0.6.0.fwsc
+            build/felucca.bin
+            build/felucca.dis
+            build/felucca.elf
+            build/loader/ota.bin
+            build/validation-sdk/
+            build/validation-source-sha.txt
+            build/validation/host-inventory.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-060-build-diagnostics
+          retention-days: 7
+          path: |
+            build/*.txt
+            build/*.json
+  host:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [storage_usb, synthesis_midi, ui_storage, effects, cpu_dual, engines_samples, sanitizers, web_target]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: python -m pip install Pillow fonttools
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-060-inputs
+          path: build
+      - name: Pin DaisySP float reference for PHYS
+        if: matrix.shard == 'engines_samples'
+        run: |
+          git init "$RUNNER_TEMP/DaisySP"
+          git -C "$RUNNER_TEMP/DaisySP" remote add origin https://github.com/daisyaudio/DaisySP.git
+          git -C "$RUNNER_TEMP/DaisySP" fetch --depth 1 origin 2c72eaf9eac5fc0dca1919d65d606da907832618
+          git -C "$RUNNER_TEMP/DaisySP" checkout --detach FETCH_HEAD
+      - name: Install pinned Emscripten for required browser tests
+        if: matrix.shard == 'web_target'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Run complete original host-suite shard, no baseline updates
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          CARAVEL_REVERB_MINIMAL: '1'
+          AC79_SDK: ${{ github.workspace }}/build/validation-sdk
+          DAISYSP: ${{ runner.temp }}/DaisySP
+          TSAN: '1'
+          SANITIZE: '1'
+          ASAN_OPTIONS: detect_leaks=0
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/emsdk/emsdk_env.sh" ]; then . "$RUNNER_TEMP/emsdk/emsdk_env.sh"; fi
+          python3 tools/validate_all.py "${{ matrix.shard }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-060-${{ matrix.shard }}
+          retention-days: 14
+          path: |
+            build/validation/
+            build/ui_new/*.txt
+            build/ui_new/*.tsv
+            build/ui_new/sheet*.png
+            build/ui_fm4/*.txt
+            build/ui_slot/*.png
+            build/host/*.json
+  experiments:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [pair, home, target]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: python -m pip install Pillow fonttools
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-060-inputs
+          path: build
+      - name: Install pinned Emscripten for all experimental browser tests
+        if: matrix.suite != 'target'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Build and check Pair experiment
+        if: matrix.suite == 'pair'
+        env:
+          CC: cc -include stdint.h
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          mkdir -p build/validation
+          set -o pipefail
+          python3 experiments/engine-pair-morph/build.py 2>&1 | tee build/validation/pair-build.log
+          sh experiments/engine-pair-morph/run_checks.sh 2>&1 | tee build/validation/pair.log
+      - name: Build and check HOME experiment
+        if: matrix.suite == 'home'
+        env:
+          CC: cc -include stdint.h
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          mkdir -p build/validation
+          set -o pipefail
+          python3 experiments/home-perf/build.py 2>&1 | tee build/validation/home-build.log
+          sh experiments/home-perf/checks.sh 2>&1 | tee build/validation/home.log
+      - name: Exact target profile, safety checks, D3 and uncovered experiment cases
+        if: matrix.suite == 'target'
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          CARAVEL_REVERB_MINIMAL: '1'
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          set -o pipefail
+          mkdir -p build/validation build/host build/home-perf
+          python3 tools/validate_target_060.py 2>&1 | tee build/validation/target.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-060-experiment-${{ matrix.suite }}
+          retention-days: 14
+          path: |
+            build/validation/
+            build/dc1/*.log
+            build/dc1/*.json
+            build/home-perf/*.png
+            build/home-perf/*.txt
+  report:
+    needs: [prepare, host, experiments]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: validation-060-*
+          path: reports
+      - name: Record complete validation scope and gate
+        env:
+          PREPARE: ${{ needs.prepare.result }}
+          HOST: ${{ needs.host.result }}
+          EXPERIMENTS: ${{ needs.experiments.result }}
+        run: |
+          python3 tools/validate_report_060.py reports
+          {
+            echo '# Caravel 0.6.0 automated validation'
+            echo "Source: $GITHUB_SHA"
+            echo "Target build: $PREPARE"
+            echo "Eight complete host-suite shards: $HOST"
+            echo "Pair, HOME and exact STASIS target checks: $EXPERIMENTS"
+            echo 'Legacy host checks retain ROOM/SPRING/SLICE; the actual 0.6.0 target is minimal STASIS with SLICE omitted.'
+            echo 'No golden audio or CPU/target budgets were automatically updated.'
+            echo 'Actual FM-1 sound, worst-case deadlines, physical USB/MIDI/OTA and long hardware soak tests remain unverified.'
+          } | tee VALIDATION-0.6.0.txt >> "$GITHUB_STEP_SUMMARY"
+          [ "$PREPARE" = success ] && [ "$HOST" = success ] && [ "$EXPERIMENTS" = success ]
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Caravel-0.6.0-complete-test-report
+          retention-days: 30
+          path: |
+            VALIDATION-0.6.0.txt
+            reports/
+  publish-060:
+    name: Publish authorized Caravel 0.6.0
+    needs: [prepare, report]
+    if: github.repository == 'bonszaimusic/caravel' && github.ref == 'refs/heads/main' && github.event_name == 'push' && contains(github.event.head_commit.message, '[publish 0.6.0]')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install Pillow fonttools
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-060-inputs
+          path: build
+      - name: Install the target toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Build a clean-source release and compare with the tested target
+        env:
+          CC: cc -include stdint.h
+          CARAVEL_REVERB_MINIMAL: '1'
+          FELUCCA_SLICE: '0'
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$GITHUB_WORKSPACE/build/validation-sdk"
+          cp build/felucca.bin build/validated-felucca.bin
+          sh build.sh --release 0.6.0
+          cmp build/felucca.bin build/validated-felucca.bin
+          python3 tools/release_artifacts.py 0.6.0 --verify-only
+          python3 web/stasis_pages.py --check-source
+      - name: Compile the matching public emulator
+        env:
+          EMU_VERSION: v0.6.0
+          EMU_PREVIEW: '0'
+          EMU_CFLAGS: -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          sh web/emu/build.sh
+      - name: Verify the complete publication site before publishing
+        run: |
+          python3 web/make_site.py build/release-0.6.0/caravel-0.6.0.fwsc 0.6.0 build/site-0.6.0 \
+            --release-dir build/release-0.6.0 --emulator build/emu
+          python3 web/stasis_pages.py --check-site build/site-0.6.0
+      - name: Check desktop/mobile pages and audio playback metadata in Chromium
+        run: |
+          python -m pip install playwright
+          if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
+            python -m playwright install --with-deps chromium
+          fi
+          python3 tools/site_060_browser.py build/site-0.6.0 build/browser-0.6.0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Caravel-0.6.0-reviewed-publication
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/release-0.6.0/
+            build/site-0.6.0/
+            build/browser-0.6.0/
+      - name: Publish the requested version and start its Pages deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view v0.6.0 >/dev/null 2>&1; then
+            echo 'Refusing to replace an existing 0.6.0 release.'
+            exit 1
+          fi
+          gh release create v0.6.0 --target "$GITHUB_SHA" --title 'Caravel 0.6.0' \
+            --notes-file RELEASE-NOTES.md build/release-0.6.0/*
+          gh workflow run pages.yml --ref main -f version=0.6.0
+

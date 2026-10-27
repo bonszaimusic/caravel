@@ -29,6 +29,11 @@
 #ifndef FELUCCA_SLICE
 #define FELUCCA_SLICE 1          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
 #endif
+/* Experimental lean reverb: omit ROOM/SPRING DSP, retain saved IDs
+ * 0 and 1 as HALL aliases. Default 0 preserves stock Caravel behavior. */
+#ifndef CARAVEL_REVERB_MINIMAL
+#define CARAVEL_REVERB_MINIMAL 0
+#endif
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built
                                   * by default; replaced by FM6, its sounds convert (fm4_convert.c) */
@@ -124,6 +129,13 @@ enum {                          /* global parameters */
                                  * the import of an old project reads them: proj_drums_to_part) */
     G_COUNT
 };
+
+#if CARAVEL_REVERB_MINIMAL
+/* Reuse three retired, previously inert globals; project/protocol IDs stay fixed. */
+#define G_STMODE G_SYNC
+#define G_STAMT G_INFO
+#define G_STTIME G_ENGGO
+#endif
 
 /* stored parameters of an older layout -> today's P_* order. A store keeps np = the P_COUNT it was
  * written with; common parameters are only ever added just before P_E0, so the first np - 8 are

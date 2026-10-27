@@ -81,6 +81,14 @@ jobs:
             --release-dir "$RUNNER_TEMP/release" --check-only
       - name: Install header-generation dependencies
         run: python -m pip install Pillow fonttools
+      - name: Match the selected 0.6.0 engine and effects profile
+        run: |
+          if [ "$VER" = 0.6.0 ]; then
+            echo 'CARAVEL_REVERB_MINIMAL=1' >> "$GITHUB_ENV"
+            echo 'FELUCCA_SLICE=0' >> "$GITHUB_ENV"
+            echo 'EMU_CFLAGS=-DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
+            python3 web/stasis_pages.py --check-source
+          fi
       - name: Generate headers from the selected source (no target binary rebuild)
         run: |
           python3 - <<'PY'
@@ -105,6 +113,7 @@ jobs:
           EMU_PREVIEW=0 sh web/emu/build.sh
           python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site \
             --release-dir "$RUNNER_TEMP/release" --emulator build/emu
+          if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-site site; fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "id": "caravel-build-profiles",
+  "decision_date": "2026-10-27",
+  "decision_status": "0.6.0_publication_profile",
+  "scope": "M-VAVE FM-1 / Caravel",
+  "profiles": {
+    "caravel_synth": {
+      "name": "Caravel 0.6.0 Synth + STASIS",
+      "status": "release_default_automated_validated",
+      "release_default": true,
+      "flags": {
+        "CARAVEL_REVERB_MINIMAL": 1,
+        "FELUCCA_SLICE": 0,
+        "FELUCCA_FM4": 0,
+        "FELUCCA_HOME_PERF": 1,
+        "FELUCCA_PAIR_MORPH": 1,
+        "FELUCCA_PERF_HW": 1
+      },
+      "reverbs": [
+        "HALL",
+        "STASIS"
+      ],
+      "omitted": [
+        "ROOM",
+        "SPRING",
+        "SLICE engine"
+      ],
+      "retained": "SLICER track insert, all other current synth engines, HOME/Pair/macros and performance storage",
+      "compatibility": "CANCEL preserves the current session; TEST converts a working copy. Protect source slots and save elsewhere.",
+      "capture": "Internal mono REV send; two 32768-sample banks share the existing 131072-byte delay allocation.",
+      "controls": {
+        "REVERB": [
+          "TYPE",
+          "CAPT LIVE/HOLD",
+          "STR",
+          "MOTN"
+        ],
+        "LAYER": [
+          "MODE ADD/BLEND",
+          "AMT",
+          "TIME 1-30 s",
+          "OCT+ start/cancel"
+        ]
+      }
+    },
+    "legacy_host_reference": {
+      "name": "Full legacy host reference",
+      "release_default": false,
+      "flags": {
+        "CARAVEL_REVERB_MINIMAL": 0,
+        "FELUCCA_SLICE": 1
+      },
+      "purpose": "Existing golden audio, MIDI, UI and engine regressions; distinct from the actual reduced target build."
+    }
+  },
+  "resource_notes": {
+    "app_bytes": 554384,
+    "data_bss_bytes": 64460,
+    "pool_bytes": 360164,
+    "pool_limit_bytes": 368640,
+    "layer_state_bytes": 60,
+    "audio_buffer_added_bytes": 0,
+    "cpu": "Host and emulator timings do not establish actual FM-1 worst-case load. Real-device deadlines and long stability remain unverified.",
+    "input": "No external microphone/USB audio capture. Ordinary tempo DELAY is suspended while STASIS owns the shared buffer."
+  }
+}

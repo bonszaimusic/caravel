@@ -73,11 +73,16 @@ def look_css(installer):
 def landing(look, version, emulator, source_url, label=""):
     """The site's start page: header, hero and a box per page. Self-contained (no external requests)."""
     ver = markup.escape(version.lower() + label)
+    subtitle = "Hold a sound. Build a texture. STASIS, ADD and BLEND." if version == "0.6.0" else "Multi-engine synth firmware for the FM-1"
     ship = SHIP_PATH
     boxes = [("INSTALL", "webapp/installer/", "Install Caravel on the FM-1 over USB (Chrome or Edge)."),
              ("EDITOR", "webapp/editor/", "Edit sounds, sequences, banks and samples from the computer.")]
     if emulator:
         boxes.append(("EMULATOR", "emulator/", "The same code the instrument runs, in the browser."))
+    if version == "0.6.0":
+        boxes.extend([("TUTORIALS", "tutorials/", "Learn STASIS HOLD, ADD and BLEND with real firmware screens and a PDF guide."),
+                      ("SOUNDS", "sounds/", "Hear three original STASIS examples rendered by the actual firmware DSP."),
+                      ("CHANGELOG", "changelog/", "What changed in 0.6.0, the release profile and upgrade notes.")])
     cards = "".join(f'<section class="box sec"><span class="tag">{tag}</span><p><a href="{href}">{markup.escape(text)}</a></p></section>\n'
                     for tag, href, text in boxes)
     nav = "".join(f'<a href="{href}">{tag}</a>' for tag, href, _ in boxes)
@@ -110,7 +115,7 @@ def landing(look, version, emulator, source_url, label=""):
 <section class="box hero">
   <span class="tag">FM-1 firmware</span>
   <svg class="ship" width="140" height="85" viewBox="0 0 28 17" aria-hidden="true"><path d="{ship}"/></svg>
-  <div><h1>Caravel</h1><p>Multi-engine synth firmware for the FM-1</p></div>
+  <div><h1>Caravel</h1><p>{subtitle}</p></div>
 </section>
 {cards}</div>
 <p class="credits">Caravel by bonszaimusic, based on Felucca 1.6.1 by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">H\u00fcgelton Instruments</a>. GPL-3.0, no warranty.<br>
@@ -223,6 +228,10 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
         release.require(release_dir is not None, "provide --release-dir, or --preview for local-only testing")
         hashes = checked_release(HERE.parent, release_dir, version, pkg)
     emulator_html = checked_emulator(emulator, version, preview) if emulator else None
+    if version == "0.6.0":
+        sys.path.insert(0, str(HERE))
+        import stasis_pages
+        stasis_pages.load_sources(HERE.parent)
     if check_only:
         print("site inputs verified; no output/deployment performed")
         return
@@ -275,6 +284,8 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
             (dest / "index.html").write_text(source_href(emulator_html, emulator_source), encoding="utf-8")
         (stage / "index.html").write_text(
             landing(look, version, emulator, "firmware/" + source if not preview else source_url, label), encoding="utf-8")
+        if version == "0.6.0":
+            stasis_pages.build(stage, look, SHIP_PATH, HERE.parent)
         stage.rename(out)
     print(f"site: {out}; version {version}; verified release: {not preview}; no deployment performed")
 
@@ -295,3 +306,4 @@ if __name__ == "__main__":
              emulator=args.emulator, preview=args.preview, check_only=args.check_only)
     except (release.ReleaseError, OSError, ValueError) as error:
         parser.exit(1, f"site verification failed: {error}\n")
+

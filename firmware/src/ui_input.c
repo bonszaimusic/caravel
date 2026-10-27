@@ -1149,6 +1149,17 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
+#if CARAVEL_REVERB_MINIMAL
+    if (cur_page()->graph == GR_STLAYER) {
+        uint32_t cancel = stasis_layer_can_cancel();
+        fm1_irq_off();
+        int ok = stasis_layer_command(cancel);
+        fm1_irq_on();
+        if (!ok) ui_message(st_layer.phase == STL_MERGE ? "STORING TEXTURE" : "CAPT HOLD FIRST");
+        ui.force = 1;
+        return;
+    }
+#endif
     if (cur_page()->graph == GR_SLOTS && c == 1u && !ui.proj_erase) {
         confirm_open(CF_INIT_PROJECT, 0);
         return;
@@ -1222,11 +1233,12 @@ static void act_do(void)
             char msg[] = "QUEUED A";
             msg[7] = (char)('A' + k);
             ui_message(rc == 1u ? "EMPTY SLOT" : rc == 2u ? "STOP SONG FIRST" :
-                       rc == 3u ? "ENGINE MISMATCH" : rc == 4u ? "STOPPED" : msg);
+                       rc == 3u ? "ENGINE MISMATCH" : rc == 4u ? "STOPPED" : rc == 5u ? "STOP TO TEST LOAD" : msg);
         } else
             project_load(k);
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
+        if (project_compat_save_blocked(k)) break;
         if (chain_busy())
             ui_message("STOP SONG FIRST");
         else if (project_used(k))
@@ -1777,6 +1789,7 @@ static void ui_input(void)
             menu_close();
         } else {
             ui.menu = 1;                                /* (at the tab and row it was left at) */
+            if (ui.confirm == CF_COMPAT_PROJECT) project_compat_cancel();
             ui.confirm = 0;                             /* (a clear dialog is cancelled, NAME too) */
             name_close();
             ui.force = 1;
@@ -1816,7 +1829,9 @@ static void ui_input(void)
             uint32_t kind = ui.confirm;
             ui.confirm = 0;
             ui.force = 1;
-            if (kind == CF_OVR_PROJ) {                  /* overwrite: the NAME screen writes it */
+            if (kind == CF_COMPAT_PROJECT) {
+                project_compat_confirm();
+            } else if (kind == CF_OVR_PROJ) {                  /* overwrite: the NAME screen writes it */
                 name_open(NK_PROJ_SAVE, ui.confirm_trk & 3u);
             } else if (kind == CF_OVR_USER) {
                 name_open(NK_USER_SAVE, ui.confirm_trk);
@@ -1862,6 +1877,7 @@ static void ui_input(void)
                 }
             }
         } else if (oct & 1u) {
+            if (ui.confirm == CF_COMPAT_PROJECT) project_compat_cancel();
             ui.confirm = 0;
             ui.force = 1;
         }
@@ -1882,6 +1898,15 @@ static void ui_input(void)
         case B_PLAY:
             if (layer_play())                           /* (GLO held: RESTART) */
                 break;
+#if CARAVEL_REVERB_MINIMAL
+            /* Even with the sequencer already stopped, PLAY/STOP must not
+             * start a new sequence just to release a held STASIS texture. */
+            if (song.g[G_RTYPE] == 3 && song.g[G_DRLVL] &&
+                !song.playing && !chain_busy() && !seq_counting()) {
+                transport_req = 2u;
+                break;
+            }
+#endif
             if (midi_clock.resync_start || (!song.playing && transport_req >= 4u))
                 transport_req = 6;                    /* PLAY again cancels an armed external start. */
             else if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
@@ -2130,5 +2155,6 @@ timeout:
     ui.force = 1;
     ui_message("SETUP CANCELLED");
 }
+
 
 

@@ -1,0 +1,140 @@
+{
+  "version": "0.6.0",
+  "origin": "Native render of the actual Caravel firmware DSP; not a recording of an FM-1.",
+  "processing": "Constant peak normalization to -3 dBFS and a 150-ms end fade; no external sound effects.",
+  "sample_rate": 44100,
+  "channels": 2,
+  "profile": {
+    "CARAVEL_REVERB_MINIMAL": 1,
+    "FELUCCA_SLICE": 0
+  },
+  "render_source": "tools/stasis_release_media.c",
+  "clips": [
+    {
+      "id": "hold",
+      "file": "stasis-hold.mp3",
+      "title": "Hold a SEM chord",
+      "seconds": 20,
+      "description": "A WARM PAD chord becomes a sustained texture; MOTN animates it after the original track is muted.",
+      "cues": [
+        [
+          0,
+          "SEM WARM PAD chord"
+        ],
+        [
+          2.5,
+          "CAPT HOLD"
+        ],
+        [
+          4.2,
+          "Source track muted; captured texture remains"
+        ],
+        [
+          6.5,
+          "MOTN about 79%"
+        ],
+        [
+          15,
+          "STOP; natural HALL tail"
+        ]
+      ],
+      "sha256": "d99b0518594dd8eb65b15bb3144e0451ecad9308f743c6272730f04c3db917ff",
+      "raw_wav_sha256": "1d2673b2922d976779585e95cb674fdc6abef6335d283e5d779cb9126117248e",
+      "gain_db": 8.3105,
+      "decoded_peak": 0.708851,
+      "held_rms": 0.235008
+    },
+    {
+      "id": "add",
+      "file": "stasis-add.mp3",
+      "title": "Build a texture with ADD",
+      "seconds": 24,
+      "description": "A held SEM pad takes in DRONE SUB FOG, followed by HADES RAW LEAD. Each new source is muted after capture.",
+      "cues": [
+        [
+          0,
+          "SEM WARM PAD chord"
+        ],
+        [
+          2.5,
+          "CAPT HOLD"
+        ],
+        [
+          6,
+          "DRONE SUB FOG enters"
+        ],
+        [
+          7,
+          "ADD 33%"
+        ],
+        [
+          9,
+          "New source muted; overdub remains"
+        ],
+        [
+          12,
+          "HADES RAW LEAD enters"
+        ],
+        [
+          13,
+          "Second ADD"
+        ],
+        [
+          15,
+          "Lead muted; combined texture remains"
+        ],
+        [
+          19,
+          "STOP; natural HALL tail"
+        ]
+      ],
+      "sha256": "dc52721f66aec53dab40fe6f178e446ecf55a52653ad94a67718482703d3b21f",
+      "raw_wav_sha256": "c2dd3b6bc1c1a482d84b8340d5d5667247fa2a7fabcf2173907b66c0cd256fb0",
+      "gain_db": 8.021,
+      "decoded_peak": 0.722842,
+      "held_rms": 0.227385
+    },
+    {
+      "id": "blend",
+      "file": "stasis-blend.mp3",
+      "title": "Move from TIDE to OB STRING",
+      "seconds": 24,
+      "description": "A frozen DRONE TIDE texture transitions into a captured SEM OB STRING chord over six seconds.",
+      "cues": [
+        [
+          0,
+          "DRONE TIDE"
+        ],
+        [
+          2.5,
+          "CAPT HOLD"
+        ],
+        [
+          6,
+          "SEM OB STRING enters"
+        ],
+        [
+          7,
+          "BLEND starts; TIME 6 s"
+        ],
+        [
+          9,
+          "Source track muted while the captured transition continues"
+        ],
+        [
+          13,
+          "New texture held"
+        ],
+        [
+          19,
+          "STOP; natural HALL tail"
+        ]
+      ],
+      "sha256": "701a517a89ce1f26722f5a05ac1bbd317c298646037796c67e4dd84691483192",
+      "raw_wav_sha256": "c0da25ff8fcc2855a1b3b61cf74419fa1e63fd484b438e88330aaee66fceaa02",
+      "gain_db": 8.3192,
+      "decoded_peak": 0.707245,
+      "held_rms": 0.166346
+    }
+  ]
+}

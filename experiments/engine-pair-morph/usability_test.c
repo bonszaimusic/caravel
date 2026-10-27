@@ -54,14 +54,35 @@ int main(void)
         if(mode==V_LEGATO||mode==V_UNISON)CHECK(trk[0].v[0].age==age);
         if(mode==V_MONO)CHECK(trk[0].v[0].age!=age);
         trk_note_off(&trk[2],67);run_ms(5);
-        if(mode!=V_POLY||topo>=3)CHECK(gates(0)==1&&gates(2)==1&&trk[0].v[0].note==60&&trk[2].v[0].note==60);
+        if(mode!=V_POLY)CHECK(gates(0)==1&&gates(2)==1&&trk[0].v[0].note==60&&trk[2].v[0].note==60);
+        else if(topo>=3) {
+            /* A POLY cell network's host voice can retain the released note.
+             * Its full held mask and per-cell pitches own the musical gesture. */
+            track_t *network=&trk[reverse?0:2], *pitched=&trk[reverse?2:0];
+            drone_part_t *state=drone_state(network);uint32_t held60=0;
+            for(uint32_t i=0;i<NVOICE;i++)held60+=pitched->v[i].gate&&pitched->v[i].note==60;
+            CHECK(gates(0)==1&&gates(2)==1&&held60==1);
+            CHECK(drone_held(state,60)&&!drone_held(state,67));
+            CHECK(state->owner[0]==60&&state->pitch16[0]==60*16);
+        }
         trk_note_off(&trk[0],60);run_ms(5);CHECK(!gates(0)&&!gates(2));
         trk_all_off(&trk[0]);
     }
     for(uint32_t mode=0;mode<4;mode++)for(uint32_t priority=0;priority<3;priority++) {
         mode_pair(ENGI_SEM,ENGI_DRONE,mode,5);trk[0].p[P_PRIO]=priority;run_ms(3);
         for(uint32_t n=0;n<128;n++){trk_note_on(&trk[0],n,100);CHECK(ep.key_count==n+1);CHECK(voices_busy()<=NVOICE);}
-        for(uint32_t n=128;n-->0;){trk_note_off(&trk[2],n);CHECK(ep.key_count==n);if(n)CHECK(gates(0)==gates(2));}
+        for(uint32_t n=128;n-->0;){
+            trk_note_off(&trk[2],n);CHECK(ep.key_count==n);
+            if(mode!=V_POLY) { if(n)CHECK(gates(0)==gates(2)); }
+            else {
+                /* POLY cells use one network voice and up to four pitched voices;
+                 * stealing a pitched slot does not discard the network's keys. */
+                CHECK(!!drone_any_held(drone_state(&trk[2]))==!!n);
+                CHECK(!drone_held(drone_state(&trk[2]),n));
+                CHECK(gates(0)<=ep.budget&&gates(2)<=1&&voices_busy()<=NVOICE);
+                for(uint32_t v=0;v<NVOICE;v++)if(trk[0].v[v].gate)CHECK(trk[0].v[v].note<n);
+            }
+        }
         CHECK(!gates(0)&&!gates(2));
     }
     /* UNISON is paired within eight voices and protects the other parts' mono voices. */
@@ -73,3 +94,4 @@ int main(void)
     printf("usability: %u total checks; %u engine/mode combinations + 48 DRONE topology/mode cases; startup, HOME morph, inheritance, 128-key release, UNISON budget passed\n",checks,combinations);
     return 0;
 }
+

@@ -91,18 +91,21 @@ static int hp_hw_commit(uint32_t slot,const uint8_t*meta,const project_store_t*n
 }
 static uint32_t hp_pref_value(void){uint32_t v=(ui_prefs3>>3)&3;return v==1?0:v==2?2:1;}
 static int hp_project_save(uint32_t slot,const char*name){
+ if(project_compat_save_blocked(slot))return 1;
  if(slot>=4||chain_busy()){ui_message("STOP SONG FIRST");return 1;}if(!flash_ok){ui_message("FLASH UNAVAILABLE");return 2;}
  proj_wire_gen++;hp_capture(&hp_io);
  if(name){memset(proj_scratch.name,0,sizeof proj_scratch.name);str_cpy(proj_scratch.name,name,sizeof proj_scratch.name);proj_scratch.sum=proj_sum(&proj_scratch);if(!proj_pack(&hp_io.native,&proj_scratch))return 2;}
  memcpy(&proj_slot[slot],&hp_io.native,sizeof hp_io.native);hp_meta_pack(hp_pending[slot],&hp_io.model,&hp_io.pair);hp_pending_mask|=1u<<slot;project_ram_set(project_ram_mask()|(1u<<slot));proj_cur=slot;pat_from_set(slot+1);proj_name_get(proj_name,(uint8_t*)proj_scratch.name);
- if(transport_busy()){ui_message("SAVED RAM / STOP TO COMMIT");return 0;}
+ if(transport_busy()){ui_message("SAVED RAM / STOP TO COMMIT");project_compat_saved();return 0;}
  if(st_save(OBJ_PROJECT0+slot,&proj_slot[slot],sizeof proj_slot[slot])||!hp_hw_commit(slot,hp_pending[slot],&proj_slot[slot],0)){ui_message("RAM: SAVE ERROR / RETRY");hp_retry=fm1_ms;return 2;}
- hp_pending_mask&=~(1u<<slot);project_ram_set(project_ram_mask()&~(1u<<slot));ui_message("SAVED: SOUND + HOME + PAIR");return 0;
+ hp_pending_mask&=~(1u<<slot);project_ram_set(project_ram_mask()&~(1u<<slot));ui_message("SAVED: SOUND + HOME + PAIR");project_compat_saved();return 0;
 }
-static int hp_project_load(uint32_t slot){const hp_store_t*p=hp_slot(slot);if(!p)return 0;if(!hp_restore(p)){ui_message("PERF PROJECT INVALID");return 1;}proj_cur=slot;pat_from_set(slot+1);go_home();ui_message("LOADED: SOUND + HOME + PAIR");return 1;}
+static int hp_project_load(uint32_t slot){const hp_store_t*p=hp_slot(slot);if(!p)return 0;
+ if(!proj_import(&proj_scratch,&p->native,sizeof p->native))return 1;
+ if(project_compat_request(&proj_scratch,slot))return 1;if(!hp_restore(p)){ui_message("PERF PROJECT INVALID");return 1;}proj_cur=slot;pat_from_set(slot+1);go_home();ui_message(project_compat_state.trial?"TEST LOADED / SAVE A COPY":"LOADED: SOUND + HOME + PAIR");return 1;}
 /* USB restore writes a validated saved project, without replacing the working sound. */
 static int hp_project_import(uint32_t slot,const hp_store_t*p){
- if(slot>=4||transport_busy()||!flash_ok)return 0;
+ if(slot>=4||transport_busy()||!flash_ok||project_compat_save_blocked(slot))return 0;
  if(!hp_capsule_ok(p)||!proj_import(&proj_scratch,&p->native,sizeof p->native)||!proj_engines_ok(&proj_scratch))return 0;
  if(p->pair.on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?p->pair.b:p->pair.a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}
  hp_meta_pack(hp_pending[slot],&p->model,&p->pair);proj_slot[slot]=p->native;
@@ -132,6 +135,7 @@ static void hp_autosave_poll(void){
   if(st_save(OBJ_PROJECT0+slot,&proj_slot[slot],sizeof proj_slot[slot])||!hp_hw_commit(slot,hp_pending[slot],&proj_slot[slot],0)){hp_retry=fm1_ms;ui_message("RAM: SAVE ERROR / RETRY");return;}
   hp_pending_mask&=~(1u<<slot);project_ram_set(project_ram_mask()&~(1u<<slot));hp_retry=0;ui_message("PERF PROJECT SAVED");
  }
+ if(project_compat_state.hold_autosave)return;
  if(fm1_ms-hp_as_poll<250)return;hp_as_poll=fm1_ms;uint32_t sig=hp_signature();
  if(sig!=hp_as_seen||!autosave_quiet()){hp_as_seen=sig;hp_as_time=fm1_ms;return;}
  if(sig==hp_as_saved||(ui_prefs&PREF_RESTORE_OFF)||fm1_ms-hp_as_time<10000||fm1_ms-as.t<10000||(hp_retry&&fm1_ms-hp_retry<1000))return;
@@ -141,7 +145,7 @@ static void hp_autosave_poll(void){
 static int hp_autosave_boot(int allowed){
  hp_pending_mask=0;hp_default=hp_pref_value();for(uint32_t t=0;t<4;t++)hp_apply(t,hp_default);
  for(uint32_t slot=0;slot<4;slot++){const hp_store_t*p=hp_slot_disk(slot);if(p)proj_slot[slot]=p->native;}
- int restored=0;const hp_store_t*p=hp_slot_disk(4);if(p&&allowed&&!(ui_prefs&PREF_RESTORE_OFF))restored=hp_restore(p);
+ int restored=0;const hp_store_t*p=hp_slot_disk(4);if(p&&allowed&&!(ui_prefs&PREF_RESTORE_OFF)&&proj_import(&proj_scratch,&p->native,sizeof p->native)&&!project_compat_request(&proj_scratch,4))restored=hp_restore(p);
  hp_as_seen=hp_as_saved=hp_signature();hp_as_time=fm1_ms;return restored;
 }
 static int hp_forget(uint32_t slot){if(slot>=4)return 1;if(!hp_hw_commit(slot,0,0,1))return 1;hp_pending_mask&=~(1u<<slot);project_ram_set(project_ram_mask()&~(1u<<slot));return 0;}

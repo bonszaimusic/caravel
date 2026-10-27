@@ -1432,6 +1432,15 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
+#if CARAVEL_REVERB_MINIMAL
+        if (cur_page()->graph == GR_STLAYER && c == 3u) {
+            const char *status = stasis_layer_status();
+            if (st_layer.phase || st_layer.request)
+                draw_column(c, stasis_layer_can_cancel() ? "CANCEL" : "LAYER", status, "", T_ACCENT, -1, ICON_AUTO);
+            else draw_act_column(c, song.g[G_STMODE] == 1 ? "BLEND" : "ADD", T_THEME, ICON_AUTO);
+            continue;
+        }
+#endif
         if (cur_page()->graph == GR_SLOTS && c == 1u) {
             draw_act_column(c, ui.proj_erase ? "ERASE" : "INIT", ui.proj_erase && !graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_DIM : T_THEME, ICON_AUTO);
             continue;
@@ -1445,6 +1454,13 @@ static void draw_columns(void)
             continue;
         }
         param_format(d, *vp, val, &unit);
+#if CARAVEL_REVERB_MINIMAL
+        if (cur_page()->graph == GR_STLAYER &&
+            ((c == 1u && song.g[G_STMODE] == 1) || (c == 2u && song.g[G_STMODE] != 1))) {
+            draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), ICON_AUTO);
+            continue;
+        }
+#endif
         card_mot_of(vp);                                /* (a global: never) */
         card_span_of(d);
         if (vp == &TSEL->p[P_LRATE] && TSEL->p[P_LSYNC]) {   /* LFO 2 SYNC on: RATE does nothing, DIM (1.2) */
@@ -1600,6 +1616,12 @@ static void confirm_text(char *a, char *b)
     uint32_t k = ui.confirm_trk;
     b[0] = 0;
     switch (ui.confirm) {
+    case CF_COMPAT_PROJECT: {
+        uint32_t f = project_compat_warning();
+        str_cpy(a, f & 1u ? "SLICE > ANALOG" : "REVERB CHANGES", 24);
+        str_cpy(b, f & 2u ? "ROOM > HALL" : f & 4u ? "SPRING > HALL" : "SAVE A COPY ONLY", 24);
+        break;
+    }
     case CF_CLEAR_TRK:
         str_cpy(a, "CLEAR TRACK 1?", 24);
         a[12] = (char)('1' + k % NTRK);
@@ -1663,6 +1685,8 @@ static void confirm_text(char *a, char *b)
 static void draw_confirm(void)
 {
     char a[24], b[24];
+    const char *no = ui.confirm == CF_COMPAT_PROJECT ? "CANCEL" : "NO";
+    const char *yes = ui.confirm == CF_COMPAT_PROJECT ? "TEST" : "YES";
     const aafont_t *tf = &AF_M;
     confirm_text(a, b);
     lcd_fill(0, H_HEAD, 240, 240 - H_HEAD, T_BG);
@@ -1686,13 +1710,13 @@ static void draw_confirm(void)
     }
     cv_rrect(10, 80, 90, 26, 6, T_RAISE, T_SURF);     /* OCT-: NO */
     GFX_HOOK_ALIGN(10, 80, 100, 106, AL_HV | AL_N(2), "dialog button NO");
-    cv_key_hint(10 + HALF_UP(90 - kh_ink(KC_OCTDN, "NO")), 80 + HALF_UP(26 - KC_H), KC_OCTDN, "NO", 1, T_RAISE);   /* (ink centred) */
+    cv_key_hint(10 + HALF_UP(90 - kh_ink(KC_OCTDN, no)), 80 + HALF_UP(26 - KC_H), KC_OCTDN, no, 1, T_RAISE);   /* (ink centred) */
     cv_rrect(108, 80, 90, 26, 6, T_THEME, T_SURF);    /* OCT+: YES (on the THEME fill: an INK keycap, THEME label) */
     {
-        int32_t x = 108 + HALF_UP(90 - kh_ink(KC_OCTUP, "YES"));
+        int32_t x = 108 + HALF_UP(90 - kh_ink(KC_OCTUP, yes));
         GFX_HOOK_ALIGN(108, 80, 198, 106, AL_HV | AL_N(2), "dialog button YES");
         x = cv_keycap(x, 80 + HALF_UP(26 - KC_H), KC_OCTUP, T_INK, T_THEME, T_THEME);
-        cv_text_on(x + KH_GAP, 80 + HALF_UP(26 - KC_H) - 1, &AF_S, "YES", T_INK, T_THEME);
+        cv_text_on(x + KH_GAP, 80 + HALF_UP(26 - KC_H) - 1, &AF_S, yes, T_INK, T_THEME);
     }
     cv_blit(DLG_X, DLG_Y);
 }

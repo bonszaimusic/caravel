@@ -46,6 +46,29 @@ const E = vm.runInNewContext(proto + `
    midiLearn: typeof midiLearn === "undefined" ? null : midiLearn })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console });
 
+/* The historical descriptor suite exercises the complete legacy host profile.
+ * Production/demo defaults use STASIS; test it explicitly as a second profile. */
+const makeProfileMock = E.makeMockDevice;
+E.makeMockDevice = (opt = {}) => makeProfileMock({ stasis: false, ...opt });
+{
+  const m = makeProfileMock({ auto: false });
+  ok(m.tables.GP[24].names.join() === "HALL,HALL,HALL,STASIS" &&
+     m.tables.GP[25].label === "CAPT" && m.tables.GP[26].label === "MOTN",
+     "STASIS demo: reverb aliases and CAPT/MOTN descriptors");
+  ok(m.tables.GP[13].names.join() === "ADD,BLEND" && m.tables.GP[15].label === "AMT" &&
+     m.tables.GP[15].def === 32 && m.tables.GP[21].label === "TIME" &&
+     m.tables.GP[21].min === 1 && m.tables.GP[21].max === 30 && m.tables.GP[21].unit === "s",
+     "STASIS demo: layer descriptors match retired global IDs");
+  ok(m.tables.ENG[13].name === "-" && m.tables.GP[20].names[13] === "-" &&
+     m.tables.TP[45].names.join() === "OFF,GATE,STUT",
+     "STASIS demo: SLICE omitted and the SLICER track effect retained");
+  const d = m.tables.TP[50];
+  ok(d.names.length === 29 && d.names.slice(25).join() === "PAIR,CAPT,STR,MOTN" &&
+     E.enumShown(d).slice(-4).join() === "25,26,27,28",
+     "STASIS demo: appended modulation IDs and knob order");
+  m.stop();
+}
+
 async function lfo2Editor() {
   const {rq,done}=attachMock({lfo2:true});
   const info=E.parse[E.CMD.INFO](await rq(E.req.info()));
@@ -473,9 +496,9 @@ async function editorMock() {
     const r0 = E.parse[E.CMD.SET](await rq(E.req.set(1, 24, 0)));
     const inert = [25, 26].map(async (id) => E.parse[E.CMD.DESC](await rq(E.req.desc(1, id))));
     const [d25, d26] = await Promise.all(inert);
-    ok(rd.label === "TYPE" && rd.def === 2 && eq(rd.names, ["ROOM", "SPRING", "HALL"]) && r1.value === 2 && r0.value === 0 &&
-       d25.label === "-" && d26.label === "-" && d25.max === 0 && info.gcount === 27,
-      "editor: REVERB TYPE (ROOM / SPRING / HALL, global id 24; 25, 26 still inert)");
+    ok(rd.label === "TYPE" && rd.def === 2 && eq(rd.names, ["ROOM", "SPRING", "HALL", "STASIS"]) && r1.value === 3 && r0.value === 0 &&
+       d25.label === "-" && d26.label === "-" && d25.max === 0 && d26.max === 0 && d26.def === 0 && info.gcount === 27,
+      "editor: legacy full profile REVERB TYPE and inert global IDs 25/26");
   }
   const st = E.parse[E.CMD.STEP_SET](await rq(E.req.stepSet(5, { n: 2, notes: [60, 64], time: 0, flags: 1, vel: 100 })));
   ok(st.n === 2 && st.notes[1] === 64 && st.vel === 100, "editor: STEP_SET");
@@ -1936,5 +1959,6 @@ await packages();
 await updater();
 console.log(failed ? `WEB TESTS FAILED (${failed})` : "web tests passed");
 process.exit(failed ? 1 : 0);
+
 
 

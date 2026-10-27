@@ -1796,11 +1796,13 @@ function fromPerc(pt, engines, pe0) {
 const engineLabel = (engines, e) => (e === 1 && (engines || [])[1] === "-" ? "FM6" : (engines || [])[e] ?? String(e));
 
 function makeMockDevice(opt = {}) {
+  const stasis = opt.stasis !== false, pair = stasis || !!opt.pair;
+  const slice = opt.slice ?? !stasis; /* Public 0.6.0 demo matches the reduced target. */
   const NONOFF = ["OFF", "ON"], NDIV = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"], NGO = ["--", "GO"], NDASH = ["--"];
   const D = (label, fmt, min, max, def, names = null, unit = "") => ({ label, fmt, min, max, def, names, unit });
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
   const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW", "LFO2", "S&H2", "SLEW2"];   /* (append-only: S&H SLEW, #132) */
-  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB"];   /* (DEPTH: #132; VEL TIME: 1.5.6, #213) */
+  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB", ...(pair ? ["PAIR"] : []), ...(stasis ? ["CAPT", "STR", "MOTN"] : [])]; /* append-only IDs; match the selected firmware profile */
   const TP = [
     D("LVL", F.DB, 0, 127, 104),
     D("ATK", F.TIME, 0, 127, 10), D("DEC", F.TIME, 0, 127, 70), D("SUS", F.PCT, 0, 127, 90), D("REL", F.TIME, 0, 127, 60),
@@ -1821,13 +1823,14 @@ function makeMockDevice(opt = {}) {
     D("BPM", F.BPM, 40, 240, 120), D("SWG", F.PCT, 0, 100, 0), E("CLK", ["INT", "USB", "TRS"], 0), D("TUNE", F.INT, -50, 50, 0),
     E("TIME", [...NDIV, "1/8D", "1/16D", "1/4D"], 1), D("FDBK", F.PCT, 0, 120, 60), D("COLR", F.PCT, 0, 127, 70), D("MIX", F.PCT, 0, 127, 90),
     D("SIZE", F.PCT, 0, 127, 90), D("DAMP", F.PCT, 0, 127, 60), D("CRT", F.LFOHZ, 0, 127, 40), D("CDP", F.PCT, 0, 127, 60),
-    E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"], 0), D("CPU", F.INT, 0, 0, 0),
+    E("MIDI", ["USB", "TRS"], 0), stasis ? E("MODE", ["ADD", "BLEND"], 0) : E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"], 0), stasis ? D("AMT", F.PCT, 0, 127, 32) : D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
     E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL",
-      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE", "SEM", "HADES", "DRONE"], 0), E("SET", NGO, 0),
+      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", slice ? "SLICE" : "-", "SEM", "HADES", "DRONE"], 0), stasis ? D("TIME", F.INT, 1, 30, 6, null, "s") : E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
-    E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
-    D("-", F.INT, 0, 0, 0), D("-", F.INT, 0, 0, 0),   /* G_DRLVL, G_DRREV: inert since 1.0 */
+    E("TYPE", stasis ? ["HALL", "HALL", "HALL", "STASIS"] : ["ROOM", "SPRING", "HALL", "STASIS"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
+    stasis ? E("CAPT", ["LIVE", "HOLD"], 0) : D("-", F.INT, 0, 0, 0),
+    stasis ? D("MOTN", F.PCT, 0, 127, 45) : D("-", F.INT, 0, 0, 0), /* STASIS: CAPT+EVOLVE; former global ids 25/26 */
   ];
   const NONE = D("-", F.INT, 0, 0, 0);
   const RATIO = [".5", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "14", "16"];
@@ -1908,7 +1911,7 @@ function makeMockDevice(opt = {}) {
         P("FM BASS", [0, 0, 0, 0, 0, 0, 0, 2], [0, 0, 127, 0], 1, 2), P("BRASS", [0, 0, 0, 0, 0, 0, 0, 3], [0, 0, 127, 0], 0, 4),
         P("PAD", [0, 0, 0, 0, 0, 0, 30, 4], [0, 0, 127, 0], 0, 5), P("MARIMBA", [0, 0, 0, 0, 0, 0, 0, 5], [0, 0, 127, 0], 0, 3),
         P("ORGAN", [0, 0, 0, 0, 0, 0, 0, 6], [0, 0, 127, 0], 0, 6), P("PLUCK", [0, 0, 0, 0, 0, 0, 0, 7], [0, 0, 127, 0], 0, 13)] },
-    { name: "SLICE", titles: ["SLCE", "PLAY"], edit: [E("SRC", ["BREAK", "USR1", "USR2", "USR3", "PIANO"], 0),
+    { name: slice ? "SLICE" : "-", titles: ["SLCE", "PLAY"], edit: [E("SRC", ["BREAK", "USR1", "USR2", "USR3", "PIANO"], 0),
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
@@ -2701,7 +2704,7 @@ function enumShown(d) {
     const order = d.label.startsWith("SRC")
       ? ["OFF", "LFO", "S&H", "SLEW", "LFO2", "S&H2", "SLEW2", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR"]
       : ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "MORPH", "PHS FB", "RATE", "VIB", "DEPTH",
-         "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "VEL", "TIME", "DIST", "CHO", "DLY", "REV"];
+         "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "VEL", "TIME", "DIST", "CHO", "DLY", "REV", "PAIR", "CAPT", "STR", "MOTN"];
     const rank = (v) => { const i = order.indexOf(d.names[v - d.min]); return i < 0 ? order.length : i; };
     return vals.sort((a, b) => rank(a) - rank(b) || a - b);
   }
@@ -3146,7 +3149,7 @@ const LAYOUT = (pe0) => [
     ...[0, 1, 2, 3].map((k) => [`OP${k + 1}`, 0, [61 + 5 * k, 62 + 5 * k, 63 + 5 * k, 64 + 5 * k]]),
     ["OP LVL", 0, [65, 70, 75, 80]]] }] : []),
   { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]], ...(pe0 >= 96 ? [["VOICE 3", 0, [95]]] : [])] },
-  { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["SLICER", 0, [45, 46, 47, 48]], ...(pe0 >= 103 ? [["INSERT", 0, [96, 97, 98, 99]], ["INSERT MIX", 0, [100]]] : []), ...(pe0 >= 106 ? [["FILTER", 0, [105]]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, [24, 8, 9]], ["CHORUS", 1, [10, 11]]] },   /* G_RTYPE 24: ROOM / SPRING / HALL */
+  { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["SLICER", 0, [45, 46, 47, 48]], ...(pe0 >= 103 ? [["INSERT", 0, [96, 97, 98, 99]], ["INSERT MIX", 0, [100]]] : []), ...(pe0 >= 106 ? [["FILTER", 0, [105]]] : []), ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, dev?.gdesc?.[25]?.label === "CAPT" && dev?.dump?.g?.[24] === 3 ? [24, 25, 8, 26] : [24, 8, 9]], ["CHORUS", 1, [10, 11]], ...(dev?.gdesc?.[13]?.names?.join() === "ADD,BLEND" && dev?.dump?.g?.[24] === 3 ? [["LAYER", 1, [13, 15, 21]]] : [])] },   /* Layer controls; start/cancel on the FM-1 or emulator panel with OCT+. */
   { t: "SCL", pages: [["SCL", 0, [25, 26, 27, 28]], ...(pe0 >= 83 ? [["CHORD", 0, P_CHORD]] : [])] },   /* CHRD VOIC 81, 82, LATCH 8 */
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
   { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]], ...(pe0 >= 96 ? [["TIMING", 0, [94]]] : [])] },
@@ -3446,7 +3449,9 @@ function buildGroups() {
 }
 
 function paramRow(s, id) {
-  const d = s ? dev.gdesc[id] : dev.pdesc[id];
+  const orig = s ? dev.gdesc[id] : dev.pdesc[id];
+  const d = s && id === 8 && dev.dump?.g?.[24] === 3
+    ? { ...orig, label: "STR" } : orig;
   if (!visible(d) || (s === 1 && G_SKIP.has(d.label))) return null;
   const k = key(s, id);
   let input;
@@ -3524,6 +3529,8 @@ function userSet(s, id, v, final) {
   if (!dev) return;
   const k = key(s, id);
   (s ? dev.dump.g : dev.dump.p)[id] = v;
+  if (s && id === 24 && dev.gdesc?.[25]?.label === "CAPT")
+    buildGroups();              /* one REVERB page: swap HALL versus STASIS rows */
   showValue(k, v, false);
   mixFromDump();
   let st = sets.get(k);
@@ -3542,6 +3549,8 @@ async function sendSet(s, id, k) {
     const r = parse[CMD.SET](await rq(req.set(s, id, v), { key: k }));
     if (dev && dragging !== k && st.sent === v && !dev.link.hasQueued(k)) {   /* the device's value after clamping */
       (s ? dev.dump.g : dev.dump.p)[id] = r.value;
+      if (s && id === 24 && dev.gdesc?.[25]?.label === "CAPT")
+        buildGroups();
       showValue(k, r.value, false);
       mixFromDump();
       if (d === dev && !s && id === d.info.pe0 + 1 && d.info.engines[d.dump.engine] === "LOFI") {
@@ -5479,4 +5488,5 @@ if (!MOCK && !navigator.requestMIDIAccess) sayK("nomidi");
 </script>
 </body>
 </html>
+
 

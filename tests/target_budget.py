@@ -40,14 +40,20 @@ FUNCS = sorted(NEW_LFO2) + ['drone_render', 'drone_legacy_render', 'drone_cell_r
          "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
          "perf_flanger", "perf_phaser",                     # .. FLANGER, PHASER (1.2), while held or fading
          "perf_throw",                                      # .. REV / ECHO THROW (1.5.1): per part, while held or gliding
-         "rev_room", "rev_spring", "rev_hall", "rev_side_mix",   # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING / HALL (and its stereo)
+         "rev_room", "rev_spring", "rev_hall", "rev_side_mix",  # HALL/ABYSS share this actual DSP loop; wrappers contain only a call
          "track_insert", "ins_drive", "ins_swept",          # the per-track INSERT (fx.c, 1.5), while a TYPE plays
          "track_filter", "tf_wet_block"]                                    # the per-track FILTER (fx.c, 0.3.0), while FILT is set or fading (twice a block with SPREAD)
 # built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
+# With the SLICE-off slim profile those functions are intentionally absent.
+# If present they remain budget-checked against tests/target_budget.txt.
+SLICE_OPTIONAL = {"slice_render": 453, "slc_rev": 120} if os.environ.get("FELUCCA_SLICE") == "0" else {}
+# The STASIS minimal profile removes both old ROOM and SPRING renderers.
+REVERB_MINIMAL_OPTIONAL = {"rev_room": 218, "rev_spring": 126} if os.environ.get("CARAVEL_REVERB_MINIMAL") == "1" else {}
+
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,
             "uac_tap48": 504,           # (absent from a FELUCCA_UAC_48K=0 or FELUCCA_UAC=0 build)
-            "mix_part": 2800, "mix_part_inner": 2800, "track_render": None}           # (FELUCCA_CPU2=1, the default since 1.6.1: out of line, either core may run it)
+            "mix_part": 2800, "mix_part_inner": 2800, "track_render": None, **SLICE_OPTIONAL, **REVERB_MINIMAL_OPTIONAL}           # (FELUCCA_CPU2=1, the default since 1.6.1: out of line, either core may run it)
 # a FELUCCA_CPU2=0 build (no mix_part: inlined into the audio ISR, as 1.6) has the one-core ISR, checked against this
 ONE_CORE = {"fm1_alnk0_irq": 37502}
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not

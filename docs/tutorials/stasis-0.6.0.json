@@ -1,0 +1,99 @@
+{
+  "version": "0.6.0",
+  "pdf": "Caravel-0.6.0-STASIS-Guide.pdf",
+  "pdf_sha256": "36c823ecad08f4ef47a3a821df8a2b00ebe93b75f6dadf1927d371a54474e3b3",
+  "chapters": [
+    {
+      "number": "01",
+      "title": "Capture a sound. Keep it moving.",
+      "image": "stasis-hold.png",
+      "image_sha256": "7097bf53f0101618fd94622b706d8aca63a5e68e91ace993231fcf43bb7a3889",
+      "tag": "LIVE / HOLD",
+      "steps": [
+        {
+          "title": "1. Feed the texture",
+          "text": "Set a track's REV send to about 85-90%. On FX > REVERB, select TYPE STASIS. This page now reads TYPE / CAPT / STR / MOTN."
+        },
+        {
+          "title": "2. Capture",
+          "text": "Leave CAPT on LIVE and play a chord for at least 0.6 seconds. Turn CAPT to HOLD: the recently played sound continues after you release the notes."
+        },
+        {
+          "title": "3. Shape the held sound",
+          "text": "Start with STR around 70-85% and MOTN around 30-45%. STR brings the texture forward; MOTN moves reflections, filtering and HALL damping while keeping grain playback at its original rate."
+        }
+      ],
+      "tip": "Try it: SEM > WARM PAD, a low minor chord, CAPT HOLD, then raise MOTN. STOP releases the texture into the HALL tail.",
+      "note": "STASIS captures the internal REV send. It does not record microphone or USB audio. Ordinary tempo DELAY is suspended while STASIS is active."
+    },
+    {
+      "number": "02",
+      "title": "Add another sound to the texture.",
+      "image": "add-ready.png",
+      "image_sha256": "33312f7f57dba1d8c614d90c6d085dc40047321e5b2a8d73eb499f4c16c49e3a",
+      "tag": "ADD",
+      "steps": [
+        {
+          "title": "1. Keep HOLD",
+          "text": "Leave CAPT on HOLD and open FX > LAYER. The controls are MODE / AMT / TIME / action. Choose MODE ADD; AMT 25% is a good starting point."
+        },
+        {
+          "title": "2. Play the addition",
+          "text": "Play the new sound with its REV send enabled for about 0.6 seconds. Every track with REV send contributes, so lower the other sends if you want just one source."
+        },
+        {
+          "title": "3. Press OCT+",
+          "text": "OCT+ starts the overdub. MIX fades in the new recording over 200 ms; STORE finishes the mixture in about 0.75 s. READY means you can add again. CAPT remains HOLD."
+        }
+      ],
+      "tip": "Try it: hold a SEM pad, add a low DRONE note, then a higher HADES note. After capture you can mute each live source; its contribution remains in the texture.",
+      "note": "AMT is the new sound's share: 25% new + 75% old. Gains are complementary to keep repeated additions bounded. The layers merge and cannot be removed individually."
+    },
+    {
+      "number": "03",
+      "title": "Blend into a new held texture.",
+      "image": "blend-mix.png",
+      "image_sha256": "ebd75f1fa724a4f218f84e7c90cd594a35c96e25365be14716dd107ec04ca954",
+      "tag": "BLEND",
+      "steps": [
+        {
+          "title": "1. Choose the transition",
+          "text": "With CAPT HOLD, open LAYER and choose MODE BLEND. Set TIME from 1 to 30 seconds; start with 6 s. AMT is not used in BLEND."
+        },
+        {
+          "title": "2. Play, then start",
+          "text": "Play the destination sound through REV send for about 0.6 seconds, then press OCT+. A snapshot of the new sound replaces the held texture over TIME."
+        },
+        {
+          "title": "3. Hold the destination",
+          "text": "When MIX and STORE finish, the destination stays in HOLD. This is one transition per press, not continuous automatic capture. Press OCT+ during WAIT or MIX to return smoothly to the original."
+        }
+      ],
+      "tip": "Try it: hold DRONE > TIDE, then blend into a brighter SEM > OB STRING chord. Release or mute the live source after capture to hear the transition alone.",
+      "note": "WAIT keeps the original while there is no sufficiently recent input. During STORE the commit finishes before another operation. STOP and HOLD > LIVE release the audible mixture normally."
+    },
+    {
+      "number": "04",
+      "title": "Keep projects safe when upgrading.",
+      "image": "stasis-compat.png",
+      "image_sha256": "98eb750a99f42a977bc3fc24427b7d3b20b9923919ff81af9ca05435b745d47f",
+      "tag": "PROJECTS / PROFILE",
+      "steps": [
+        {
+          "title": "1. Know the 0.6.0 profile",
+          "text": "The release contains HALL and STASIS. ROOM, SPRING and the SLICE engine are omitted to fit the target. The separate SLICER track effect remains available."
+        },
+        {
+          "title": "2. Review the warning",
+          "text": "Projects using omitted features show the actual substitutions: SLICE > ANALOG and ROOM/SPRING > HALL. OCT- CANCEL leaves the current session untouched; OCT+ TEST loads a converted working copy."
+        },
+        {
+          "title": "3. Save a separate copy",
+          "text": "The source slot stays protected for the session. Save the audition into another slot. For RESTORE LAST, occupied slots are protected because the original source slot is unknown; use an empty slot."
+        }
+      ],
+      "tip": "Before updating: export a complete backup with matching Caravel tools. Keep user banks with the performance. The public installer provides the matching 0.6.0 package.",
+      "note": "Project saves keep MODE, AMT and TIME, but not the captured audio. Textures live in RAM. Automated tests pass; actual FM-1 worst-case load, physical USB/OTA and long-term stability are not certified by host tests."
+    }
+  ]
+}

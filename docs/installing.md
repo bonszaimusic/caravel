@@ -87,7 +87,12 @@ cd /tmp/caravel-site && python3 -m http.server 8000
 # open http://localhost:8000/webapp/installer/
 ```
 
-## 0.5.0 in preparation
+## 0.6.0 profile and upgrade
+
+The public 0.6.0 package contains HALL/STASIS and omits ROOM, SPRING and the
+SLICE engine. The SLICER track effect remains. Back up first; incompatible
+projects offer CANCEL / TEST, preserve their original slots and can be saved as
+a separate copy. See [the STASIS tutorial](tutorials/README.md).
 
 Versioned builds use the fixed FM-1_999 identity prepared in 0.3.4; existing
 published releases retain their original packages and identities. HPM1 performance

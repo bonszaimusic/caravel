@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Experimental STASIS browser preview: deliberately independent of slow target
+# compiler/toolchain, flash packaging, target regression and hardware checks.
+name: STASIS Emulator Preview
+
+on:
+  push:
+    branches: [experiment/stasis-texture-v0]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stasis-emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out experimental source
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install font/sample generator requirements
+        run: python -m pip install Pillow fonttools
+      - name: Generate the browser's UI and synth data without building target firmware
+        env:
+          FELUCCA_SLICE: '1'
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "tools")
+          import build
+          build.generate()
+          PY
+      - name: Fast STASIS capture/freeze/granular DSP and compatibility test
+        run: |
+          mkdir -p build/host
+          cc -O2 -w -DCARAVEL_REVERB_MINIMAL=1 -DSTASIS_FULL_PROFILE=1 -Ibuild/gen -Ifirmware/src \
+            -o build/host/stasis_minimal_test tests/stasis_test.c -lm
+          build/host/stasis_minimal_test
+          cc -O2 -w -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_PERF_HW=0 \
+            -Ibuild/gen -Ifirmware/src -o build/host/stasis_layer_test tests/stasis_layer_test.c -lm
+          build/host/stasis_layer_test
+          for slice in 0 1; do
+            cc -O2 -w -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=$slice -DFELUCCA_PERF_HW=0 \
+              -Ibuild/gen -Ifirmware/src -o build/host/project_compat_web tests/project_compat_test.c -lm
+            build/host/project_compat_web
+          done
+      - name: Install pinned Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Compile standalone STASIS browser emulator
+        env:
+          EMU_VERSION: v0.6.0-STASIS-ADD-BLEND
+          EMU_PREVIEW: '1'
+          EMU_CFLAGS: -DCARAVEL_REVERB_MINIMAL=1
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          sh web/emu/build.sh
+          test -s build/emu/index.html
+          test -s build/emu/felucca.wasm
+          test -s build/emu/worklet.js
+          cat > build/emu/HOW-TO-RUN.txt <<'TXT'
+          Caravel STASIS V0.6 fixed-pitch MOTN ambient emulator (NOT hardware firmware)
+
+          1. Extract the GitHub Actions artifact ZIP.
+          2. In Terminal, open the folder containing index.html and felucca.wasm:
+                 cd /path/to/extracted/folder
+          3. Run:
+                 python3 -m http.server 8790
+          4. Open http://localhost:8790/ in Chrome, Safari or another supported browser.
+          5. Select FX > REVERB > TYPE > STASIS; the same REVERB page now shows CAPT, STR, MOTN.
+             CAPT LIVE -> HOLD: capture a chord; STOP releases HOLD and fades into the HALL tail.
+             MOTN 0..127: animate delay reflections, stereo filter and HALL without pitch sweeps.
+             STR 0..127: texture strength. No separate MORPH, EVOLV or FRZ pages.
+             FX > LAYER: choose ADD or BLEND. ADD uses AMT; BLEND uses TIME in seconds.
+             Keep CAPT HOLD, play a new sound with REV SEND for ~0.6 s, then press OCT+.
+             ADD keeps AMT of the new recording in the old texture; BLEND replaces it gradually.
+             Both finish in HOLD. OCT+ cancels WAIT or fades MIX back to the original.
+             STORE finishes the mixture (~0.75 s); a quiet input never erases HOLD.
+             Set REV SEND around 110 and play a SEM pad or short FM chord.\n             Try STR 100 and MOTN 45. Increase MOTN to 100 on HOLD, then STOP.\n             Wait about 0.5s after entering STASIS before CAPT HOLD. Ordinary tempo DELAY
+             is suspended while STASIS owns its 128-KiB buffer.
+             ROOM, SPRING and ABYSS DSP are absent from this experimental build.
+          6. Stop the local server with Ctrl+C.
+
+          This preview has not passed FM-1 hardware validation. Do not flash it.
+          The browser preview retains SLICE. A separate SLICE-off target configuration
+          is not validated here. Nothing in this ZIP is flashable firmware.
+          TXT
+      - name: Upload experimental emulator independently of target CI
+        uses: actions/upload-artifact@v4
+        with:
+          name: STASIS-0.6.0-Emulator-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: build/emu/
+      - name: Preview instructions
+        if: success()
+        run: |
+          {
+            echo '### STASIS browser preview ready'
+            echo 'Download **STASIS-Emulator** from the Artifacts section of this run.'
+            echo 'Unzip, open Terminal in the directory with index.html and run `python3 -m http.server 8790`.'
+            echo 'Then visit **http://localhost:8790/** and select **REVERB > TYPE > STASIS**.'
+            echo 'This is an experimental STASIS WebAssembly emulator, not firmware to flash.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+

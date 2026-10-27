@@ -54,7 +54,15 @@ static const char *const N_MIDI_INPUT[] = {"USB", "TRS"};
 static const char *const N_ROUTE[] = {"CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"};
 static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const N_DASH[] = {"--"};
-static const char *const N_RTYPE[] = {"ROOM", "SPRING", "HALL"};   /* G_RTYPE: the reverb bus's model (fx.c) */
+#if CARAVEL_REVERB_MINIMAL
+/* Old stored 0/1 remain HALL aliases. Slot 3 is STASIS, not ABYSS. */
+static const char *const N_RTYPE[] = {"HALL", "HALL", "HALL", "STASIS"};
+static const char *const N_STCAP[] = {"LIVE", "HOLD"};  /* CAPT captures already-playing sound */
+static const char *const N_STLAYER[] = {"ADD", "BLEND"};
+/* Former FRZ/global ID 26 becomes continuously variable EVOLVE. */
+#else
+static const char *const N_RTYPE[] = {"ROOM", "SPRING", "HALL", "STASIS"};
+#endif
 static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
@@ -73,6 +81,9 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
                                      "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME", "MORPH", "PHS FB"
 #if FELUCCA_PAIR_MORPH
                                      , "PAIR"
+#endif
+#if CARAVEL_REVERB_MINIMAL
+                                     , "CAPT", "STR", "MOTN" /* shared STASIS bus targets */
 #endif
 };
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
@@ -215,17 +226,29 @@ static const param_desc_t GP[G_COUNT] = {
      * showed the USB state), SYNC was a placeholder, CPU a reading; the USB state and the CPU load are MENU > SYSTEM >
      * INFO's now (ui_menu.c). Kept: the ids and G_COUNT are fixed by the formats and the protocol */
     [G_MIDI] = PE("MIDI", N_MIDI_INPUT, 0),
+#if CARAVEL_REVERB_MINIMAL
+    [G_STMODE] = PE("MODE", N_STLAYER, 0),
+#else
     [G_SYNC] = PE("SYNC", N_DASH, 0),
+#endif
     /* MIDI IN's routing, edited on MENU > MIDI > MIDI IN (1.2: menu_items.c MI_MIDIIN; up to 1.1.5 GLO > SYSTEM ROUT),
      * stored with the project as before. (was "--": stored 0 = CH1-4, as MIDI IN always was) */
     [G_ROUTE] = PE("ROUT", N_ROUTE, 0),
+#if CARAVEL_REVERB_MINIMAL
+    [G_STAMT] = PD("AMT", F_PCT, 0, 127, 32),
+#else
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
+#endif
     [G_SLOT] = PD("SLOT", F_INT, 1, 4, 1),
     [G_NAME] = PE("NAME", N_DASH, 0),
     [G_LOAD] = PE("LOAD", N_GO, 0),
     [G_SAVE] = PE("SAVE", N_GO, 0),
     [G_ENGSEL] = PE("ENG", N_ENGNAME, 0),
+#if CARAVEL_REVERB_MINIMAL
+    [G_STTIME] = {"TIME", F_INT, 1, 30, 6, 0, "s"},
+#else
     [G_ENGGO] = PE("SET", N_GO, 0),
+#endif
     [G_CLRSEQ] = PE("CLRSQ", N_GO, 0),
     [G_INITSND] = PE("INIT", N_GO, 0),
     /* the reverb's model on the REVERB page: the id of the old GM drum channel (G_DRCH, inert since 1.0) */
@@ -233,8 +256,16 @@ static const param_desc_t GP[G_COUNT] = {
     /* inert: they set the GM drum part (level, reverb send), which is gone (drums are the DRUM engine
      * on any part). On no page; kept so the ids and G_COUNT, which the project format and the
      * editor protocol depend on, do not move */
+#if CARAVEL_REVERB_MINIMAL
+    /* Experimental STASIS controls, using old obsolete drum globals.
+     * CAPT combines record and freeze; EVOLVE continuously moves stereo scans.
+     * Legacy GM drum fields require separate project migration review. */
+    [G_DRLVL] = PE("CAPT", N_STCAP, 0),
+    [G_DRREV] = PD("MOTN", F_PCT, 0, 127, 45),
+#else
     [G_DRLVL] = PD("-", F_INT, 0, 0, 0),
     [G_DRREV] = PD("-", F_INT, 0, 0, 0),
+#endif
 };
 
 static const param_desc_t L2_DESC[L2_N] = {
@@ -342,6 +373,13 @@ static const uint8_t MDST_ORDER[] = {0, 1, 2, 3, 4, 5, 23, 24, 10, 11, 20,
 #if FELUCCA_PAIR_MORPH
                                       , 25
 #endif
+#if CARAVEL_REVERB_MINIMAL
+#if FELUCCA_PAIR_MORPH
+                                      , 26, 27, 28
+#else
+                                      , 25, 26, 27
+#endif
+#endif
 };
 static const uint8_t *enum_order(const param_desc_t *d)
 {
@@ -360,6 +398,10 @@ static int32_t enum_rank(const param_desc_t *d, int32_t v)   /* v's place in the
 /* a knob turned `steps` (signed) from v: clamped, over the shown order, past aliases (enum_step) */
 static int32_t param_turn(const param_desc_t *d, int32_t v, int32_t steps)
 {
+#if CARAVEL_REVERB_MINIMAL
+    if (d->names == N_RTYPE)
+        return clamp((v < 2 ? 2 : v) + steps, 2, 3);
+#endif
     const uint8_t *o = enum_order(d);
     if (o)
         return o[clamp(enum_rank(d, v) - d->min + steps, 0, d->max - d->min)] + d->min;
@@ -503,6 +545,9 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        , GR_MACRO, GR_MACROMAP, GR_HOMEEDIT
 #endif
 #endif
+#if CARAVEL_REVERB_MINIMAL
+       , GR_STLAYER
+#endif
 };
 
 typedef struct {
@@ -528,8 +573,17 @@ static const page_t PAGES[] = {
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
-    {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
+#if CARAVEL_REVERB_MINIMAL
+    /* One conditional page: HALL = TYPE SIZE DAMP; STASIS = TYPE CAPT STR MOTN.
+     * page_desc switches IDs per knob without changing stored parameter IDs. */
+    {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, G_DRREV}},
+#else
+    {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},
+#endif
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
+#if CARAVEL_REVERB_MINIMAL
+    {"LAYER", FAM_FX, SC_GLOBAL, GR_STLAYER, {G_STMODE, G_STAMT, G_STTIME, 0xFF}},
+#endif
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IMIX, 0xFF, 0xFF}},   /* 1.5: the track's INSERT (fx.c): TYPE and dry / wet; 0.3.0: FX HOLD is KNOB 3 (no parameter), the type's curve the fourth card */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IA, P_IB, P_IC, P_FILT}},    /* .. the type's A B C (its own labels) and the track's FILTER (0.3.0) */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* (the FX family's order is the two-group layout's: FX|DLY, REVERB|CHORUS, INSERT|INSERT 2, SLICER with its graph) */
@@ -607,9 +661,27 @@ static const page_t PAGES[] = {
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
 static int more_slot_ok(uint32_t id);              /* (ui.c: MORPH / PHS FB only on the engines that have them) */
+#if CARAVEL_REVERB_MINIMAL
+/* Present STASIS's texture parameters without renaming HALL's SIZE / DAMP.
+ * The underlying stored globals are deliberately shared. */
+static const param_desc_t ST_STR_DESC = PD("STR", F_PCT, 0, 127, 90);
+/* G_DRREV preserves old EVOLV data but controls the single combined MOTN.
+ * G_RDAMP continues to store HALL DAMP and is not read while STASIS plays. */
+static const param_desc_t ST_MOTION_DESC = PD("MOTN", F_PCT, 0, 127, 45);
+#endif
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
+#if CARAVEL_REVERB_MINIMAL
+    if (pg->id[0] == G_RTYPE) {        /* the REVERB page alone */
+        if (song.g[G_RTYPE] == 3) {
+            /* TYPE / CAPT / STR / MOTN, without a second STASIS page */
+            static const uint8_t st_ids[4] = {G_RTYPE, G_DRLVL, G_RSIZE, G_DRREV};
+            id = st_ids[slot];
+        } else if (slot == 3u)
+            id = 0xFFu;                /* HALL: TYPE / SIZE / DAMP / empty */
+    }
+#endif
     if (id == 0xFFu) {
         *valp = 0;
         return 0;
@@ -620,6 +692,10 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     }
     if (pg->scope == SC_GLOBAL) {
         *valp = &song.g[id];
+#if CARAVEL_REVERB_MINIMAL
+        if (pg->id[0] == G_RTYPE && song.g[G_RTYPE] == 3)
+            return id == G_RSIZE ? &ST_STR_DESC : id == G_DRREV ? &ST_MOTION_DESC : &GP[id];
+#endif
         return &GP[id];
     }
     if (pg->id[1] == P_MORPH && pg->scope == SC_TRACK && !more_slot_ok(id)) {   /* MORE: an engine without that one */

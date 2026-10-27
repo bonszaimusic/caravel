@@ -56,6 +56,9 @@ enum { MD_OFF, MD_PITCH, MD_CUT, MD_SHP, MD_AMP, MD_PAN, MD_DIST, MD_CHO, MD_DLY
 #if FELUCCA_PAIR_MORPH
        MD_PAIR,
 #endif
+#if CARAVEL_REVERB_MINIMAL
+       MD_STCAP, MD_STSTR, MD_STMOTN,
+#endif
        MD_N };   /* (append-only: the stored values keep their meaning) */
 _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST == MS_* / MD_*");
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
@@ -219,6 +222,10 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
 #if FELUCCA_PAIR_MORPH
         if (d == MD_PAIR) continue; /* aggregate exactly once, before the pair mix */
 #endif
+#if CARAVEL_REVERB_MINIMAL
+        if (d >= MD_STCAP && d <= MD_STMOTN)
+            continue; /* aggregated after all parts, never a track parameter */
+#endif
         if (d <= MD_AMP) {                              /* per voice */
             mw->amp |= d == MD_AMP;
             if (MS_VOICE(s)) {
@@ -255,6 +262,47 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
     }
     return 1;
 }
+
+#if CARAVEL_REVERB_MINIMAL
+/* A shared bus cannot be modulated by writing t->p during mix_part. Aggregate
+ * all four tracks on core 0, once per FX block, without mutating song.g. */
+static struct {
+    int16_t strength, motion;
+    uint8_t capt, capt_hyst;
+} mod_stasis;
+
+static __attribute__((noinline)) void mod_stasis_update(void)
+{
+    int32_t off[3] = {0, 0, 0};
+    uint32_t i, k, any_cap = 0;
+    for (i = 0; i < NTRK; i++) {
+        const track_t *t = &trk[i];
+        const int16_t *p = t->p;
+        int32_t lfo = mulq15(t->lfo_val, t->lfo_fade);
+        for (k = 0; k < NMSLOT; k++) {
+            uint32_t d = (uint32_t)p[P_M1DST + 3u*k];
+            uint32_t src = (uint32_t)p[P_M1SRC + 3u*k];
+            int32_t amt = p[P_M1AMT + 3u*k], x;
+            if (d < MD_STCAP || d > MD_STMOTN || !src || src >= MS_N || !amt)
+                continue;
+            any_cap |= d == MD_STCAP;
+            x = mod_tsrc(t, src, lfo);
+            off[d - MD_STCAP] += ((((x * amt) >> 6) * 127) >> 15);
+        }
+    }
+    mod_stasis.strength = (int16_t)clamp(song.g[G_RSIZE] + off[1], 0, 127);
+    mod_stasis.motion = (int16_t)clamp(song.g[G_DRREV] + off[2], 0, 127);
+    if (!any_cap) {
+        mod_stasis.capt = song.g[G_DRLVL] != 0;
+        mod_stasis.capt_hyst = mod_stasis.capt;
+    } else {
+        int32_t value = clamp((song.g[G_DRLVL] ? 127 : 0) + off[0], 0, 127);
+        if (value >= 78) mod_stasis.capt_hyst = 1;
+        else if (value <= 49) mod_stasis.capt_hyst = 0;
+        mod_stasis.capt = mod_stasis.capt_hyst;
+    }
+}
+#endif
 
 /* after the part's block (when mw->on): the stored values back */
 static __attribute__((noinline)) void mod_end(track_t *t)
