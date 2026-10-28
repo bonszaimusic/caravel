@@ -27,7 +27,7 @@ for(let y=24+171;y<24+201;y++)
  for(let x=0;x<240;x++)changed+=before[y*240+x]!==after[y*240+x];
 assert.ok(changed>100,'third ACTION strip appears on genuine LCD renderer');
 assert.equal(e.web_breath_keys() & (31<<22),31<<22,'all five ACTION key LEDs breathe');
-assert.equal(key(23),255,'ACTION key is silent in firmware keyboard block');
+assert.equal(key(26),255,'ACTION key is silent in firmware keyboard block (CAPTURE A is non-destructive)');
 assert.notEqual(key(7),255,'22 other physical notes still playable');
 assert.equal(key(22),255,'bank key never sounds');
 assert.equal((state()>>8)&255,1,'bank switch selects STASIS');
