@@ -631,17 +631,42 @@ static inline int32_t stasis_record_prefilter(int32_t sample,int32_t lp[3],
  }
  return sample;
 }
-/* Grain window with zero slope at both ends. The previous triangle was
- * continuous, but its 5..11 Hz derivative corners were audible on bright
- * sustained harmonics and extreme SCAN/REVERSE settings.
- * Q15 cubic smoothstep: 3u^2-2u^3, u = triangle position / half size.
- * All products fit 32 bits. No divisions or costly sine on the audio ISR. */
+/* Monotone cubic smoothstep LUT, 0..32768 Q15. All 257 steps are
+ * nondecreasing and zero-slope at endpoints. 514 bytes of read-only flash
+ * replace per-sample cubic rounding (which could occasionally DECREASE
+ * the gain by one quantization step near the peak), and need one multiply.
+ * Neither RAM allocation nor native audio sample rate changes. */
+static const uint16_t stasis_grain_env[257]={
+ 0, 1, 6, 13, 24, 37, 53, 72, 94, 119, 146, 176,
+ 209, 245, 283, 324, 368, 414, 463, 515, 569, 625, 684, 746,
+ 810, 876, 945, 1017, 1090, 1166, 1245, 1325, 1408, 1493, 1580, 1670,
+ 1762, 1856, 1952, 2050, 2150, 2252, 2357, 2463, 2571, 2682, 2794, 2908,
+ 3024, 3142, 3262, 3383, 3507, 3632, 3759, 3888, 4018, 4150, 4284, 4419,
+ 4556, 4695, 4835, 4977, 5120, 5265, 5411, 5559, 5708, 5858, 6010, 6163,
+ 6318, 6474, 6631, 6790, 6949, 7110, 7272, 7436, 7600, 7766, 7932, 8100,
+ 8269, 8439, 8609, 8781, 8954, 9128, 9302, 9478, 9654, 9831, 10010, 10188,
+ 10368, 10548, 10729, 10911, 11094, 11277, 11461, 11645, 11830, 12016, 12202, 12388,
+ 12575, 12763, 12951, 13139, 13328, 13517, 13707, 13897, 14087, 14277, 14468, 14659,
+ 14850, 15041, 15233, 15424, 15616, 15808, 16000, 16192, 16384, 16576, 16768, 16960,
+ 17152, 17344, 17535, 17727, 17918, 18109, 18300, 18491, 18681, 18871, 19061, 19251,
+ 19440, 19629, 19817, 20005, 20193, 20380, 20566, 20752, 20938, 21123, 21307, 21491,
+ 21674, 21857, 22039, 22220, 22400, 22580, 22758, 22937, 23114, 23290, 23466, 23640,
+ 23814, 23987, 24159, 24329, 24499, 24668, 24836, 25002, 25168, 25332, 25496, 25658,
+ 25819, 25978, 26137, 26294, 26450, 26605, 26758, 26910, 27060, 27209, 27357, 27503,
+ 27648, 27791, 27933, 28073, 28212, 28349, 28484, 28618, 28750, 28880, 29009, 29136,
+ 29261, 29385, 29506, 29626, 29744, 29860, 29974, 30086, 30197, 30305, 30411, 30516,
+ 30618, 30718, 30816, 30912, 31006, 31098, 31188, 31275, 31360, 31443, 31523, 31602,
+ 31678, 31751, 31823, 31892, 31958, 32022, 32084, 32143, 32199, 32253, 32305, 32354,
+ 32400, 32444, 32485, 32523, 32559, 32592, 32622, 32649, 32674, 32696, 32715, 32731,
+ 32744, 32755, 32762, 32767, 32768
+};
 static inline uint32_t stasis_grain_weight(uint32_t triangle,uint32_t grain)
 {
  uint32_t u=triangle << (4u-grain);
- uint32_t u2=(u*u)>>15u;
- uint32_t u3=(u2*u)>>15u;
- return 3u*u2-2u*u3;
+ uint32_t i=u>>7u,frac=u&127u;
+ if(i>=256u)return 32768u;
+ uint32_t a=stasis_grain_env[i],b=stasis_grain_env[i+1u];
+ return a+(((b-a)*frac+64u)>>7u);
 }
 #endif
 
