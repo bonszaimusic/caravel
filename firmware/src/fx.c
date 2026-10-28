@@ -616,31 +616,30 @@ _Static_assert(16384u+4096u+ST_OFFSET+421u+4096u+256u<ST_RING_LEN,
 /* Single control path used by FX > GRAIN and HOME ACTION STASIS. The
  * handwritten restrictions may not be bypassed by navigating another page.
  * No second parameter store and no changes to persistent project layout. */
-static void stasis_exp_turn(uint32_t slot,int32_t steps)
+/* DSP layer returns a status; only the later UI layer displays it. */
+static const char *stasis_exp_turn(uint32_t slot,int32_t steps)
 {
- if(slot>=4u||!steps)return;
- if(song.g[G_RTYPE]!=3u){ui_message("SET REVERB TYPE STASIS");return;}
+ if(slot>=4u||!steps)return 0;
+ if(song.g[G_RTYPE]!=3u)return "SET REVERB TYPE STASIS";
  if(slot==0u){
   uint32_t requested=(uint32_t)clamp((int32_t)st_expand.grain+steps,0,2);
   uint32_t required=((4096u<<requested)+4096u+ST_OFFSET+421u+4096u+
       256u+stasis_record_factor()-1u)>>st.active_quality;
-  if(st.auto_hold && st.valid<required){
-   ui_message("GRAIN TOO LONG FOR CAPTURE");return;
-  }
+  if(st.auto_hold && st.valid<required)
+   return "GRAIN TOO LONG FOR CAPTURE";
   st_expand.grain=(int16_t)requested;
  }else if(slot==1u){
   st_expand.scan=(int16_t)clamp((int32_t)st_expand.scan+steps,0,127);
  }else if(slot==2u){
   if(song.g[G_DRLVL] || mod_stasis.capt || st.auto_hold ||
-      st.cap_pending || st.releasing || st_layer.phase!=STL_IDLE){
-   ui_message("STASIS: RELEASE HOLD FIRST");return;
-  }
+      st.cap_pending || st.releasing || st_layer.phase!=STL_IDLE)
+   return "STASIS: RELEASE HOLD FIRST";
   st_expand.quality=(int16_t)clamp((int32_t)st_expand.quality+steps,0,2);
-  ui_message("STASIS WINDOW: NEW LIVE CAPTURE");
+  return "STASIS WINDOW: NEW LIVE CAPTURE";
  }else{
   st_expand.reverse=(int16_t)clamp((int32_t)st_expand.reverse+steps,0,1);
  }
- ui.force=1;
+ return 0;
 }
 #endif
 
