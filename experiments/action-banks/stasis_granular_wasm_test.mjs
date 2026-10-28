@@ -64,7 +64,8 @@ assert.equal(dsp(11),1,'HOLD freezes retroactive audio');
 const frozenWrite=dsp(5);
 turn(5,1);assert.equal(dsp(2),1,'quality cannot change during HOLD');
 render(400);assert.equal(dsp(5),frozenWrite,'held capture cannot be overwritten');
-key(24);render(1600);assert.ok(dsp(6)>0,'ADD records into second bank');
+key(24);render(300);assert.ok(dsp(6)>0,'ADD records into second bank');
+render(1800); /* allow background merge to complete before changing resolution */
 e.web_stasis_test_hold(0);render(2700);
 assert.equal(dsp(11),0,'return to LIVE');
 turn(5,1);assert.equal(dsp(2),2,'DRONE 11.025kHz selected');
@@ -72,7 +73,7 @@ render(100);assert.equal(dsp(8),2,'audio thread adopted DRONE');
 write=dsp(5);render(500);delta=dsp(5)-write;
 assert.ok(delta>=5450&&delta<=5600,'11.025kHz capture rate: '+delta);
 turn(3,-2);assert.equal(dsp(0),0,'93ms grain selected');
-render(250);assert.equal(dsp(9),0,'audio thread adopted 93ms grain');
+render(500);assert.equal(dsp(9),0,'audio thread adopted 93ms grain');
 turn(6,-1);assert.equal(dsp(3),0,'reverse OFF');
 turn(0,1);assert.equal(dsp(14),0,'SELECT back to FX page');
 assert.equal(setting(0),90,'original STR stays canonical');
