@@ -229,8 +229,15 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
   if(song.g[G_RTYPE]!=3u){ui_message("FX: SET TYPE STASIS");return;}
 #if CARAVEL_STASIS_EXPAND
   if(action_stasis_grain_page){
-   if(slot==0u)
-    st_expand.grain=(uint8_t)clamp((int32_t)st_expand.grain+steps,0,2);
+   if(slot==0u){
+    uint32_t requested=(uint32_t)clamp((int32_t)st_expand.grain+steps,0,2);
+    uint32_t required=((4096u<<requested)+4096u+ST_OFFSET+421u+4096u+
+           256u+stasis_record_factor()-1u)>>st.active_quality;
+    if(st.auto_hold && st.valid<required){
+     ui_message("GRAIN TOO LONG FOR CAPTURE");return;
+    }
+    st_expand.grain=(uint8_t)requested;
+   }
    else if(slot==1u)
     st_expand.scan=(uint8_t)clamp((int32_t)st_expand.scan+steps,0,127);
    else if(slot==2u){
