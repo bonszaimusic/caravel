@@ -131,6 +131,35 @@ single=page[:start]+'    const wasm = '+wasm+';'+page[end:]
 single=single.replace('typeof AudioContext === "undefined" || typeof AudioWorkletNode === "undefined"','typeof AudioContext === "undefined"')
 single=single.replace('    if (!ac.audioWorklet) throw new Error("Dieser Dateikontext erlaubt keinen AudioWorklet. Die Serverversion benötigt localhost oder HTTPS.");','')
 single=single.replace('new AudioWorkletNode(ac, "felucca", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] })','createOfflineAudioNode(ac)')
+if 'CARAVEL_STASIS_EXPAND=1' in extra:
+    # Chrome file:// can sometimes instantiate Blob-based AudioWorklet modules;
+    # content:// and restrictive browsers cannot. Try the genuine worklet first,
+    # then retain the prior offline ScriptProcessor (no network or external files).
+    inline_worklet = w.replace('export ', '')
+    standalone_worklet = r"""
+const STASIS_WORKLET_SOURCE = @SOURCE@;
+async function createStasisAudioNode(ac) {
+  if(ac.audioWorklet && typeof AudioWorkletNode === "function"){
+    const url=URL.createObjectURL(new Blob([STASIS_WORKLET_SOURCE],{type:"text/javascript"}));
+    try {
+      await ac.audioWorklet.addModule(url);
+      const result=new AudioWorkletNode(ac,"felucca",
+        {numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+      result._caravelMode="AudioWorklet (separater Audiothread)";
+      return result;
+    }catch(err){
+      console.warn("Caravel standalone: AudioWorklet unavailable; using legacy audio",err);
+    }finally { URL.revokeObjectURL(url); }
+  }
+  const fallback=createOfflineAudioNode(ac);
+  fallback._caravelMode="Fallback: Audiothread geteilt (bei hoher Browserlast Knarzen möglich)";
+  return fallback;
+}
+""".replace('@SOURCE@',json.dumps(inline_worklet))
+    single=single.replace('createOfflineAudioNode(ac)', 'await createStasisAudioNode(ac)', 1)
+    single=single.replace('const SANS =',standalone_worklet+'\nconst SANS =',1)
+    single=single.replace('node = await createStasisAudioNode(ac);',
+      'node = await createStasisAudioNode(ac);\n    homeEl("audio").textContent="Audio: "+node._caravelMode;',1)
 adapter=(R/'experiments/engine-pair-morph/offline_audio.js').read_text().replace('/* @PROCESSOR_SOURCE@ */',w.replace('export ',''))
 helpers=w.split('if (typeof registerProcessor === \"function\") {',1)[0].replace('export ','')
 single=single.replace('import { midiKnob, KNOB_MODES } from \"./worklet.js\";',helpers+'\n'+adapter)
