@@ -63,3 +63,36 @@ static int hp_forget(uint32_t slot);
 static void hp_motion_clear(track_t*t);
 
 static int hp_sound_changed(const track_t *t);
+
+#if FELUCCA_RANDOM_MORPH
+/* Volatile HOME Random Morph state shared by the menu and performance UI. */
+#define HP_RM_MAX 128u
+#define HP_RM_IDLE 0u
+#define HP_RM_RANDOM 1u
+#define HP_RM_FROZEN 2u
+#define HP_RM_RETURN 3u
+#define HP_RM_DONE 4u
+#define HP_RM_ROW 0u
+#define HP_RM_TRACK 1u
+#define HP_RM_ALL 2u
+#define HP_RM_LINEAR 0u
+#define HP_RM_SMOOTH 1u
+#define HP_RM_DRIFT 2u
+
+typedef struct {
+ hp_ref_t ref;
+ int16_t original,from,to,last;
+} hp_rm_cell_t;
+typedef struct {
+ hp_rm_cell_t cell[HP_RM_MAX];
+ uint32_t count,phase,stamp,seed;
+ uint8_t state,bars,depth,scope,shape,origin_track,origin_row,frozen_from;
+} hp_rm_state_t;
+static hp_rm_state_t hp_rm = {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_SMOOTH,.seed=0x8C89D39Bu};
+static const uint8_t hp_rm_times[]={1,2,4,8,16,32,64};
+static const uint8_t hp_rm_depths[]={10,25,35,50,75,100};
+
+static void hp_rm_reset(void);
+static void hp_rm_freeze(void);
+
+#endif /* FELUCCA_RANDOM_MORPH */
