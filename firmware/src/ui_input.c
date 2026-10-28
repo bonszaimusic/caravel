@@ -1010,7 +1010,7 @@ static void step_edit(uint32_t slot, int32_t steps)
 static void edit_param(uint32_t slot, int32_t steps)
 {
 #if CARAVEL_STASIS_EXPAND
-    if(cur_page()->graph==GR_STGRAIN){stasis_exp_turn(slot,steps);return;}
+    if(cur_page()->graph==GR_STGRAIN){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
 #endif
 #if FELUCCA_HOME_PERF
     if(cur_page()->graph==GR_MACRO || cur_page()->graph==GR_MACROMAP || cur_page()->graph==GR_HOMEEDIT) { hp_page_knob(slot,steps); return; }
