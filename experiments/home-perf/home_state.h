@@ -72,6 +72,7 @@ static int hp_sound_changed(const track_t *t);
 #define HP_RM_FROZEN 2u
 #define HP_RM_RETURN 3u
 #define HP_RM_DONE 4u
+#define HP_RM_RECALL 5u
 #define HP_RM_ROW 0u
 #define HP_RM_TRACK 1u
 #define HP_RM_ALL 2u
@@ -91,6 +92,19 @@ typedef struct {
 static hp_rm_state_t hp_rm = {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_SMOOTH,.seed=0x8C89D39Bu};
 static const uint8_t hp_rm_times[]={1,2,4,8,16,32,64};
 static const uint8_t hp_rm_depths[]={10,25,35,50,75,100};
+#if CARAVEL_ACTION_BANKS
+/* Volatile four-slot snapshot memory. Store refs/values only: no sound,
+ * project, FX audio or duplicate synth parameter stores. No heap use. */
+#define HP_RM_SNAP_SLOTS 4u
+typedef struct { hp_ref_t ref; int16_t value; } hp_rm_snap_cell_t;
+typedef struct {
+ uint16_t count;
+ uint8_t scope,origin_track,origin_row,pad;
+ hp_rm_snap_cell_t cell[HP_RM_MAX];
+} hp_rm_snap_t;
+static hp_rm_snap_t hp_rm_snap[HP_RM_SNAP_SLOTS];
+#endif
+
 
 static void hp_rm_reset(void);
 static void hp_rm_freeze(void);
