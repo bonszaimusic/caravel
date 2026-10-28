@@ -273,9 +273,11 @@ export async function validateCaravelPackage(bytes, expected) {
   if (outer.offset !== 32 || outer.size !== loader.length - 32 ||
       outer.flags !== 0x41 || outer.name !== "usb_hid_ota.bin" ||
       crc16(loader.subarray(32)) !== outer.dcrc ||
-      inner.offset !== 0x01C0A800 || inner.flags !== 0 ||
+      // The inner loader header reuses the JLFS fields: offset = decoded
+      // image length, size = RAM load address (see verify_loader in release_artifacts.py).
+      inner.size !== 0x01C0A800 || inner.flags !== 0 ||
       inner.name !== "usb_hid_ota.bin" ||
-      inner.size <= 0 || inner.size > 0x14000)
+      inner.offset <= 0 || inner.offset > 0x14000)
     throw new Error("unsupported Caravel update loader layout");
   return { product: pkg.product, image: logicalImage(bytes), sha256: expected.sha256 };
 }
