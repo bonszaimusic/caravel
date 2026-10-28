@@ -31,6 +31,13 @@
 #endif
 /* Experimental lean reverb: omit ROOM/SPRING DSP, retain saved IDs
  * 0 and 1 as HALL aliases. Default 0 preserves stock Caravel behavior. */
+/* HOME ACTION/RANDOM prototypes are opt-in. Published firmware is unchanged. */
+#ifndef CARAVEL_ACTION_BANKS
+#define CARAVEL_ACTION_BANKS 0
+#endif
+#ifndef FELUCCA_RANDOM_MORPH
+#define FELUCCA_RANDOM_MORPH 0
+#endif
 #ifndef CARAVEL_REVERB_MINIMAL
 #define CARAVEL_REVERB_MINIMAL 0
 #endif
