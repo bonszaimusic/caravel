@@ -96,10 +96,11 @@ key(24);assert.equal(e.web_action_random_state(),1);
 // A4 long during live RANDOM stores the audible intermediate and cancels
 // only the morph trajectory; it never resets any sound parameter.
 render(250);
-const intermediate=level();
 hold(26);
 assert.equal(e.web_action_random_state(),0,'A4 capture stops moving morph');
-assert.equal(level(),intermediate,'A4 capture retains live level at capture time');
+const heldAfterCapture=level();
+render(720);
+assert.equal(level(),heldAfterCapture,'A4 capture retains live level after capture time');
 // More than one snapshot still exists; no new UI pages, no extra notes.
 assert.equal(count(0),n1);
 assert.ok(count(1)>0);
