@@ -41,6 +41,23 @@
 #ifndef CARAVEL_REVERB_MINIMAL
 #define CARAVEL_REVERB_MINIMAL 0
 #endif
+/* Opt-in granular STASIS experiment: default release and project formats are unchanged. */
+#ifndef CARAVEL_STASIS_EXPAND
+#define CARAVEL_STASIS_EXPAND 0
+#endif
+#if CARAVEL_STASIS_EXPAND && !CARAVEL_REVERB_MINIMAL
+#error "Expanded STASIS requires the experimental minimal reverb implementation"
+#endif
+#if CARAVEL_STASIS_EXPAND
+/* Only the new grain settings are volatile. Existing STR/MOTN/LAYER remain
+ * the single authoritative song.g values. Each field is atomic on FM-1. */
+static struct {
+ volatile uint8_t grain;    /* 0=4096, 1=8192, 2=16384 output samples */
+ volatile uint8_t quality;  /* 0=44.1k, 1=22.05k, 2=11.025k capture */
+ volatile uint8_t scan;     /* 0..127; modulation may offset this */
+ volatile uint8_t reverse;  /* 0 forward, 1 reverse per grain */
+} st_expand = {.grain=1u,.quality=0u,.scan=0u,.reverse=0u};
+#endif
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built
                                   * by default; replaced by FM6, its sounds convert (fm4_convert.c) */
