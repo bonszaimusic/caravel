@@ -83,6 +83,7 @@ static int hp_sound_changed(const track_t *t);
 typedef struct {
  hp_ref_t ref;
  int16_t original,from,to,last;
+ uint8_t released; /* manual edit takes permanent priority for this morph */
 } hp_rm_cell_t;
 typedef struct {
  hp_rm_cell_t cell[HP_RM_MAX];
