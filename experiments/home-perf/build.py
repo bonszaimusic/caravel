@@ -73,6 +73,32 @@ Die 22 übrigen physischen Tasten und externe MIDI-Noten spielen unverändert.
 Zum Testen von STASIS: FX &gt; REVERB &gt; TYPE STASIS wählen.
 <strong>Nur Emulator-Prototyp:</strong> ACTION-Bänke sind vorläufig feste Vorlagen, Snapshot-Speicher sind RAM-only,
 nicht projektgespeichert. Keine Firmware zum Flashen.</p></section>'''
+    if 'CARAVEL_STASIS_EXPAND=1' in extra:
+        guide += '''<section class="home-panel" aria-label="STASIS GRAIN experiment">
+<h2>STASIS GRAIN · LONG CAPTURE · ACTION SETUP</h2>
+<p><strong>Echte FM-1-Bedienung:</strong> FX &gt; REVERB &gt; TYPE auf STASIS setzen.
+HOME zweimal drücken, ACTION-Bank <strong>STASIS</strong> wählen (BANK kurz).
+BANK ca. 0,5 s halten: STASIS SETUP öffnen. <strong>SELECT drehen</strong> schaltet zwischen
+<strong>FX 1/2</strong> (bestehende STR, MOTN, ADD/BLEND AMT, TIME)
+und <strong>GRAIN 2/2</strong> um. Im GRAIN-Setup:
+K1 <strong>GRAIN</strong> 93 / 186 / 372 ms;
+K2 <strong>SCAN</strong> 0–100 % des sicher erfassten Fensters;
+K3 <strong>WINDOW</strong> HQ (44,1 kHz / ca. 0,74 s),
+LONG (22,05 kHz / ca. 1,49 s) oder DRONE (11,025 kHz / ca. 2,97 s);
+K4 <strong>REVERSE</strong> vorwärts/rückwärts pro Grain.
+Für WINDOW-Wechsel erst HOLD lösen und das Ausklingen beenden;
+der neue Modus beginnt ein frisches LIVE-Recording.
+Grain-Länge während HOLD nur bei genügend aufgezeichnetem Material erhöhen.</p>
+<p>Die vier ACTION-Tasten sind weiter HOLD, ADD, BLEND, RELEASE.
+SCAN ist jetzt außerdem ein eigenes MOD-Ziel: LFO oder S&amp;H &gt; SCAN,
+z. B. mit Amount +20. Bereits vorhandene MOD-Ziele CAPT/STR/MOTN funktionieren unverändert.
+MOTN beeinflusst weiterhin Filter und Mikro-Tap-Bewegung; SCAN durchsucht unabhängig
+den länger aufgenommenen Klang. Keine zusätzlichen Audiopuffer: bestehende
+zwei 32.768-Sample-Capture-Bänke werden je nach WINDOW mit unterschiedlicher
+Abtastrate gespeichert, bei Wiedergabe interpoliert.
+<strong>Opt-in, RAM-only:</strong> neue GRAIN/WINDOW/SCAN/REVERSE-Werte werden noch
+nicht im Projekt gespeichert. PITCH shifting ist in diesem Test nicht enthalten.
+Audioqualität und CPU-Reserve auf echter FM-1-Hardware stehen noch aus.</p></section>'''
     page=page.replace('<div class="boxes">',guide+'\n<div class="boxes">')
 (out/'index.html').write_text(page)
 w=(out/'worklet.js').read_text().replace('[0xE5000, 0xE8000]','[0xE5000, 0xFC000]')
