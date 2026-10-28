@@ -79,7 +79,8 @@ static void hp_rm_cut_bounds(const param_desc_t*d,int32_t*lo,int32_t*hi)
  }
 }
 /* A physical HOME/source-page turn owns its control for the REST OF the
- * current morph (also through FREEZE/RESUME and RETURN). Never write it in
+ * current morph (also through FREEZE/RESUME and RETURN). A new explicit
+ * RANDOM/RECALL starts a separate trajectory. Never write it in
  * hp_rm_poll again. The next independently started morph may recapture it. */
 static void hp_rm_disengage(hp_ref_t r)
 {
@@ -248,7 +249,9 @@ static void hp_rm_start(uint32_t now)
   const param_desc_t*d=hp_desc(c->ref);
   int32_t cur=hp_get(c->ref);
   c->from=(int16_t)cur;c->last=(int16_t)cur;
-  if(c->released)continue; /* manual override persists through re-randomise */
+  /* A new explicit RANDOM starts a new trajectory and may reclaim a
+   * previously hand-edited control. RETURN/FREEZE never reclaim it. */
+  c->released=0u;
   if(!hp_rm_random_allowed(c->ref,d)){
    c->released=1u; /* preserve legacy captured LEVELs without writing */
    continue;
