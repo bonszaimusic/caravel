@@ -52,6 +52,43 @@ static int hp_rm_safe(hp_ref_t r,const param_desc_t*d)
  if(r.kind==HP_PAIR)return r.id==2; /* morph amount only; never pair on/off */
  return 0; /* macro/switch/special controls require independent priority rules */
 }
+/* Random safety is stricter than manual/snapshot control. Snapshot recall may
+ * intentionally restore a saved LEVEL; RANDOM must never randomise gain. */
+static int hp_rm_random_allowed(hp_ref_t r,const param_desc_t*d)
+{
+ if(!d)return 0;
+ if(r.kind==HP_TRACK && hp_tid(r)==P_LEVEL)return 0;
+ if(d->fmt==F_DB)return 0;
+ const char *label=d->label;
+ if(label && (!strcmp(label,"LEVEL") || !strcmp(label,"LVL") ||
+              !strcmp(label,"GAIN") || !strcmp(label,"VOLUME")))return 0;
+ return 1;
+}
+/* Hz constraints apply to F_CUTOFF synth and filter parameters ONLY, not
+ * bipolar P_FILT or sound-specific non-frequency parameters. Use the same
+ * CUTOFF_HZ table as the real FM-1 user interface and DSP. */
+static void hp_rm_cut_bounds(const param_desc_t*d,int32_t*lo,int32_t*hi)
+{
+ *lo=d->min;*hi=d->max;
+ if(d->fmt!=F_CUTOFF)return;
+ for(int32_t i=d->min;i<=d->max;i++){
+  if(CUTOFF_HZ[i & 127]>=150u){*lo=i;break;}
+ }
+ for(int32_t i=d->max;i>=d->min;i--){
+  if(CUTOFF_HZ[i & 127]<=6000u){*hi=i;break;}
+ }
+}
+/* A physical HOME/source-page turn owns its control for the REST OF the
+ * current morph (also through FREEZE/RESUME and RETURN). Never write it in
+ * hp_rm_poll again. The next independently started morph may recapture it. */
+static void hp_rm_disengage(hp_ref_t r)
+{
+ if(hp_rm.state==HP_RM_IDLE)return;
+ if(r.track==255u)r.track=(uint8_t)song.sel;
+ for(uint32_t i=0;i<hp_rm.count;i++)
+  if(hp_rm_same(hp_rm.cell[i].ref,r))
+   hp_rm.cell[i].released=1u;
+}
 static void hp_rm_reset(void)
 {
  uint8_t bars=hp_rm.bars,depth=hp_rm.depth,scope=hp_rm.scope,shape=hp_rm.shape;
@@ -62,27 +99,27 @@ static void hp_rm_reset(void)
  hp_rm.shape=shape<=HP_RM_DRIFT?shape:HP_RM_SMOOTH;
  hp_rm.seed=seed?seed:0x8C89D39Bu;
 }
-static int hp_rm_add(hp_ref_t r)
+static int hp_rm_add(hp_ref_t r,int random_only)
 {
  if(!r.kind)return 1;
  if(r.track==255u)r.track=(uint8_t)song.sel; /* pin owner at capture, never follow later selection */
  const param_desc_t*d=hp_desc(r);
- if(!hp_rm_safe(r,d))return 1;
+ if(!hp_rm_safe(r,d) || (random_only&&!hp_rm_random_allowed(r,d)))return 1;
  for(uint32_t i=0;i<hp_rm.count;i++)if(hp_rm_same(hp_rm.cell[i].ref,r))return 1;
  if(hp_rm.count==HP_RM_MAX)return 0; /* all-or-nothing, no hidden truncation */
  int32_t value=hp_get(r);
  if(value<d->min||value>d->max)return 1;
  hp_rm_cell_t*c=&hp_rm.cell[hp_rm.count++];
- c->ref=r;c->original=c->from=c->to=c->last=(int16_t)value;
+ c->ref=r;c->original=c->from=c->to=c->last=(int16_t)value;c->released=0u;
  return 1;
 }
-static int hp_rm_capture(void)
+static int hp_rm_capture(int random_only)
 {
  hp_rm.count=0;
  uint32_t t0=song.sel;
  if(hp_rm.scope==HP_RM_ROW){
   hp_track_t*h=&hp.track[t0];uint32_t row=h->active;
-  for(uint32_t k=0;k<4;k++)if(!hp_rm_add(h->cell[row][k]))goto full;
+  for(uint32_t k=0;k<4;k++)if(!hp_rm_add(h->cell[row][k],random_only))goto full;
  }else{
   uint32_t lo=hp_rm.scope==HP_RM_TRACK?t0:0;
   uint32_t hi=hp_rm.scope==HP_RM_TRACK?t0+1:NTRK;
@@ -94,7 +131,7 @@ static int hp_rm_capture(void)
      /* SEL-relative references resolve to the HOME owner track, not the
       * currently selected track, when capturing multiple tracks. */
      if(r.track==255u)r.track=(uint8_t)t;
-     if(!hp_rm_add(r))goto full;
+     if(!hp_rm_add(r,random_only))goto full;
     }
   }
  }
@@ -107,7 +144,7 @@ static int hp_rm_valid(void)
 {
  for(uint32_t i=0;i<hp_rm.count;i++){
   const hp_rm_cell_t*c=&hp_rm.cell[i];
-  if(!hp_rm_safe(c->ref,hp_desc(c->ref)))return 0;
+  if(!c->released && !hp_rm_safe(c->ref,hp_desc(c->ref)))return 0;
  }
  return 1;
 }
@@ -132,7 +169,7 @@ static int hp_rm_snapshot_store(uint32_t slot)
 {
  if(slot>=HP_RM_SNAP_SLOTS)return 0;
  hp_rm_reset(); /* preserve current live sound; discard obsolete morph */
- if(!hp_rm_capture()){
+ if(!hp_rm_capture(0)){
   ui_message("SNAP: NO SAFE HOME TARGETS");ui.force=1;return 0;
  }
  hp_rm_snap_t *snap=&hp_rm_snap[slot];
@@ -203,7 +240,7 @@ static void hp_rm_start(uint32_t now)
  if(hp_rm.state==HP_RM_IDLE||hp_rm.state==HP_RM_RECALL||
     (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL)){
   hp_rm_reset();
-  if(!hp_rm_capture()){ui_message("RANDOM: NO SAFE CONTROLS");return;}
+  if(!hp_rm_capture(1)){ui_message("RANDOM: NO SAFE CONTROLS");return;}
  }
  if(!hp_rm_valid()){hp_rm_reset();ui_message("RANDOM: TARGET CHANGED");return;}
  for(uint32_t i=0;i<hp_rm.count;i++){
@@ -211,10 +248,23 @@ static void hp_rm_start(uint32_t now)
   const param_desc_t*d=hp_desc(c->ref);
   int32_t cur=hp_get(c->ref);
   c->from=(int16_t)cur;c->last=(int16_t)cur;
-  int32_t span=d->max-d->min;
-  int32_t radius=(span*hp_rm.depth+199)/200; /* 100% = half the full range each way */
+  if(c->released)continue; /* manual override persists through re-randomise */
+  if(!hp_rm_random_allowed(c->ref,d)){
+   c->released=1u; /* preserve legacy captured LEVELs without writing */
+   continue;
+  }
+  int32_t lower,upper;
+  hp_rm_cut_bounds(d,&lower,&upper);
+  /* Never force a user's manually chosen out-of-band cutoff to jump:
+   * leave it untouched until the user explicitly moves it into 150..6000Hz. */
+  if(d->fmt==F_CUTOFF && (cur<lower||cur>upper)){
+   c->released=1u;
+   continue;
+  }
+  int32_t span=upper-lower;
+  int32_t radius=(span*hp_rm.depth+199)/200; /* depth is fraction of SAFE band */
   int32_t jitter=radius?(int32_t)(hp_rm_rand()%(2u*(uint32_t)radius+1u))-radius:0;
-  c->to=(int16_t)clamp(cur+jitter,d->min,d->max);
+  c->to=(int16_t)clamp(cur+jitter,lower,upper);
  }
  hp_rm.phase=0;hp_rm.stamp=now;hp_rm.state=HP_RM_RANDOM;
  ui_message("RANDOM MORPH START");ui.force=1;
@@ -225,6 +275,7 @@ static void hp_rm_return(uint32_t now)
  if(!hp_rm_valid()){hp_rm_reset();ui_message("RANDOM: TARGET CHANGED");return;}
  for(uint32_t i=0;i<hp_rm.count;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
+  if(c->released)continue; /* do not fight a manual adjustment on RETURN */
   c->from=(int16_t)hp_get(c->ref);
   c->to=c->original;c->last=c->from;
  }
@@ -253,6 +304,7 @@ static void hp_rm_poll(uint32_t now)
  hp_rm.phase=hp_rm.phase+advance>=65536u?65536u:hp_rm.phase+advance;
  for(uint32_t i=0;i<hp_rm.count;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
+  if(c->released)continue;
   uint32_t pos=hp_rm_curve(hp_rm.phase,i);
   int32_t next=hp_rm_interp(c->from,c->to,pos);
   if(next!=c->last){
