@@ -45,9 +45,18 @@ if 'CARAVEL_ACTION_BANKS=1' in extra:
     guide='''<section class="home-panel" aria-label="ACTION banks v0.6.0">
 <h2>CARAVEL 0.6.0 · HOME ACTION BANKS · ANDROID PREVIEW</h2>
 <p><strong>Am virtuellen FM-1:</strong> HOME zweimal kurz tippen, um ACTION ON/OFF zu schalten.
-Die fünf höchsten Keyboard-Tasten: <strong>erste = BANK +</strong>, folgende vier = ACTION 1–4.
-SELECT wechselt weiterhin HOME-Zeilen, ALGORITHM den Track; K1–K4 bearbeiten die aktive Zeile.
-Die dritte kleine HOME-Zeile zeigt die aktuelle Bank und vier Aktionen. OCT+/− bleiben frei.</p>
+Die fünf höchsten Keyboard-Tasten: <strong>erste = BANK</strong>, folgende vier = ACTION 1–4.
+<strong>BANK kurz (loslassen):</strong> Bank wechseln. <strong>BANK mindestens 0,5 Sekunden:</strong>
+SETUP ein-/ausblenden (kein gleichzeitiges Halten beim Drehen nötig).
+In SETUP bearbeiten K1–K4 bankbezogene Werte; die vier ACTION-Tasten bleiben spielbar.
+In PERFORM bearbeiten K1–K4 weiter die normale HOME-Zeile.
+SELECT wechselt weiterhin HOME-Zeilen, ALGORITHM den Track.
+Die dritte kleine HOME-Zeile zeigt die Bank und vier Aktionen. OCT+/− bleiben frei.</p>
+<p><strong>SETUP:</strong> RANDOM = Dauer (Bars), Depth, Scope, Shape;
+STASIS = STR/MOTN (REVERB), AMT/TIME (LAYER), nur bei aktivem TYPE STASIS;
+PAIR = Morph und vorhandene LFO1/LFO2-MOD-Amounts (keine MOD-Slots werden überschrieben);
+LIVE = Track-Level T1–T4. Keine doppelten Projektparameter.
+RANDOM Scope-Wechsel setzt einen laufenden Morph/Snapshot zurück; Depth wirkt für das nächste Zufallsziel.</p>
 <p>Bänke: RANDOM (Random, Freeze/Resume, Return A, Capture A), STASIS
 (Hold, Add, Blend, Release), PAIR (A, 50 %, B, Motion), LIVE (Mute T1–T4).
 Die 22 übrigen physischen Tasten und externe MIDI-Noten spielen unverändert.
