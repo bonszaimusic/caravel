@@ -576,6 +576,24 @@ EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL];
 #if CARAVEL_STASIS_EXPAND
 /* Read-only C/WASM hardware regressions. The browser UI itself always
  * uses the actual physical HOME/SELECT/K1..K4 and ACTION note gestures. */
+/* Native FX > GRAIN page verification; values are the same C fields as
+ * ACTION > STASIS > GRAIN (not mirrored emulator settings). */
+EXPORT uint32_t web_stasis_grain_page(void)
+{
+ for(uint32_t i=0;i<NPAGES;i++)
+  if(PAGES[i].graph==GR_STGRAIN)return i;
+ return 0xFFFFFFFFu;
+}
+EXPORT uint32_t web_stasis_grain_visible(void)
+{
+ uint32_t page=web_stasis_grain_page();
+ return page<NPAGES && page_visible(page);
+}
+EXPORT void web_stasis_grain_open(void)
+{
+ uint32_t p=web_stasis_grain_page();
+ if(p<NPAGES&&page_visible(p)){ui.home=0;ui.page=p;ui.force=1;page_entered();}
+}
 EXPORT uint32_t web_stasis_granular_get(uint32_t field)
 {
  switch(field){
@@ -616,6 +634,32 @@ EXPORT uint32_t web_action_mute(uint32_t t) { return t<NTRK?(uint32_t)trk[t].p[P
 #if FELUCCA_RANDOM_MORPH
 EXPORT uint32_t web_action_random_state(void) { return hp_rm.state; }
 EXPORT uint32_t web_action_random_count(void) { return hp_rm.count; }
+EXPORT uint32_t web_action_random_cell(uint32_t index,uint32_t field)
+{
+ if(index>=hp_rm.count)return 0xFFFFFFFFu;
+ const hp_rm_cell_t*c=&hp_rm.cell[index];
+ switch(field){
+ case 0:return c->ref.kind;
+ case 1:return c->ref.id;
+ case 2:return c->ref.track;
+ case 3:return (uint32_t)(int32_t)c->from;
+ case 4:return (uint32_t)(int32_t)c->to;
+ case 5:return c->released;
+ case 6:return c->ref.aux;
+ default:return 0;
+ }
+}
+/* Diagnostics expose actual descriptors/table, not hardcoded cutoff limits. */
+EXPORT int32_t web_action_find_cutoff(uint32_t track)
+{
+ if(track>=NTRK)return -1;
+ for(uint32_t id=P_E0;id<P_E0+8u;id++)
+  if(track_desc(&trk[track],id)->fmt==F_CUTOFF)return (int32_t)id;
+ return -1;
+}
+EXPORT uint32_t web_action_cutoff_hz(uint32_t index)
+{ return CUTOFF_HZ[index&127u]; }
+
 /* Read-only snapshot diagnostics; all writes still use the real physical
  * A4 tap/hold and A3 recall pathways in action_control.c. */
 EXPORT uint32_t web_action_snapshot_slot(void) { return action_snap_slot; }
