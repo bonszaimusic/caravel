@@ -359,13 +359,13 @@ static void hp_draw_home(void)
  }
 #if CARAVEL_ACTION_BANKS
  if(action_enabled){
-  cv_rrect(3,171,234,31,4,T_SURF,T_BG);
+  cv_rrect(3,171,234,28,4,T_SURF,T_BG);
   cv_bg=T_SURF;
   perf_format(title,sizeof title,"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
   cv_text(7,172,&AF_S,title,T_ACCENT);
   for(uint32_t k=0;k<4;k++)
-   cv_free_text(7+(int)k*59,187,&AF_S,action_labels[action_bank][k],T_TEXT,T_SURF,52);
-  cv_free_text(5,204,&AF_S,ui.msg_t?ui.msg:"KEY 22: BANK / 23-26: ACT",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+   cv_free_text(7+(int)k*59,185,&AF_S,action_labels[action_bank][k],T_TEXT,T_SURF,52);
+  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:"KEY 22: BANK / 23-26: ACT",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
  }else
 #endif
   cv_free_text(5,198,&AF_S,ui.msg_t?ui.msg:"SELECT: ROW / ALGO: TRACK",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
