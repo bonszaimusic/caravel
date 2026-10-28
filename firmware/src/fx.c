@@ -582,6 +582,7 @@ static struct {
     uint16_t grain_xfade; /* anti-click transition on grain length changes */
     int32_t grain_xfade_l,grain_xfade_r;
     int32_t record_acc;
+    int32_t record_lp[3]; /* pre-decimation antialias filter, no extra audio ring */
 #endif
 } st __attribute__((section(".pool")));
 
@@ -608,6 +609,40 @@ static inline uint32_t stasis_min_history(void)
 }
 _Static_assert(16384u+4096u+ST_OFFSET+421u+4096u+256u<ST_RING_LEN,
                "STASIS largest grain and stereo scans must fit HQ capture bank");
+#endif
+
+#if CARAVEL_STASIS_EXPAND
+/* The old 2x/4x capture used only a 2/4-sample boxcar. Its inadequate
+ * rejection above the decimated Nyquist frequency aliases bright material
+ * into the held grain as repetitive gritty tones. Three cheap Q15 poles
+ * low-pass the input BEFORE averaging/decimation (without any new audio
+ * buffer). HQ stays bit-for-bit unfiltered.
+ *
+ * alpha ~0.45 for LONG (cutoff ~4kHz), 0.25 for DRONE (~2kHz).
+ * The sign-safe Q15 multiply is below 2^31 for 16-bit source samples. */
+static inline int32_t stasis_record_prefilter(int32_t sample,int32_t lp[3],
+                                               uint32_t quality)
+{
+ if(!quality)return sample;
+ int32_t k=quality==1u?14746:8192;
+ for(uint32_t i=0;i<3u;i++){
+  lp[i]+=((sample-lp[i])*k)>>15u;
+  sample=lp[i];
+ }
+ return sample;
+}
+/* Grain window with zero slope at both ends. The previous triangle was
+ * continuous, but its 5..11 Hz derivative corners were audible on bright
+ * sustained harmonics and extreme SCAN/REVERSE settings.
+ * Q15 cubic smoothstep: 3u^2-2u^3, u = triangle position / half size.
+ * All products fit 32 bits. No divisions or costly sine on the audio ISR. */
+static inline uint32_t stasis_grain_weight(uint32_t triangle,uint32_t grain)
+{
+ uint32_t u=triangle << (4u-grain);
+ uint32_t u2=(u*u)>>15u;
+ uint32_t u3=(u2*u)>>15u;
+ return 3u*u2-2u*u3;
+}
 #endif
 
 #include "stasis_layer.c"
@@ -694,6 +729,7 @@ static inline void stasis_transport_start(void)
     st.smooth_l = st.smooth_r = 0;     /* don't resurrect old grains on new PLAY */
 #if CARAVEL_STASIS_EXPAND
     st.record_acc=0;st.record_n=0;st.reverse_mask=0;
+    memset(st.record_lp,0,sizeof st.record_lp);
     st.grain_xfade=0;
 #endif
     stasis_layer_reset();
@@ -725,6 +761,7 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
         st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
         st.w=st.valid=st.phase=0;
         st.gr_ready=0;st.record_acc=0;st.record_n=0;
+        memset(st.record_lp,0,sizeof st.record_lp);
         st.smooth_l=st.smooth_r=0;st.reverse_mask=0;
         stasis_layer_reset();
     }
@@ -807,7 +844,7 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
 #if CARAVEL_STASIS_EXPAND
             /* Boxcar decimator; bounded +/-32768*4. The one source ring
              * gains 2x/4x history but not a single extra sample of RAM. */
-            st.record_acc+=v;
+            st.record_acc+=stasis_record_prefilter(v,st.record_lp,st.active_quality);
             if(++st.record_n>=factor){
                 dly_buf[st.w++ & ST_RING_MASK] =
                     (int16_t)clamp(st.record_acc/(int32_t)factor,-32768,32767);
@@ -853,12 +890,13 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
             int32_t lb=stasis_grain_read(st.gr_l[1],p1);
             int32_t ra=stasis_grain_read(st.gr_r[0],p0);
             int32_t rb=stasis_grain_read(st.gr_r[1],p1);
-            /* Normalize the crossfade against each grain's HALF size.
-             * Previous fixed >>12 doubled 372ms grains (+6dB), a plausible
-             * cause of periodic clipping/crackle, and attenuated 93ms grains. */
-            uint32_t gain_shift=11u+st.active_grain;
-            int32_t left=(la*(int32_t)weight+lb*(int32_t)(grain_half-weight))>>gain_shift;
-            int32_t right=(ra*(int32_t)weight+rb*(int32_t)(grain_half-weight))>>gain_shift;
+            /* Zero-slope overlap envelope, constant unity sum. Keep
+             * normalized gain for ALL grain sizes; no periodic hard corners
+             * and no accidental 6dB boost with the largest 372ms grains. */
+            uint32_t wa=stasis_grain_weight(weight,st.active_grain);
+            int32_t wb=(int32_t)(32768u-wa);
+            int32_t left=(la*(int32_t)wa+lb*wb)>>15u;
+            int32_t right=(ra*(int32_t)wa+rb*wb)>>15u;
 #else
             if (p == 0) st_grain_start(0, tap_l, tap_r);
             if (p == ST_HALF) st_grain_start(1, tap_l + 743u, tap_r + 421u);
@@ -890,6 +928,7 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
                     st.valid = 0;      /* new live capture, no frozen taps */
 #if CARAVEL_STASIS_EXPAND
                     st.record_acc=0;st.record_n=0;
+                    memset(st.record_lp,0,sizeof st.record_lp);
 #endif
                     st.smooth_l = st.smooth_r = 0;
                     stasis_layer_reset();
@@ -981,6 +1020,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
         st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
         st.record_acc=0;st.record_n=0;st.reverse_mask=0;
+        memset(st.record_lp,0,sizeof st.record_lp);
         st.grain_xfade=0;
 #endif
 #if CARAVEL_REVERB_MINIMAL
