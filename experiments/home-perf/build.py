@@ -4,7 +4,11 @@
 from pathlib import Path
 import os,subprocess,shutil,json,base64,zipfile,hashlib
 R=Path(__file__).resolve().parents[2];H=Path(__file__).resolve().parent
-env=dict(os.environ,EXPERIMENT_CFLAGS='-DFELUCCA_HOME_PERF=1 -DFELUCCA_PERF_HW=1',EXPERIMENT_VERSION='HOME-PERFORMANCE-V10')
+# Let opt-in experimental variants reuse the original full HOME / PAIR C/WASM
+# mobile build without affecting regular release or HOME-only builds.
+extra=os.environ.get('ACTION_EMU_CFLAGS','')
+env=dict(os.environ,EXPERIMENT_CFLAGS='-DFELUCCA_HOME_PERF=1 -DFELUCCA_PERF_HW=1 '+extra,
+         EXPERIMENT_VERSION=os.environ.get('ACTION_EMU_VERSION','HOME-PERFORMANCE-V10'))
 subprocess.run(['python3','experiments/engine-pair-morph/build.py'],cwd=R,env=env,check=True)
 out=R/'build/home-perf';shutil.copytree(R/'build/engine-pair-morph',out,dirs_exist_ok=True)
 page=(out/'index.html').read_text().replace('ENGINE-PAIR-PROTOTYPE-V6','HOME-PERFORMANCE-V10')
