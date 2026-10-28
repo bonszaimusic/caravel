@@ -659,6 +659,7 @@ EXPORT int32_t web_action_find_cutoff(uint32_t track)
 }
 EXPORT uint32_t web_action_cutoff_hz(uint32_t index)
 { return CUTOFF_HZ[index&127u]; }
+EXPORT uint32_t web_action_engine_base(void){return P_E0;}
 
 /* Read-only snapshot diagnostics; all writes still use the real physical
  * A4 tap/hold and A3 recall pathways in action_control.c. */
