@@ -579,6 +579,8 @@ static struct {
     uint8_t cap_prev, auto_hold, cap_pending, delay_dirty, gr_ready, stopping, releasing;
 #if CARAVEL_STASIS_EXPAND
     uint8_t active_quality, active_grain, record_n, reverse_mask;
+    uint16_t grain_xfade; /* anti-click transition on grain length changes */
+    int32_t grain_xfade_l,grain_xfade_r;
     int32_t record_acc;
 #endif
 } st __attribute__((section(".pool")));
@@ -661,6 +663,7 @@ static inline void stasis_transport_start(void)
     st.smooth_l = st.smooth_r = 0;     /* don't resurrect old grains on new PLAY */
 #if CARAVEL_STASIS_EXPAND
     st.record_acc=0;st.record_n=0;st.reverse_mask=0;
+    st.grain_xfade=0;
 #endif
     stasis_layer_reset();
 }
@@ -704,6 +707,12 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
       (!st.auto_hold || st.valid>=requested_min) &&
       (!st.gr_ready ||
       ((st.phase&(stasis_grain_samples()-1u))<CTL))){
+       /* New grain-head phase is discontinuous when we switch the window.
+        * Retain the previous audible texture and crossfade 12ms into the
+        * newly seeded heads; never inject an amplitude step into the HALL. */
+       st.grain_xfade_l=st.smooth_l;
+       st.grain_xfade_r=st.smooth_r;
+       st.grain_xfade=512u;
        st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
        st.gr_ready=0;st.phase=0;st.reverse_mask=0;
     }
@@ -813,8 +822,12 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
             int32_t lb=stasis_grain_read(st.gr_l[1],p1);
             int32_t ra=stasis_grain_read(st.gr_r[0],p0);
             int32_t rb=stasis_grain_read(st.gr_r[1],p1);
-            int32_t left=(la*(int32_t)weight+lb*(int32_t)(grain_half-weight))>>12u;
-            int32_t right=(ra*(int32_t)weight+rb*(int32_t)(grain_half-weight))>>12u;
+            /* Normalize the crossfade against each grain's HALF size.
+             * Previous fixed >>12 doubled 372ms grains (+6dB), a plausible
+             * cause of periodic clipping/crackle, and attenuated 93ms grains. */
+            uint32_t gain_shift=11u+st.active_grain;
+            int32_t left=(la*(int32_t)weight+lb*(int32_t)(grain_half-weight))>>gain_shift;
+            int32_t right=(ra*(int32_t)weight+rb*(int32_t)(grain_half-weight))>>gain_shift;
 #else
             if (p == 0) st_grain_start(0, tap_l, tap_r);
             if (p == ST_HALF) st_grain_start(1, tap_l + 743u, tap_r + 421u);
@@ -856,8 +869,20 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
             }
             gain = st.release_gain;
         }
+#if CARAVEL_STASIS_EXPAND
+        int32_t smooth_l=st.smooth_l,smooth_r=st.smooth_r;
+        if(st.grain_xfade){
+            uint32_t x=512u-(uint32_t)st.grain_xfade;
+            smooth_l=st.grain_xfade_l+(((smooth_l-st.grain_xfade_l)*(int32_t)x)>>9u);
+            smooth_r=st.grain_xfade_r+(((smooth_r-st.grain_xfade_r)*(int32_t)x)>>9u);
+            st.grain_xfade--;
+        }
+        mid[i] = (((smooth_l + smooth_r) >> 1u) * gain) >> 15u;
+        side[i] = (((smooth_l - smooth_r) >> 1u) * gain) >> 15u;
+#else
         mid[i] = (((st.smooth_l + st.smooth_r) >> 1u) * gain) >> 15u;
         side[i] = (((st.smooth_l - st.smooth_r) >> 1u) * gain) >> 15u;
+#endif
         hall_in[i] = clamp(rev_in[i] + ((mid[i] * hall_gain) >> 8u), -262143, 262143);
         st.phase++;
     }
@@ -925,6 +950,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
         st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
         st.record_acc=0;st.record_n=0;st.reverse_mask=0;
+        st.grain_xfade=0;
 #endif
 #if CARAVEL_REVERB_MINIMAL
         st.evolve_q8 = (uint32_t)clamp(mod_stasis.motion, 0, 127) << 8u;
