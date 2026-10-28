@@ -127,6 +127,11 @@ static int32_t action_setup_value(uint32_t slot)
  }
  if(action_bank==1u){
 #if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_STASIS_EXPAND
+  if(action_stasis_grain_page)
+   return slot==0u?st_expand.grain:slot==1u?st_expand.scan:
+          slot==2u?st_expand.quality:st_expand.reverse;
+#endif
   static const uint8_t ids[4]={G_RSIZE,G_DRREV,G_STAMT,G_STTIME};
   return song.g[ids[slot]];
 #else
@@ -151,7 +156,27 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   {"LVL T1","LVL T2","LVL T3","LVL T4"}
  };
  str_cpy(name,labels[action_bank][slot&3u],16);
+#if CARAVEL_STASIS_EXPAND
+ if(action_bank==1u && action_stasis_grain_page){
+  static const char *const grain_labels[4]={"GRAIN","SCAN","WINDOW","REVERSE"};
+  str_cpy(name,grain_labels[slot&3u],16);
+ }
+#endif
  int32_t v=action_setup_value(slot);
+#if CARAVEL_STASIS_EXPAND
+ if(action_bank==1u && action_stasis_grain_page){
+  if(slot==0u){
+   str_cpy(value,v==0?"93ms":v==1?"186ms":"372ms",24);return;
+  }
+  if(slot==1u){
+   perf_format(value,24,"%u%%",(uint32_t)v*100u/127u);return;
+  }
+  if(slot==2u){
+   str_cpy(value,v==0?"HQ 0.74s":v==1?"LONG 1.49s":"DRONE 2.97s",24);return;
+  }
+  str_cpy(value,v?"ON":"OFF",24);return;
+ }
+#endif
  if(action_bank==0u && slot==2u){
   str_cpy(value,v==0?"ROW":v==1?"TRACK":"ALL",24);return;
  }
@@ -202,6 +227,23 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
  }else if(action_bank==1u){
 #if CARAVEL_REVERB_MINIMAL
   if(song.g[G_RTYPE]!=3u){ui_message("FX: SET TYPE STASIS");return;}
+#if CARAVEL_STASIS_EXPAND
+  if(action_stasis_grain_page){
+   if(slot==0u)
+    st_expand.grain=(uint8_t)clamp((int32_t)st_expand.grain+steps,0,2);
+   else if(slot==1u)
+    st_expand.scan=(uint8_t)clamp((int32_t)st_expand.scan+steps,0,127);
+   else if(slot==2u){
+    if(song.g[G_DRLVL] || mod_stasis.capt || st.auto_hold ||
+       st.releasing || st_layer.phase!=STL_IDLE){
+     ui_message("STASIS: RELEASE HOLD FIRST");return;
+    }
+    st_expand.quality=(uint8_t)clamp((int32_t)st_expand.quality+steps,0,2);
+    ui_message("STASIS WINDOW: NEW LIVE CAPTURE");
+   }else st_expand.reverse=(uint8_t)clamp((int32_t)st_expand.reverse+steps,0,1);
+   ui.force=1;return;
+  }
+#endif
   static const uint8_t ids[4]={G_RSIZE,G_DRREV,G_STAMT,G_STTIME};
   uint32_t id=ids[slot];
   song.g[id]=(int16_t)param_turn(&GP[id],song.g[id],steps);
