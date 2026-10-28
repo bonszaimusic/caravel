@@ -696,7 +696,10 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
     }
     /* Grain-length changes land at a cycle boundary. This keeps both
      * read heads phase aligned, and does not rewrite any frozen bank. */
+    uint32_t requested_min=(((4096u<<(uint32_t)clamp(st_expand.grain,0,2))+4096u+
+            ST_OFFSET+421u+4096u+256u+stasis_record_factor()-1u) >> st.active_quality);
     if(st.active_grain!=st_expand.grain &&
+      (!st.auto_hold || st.valid>=requested_min) &&
       (!st.gr_ready ||
       ((st.phase&(stasis_grain_samples()-1u))==0u))){
        st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
