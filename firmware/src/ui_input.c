@@ -2067,6 +2067,12 @@ static void ui_input(void)
             ui.hot_t = 40;
         }
         if (ui.home) {
+#if CARAVEL_ACTION_BANKS
+            if(action_enabled && action_setup && action_capture_mask){
+                action_setup_turn(k,s);
+                continue;
+            }
+#endif
 #if FELUCCA_HOME_PERF
             hp_turn(k,s,0); continue;
 #endif
