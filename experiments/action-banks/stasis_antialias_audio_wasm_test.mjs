@@ -27,7 +27,7 @@ for(const [quality,highFreq] of [[1,15000],[2,9000]]){
  assert.ok(high/low<0.12,
    'out-of-band alias energy below -18.4dB for q='+quality+': ratio '+high/low);
 }
-// All three modes preserve equal-power complementary overlap at both
+// All three modes preserve complementary gains summing to unity at both
 // boundaries, with zero derivative: no corners every 93/186/372 ms.
 for(let grain=0;grain<3;grain++){
  const h=2048<<grain;
@@ -51,8 +51,8 @@ const render=(ms,record=false)=>{
    for(let i=0;i<k;i++){
     const x=l[i],y=r[i];assert.ok(Number.isFinite(x)&&Number.isFinite(y));
     absPeak=Math.max(absPeak,Math.abs(x),Math.abs(y));
-    if(prev!==null)maxJump=Math.max(maxJump,Math.abs(x-prev));
-    prev=x;observed++;
+    if(prev!==null)maxJump=Math.max(maxJump,Math.abs(x-prev[0]),Math.abs(y-prev[1]));
+    prev=[x,y];observed++;
    }
   }
   n-=k;

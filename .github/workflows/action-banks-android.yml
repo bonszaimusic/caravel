@@ -8,6 +8,7 @@ on:
       - 'experiments/home-perf/**'
       - 'firmware/src/**'
       - 'web/emu/**'
+      - 'tests/stasis_continuity_test.c'
       - '.github/workflows/action-banks-android.yml'
   workflow_dispatch:
 
@@ -48,10 +49,16 @@ jobs:
           git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
           "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
           "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Stereo PCM continuity over 36 STASIS grain/window/reverse/scan combinations
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 \
+            tests/stasis_continuity_test.c -o build/stasis-continuity -lm
+          build/stasis-continuity
       - name: Build 0.6.0 STASIS + HOME/PAIR + ACTION C/WASM Android emulator
         env:
           ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'
-          ACTION_EMU_VERSION: 'v0.6.0-STASIS-SMOOTH-TEST'
+          ACTION_EMU_VERSION: 'v0.6.0-STASIS-SMOOTH-PREFILL'
         run: |
           . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           python3 experiments/home-perf/build.py

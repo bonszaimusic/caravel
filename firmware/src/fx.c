@@ -711,8 +711,20 @@ static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
     uint32_t room=st.valid>stasis_min_history()?st.valid-stasis_min_history():0u;
     uint32_t scan=room*(uint32_t)clamp(mod_stasis.scan,0,127)/127u;
     uint32_t lag=stasis_lag_samples();
-    st.gr_l[head] = (st.w - lag - tap_l - scan) & ST_RING_MASK;
-    st.gr_r[head] = (st.w - lag - (ST_OFFSET>>st.active_quality) - tap_r - scan) & ST_RING_MASK;
+    uint32_t look_l=lag+tap_l+scan;
+    uint32_t look_r=lag+(ST_OFFSET>>st.active_quality)+tap_r+scan;
+    if(st_expand.reverse && !st.auto_hold && !st.stopping){
+        /* During LIVE the writer advances while a reverse head moves back.
+         * Reserve a whole grain of future writes, otherwise the head crosses
+         * the old/new seam of the ring while it is still audible. For the
+         * largest HQ grain this necessarily limits SCAN/stereo tap offsets.
+         * HOLD freezes the writer and retains the full captured SCAN range. */
+        uint32_t limit=ST_RING_LEN-(stasis_grain_samples()>>st.active_quality);
+        if(look_l>limit)look_l=limit;
+        if(look_r>limit)look_r=limit;
+    }
+    st.gr_l[head] = (st.w - look_l) & ST_RING_MASK;
+    st.gr_r[head] = (st.w - look_r) & ST_RING_MASK;
     if(st_expand.reverse)st.reverse_mask|=(uint8_t)(1u<<head);
     else st.reverse_mask&=(uint8_t)~(1u<<head);
 #else
@@ -897,6 +909,14 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
         if (st.valid >= ST_MIN_VALID && !st.gr_ready) {
 #endif
 #if CARAVEL_STASIS_EXPAND
+            /* The already half-open second head otherwise introduces captured
+             * audio at full weight on the very first valid sample. This also
+             * happens after HOLD->LIVE or a WINDOW change restarts prefill.
+             * Fade in from the preceding audible layer using the existing
+             * transition state; keep the normal per-head joins untouched. */
+            st.grain_xfade_l=st.smooth_l;
+            st.grain_xfade_r=st.smooth_r;
+            st.grain_xfade=512u;
             st.phase = p = 0; q = grain_half; weight = 0;
             st_grain_start(0, tap_l, tap_r);
             st_grain_start(1, tap_l + (743u>>st.active_quality),
