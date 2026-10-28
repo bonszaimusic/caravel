@@ -758,6 +758,11 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
     if(st.active_quality!=st_expand.quality && !st.auto_hold &&
        !st.cap_pending && !st.releasing && !st.stopping &&
        st_layer.phase==STL_IDLE && !mod_stasis.capt){
+        /* Changing capture sample rate discards the former ring. Fade the
+         * audible grain layer rather than hard-muting it in one sample. */
+        st.grain_xfade_l=st.smooth_l;
+        st.grain_xfade_r=st.smooth_r;
+        st.grain_xfade=512u;
         st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
         st.w=st.valid=st.phase=0;
         st.gr_ready=0;st.record_acc=0;st.record_n=0;
