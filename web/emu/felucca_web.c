@@ -573,6 +573,45 @@ EXPORT void web_action_setup_toggle(void)
 {if(action_enabled){action_setup=!action_setup;ui.force=1;}}
 EXPORT uint32_t web_action_key_note(uint32_t k) { return k<27u?kb_note[k]:0; }
 EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL]; }
+#if CARAVEL_STASIS_EXPAND
+/* Read-only C/WASM hardware regressions. The browser UI itself always
+ * uses the actual physical HOME/SELECT/K1..K4 and ACTION note gestures. */
+EXPORT uint32_t web_stasis_granular_get(uint32_t field)
+{
+ switch(field){
+ case 0:return st_expand.grain;
+ case 1:return st_expand.scan;
+ case 2:return st_expand.quality;
+ case 3:return st_expand.reverse;
+ case 4:return st.valid;
+ case 5:return st.w;
+ case 6:return st_layer.valid;
+ case 7:return st_layer.phase;
+ case 8:return st.active_quality;
+ case 9:return st.active_grain;
+ case 10:return st.gr_ready;
+ case 11:return st.auto_hold;
+ case 12:return stasis_min_history();
+ case 13:return mod_stasis.scan;
+ case 14:return action_stasis_grain_page;
+ default:return 0;
+ }
+}
+EXPORT void web_stasis_test_type(uint32_t type)
+{song.g[G_RTYPE]=(int16_t)clamp(type,0,3);ui.force=1;}
+EXPORT void web_stasis_test_hold(uint32_t hold)
+{song.g[G_DRLVL]=(int16_t)!!hold;ui.force=1;}
+EXPORT uint32_t web_stasis_scan_mod(uint32_t source,int32_t amount)
+{
+ if(source==0u){trk[0].p[P_M1SRC]=0;trk[0].p[P_M1DST]=0;trk[0].p[P_M1AMT]=0;}
+ else {
+  trk[0].p[P_M1SRC]=(int16_t)clamp(source,1,MS_N-1);
+  trk[0].p[P_M1DST]=MD_STSCAN;
+  trk[0].p[P_M1AMT]=(int16_t)clamp(amount,-64,63);
+ }
+ return MD_STSCAN;
+}
+#endif
 EXPORT uint32_t web_action_mute(uint32_t t) { return t<NTRK?(uint32_t)trk[t].p[P_MUTE]:0; }
 #if FELUCCA_RANDOM_MORPH
 EXPORT uint32_t web_action_random_state(void) { return hp_rm.state; }
