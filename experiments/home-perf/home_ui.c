@@ -60,9 +60,15 @@ static void hp_special_set(uint32_t t,uint32_t c,int32_t value,int capture)
   {uint32_t owner=c>=6&&pair_member(&trk[t])?ep.a:t;hp_event_put(owner,trk[owner].seq_idx%clamp(trk[owner].p[P_SLEN],1,NSTEP),c,value,0);}
  hp_dirty=1;perf_irq_restore(irq);
 }
+#if FELUCCA_RANDOM_MORPH
+static void hp_rm_disengage(hp_ref_t r); /* defined in home_random_morph.c */
+#endif
 static void hp_set(hp_ref_t r,int32_t value,int capture)
 {
  uint32_t t=hp_owner(r);const param_desc_t*d=hp_desc(r);if(!d)return;value=param_fit(d,value);
+#if FELUCCA_RANDOM_MORPH
+ if(capture)hp_rm_disengage(r); /* source knob or MIDI overrides moving target */
+#endif
  if(r.kind==HP_TRACK){trk[t].p[hp_tid(r)]=value;if(capture)motion_capture(&trk[t],hp_tid(r),value);}
  else if(r.kind==HP_GLOBAL)song.g[r.id]=value;
  else if(r.kind==HP_LFO2)lfo2_set(t,r.id,value);
@@ -99,7 +105,11 @@ static void hp_touch(uint32_t slot)
   if(pg->scope==SC_GLOBAL){uint32_t id=p-song.g;if(id>G_CDEPTH&&id!=G_RTYPE)return;r.kind=HP_GLOBAL;r.id=id;}
   else r=hp_track_ref(song.sel,p-TSEL->p,ui.page);
  }
- if(!hp_desc(r))return;hp_last=r;hp_last_valid=1;hp_last_track=song.sel;
+ if(!hp_desc(r))return;
+#if FELUCCA_RANDOM_MORPH
+ hp_rm_disengage(r); /* regular parameter pages also take precedence */
+#endif
+ hp_last=r;hp_last_valid=1;hp_last_track=song.sel;
 }
 static void hp_apply(uint32_t t,uint32_t set)
 {
@@ -139,6 +149,9 @@ static void hp_turn(uint32_t slot,int32_t steps,int momentary)
  hp_ref_t r=hp_current(slot);const param_desc_t*d=hp_desc(r);if(!d){ui_message(r.kind?"TARGET NOT AVAILABLE":"EMPTY: GLO+HOME TO ADD");return;}
  hp_last=r;hp_last.page=0xFFFF;hp_last_valid=1;hp_last_track=song.sel;
  if(momentary){if(r.kind!=HP_TRACK&&r.kind!=HP_GLOBAL){ui_message("USE NORMAL TURN");return;}
+#if FELUCCA_RANDOM_MORPH
+  hp_rm_disengage(r);
+#endif
   int16_t*vp=r.kind==HP_TRACK?&trk[hp_owner(r)].p[hp_tid(r)]:&song.g[r.id];uint32_t i;
   for(i=0;i<mom.n&&mom.vp[i]!=vp;i++);if(i==mom.n){if(i==MOM_N){ui_message("MOMENTARY FULL");return;}mom.vp[i]=vp;mom.v[i]=*vp;mom.n++;}
   *vp=param_turn(d,*vp,steps);ui.force=1;return;}
