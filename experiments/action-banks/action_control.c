@@ -67,8 +67,15 @@ static void action_refresh(void)
   if(!action_bank_long && fm1_ms-action_bank_started>=ACTION_LONG_MS){
    action_bank_long=1;
    action_setup=!action_setup;
+#if CARAVEL_STASIS_EXPAND
+   if(action_setup && action_bank==1u)action_stasis_grain_page=1u;
+#endif
    ui.force=1;
-   ui_message(action_setup?"ACTION SETUP: K1-K4":"ACTION PERFORM: K1-K4 HOME");
+   ui_message(action_setup?(
+#if CARAVEL_STASIS_EXPAND
+      action_bank==1u?"STASIS GRAIN: K1-K4":
+#endif
+      "ACTION SETUP: K1-K4"):"ACTION PERFORM: K1-K4 HOME");
   }
  }else if(action_bank_down){
   action_bank_down=0;
@@ -228,28 +235,7 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
 #if CARAVEL_REVERB_MINIMAL
   if(song.g[G_RTYPE]!=3u){ui_message("FX: SET TYPE STASIS");return;}
 #if CARAVEL_STASIS_EXPAND
-  if(action_stasis_grain_page){
-   if(slot==0u){
-    uint32_t requested=(uint32_t)clamp((int32_t)st_expand.grain+steps,0,2);
-    uint32_t required=((4096u<<requested)+4096u+ST_OFFSET+421u+4096u+
-           256u+stasis_record_factor()-1u)>>st.active_quality;
-    if(st.auto_hold && st.valid<required){
-     ui_message("GRAIN TOO LONG FOR CAPTURE");return;
-    }
-    st_expand.grain=(uint8_t)requested;
-   }
-   else if(slot==1u)
-    st_expand.scan=(uint8_t)clamp((int32_t)st_expand.scan+steps,0,127);
-   else if(slot==2u){
-    if(song.g[G_DRLVL] || mod_stasis.capt || st.auto_hold ||
-       st.releasing || st_layer.phase!=STL_IDLE){
-     ui_message("STASIS: RELEASE HOLD FIRST");return;
-    }
-    st_expand.quality=(uint8_t)clamp((int32_t)st_expand.quality+steps,0,2);
-    ui_message("STASIS WINDOW: NEW LIVE CAPTURE");
-   }else st_expand.reverse=(uint8_t)clamp((int32_t)st_expand.reverse+steps,0,1);
-   ui.force=1;return;
-  }
+  if(action_stasis_grain_page){stasis_exp_turn(slot,steps);return;}
 #endif
   static const uint8_t ids[4]={G_RSIZE,G_DRREV,G_STAMT,G_STTIME};
   uint32_t id=ids[slot];
