@@ -470,6 +470,9 @@ static int page_visible(uint32_t i)
 #if CARAVEL_REVERB_MINIMAL
     if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
 #endif
+#if CARAVEL_STASIS_EXPAND
+    if (PAGES[i].graph == GR_STGRAIN) return song.g[G_RTYPE] == 3u;
+#endif
     if (str_eq(PAGES[i].title, "SEM MODE")) return TSEL->eng_req == ENGI_SEM;
     if (str_eq(PAGES[i].title, "MORE")) return TSEL->eng_req != ENGI_SEM;          /* SEM MODE has its SPREAD: nothing else is left */
     if (PAGES[i].graph >= GR_DXKIT && PAGES[i].graph <= GR_DXLAYER) return dx_track(TSEL);
