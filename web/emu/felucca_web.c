@@ -171,6 +171,7 @@ static void lcd_init(void) {}
 #include "../../firmware/src/ui_graph.c"
 #include "../../firmware/src/ui_draw.c"
 #include "../../firmware/src/ui_menu.c"
+#include "../../experiments/action-banks/action_control.c"
 #include "../../firmware/src/ui_input.c"
 #include "../../firmware/src/ui_layer.c"
 
