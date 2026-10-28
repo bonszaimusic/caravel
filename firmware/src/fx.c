@@ -577,7 +577,36 @@ static struct {
     int32_t stop_gain, release_gain;   /* independent STOP and HOLD->LIVE envelopes */
     int32_t smooth_l, smooth_r;
     uint8_t cap_prev, auto_hold, cap_pending, delay_dirty, gr_ready, stopping, releasing;
+#if CARAVEL_STASIS_EXPAND
+    uint8_t active_quality, active_grain, record_n, reverse_mask;
+    int32_t record_acc;
+#endif
 } st __attribute__((section(".pool")));
+
+#if CARAVEL_STASIS_EXPAND
+/* Longer recording WITHOUT increasing DLY_LEN: each of the two fixed 32768
+ * sample capture banks stores mono samples at 44.1/22.05/11.025 kHz. Window
+ * sizes are 0.743, 1.486, 2.972 seconds respectively. All grains still
+ * output at 44.1 kHz; playback decimation uses linear interpolation.
+ * GRAIN 4096/8192/16384 samples is independent of recording duration.
+ */
+static inline uint32_t stasis_grain_samples(void)
+{ return 4096u << st.active_grain; }
+static inline uint32_t stasis_record_factor(void)
+{ return 1u << st.active_quality; }
+static inline uint32_t stasis_lag_samples(void)
+{ return (stasis_grain_samples()+4096u) >> st.active_quality; }
+static inline uint32_t stasis_min_history(void)
+{
+ /* Conservative maximum: grain-start lookback + far stereo offset + tap
+  * modulation + second head's displacement + guard. SCAN uses remaining
+  * history only: never reads unrecorded samples, even during LIVE prefill. */
+ return stasis_lag_samples() +
+       ((ST_OFFSET+421u+4096u+256u+stasis_record_factor()-1u) >> st.active_quality);
+}
+_Static_assert(16384u+4096u+ST_OFFSET+421u+4096u+256u<ST_RING_LEN,
+               "STASIS largest grain and stereo scans must fit HQ capture bank");
+#endif
 
 #include "stasis_layer.c"
 
@@ -585,9 +614,33 @@ static struct {
  * never depends on MOTN. Taps are changed only at zero-crossfade weight. */
 static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
 {
+#if CARAVEL_STASIS_EXPAND
+    uint32_t room=st.valid>stasis_min_history()?st.valid-stasis_min_history():0u;
+    uint32_t scan=room*(uint32_t)clamp(mod_stasis.scan,0,127)/127u;
+    uint32_t lag=stasis_lag_samples();
+    st.gr_l[head] = (st.w - lag - tap_l - scan) & ST_RING_MASK;
+    st.gr_r[head] = (st.w - lag - (ST_OFFSET>>st.active_quality) - tap_r - scan) & ST_RING_MASK;
+    if(st_expand.reverse)st.reverse_mask|=(uint8_t)(1u<<head);
+    else st.reverse_mask&=(uint8_t)~(1u<<head);
+#else
     st.gr_l[head] = (st.w - ST_LAG - tap_l) & ST_RING_MASK;
     st.gr_r[head] = (st.w - ST_LAG - ST_OFFSET - tap_r) & ST_RING_MASK;
+#endif
 }
+#if CARAVEL_STASIS_EXPAND
+/* An expansion grain remains at unity speed: resampling changes only the
+ * CAPTURE density, not pitch. Interpolate stored data at the original clock.
+ * Reverse is latched per head at its silent crossfade boundary. */
+static inline int32_t stasis_grain_read(uint32_t start,uint32_t pos)
+{
+ uint32_t sub=pos&((1u<<st.active_quality)-1u);
+ uint32_t sample=pos>>st.active_quality;
+ int32_t a=stasis_read(start+sample);
+ if(!sub)return a;
+ int32_t b=stasis_read(start+sample+1u);
+ return a+(((b-a)*(int32_t)sub)>>st.active_quality);
+}
+#endif
 static inline void stasis_transport_stop(void)
 {
     if (song.g[G_RTYPE] != 3u) return;
@@ -606,6 +659,9 @@ static inline void stasis_transport_start(void)
     st.gr_ready = 0;
     st.valid = 0;                      /* no stale STOP tail in the next performance */
     st.smooth_l = st.smooth_r = 0;     /* don't resurrect old grains on new PLAY */
+#if CARAVEL_STASIS_EXPAND
+    st.record_acc=0;st.record_n=0;st.reverse_mask=0;
+#endif
     stasis_layer_reset();
 }
 
@@ -782,6 +838,11 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     if (rt == 3u && fx.rtype != 3u) {
         stasis_layer_reset();
         st.w = st.valid = st.phase = st.drift_ph = 0u;
+#if CARAVEL_STASIS_EXPAND
+        st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
+        st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
+        st.record_acc=0;st.record_n=0;st.reverse_mask=0;
+#endif
 #if CARAVEL_REVERB_MINIMAL
         st.evolve_q8 = (uint32_t)clamp(mod_stasis.motion, 0, 127) << 8u;
 #else
