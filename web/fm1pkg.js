@@ -232,6 +232,54 @@ export async function sha256hex(bytes) {
   return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+// Fail-closed preflight for Caravel's own published package. The release site's
+// builder pins the SHA-256 of the exact .fwsc alongside its version and size.
+// This is a consistency check, not a signature against a compromised web site.
+export async function validateCaravelPackage(bytes, expected) {
+  if (!(bytes instanceof Uint8Array) || !expected ||
+      !Number.isSafeInteger(expected.size) || expected.size <= 0 ||
+      !/^FM-1_9[0-9][0-9]$/.test(expected.product || "") ||
+      !/^[0-9a-f]{64}$/.test(expected.sha256 || ""))
+    throw new Error("missing or invalid Caravel release evidence");
+  if (bytes.length !== expected.size)
+    throw new Error("Caravel package size mismatch");
+  if (await sha256hex(bytes) !== expected.sha256)
+    throw new Error("Caravel package SHA-256 mismatch");
+  if (productOf(bytes) !== expected.product)
+    throw new Error("Caravel package product mismatch");
+
+  // Validate the real FM-1 package layout, not just its outer product marker.
+  const pkg = new Package(bytes); // UFW, flash.bin and JLFS header CRCs
+  if (pkg.flashSize !== 0x93000 || pkg.appBase !== 0x4000 ||
+      pkg.appOff !== 0x4120 || pkg.app.size !== STOCK_APP_SIZE ||
+      pkg.flashFileOff < BLOCKS * BLK ||
+      pkg.flashFileOff + pkg.flashSize > bytes.length ||
+      pkg.appOff + pkg.app.size > pkg.flashSize)
+    throw new Error("unsupported Caravel FM-1 flash layout");
+  if (crc16(pkg.dec.subarray(pkg.appOff, pkg.appOff + pkg.app.size)) !== pkg.app.dcrc ||
+      crc16(pkg.dec.subarray(pkg.head.hdrOff + 32, pkg.head.hdrOff + pkg.head.size)) !== pkg.head.dcrc)
+    throw new Error("Caravel application CRC mismatch");
+
+  const loaders = pkg.entries.filter((e) => e.type === 100);
+  if (loaders.length !== 1 || loaders[0].name !== "ota.bin")
+    throw new Error("missing or unsupported Caravel update loader");
+  const ent = loaders[0], off = ent.dataOff + pkg.skew;
+  if (off < BLOCKS * BLK || ent.size < 64 || off + ent.size > bytes.length)
+    throw new Error("Caravel update loader exceeds package bounds");
+  const loader = bytes.subarray(off, off + ent.size);
+  if (crc16(loader) !== ent.dcrc)
+    throw new Error("Caravel update loader CRC mismatch");
+  const outer = new Entry(loader, 0), inner = new Entry(loader, 32);
+  if (outer.offset !== 32 || outer.size !== loader.length - 32 ||
+      outer.flags !== 0x41 || outer.name !== "usb_hid_ota.bin" ||
+      crc16(loader.subarray(32)) !== outer.dcrc ||
+      inner.offset !== 0x01C0A800 || inner.flags !== 0 ||
+      inner.name !== "usb_hid_ota.bin" ||
+      inner.size <= 0 || inner.size > 0x14000)
+    throw new Error("unsupported Caravel update loader layout");
+  return { product: pkg.product, image: logicalImage(bytes), sha256: expected.sha256 };
+}
+
 // Only the user's unmodified official V15 is accepted for a return to stock.
 // The digest pins every file, loader and flash layout; filenames are not evidence.
 export async function validateStockPackage(bytes) {
