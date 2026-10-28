@@ -77,6 +77,9 @@ static void hp_set(hp_ref_t r,int32_t value,int capture)
  }
  hp_dirty=1;ui.force=1;
 }
+#if FELUCCA_RANDOM_MORPH
+#include "home_random_morph.c"
+#endif
 static void hp_midi(track_t*t,uint32_t id,uint32_t value)
 {
  hp_ref_t r={0};r.kind=id<HP_VFIRST+4?HP_MACRO:HP_PAIR;r.id=(id-HP_VFIRST)&3;r.track=trk_index(t);r.engine=255;
@@ -274,6 +277,9 @@ static const char*hp_row_name(const hp_track_t*h,uint32_t row)
 static void hp_perf_cell(hp_ref_t r,uint32_t k,int y,int active)
 {
  int x=3+(int)k*59,h=active?72:28,hot=active&&ui.hot_t&&ui.hot_col==k;
+#if CARAVEL_ACTION_BANKS
+ if(active&&action_enabled)h=52;
+#endif
  uint16_t bg=active?T_RAISE:T_SURF,edge=hot?T_TEXT:active?T_ACCENT:T_LINE;
  cv_rrect(x,y,56,h,4,edge,T_BG);cv_rrect(x+1,y+1,54,h-2,3,bg,edge);cv_bg=bg;
  const param_desc_t*d=r.kind?hp_desc(r):0;
@@ -287,13 +293,23 @@ static void hp_perf_cell(hp_ref_t r,uint32_t k,int y,int active)
   cv_free_text(x+4,y+label_y,label,d->label,T_TEXT,bg,48);
   const aafont_t*f=!foreign&&large_face_has(val)&&text_w(&AF_L,val)<=48?&AF_L:text_w(&AF_M,val)<=48?&AF_M:&AF_S;
   cv_free_text(x+4,y+(foreign?31:23),f,val,T_TEXT,bg,48);
+  #if CARAVEL_ACTION_BANKS
+  if(action_enabled){
+   if(unit)cv_text_r(x+52,y+35,&AF_S,unit,T_MID,bg);
+  }else
+#endif
   if(unit)cv_text_r(x+52,y+53,&AF_S,unit,T_MID,bg);
   if(d->max>d->min&&d->fmt!=F_ENUM){
    int32_t pos=clamp((value-d->min)*48/(d->max-d->min),0,48);
    int32_t zero=d->min<0&&d->max>0?(-d->min)*48/(d->max-d->min):0;
-   cv_rect(x+4,y+68,48,2,T_LINE);
-   if(pos!=zero)cv_rect(x+4+(pos<zero?pos:zero),y+68,pos<zero?zero-pos:pos-zero,2,T_ACCENT);
-   if(zero)cv_rect(x+4+zero,y+67,1,4,T_MID);
+   #if CARAVEL_ACTION_BANKS
+   int gy=action_enabled?48:68;
+#else
+   int gy=68;
+#endif
+   cv_rect(x+4,y+gy,48,2,T_LINE);
+   if(pos!=zero)cv_rect(x+4+(pos<zero?pos:zero),y+gy,pos<zero?zero-pos:pos-zero,2,T_ACCENT);
+   if(zero)cv_rect(x+4+zero,y+gy-1,1,4,T_MID);
   }
  }else{
   if(foreign){if(r.kind==HP_GLOBAL)perf_format(line,sizeof line,"G:%s",d->label);else perf_format(line,sizeof line,"T%u:%s",hp_owner(r)+1,d->label);}
@@ -330,9 +346,24 @@ static void hp_draw_home(void)
   perf_format(title,sizeof title,"%s %u/%u",hp_row_name(h,row),row+1,h->count);cv_text(7,y,&AF_S,title,ink);
   cv_text_r(232,y,&AF_S,active?"K1-K4":"SELECT",ink,fill);
   for(uint32_t k=0;k<4;k++)hp_perf_cell(h->cell[row][k],k,y+(active?16:13),active);
+  #if CARAVEL_ACTION_BANKS
+  y+=active?(action_enabled?72:92):45;
+#else
   y+=active?92:45;
+#endif
  }
- cv_free_text(5,198,&AF_S,ui.msg_t?ui.msg:"SELECT: ROW / ALGO: TRACK",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+#if CARAVEL_ACTION_BANKS
+ if(action_enabled){
+  cv_rrect(3,171,234,31,4,T_SURF,T_BG);
+  cv_bg=T_SURF;
+  perf_format(title,sizeof title,"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
+  cv_text(7,172,&AF_S,title,T_ACCENT);
+  for(uint32_t k=0;k<4;k++)
+   cv_free_text(7+(int)k*59,187,&AF_S,action_labels[action_bank][k],T_TEXT,T_SURF,52);
+  cv_free_text(5,204,&AF_S,ui.msg_t?ui.msg:"KEY 22: BANK / 23-26: ACT",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+ }else
+#endif
+  cv_free_text(5,198,&AF_S,ui.msg_t?ui.msg:"SELECT: ROW / ALGO: TRACK",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
  cv_blit(0,24+108*band);}
  cv_oy=0;
 }
