@@ -577,6 +577,14 @@ EXPORT uint32_t web_action_mute(uint32_t t) { return t<NTRK?(uint32_t)trk[t].p[P
 #if FELUCCA_RANDOM_MORPH
 EXPORT uint32_t web_action_random_state(void) { return hp_rm.state; }
 EXPORT uint32_t web_action_random_count(void) { return hp_rm.count; }
+/* Read-only snapshot diagnostics; all writes still use the real physical
+ * A4 tap/hold and A3 recall pathways in action_control.c. */
+EXPORT uint32_t web_action_snapshot_slot(void) { return action_snap_slot; }
+EXPORT uint32_t web_action_snapshot_count(uint32_t slot)
+{ return hp_rm_snapshot_count(slot); }
+EXPORT int32_t web_action_snapshot_value(uint32_t slot,uint32_t index)
+{ return slot<HP_RM_SNAP_SLOTS && index<hp_rm_snap[slot].count
+  ? hp_rm_snap[slot].cell[index].value : -32768; }
 #endif
 #endif
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
