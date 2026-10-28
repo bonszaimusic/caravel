@@ -59,6 +59,9 @@ enum { MD_OFF, MD_PITCH, MD_CUT, MD_SHP, MD_AMP, MD_PAN, MD_DIST, MD_CHO, MD_DLY
 #if CARAVEL_REVERB_MINIMAL
        MD_STCAP, MD_STSTR, MD_STMOTN,
 #endif
+#if CARAVEL_STASIS_EXPAND
+       MD_STSCAN,
+#endif
        MD_N };   /* (append-only: the stored values keep their meaning) */
 _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST == MS_* / MD_*");
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
@@ -223,7 +226,13 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
         if (d == MD_PAIR) continue; /* aggregate exactly once, before the pair mix */
 #endif
 #if CARAVEL_REVERB_MINIMAL
-        if (d >= MD_STCAP && d <= MD_STMOTN)
+        if (d >= MD_STCAP && d <= (
+#if CARAVEL_STASIS_EXPAND
+           MD_STSCAN
+#else
+           MD_STMOTN
+#endif
+           ))
             continue; /* aggregated after all parts, never a track parameter */
 #endif
         if (d <= MD_AMP) {                              /* per voice */
@@ -268,12 +277,21 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
  * all four tracks on core 0, once per FX block, without mutating song.g. */
 static struct {
     int16_t strength, motion;
+#if CARAVEL_STASIS_EXPAND
+    int16_t scan;
+#endif
     uint8_t capt, capt_hyst;
 } mod_stasis;
 
 static __attribute__((noinline)) void mod_stasis_update(void)
 {
-    int32_t off[3] = {0, 0, 0};
+    int32_t off[
+#if CARAVEL_STASIS_EXPAND
+       4
+#else
+       3
+#endif
+    ] = {0};
     uint32_t i, k, any_cap = 0;
     for (i = 0; i < NTRK; i++) {
         const track_t *t = &trk[i];
@@ -283,7 +301,13 @@ static __attribute__((noinline)) void mod_stasis_update(void)
             uint32_t d = (uint32_t)p[P_M1DST + 3u*k];
             uint32_t src = (uint32_t)p[P_M1SRC + 3u*k];
             int32_t amt = p[P_M1AMT + 3u*k], x;
-            if (d < MD_STCAP || d > MD_STMOTN || !src || src >= MS_N || !amt)
+            if (d < MD_STCAP || d > (
+#if CARAVEL_STASIS_EXPAND
+                MD_STSCAN
+#else
+                MD_STMOTN
+#endif
+                ) || !src || src >= MS_N || !amt)
                 continue;
             any_cap |= d == MD_STCAP;
             x = mod_tsrc(t, src, lfo);
@@ -292,6 +316,9 @@ static __attribute__((noinline)) void mod_stasis_update(void)
     }
     mod_stasis.strength = (int16_t)clamp(song.g[G_RSIZE] + off[1], 0, 127);
     mod_stasis.motion = (int16_t)clamp(song.g[G_DRREV] + off[2], 0, 127);
+#if CARAVEL_STASIS_EXPAND
+    mod_stasis.scan = (int16_t)clamp((int32_t)st_expand.scan + off[3],0,127);
+#endif
     if (!any_cap) {
         mod_stasis.capt = song.g[G_DRLVL] != 0;
         mod_stasis.capt_hyst = mod_stasis.capt;
