@@ -111,21 +111,97 @@ static int hp_rm_valid(void)
  }
  return 1;
 }
+#if CARAVEL_ACTION_BANKS
+/* Four explicit, independent snapshots. A slot captures exactly the current
+ * morph-safe HOME refs within ROW/TRACK/ALL at capture time. Slots may have
+ * different scopes. Their values are immutable until the next long A4 hold.
+ * Any currently moving morph is cancelled without resetting audible controls.
+ *
+ * The shared hp_rm cells are only a scratch list while capturing. A capture
+ * cannot overwrite an earlier snapshot unless the complete list succeeds.
+ */
+static void hp_rm_snapshot_clear(void)
+{
+ memset(hp_rm_snap,0,sizeof hp_rm_snap);
+}
+static uint32_t hp_rm_snapshot_count(uint32_t slot)
+{
+ return slot<HP_RM_SNAP_SLOTS?hp_rm_snap[slot].count:0u;
+}
+static int hp_rm_snapshot_store(uint32_t slot)
+{
+ if(slot>=HP_RM_SNAP_SLOTS)return 0;
+ hp_rm_reset(); /* preserve current live sound; discard obsolete morph */
+ if(!hp_rm_capture()){
+  ui_message("SNAP: NO SAFE HOME TARGETS");ui.force=1;return 0;
+ }
+ hp_rm_snap_t *snap=&hp_rm_snap[slot];
+ for(uint32_t i=0;i<hp_rm.count;i++){
+  snap->cell[i].ref=hp_rm.cell[i].ref;
+  snap->cell[i].value=hp_rm.cell[i].original;
+ }
+ snap->scope=hp_rm.scope;
+ snap->origin_track=hp_rm.origin_track;
+ snap->origin_row=hp_rm.origin_row;
+ snap->count=(uint16_t)hp_rm.count; /* publish count only after all values */
+ hp_rm_reset();
+ char message[32];perf_format(message,sizeof message,"SNAP S%u SAVED",slot+1u);
+ ui_message(message);ui.force=1;
+ return 1;
+}
+/* Recall is all-or-nothing. Ref identities are pinned to captured tracks;
+ * HOME layout or selection may change, but engine/type-invalid refs block the
+ * entire morph without partially moving any control.
+ * Morph starts from the ACTUAL live values, including manual/frozen edits.
+ */
+static int hp_rm_snapshot_recall(uint32_t slot,uint32_t now)
+{
+ if(slot>=HP_RM_SNAP_SLOTS || !hp_rm_snap[slot].count)return 0;
+ const hp_rm_snap_t*snap=&hp_rm_snap[slot];
+ if(snap->count>HP_RM_MAX){ui_message("SNAP: INVALID SIZE");return 0;}
+ for(uint32_t i=0;i<snap->count;i++){
+  const hp_rm_snap_cell_t*c=&snap->cell[i];
+  const param_desc_t*d=hp_desc(c->ref);
+  if(!hp_rm_safe(c->ref,d) || c->value<d->min || c->value>d->max){
+   ui_message("SNAP: TARGET CHANGED");ui.force=1;return 0;
+  }
+ }
+ hp_rm_reset();
+ for(uint32_t i=0;i<snap->count;i++){
+  const hp_rm_snap_cell_t*c=&snap->cell[i];
+  hp_rm_cell_t*dst=&hp_rm.cell[i];
+  int32_t live=hp_get(c->ref);
+  dst->ref=c->ref;
+  dst->original=dst->from=dst->last=(int16_t)live;
+  dst->to=c->value;
+ }
+ hp_rm.count=snap->count;
+ hp_rm.phase=0;
+ hp_rm.stamp=now;
+ hp_rm.state=HP_RM_RECALL;
+ char message[32];perf_format(message,sizeof message,"MORPH TO SNAP S%u",slot+1u);
+ ui_message(message);ui.force=1;
+ return 1;
+}
+#endif
+
 static void hp_rm_freeze(void)
 {
- if(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN){
+ if(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL){
   hp_rm.frozen_from=hp_rm.state;hp_rm.state=HP_RM_FROZEN;ui_message("RANDOM MORPH FROZEN");ui.force=1;
  }
 }
 static void hp_rm_resume(uint32_t now)
 {
  if(hp_rm.state!=HP_RM_FROZEN)return;
- hp_rm.state=hp_rm.frozen_from==HP_RM_RETURN?HP_RM_RETURN:HP_RM_RANDOM;
+ hp_rm.state=hp_rm.frozen_from==HP_RM_RETURN?HP_RM_RETURN:
+  hp_rm.frozen_from==HP_RM_RECALL?HP_RM_RECALL:HP_RM_RANDOM;
  hp_rm.stamp=now;ui_message("RANDOM MORPH RESUMED");ui.force=1;
 }
 static void hp_rm_start(uint32_t now)
 {
- if(hp_rm.state==HP_RM_IDLE){
+ if(hp_rm.state==HP_RM_IDLE||hp_rm.state==HP_RM_RECALL||
+    (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL)){
   hp_rm_reset();
   if(!hp_rm_capture()){ui_message("RANDOM: NO SAFE CONTROLS");return;}
  }
@@ -166,7 +242,7 @@ static void hp_rm_press(uint32_t oct,uint32_t now)
 }
 static void hp_rm_poll(uint32_t now)
 {
- if(hp_rm.state!=HP_RM_RANDOM&&hp_rm.state!=HP_RM_RETURN)return;
+ if(hp_rm.state!=HP_RM_RANDOM&&hp_rm.state!=HP_RM_RETURN&&hp_rm.state!=HP_RM_RECALL)return;
  if(!hp_rm_valid()){hp_rm_freeze();ui_message("RANDOM: PARAM UNAVAILABLE");return;}
  uint32_t delta=now-hp_rm.stamp;hp_rm.stamp=now;
  if(delta>1000u)delta=1000u; /* sleeping/USB stalls never leap many bars */
@@ -184,9 +260,9 @@ static void hp_rm_poll(uint32_t now)
   }
  }
  if(hp_rm.phase==65536u){
-  int returned=hp_rm.state==HP_RM_RETURN;
-  hp_rm.state=returned?HP_RM_IDLE:HP_RM_DONE;
-  ui_message(returned?"RANDOM RETURNED":"RANDOM DESTINATION");
+  int returned=hp_rm.state==HP_RM_RETURN, recalled=hp_rm.state==HP_RM_RECALL;
+  hp_rm.state=returned||recalled?HP_RM_IDLE:HP_RM_DONE;
+  ui_message(recalled?"SNAP REACHED":returned?"RANDOM RETURNED":"RANDOM DESTINATION");
  }
  ui.force=1;
 }
