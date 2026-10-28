@@ -682,6 +682,29 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
     st.evolve_q8 = (uint32_t)((int32_t)st.evolve_q8 +
         (err / 384 ? err / 384 : err > 0 ? 1 : err < 0 ? -1 : 0));
     uint32_t motion = st.evolve_q8 >> 8u;
+#if CARAVEL_STASIS_EXPAND
+    /* Never reinterpret held grains with a different recording sample rate.
+     * Quality changes are applied only in LIVE, and restart prefill. */
+    if(st.active_quality!=st_expand.quality && !st.auto_hold &&
+       !st.cap_pending && !st.releasing && !st.stopping &&
+       st_layer.phase==STL_IDLE && !mod_stasis.capt){
+        st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
+        st.w=st.valid=st.phase=0;
+        st.gr_ready=0;st.record_acc=0;st.record_n=0;
+        st.smooth_l=st.smooth_r=0;st.reverse_mask=0;
+        stasis_layer_reset();
+    }
+    /* Grain-length changes land at a cycle boundary. This keeps both
+     * read heads phase aligned, and does not rewrite any frozen bank. */
+    if(st.active_grain!=st_expand.grain &&
+      (!st.gr_ready ||
+      ((st.phase&(stasis_grain_samples()-1u))==0u))){
+       st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
+       st.gr_ready=0;st.phase=0;st.reverse_mask=0;
+    }
+    uint32_t grain_len=stasis_grain_samples(),grain_half=grain_len>>1u;
+    uint32_t min_valid=stasis_min_history(),factor=stasis_record_factor();
+#endif
 #if CARAVEL_REVERB_MINIMAL
     uint32_t cap = mod_stasis.capt;
 #else
@@ -697,13 +720,21 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
      * at a silent-grain crossfade boundary. */
     uint32_t tap_l = 256u + (uint32_t)(((uint32_t)(sine_l + 32768) * motion * 28u) >> 16u);
     uint32_t tap_r = 256u + (uint32_t)(((uint32_t)(sine_r + 32768) * motion * 28u) >> 16u);
+#if CARAVEL_STASIS_EXPAND
+    tap_l>>=st.active_quality;
+    tap_r>>=st.active_quality;
+#endif
     int32_t layer_gain = (int32_t)((strength * 2304u + 63u) / 127u);
     int32_t hall_gain = (int32_t)((strength * 1024u + 63u) / 127u);
     if (cap && !st.cap_prev && !st.stopping) {
         /* Retake HOLD without erasing the previous sound. */
         if (!st.releasing) stasis_layer_reset();
         st.releasing = 0;
+#if CARAVEL_STASIS_EXPAND
+        st.cap_pending = st.valid < min_valid;
+#else
         st.cap_pending = st.valid < ST_MIN_VALID;
+#endif
         st.auto_hold = !st.cap_pending;
     }
     if (!cap && st.cap_prev && !st.stopping) {
@@ -717,26 +748,69 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
     stasis_layer_block(rev_in, n);
     for (i = 0; i < n; i++) {
         stasis_layer_tick(rev_in[i]);
+#if CARAVEL_STASIS_EXPAND
+        uint32_t p = st.phase & (grain_len - 1u);
+        uint32_t q = (p + grain_half) & (grain_len - 1u);
+        uint32_t weight = p < grain_half ? p : grain_len - p;
+#else
         uint32_t p = st.phase & (ST_GRAIN_LEN - 1u);
         uint32_t q = (p + ST_HALF) & (ST_GRAIN_LEN - 1u);
         uint32_t weight = p < ST_HALF ? p : ST_GRAIN_LEN - p;
+#endif
         if (!st.auto_hold && !st.stopping) {
             int32_t v = clamp(rev_in[i] >> 2, -32768, 32767);
+#if CARAVEL_STASIS_EXPAND
+            /* Boxcar decimator; bounded +/-32768*4. The one source ring
+             * gains 2x/4x history but not a single extra sample of RAM. */
+            st.record_acc+=v;
+            if(++st.record_n>=factor){
+                dly_buf[st.w++ & ST_RING_MASK] =
+                    (int16_t)clamp(st.record_acc/(int32_t)factor,-32768,32767);
+                st.record_acc=0;st.record_n=0;
+                if(st.valid<ST_RING_LEN)st.valid++;
+            }
+            if(st.cap_pending && st.valid>=min_valid){
+#else
             dly_buf[st.w++ & ST_RING_MASK] = (int16_t)v;
             if (st.valid < ST_RING_LEN) st.valid++;
             if (st.cap_pending && st.valid >= ST_MIN_VALID) {
+#endif
                 st.cap_pending = 0;
                 st.auto_hold = 1;
             }
         }
+#if CARAVEL_STASIS_EXPAND
+        if (st.valid >= min_valid && !st.gr_ready) {
+#else
         if (st.valid >= ST_MIN_VALID && !st.gr_ready) {
+#endif
+#if CARAVEL_STASIS_EXPAND
+            st.phase = p = 0; q = grain_half; weight = 0;
+            st_grain_start(0, tap_l, tap_r);
+            st_grain_start(1, tap_l + (743u>>st.active_quality),
+                           tap_r + (421u>>st.active_quality));
+#else
             st.phase = p = 0; q = ST_HALF; weight = 0;
             st_grain_start(0, tap_l, tap_r);
             st_grain_start(1, tap_l + 743u, tap_r + 421u);
+#endif
             st.gr_ready = 1;
         }
         if (st.gr_ready) {
             /* Two heads 180 degrees apart. Reposition only where gain is 0. */
+#if CARAVEL_STASIS_EXPAND
+            if(p==0)st_grain_start(0,tap_l,tap_r);
+            if(p==grain_half)st_grain_start(1,tap_l+(743u>>st.active_quality),
+                                             tap_r+(421u>>st.active_quality));
+            uint32_t p0=st.reverse_mask&1u?grain_len-1u-p:p;
+            uint32_t p1=st.reverse_mask&2u?grain_len-1u-q:q;
+            int32_t la=stasis_grain_read(st.gr_l[0],p0);
+            int32_t lb=stasis_grain_read(st.gr_l[1],p1);
+            int32_t ra=stasis_grain_read(st.gr_r[0],p0);
+            int32_t rb=stasis_grain_read(st.gr_r[1],p1);
+            int32_t left=(la*(int32_t)weight+lb*(int32_t)(grain_half-weight))>>12u;
+            int32_t right=(ra*(int32_t)weight+rb*(int32_t)(grain_half-weight))>>12u;
+#else
             if (p == 0) st_grain_start(0, tap_l, tap_r);
             if (p == ST_HALF) st_grain_start(1, tap_l + 743u, tap_r + 421u);
             int32_t la = stasis_read(st.gr_l[0] + p);
@@ -745,6 +819,7 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
             int32_t rb = stasis_read(st.gr_r[1] + q);
             int32_t left = (la * (int32_t)weight + lb * (int32_t)(ST_HALF - weight)) >> 12u;
             int32_t right = (ra * (int32_t)weight + rb * (int32_t)(ST_HALF - weight)) >> 12u;
+#endif
             st.smooth_l += ((left - st.smooth_l) * cut_l) >> 15u;
             st.smooth_r += ((right - st.smooth_r) * cut_r) >> 15u;
         } else {
@@ -764,6 +839,9 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
                     st.releasing = st.auto_hold = 0;
                     st.gr_ready = 0;
                     st.valid = 0;      /* new live capture, no frozen taps */
+#if CARAVEL_STASIS_EXPAND
+                    st.record_acc=0;st.record_n=0;
+#endif
                     st.smooth_l = st.smooth_r = 0;
                     stasis_layer_reset();
                 }
