@@ -13,6 +13,7 @@ static struct {
     uint8_t mode;
 #if CARAVEL_STASIS_EXPAND
     int32_t record_acc;
+    int32_t record_lp[3]; /* same anti-alias process as primary bank */
     uint8_t record_n;
 #endif
     volatile uint8_t phase, request;
@@ -136,7 +137,8 @@ static inline void stasis_layer_tick(int32_t input)
 {
     if (st.auto_hold && !st.stopping && !st.releasing && st_layer.phase <= STL_WAIT) {
 #if CARAVEL_STASIS_EXPAND
-        st_layer.record_acc+=clamp(input/4,-32768,32767);
+        st_layer.record_acc+=stasis_record_prefilter(clamp(input/4,-32768,32767),
+          st_layer.record_lp,st.active_quality);
         if(++st_layer.record_n>=stasis_record_factor()){
             dly_buf[ST_RING_LEN+(st_layer.w++&ST_RING_MASK)] =
               (int16_t)clamp(st_layer.record_acc/(int32_t)stasis_record_factor(),-32768,32767);
