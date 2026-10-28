@@ -11,6 +11,9 @@
 #define ACT_KEY_MASK (31u << ACT_KEY_FIRST)
 #define ACT_BANKS 4u
 static volatile uint8_t action_enabled, action_bank, action_setup;
+#if CARAVEL_STASIS_EXPAND
+static uint8_t action_stasis_grain_page; /* 0 existing FX controls, 1 granular controls */
+#endif
 static uint8_t action_bank_down, action_bank_long;
 static uint32_t action_bank_started;
 /* RANDOM A4: tap cycles S1..S4; hold 500ms stores current live HOME state. */
