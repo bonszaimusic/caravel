@@ -323,6 +323,20 @@ static void hp_perf_cell(hp_ref_t r,uint32_t k,int y,int active)
   perf_format(line,sizeof line,"%s%s",val,unit?unit:"");cv_free_text(x+4,y+13,&AF_S,line,T_TEXT,bg,48);
  }
 }
+#if CARAVEL_ACTION_BANKS
+/* Keep genuine HOME LCD layout: SETUP replaces only the active row's four
+ * encoder cards; the other HOME row and ACTION key legend remain visible. */
+static void hp_setup_cell(uint32_t k,int y)
+{
+ int x=3+(int)k*59;
+ char name[16],value[24];
+ action_setup_caption(k,name,value);
+ cv_rrect(x,y,56,52,4,T_ACCENT,T_BG);
+ cv_rrect(x+1,y+1,54,50,3,T_RAISE,T_ACCENT);
+ cv_free_text(x+4,y+4,&AF_S,name,T_INK,T_RAISE,48);
+ cv_free_text(x+4,y+25,&AF_M,value,T_TEXT,T_RAISE,48);
+}
+#endif
 static void hp_draw_home(void)
 {
  hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
@@ -349,8 +363,19 @@ static void hp_draw_home(void)
   uint16_t fill=active?T_ACCENT:T_SURF,ink=active?T_INK:T_MID;
   cv_rrect(3,y,234,active?14:12,3,fill,T_BG);cv_bg=fill;
   perf_format(title,sizeof title,"%s %u/%u",hp_row_name(h,row),row+1,h->count);cv_text(7,y,&AF_S,title,ink);
-  cv_text_r(232,y,&AF_S,active?"K1-K4":"SELECT",ink,fill);
-  for(uint32_t k=0;k<4;k++)hp_perf_cell(h->cell[row][k],k,y+(active?16:13),active);
+  cv_text_r(232,y,&AF_S,active?(
+#if CARAVEL_ACTION_BANKS
+   action_enabled&&action_setup?"SETUP":
+#endif
+   "K1-K4"):"SELECT",ink,fill);
+  for(uint32_t k=0;k<4;k++){
+#if CARAVEL_ACTION_BANKS
+    if(active && action_enabled && action_setup)
+      hp_setup_cell(k,y+16);
+    else
+#endif
+      hp_perf_cell(h->cell[row][k],k,y+(active?16:13),active);
+   }
   #if CARAVEL_ACTION_BANKS
   y+=active?(action_enabled?72:92):45;
 #else
@@ -361,11 +386,11 @@ static void hp_draw_home(void)
  if(action_enabled){
   cv_rrect(3,171,234,28,4,T_SURF,T_BG);
   cv_bg=T_SURF;
-  perf_format(title,sizeof title,"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
+  perf_format(title,sizeof title,action_setup?"SETUP %u/%u  %s":"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
   cv_text(7,172,&AF_S,title,T_ACCENT);
   for(uint32_t k=0;k<4;k++)
    cv_free_text(7+(int)k*59,185,&AF_S,action_labels[action_bank][k],T_TEXT,T_SURF,52);
-  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:"KEY 22: BANK / 23-26: ACT",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:"BANK TAP NEXT / HOLD SETUP",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
  }else
 #endif
   cv_free_text(5,198,&AF_S,ui.msg_t?ui.msg:"SELECT: ROW / ALGO: TRACK",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
