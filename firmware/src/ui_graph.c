@@ -2384,6 +2384,12 @@ static void draw_graph(void)
             cv_oy = 0;
             panel_note(stasis_layer_status(), stasis_layer_can_cancel() ? "[OCT+] CANCEL" : "[OCT+] ADD / BLEND", 0);
             break;
+#if CARAVEL_STASIS_EXPAND
+        case GR_STGRAIN:
+            cv_oy = 0;
+            panel_note("STASIS GRAIN", "K1 SIZE / K2 SCAN / K3 WINDOW / K4 REV", 0);
+            break;
+#endif
 #endif
 #if FELUCCA_SLICE
         case GR_SLICES:
