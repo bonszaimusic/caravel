@@ -160,7 +160,14 @@ async function createStasisAudioNode(ac) {
     single=single.replace('const SANS =',standalone_worklet+'\nconst SANS =',1)
     single=single.replace('node = await createStasisAudioNode(ac);',
       'node = await createStasisAudioNode(ac);\n    homeEl("audio").textContent="Audio: "+node._caravelMode;',1)
-adapter=(R/'experiments/engine-pair-morph/offline_audio.js').read_text().replace('/* @PROCESSOR_SOURCE@ */',w.replace('export ',''))
+offline_adapter=(R/'experiments/engine-pair-morph/offline_audio.js').read_text()
+if 'CARAVEL_STASIS_EXPAND=1' in extra:
+    # A slightly larger fallback buffer gives Android's main-thread audio
+    # more scheduling slack when it must repaint the high-res FM-1 UI.
+    # The preferred AudioWorklet keeps native 128-frame render quanta.
+    offline_adapter=offline_adapter.replace('ac.createScriptProcessor(1024,0,2)',
+                                           'ac.createScriptProcessor(2048,0,2)')
+adapter=offline_adapter.replace('/* @PROCESSOR_SOURCE@ */',w.replace('export ',''))
 helpers=w.split('if (typeof registerProcessor === \"function\") {',1)[0].replace('export ','')
 single=single.replace('import { midiKnob, KNOB_MODES } from \"./worklet.js\";',helpers+'\n'+adapter)
 single=single.replace('<script type="module">','<script>\n(()=>{"use strict";').replace('</script>','\n})();\n</script>')
