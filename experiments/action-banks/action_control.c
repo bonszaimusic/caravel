@@ -56,7 +56,9 @@ static void action_stasis(uint32_t action)
  }else{
   song.g[G_STMODE]=(action==2u)?1:0;
   uint32_t cancel=stasis_layer_can_cancel();
+  fm1_irq_off();
   int ok=stasis_layer_command(cancel);
+  fm1_irq_on();
   ui_message(!ok?"STASIS: CAPT HOLD FIRST":cancel?"STASIS CANCEL":action==1u?"STASIS ADD":"STASIS BLEND");
  }
  ui.force=1;
