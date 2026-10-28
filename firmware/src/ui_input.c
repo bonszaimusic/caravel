@@ -2018,7 +2018,19 @@ static void ui_input(void)
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
 #if FELUCCA_HOME_PERF
-        if (!glo && !lay && ui.home) { hp_row_turn(s); }
+        if (!glo && !lay && ui.home) {
+#if CARAVEL_ACTION_BANKS && CARAVEL_STASIS_EXPAND
+            if(action_enabled && action_setup && action_bank==1u && action_capture_mask){
+                /* SELECT switches two STASIS SETUP pages rather than editing
+                 * HOME ROW; old FX values remain in song.g, new DSP values
+                 * remain in the single opt-in expansion state. */
+                if(s&1)action_stasis_grain_page^=1u;
+                ui.force=1;
+                ui_message(action_stasis_grain_page?"STASIS GRAIN SETUP":"STASIS FX SETUP");
+            }else
+#endif
+            hp_row_turn(s);
+        }
         else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
         else
 #endif
