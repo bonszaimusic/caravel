@@ -235,7 +235,7 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
 #if CARAVEL_REVERB_MINIMAL
   if(song.g[G_RTYPE]!=3u){ui_message("FX: SET TYPE STASIS");return;}
 #if CARAVEL_STASIS_EXPAND
-  if(action_stasis_grain_page){stasis_exp_turn(slot,steps);return;}
+  if(action_stasis_grain_page){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
 #endif
   static const uint8_t ids[4]={G_RSIZE,G_DRREV,G_STAMT,G_STTIME};
   uint32_t id=ids[slot];
