@@ -13,6 +13,9 @@
 static volatile uint8_t action_enabled, action_bank, action_setup;
 static uint8_t action_bank_down, action_bank_long;
 static uint32_t action_bank_started;
+/* RANDOM A4: tap cycles S1..S4; hold 500ms stores current live HOME state. */
+static uint8_t action_snap_slot,action_snap_down,action_snap_long;
+static uint32_t action_snap_started;
 #define ACTION_LONG_MS 500u
 static volatile uint32_t action_capture_mask, action_preheld;
 static uint32_t action_home_tap_ms;
@@ -20,7 +23,7 @@ static const char *const action_bank_names[ACT_BANKS] = {
  "RANDOM", "STASIS", "PAIR", "LIVE"
 };
 static const char *const action_labels[ACT_BANKS][4] = {
- {"RANDOM","FREEZE","RETURN","CAPTURE"},
+ {"RANDOM","FREEZE","RETURN","SNAP"},
  {"HOLD","ADD","BLEND","RELEASE"},
  {"A 0%","MID 50%","B 100%","MOTION"},
  {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"}
