@@ -5,10 +5,6 @@
  */
 #ifndef CARAVEL_ACTION_BANKS
 #define CARAVEL_ACTION_BANKS 0
-/* The UI renderer is compiled before action_control.c in the FM-1 amalgamation. */
-static void action_setup_caption(uint32_t slot,char *name,char *value);
-static void action_setup_turn(uint32_t slot,int32_t steps);
-static int32_t action_setup_value(uint32_t slot);
 #endif
 #if CARAVEL_ACTION_BANKS
 #define ACT_KEY_FIRST 22u
@@ -29,4 +25,8 @@ static const char *const action_labels[ACT_BANKS][4] = {
  {"A 0%","MID 50%","B 100%","MOTION"},
  {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"}
 };
+/* The UI renderer is compiled before action_control.c in the FM-1 amalgamation. */
+static void action_setup_caption(uint32_t slot,char *name,char *value);
+static void action_setup_turn(uint32_t slot,int32_t steps);
+static int32_t action_setup_value(uint32_t slot);
 #endif
