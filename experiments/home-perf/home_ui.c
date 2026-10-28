@@ -112,6 +112,10 @@ static void hp_init(void)
 {
  uint32_t irq=perf_irq_save();
  memset(&hp,0,sizeof hp);memset(hp_macro_live,0,sizeof hp_macro_live);memset(hp_macro_count,0,sizeof hp_macro_count);
+#if CARAVEL_ACTION_BANKS && FELUCCA_RANDOM_MORPH
+ hp_rm_reset();hp_rm_snapshot_clear(); /* volatile snapshots never survive boot */
+ action_snap_slot=0;
+#endif
  for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);hp_last_valid=0;hp_apply_armed=0;hp_edit_track=hp_backup_track=255;perf_irq_restore(irq);
 }
 static void hp_backup_take(uint32_t t){hp_edit_backup=hp.track[t];hp_backup_track=t;}
@@ -386,11 +390,30 @@ static void hp_draw_home(void)
  if(action_enabled){
   cv_rrect(3,171,234,28,4,T_SURF,T_BG);
   cv_bg=T_SURF;
-  perf_format(title,sizeof title,action_setup?"SETUP %u/%u  %s":"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
+  #if FELUCCA_RANDOM_MORPH
+  if(action_bank==0u)
+   perf_format(title,sizeof title,action_setup?"SETUP 1/4 RANDOM S%u%s":"ACTION 1/4 RANDOM S%u%s",
+     action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-");
+  else
+  #endif
+   perf_format(title,sizeof title,action_setup?"SETUP %u/%u  %s":"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
   cv_text(7,172,&AF_S,title,T_ACCENT);
-  for(uint32_t k=0;k<4;k++)
-   cv_free_text(7+(int)k*59,185,&AF_S,action_labels[action_bank][k],T_TEXT,T_SURF,52);
-  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:"BANK TAP NEXT / HOLD SETUP",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+  for(uint32_t k=0;k<4;k++){
+   const char*label=action_labels[action_bank][k];
+   char custom[24];
+   #if FELUCCA_RANDOM_MORPH
+   if(action_bank==0u && k==2u && hp_rm_snapshot_count(action_snap_slot)){
+    perf_format(custom,sizeof custom,"GO S%u",action_snap_slot+1u);label=custom;
+   }else if(action_bank==0u && k==3u){
+    perf_format(custom,sizeof custom,"S%u%s NEXT",action_snap_slot+1u,
+       hp_rm_snapshot_count(action_snap_slot)?"*":"-");label=custom;
+   }
+   #endif
+   cv_free_text(7+(int)k*59,185,&AF_S,label,T_TEXT,T_SURF,52);
+  }
+  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:
+    (action_bank==0u?"A4 TAP SLOT / HOLD SAVE":"BANK TAP NEXT / HOLD SETUP"),
+    ui.msg_t?T_ACCENT:T_MID,T_BG,230);
  }else
 #endif
   cv_free_text(5,198,&AF_S,ui.msg_t?ui.msg:"SELECT: ROW / ALGO: TRACK",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
