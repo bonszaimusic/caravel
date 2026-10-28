@@ -560,6 +560,19 @@ EXPORT uint32_t web_test_fx_edge(uint32_t on)
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }
+#if CARAVEL_ACTION_BANKS
+/* Test-only visibility for real WASM keyboard, project and display integration. */
+EXPORT uint32_t web_action_state(void) {
+ return action_enabled | ((uint32_t)action_bank<<8) | (action_capture_mask?1u<<16:0u);
+}
+EXPORT uint32_t web_action_key_note(uint32_t k) { return k<27u?kb_note[k]:0; }
+EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL]; }
+EXPORT uint32_t web_action_mute(uint32_t t) { return t<NTRK?(uint32_t)trk[t].p[P_MUTE]:0; }
+#if FELUCCA_RANDOM_MORPH
+EXPORT uint32_t web_action_random_state(void) { return hp_rm.state; }
+EXPORT uint32_t web_action_random_count(void) { return hp_rm.count; }
+#endif
+#endif
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return song.playing; }
 EXPORT uint32_t web_sample_rate(void) { return FS; }
