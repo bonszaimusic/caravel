@@ -397,6 +397,11 @@ static void hp_draw_home(void)
   else
   #endif
    perf_format(title,sizeof title,action_setup?"SETUP %u/%u  %s":"ACTION %u/%u  %s",action_bank+1,ACT_BANKS,action_bank_names[action_bank]);
+#if CARAVEL_STASIS_EXPAND
+  if(action_bank==1u && action_setup)
+   perf_format(title,sizeof title,"SETUP STASIS %s  %u/2",
+               action_stasis_grain_page?"GRAIN":"FX",action_stasis_grain_page+1u);
+#endif
   cv_text(7,172,&AF_S,title,T_ACCENT);
   for(uint32_t k=0;k<4;k++){
    const char*label=action_labels[action_bank][k];
@@ -411,8 +416,11 @@ static void hp_draw_home(void)
    #endif
    cv_free_text(7+(int)k*59,185,&AF_S,label,T_TEXT,T_SURF,52);
   }
-  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:
-    (action_bank==0u?"A4 TAP SLOT / HOLD SAVE":"BANK TAP NEXT / HOLD SETUP"),
+  const char *action_help=action_bank==0u?"A4 TAP SLOT / HOLD SAVE":"BANK TAP NEXT / HOLD SETUP";
+#if CARAVEL_STASIS_EXPAND
+  if(action_bank==1u && action_setup)action_help="SELECT: FX/GRAIN  |  BANK HOLD EXIT";
+#endif
+  cv_free_text(5,201,&AF_S,ui.msg_t?ui.msg:action_help,
     ui.msg_t?T_ACCENT:T_MID,T_BG,230);
  }else
 #endif
