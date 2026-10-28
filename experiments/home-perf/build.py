@@ -41,6 +41,20 @@ page=page.replace('            warned = true;','            warned = true; homeE
 page=page.replace('    if (ac.sampleRate !== 44100) console.warn(', '    if (ac.sampleRate !== 44100) homeEl("audio").textContent="Browser-Audio läuft nicht mit 44,1 kHz; Tonhöhe kann abweichen.";\n    if (ac.sampleRate !== 44100) console.warn(')
 page=page.replace('else if (m.type.startsWith("pair-")) pairMessage(m);','else if (m.type.startsWith("pair-")) pairMessage(m);\n        else if (m.type.startsWith("home-")) homeMessage(m);')
 page=page.replace('</script>',(H/'panel.js').read_text()+'\n</script>')
+if 'CARAVEL_ACTION_BANKS=1' in extra:
+    guide='''<section class="home-panel" aria-label="ACTION banks v0.6.0">
+<h2>CARAVEL 0.6.0 · HOME ACTION BANKS · ANDROID PREVIEW</h2>
+<p><strong>Am virtuellen FM-1:</strong> HOME zweimal kurz tippen, um ACTION ON/OFF zu schalten.
+Die fünf höchsten Keyboard-Tasten: <strong>erste = BANK +</strong>, folgende vier = ACTION 1–4.
+SELECT wechselt weiterhin HOME-Zeilen, ALGORITHM den Track; K1–K4 bearbeiten die aktive Zeile.
+Die dritte kleine HOME-Zeile zeigt die aktuelle Bank und vier Aktionen. OCT+/− bleiben frei.</p>
+<p>Bänke: RANDOM (Random, Freeze/Resume, Return A, Capture A), STASIS
+(Hold, Add, Blend, Release), PAIR (A, 50 %, B, Motion), LIVE (Mute T1–T4).
+Die 22 übrigen physischen Tasten und externe MIDI-Noten spielen unverändert.
+Zum Testen von STASIS: FX &gt; REVERB &gt; TYPE STASIS wählen.
+<strong>Nur Emulator-Prototyp:</strong> ACTION-Bänke sind vorläufig feste Vorlagen,
+nicht projektgespeichert. Keine Firmware zum Flashen.</p></section>'''
+    page=page.replace('<div class="boxes">',guide+'\n<div class="boxes">')
 (out/'index.html').write_text(page)
 w=(out/'worklet.js').read_text().replace('[0xE5000, 0xE8000]','[0xE5000, 0xFC000]')
 w=w.replace('else if (m.type === "pair") this.pairMessage(m);','else if (m.type === "home") this.homeMessage(m);\n      else if (m.type === "pair") this.pairMessage(m);')
@@ -68,5 +82,8 @@ font=json.dumps(base64.b64encode((out/'fonts/DotGothic16-subset.woff').read_byte
 single=single.replace('const SANS =','const hpFont=new FontFace("DotGothic16",Uint8Array.from(atob('+font+'),c=>c.charCodeAt(0)).buffer);document.fonts.add(hpFont);hpFont.load();\nconst SANS =')
 assert 'import ' not in single[single.index('<script>'):]
 assert 'fetch("felucca.wasm")' not in single
-(out/'Caravel-HOME-Performance-Handy.html').write_text(single)
+if 'CARAVEL_ACTION_BANKS=1' in extra:
+    (out/'Caravel-ACTION-BANKS-0.6.0-Android.html').write_text(single)
+else:
+    (out/'Caravel-HOME-Performance-Handy.html').write_text(single)
 print('HOME standalone:',len(single),'bytes; WASM SHA256',hashlib.sha256((out/'felucca.wasm').read_bytes()).hexdigest())
