@@ -123,10 +123,13 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
  if(action_bank==2u && slot==3u){
   str_cpy(value,"--",24);return;
  }
- if(v<0 && action_bank==2u){
-  str_cpy(value,ep.on?"MAP IN MOD":"NO PAIR",24);return;
- }
- if(v<0){str_cpy(value,"UNAVAIL",24);return;}
+ if(action_bank==2u){
+  if(!ep.on){str_cpy(value,"NO PAIR",24);return;}
+  if((slot==1u||slot==2u)&&action_pair_mod_slot(slot==1u?MS_LFO:MS_LFO2)==NMSLOT){
+   str_cpy(value,"MAP IN MOD",24);return;
+  }
+  /* -64..63 includes -1: never confuse a valid negative amount with NONE. */
+ }else if(v<0){str_cpy(value,"UNAVAIL",24);return;}
  if(action_bank==0u && slot==0u)perf_format(value,24,"%u BAR",v);
  else if((action_bank==0u&&slot==1u)||(action_bank==2u&&slot==0u))
   perf_format(value,24,"%u%%",v);
