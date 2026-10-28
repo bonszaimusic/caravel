@@ -11,13 +11,16 @@
 // - fm1ota.js: a full install and an unplug during the write against a simulated FM-1
 
 import { execFileSync } from "node:child_process";
+import { createHash, webcrypto } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
-import { logicalImage, productOf } from "./fm1pkg.js";
+import { logicalImage, productOf, Package, validateCaravelPackage } from "./fm1pkg.js";
 import { Updater, pack7, unpack7 } from "./fm1ota.js";
 
+// Older Node LTS versions do not expose Web Crypto globally by default.
+globalThis.crypto ||= webcrypto;
 let failed = 0;
 const ok = (cond, what) => { console.log(`${what.padEnd(64)} ${cond ? "ok" : "FAIL"}`); if (!cond) failed++; };
 const eq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
@@ -1842,6 +1845,40 @@ async function packages() {
 sys.stdout.buffer.write(b"".join(raw[i * 48:i * 48 + 47] for i in range(20)) + raw[960:])`, pkg);
   ok(eq(logicalImage(raw), logical), "fm1pkg.js logicalImage");
   ok(/^FM-1_9\d\d$/.test(productOf(raw)), "fm1pkg.js productOf");
+  // The exact package the site would publish must pass all preflight gates.
+  const digest = (b) => createHash("sha256").update(b).digest("hex");
+  const evidence = { product: productOf(raw), size: raw.length, sha256: digest(raw) };
+  const result = await validateCaravelPackage(new Uint8Array(raw), evidence).then(x => x, () => null);
+  ok(result && result.product === evidence.product && eq(result.image, logical),
+    "preflight: valid built Caravel package accepted with exact SHA-256");
+
+  const rejects = async (buffer, meta, label) => {
+    const err = await validateCaravelPackage(new Uint8Array(buffer), meta).then(() => null, e => e);
+    ok(err instanceof Error, label);
+  };
+  const oneByte = Buffer.from(raw);
+  oneByte[oneByte.length - 3] ^= 1;
+  await rejects(oneByte, evidence, "preflight: changed byte rejected by pinned SHA-256");
+  await rejects(raw.subarray(0, raw.length - 1), evidence, "preflight: truncated download rejected");
+  await rejects(raw, { ...evidence, product: "FM-1_998" },
+    "preflight: wrong release product rejected");
+  await rejects(raw, { ...evidence, sha256: "0".repeat(64) },
+    "preflight: wrong release digest rejected");
+
+  // Recompute evidence deliberately to prove the independent structural CRC
+  // gates catch corruption even if the hash alone were to match.
+  const packageInfo = new Package(new Uint8Array(raw));
+  const flashCorrupt = Buffer.from(raw);
+  flashCorrupt[packageInfo.flashFileOff + packageInfo.appOff + 512] ^= 1;
+  await rejects(flashCorrupt, { ...evidence, sha256: digest(flashCorrupt) },
+    "preflight: modified flash payload rejected despite matching SHA-256");
+
+  const loaderEntry = packageInfo.entries.find(e => e.type === 100);
+  const loaderCorrupt = Buffer.from(raw);
+  loaderCorrupt[loaderEntry.dataOff + packageInfo.skew + 96] ^= 1;
+  await rejects(loaderCorrupt, { ...evidence, sha256: digest(loaderCorrupt) },
+    "preflight: modified OTA loader rejected despite matching SHA-256");
+
 }
 
 /* ------------------------------------------------- update protocol (fm1ota.js) --- */
