@@ -576,6 +576,34 @@ EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL];
 #if CARAVEL_STASIS_EXPAND
 /* Read-only C/WASM hardware regressions. The browser UI itself always
  * uses the actual physical HOME/SELECT/K1..K4 and ACTION note gestures. */
+/* Deterministic per-sample test of the ACTUAL DSP anti-alias filter and
+ * cubic overlap. These test-only globals are never used by hardware or the
+ * live emulator audio path. */
+static int32_t stasis_probe_filter[3],stasis_probe_sum;
+static uint32_t stasis_probe_count;
+EXPORT void web_stasis_probe_reset(void)
+{
+ memset(stasis_probe_filter,0,sizeof stasis_probe_filter);
+ stasis_probe_sum=0;stasis_probe_count=0;
+}
+EXPORT int32_t web_stasis_probe_capture(int32_t value,uint32_t quality)
+{
+ quality=quality>2u?2u:quality;
+ value=clamp(value,-32768,32767);
+ stasis_probe_sum+=stasis_record_prefilter(value,stasis_probe_filter,quality);
+ if(++stasis_probe_count==(1u<<quality)){
+  int32_t result=stasis_probe_sum>>(quality);
+  stasis_probe_sum=0;stasis_probe_count=0;
+  return result;
+ }
+ return 0x10000; /* no decimated sample yet */
+}
+EXPORT uint32_t web_stasis_grain_envelope(uint32_t triangle,uint32_t grain)
+{
+ grain=grain>2u?2u:grain;
+ uint32_t half=2048u<<grain;
+ return stasis_grain_weight(triangle>half?half:triangle,grain);
+}
 /* Native FX > GRAIN page verification; values are the same C fields as
  * ACTION > STASIS > GRAIN (not mirrored emulator settings). */
 EXPORT uint32_t web_stasis_grain_page(void)
