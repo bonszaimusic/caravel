@@ -24,6 +24,8 @@ def ccase(name,path,flags=(),args=()):
     if command(name+"-compile",cc):return command(name,[str(exe),*args])
     return False
 minimal=["-DCARAVEL_REVERB_MINIMAL=1","-DFELUCCA_SLICE=0"]
+ccase("stasis-expanded-continuity","tests/stasis_continuity_test.c",
+      [*minimal,"-DCARAVEL_STASIS_EXPAND=1"])
 ccase("stasis-target","tests/stasis_test.c",minimal)
 ccase("stasis-complete-profile","tests/stasis_test.c",[*minimal,"-DSTASIS_FULL_PROFILE=1"])
 for hw in [0,1]:

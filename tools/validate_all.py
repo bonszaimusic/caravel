@@ -40,10 +40,10 @@ def main():
     inventory = {k: re.findall(r'run "([^"]+)"', v) for k,v in groups.items()}
     tests = sorted(p.as_posix() for p in Path("tests").glob("*_test.c"))
     missing = [p for p in tests if p not in source and p not in
-               ["tests/stasis_test.c", "tests/stasis_layer_test.c", "tests/project_compat_test.c"]]
+               ["tests/stasis_test.c", "tests/stasis_layer_test.c", "tests/stasis_continuity_test.c", "tests/project_compat_test.c"]]
     (OUT / "host-inventory.json").write_text(json.dumps({
         "source":"tests/run_tests.sh", "shards":inventory,
-        "separate_target_tests":["tests/stasis_test.c","tests/stasis_layer_test.c","tests/project_compat_test.c"],
+        "separate_target_tests":["tests/stasis_test.c","tests/stasis_layer_test.c","tests/stasis_continuity_test.c","tests/project_compat_test.c"],
         "uncovered_root_tests":missing}, indent=2)+"\n")
     if missing: raise SystemExit("Uncovered root tests: "+", ".join(missing))
     if a.shard == "inventory":
