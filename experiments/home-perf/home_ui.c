@@ -292,6 +292,11 @@ static void hp_perf_cell(hp_ref_t r,uint32_t k,int y,int active)
   const aafont_t*label=!foreign&&text_w(&AF_M,d->label)<=48?&AF_M:&AF_S;
   cv_free_text(x+4,y+label_y,label,d->label,T_TEXT,bg,48);
   const aafont_t*f=!foreign&&large_face_has(val)&&text_w(&AF_L,val)<=48?&AF_L:text_w(&AF_M,val)<=48?&AF_M:&AF_S;
+#if CARAVEL_ACTION_BANKS
+  /* The original 28px readout would collide with the 52px compact gauge.
+   * Use the firmware's 15px face only while ACTION is visible. */
+  if(action_enabled)f=&AF_M;
+#endif
   cv_free_text(x+4,y+(foreign?31:23),f,val,T_TEXT,bg,48);
   #if CARAVEL_ACTION_BANKS
   if(action_enabled){
