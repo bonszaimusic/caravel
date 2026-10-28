@@ -156,7 +156,7 @@ async function createStasisAudioNode(ac) {
   return fallback;
 }
 """.replace('@SOURCE@',json.dumps(inline_worklet))
-    single=single.replace('createOfflineAudioNode(ac)', 'await createStasisAudioNode(ac)', 1)
+    single=single.replace('node = createOfflineAudioNode(ac);', 'node = await createStasisAudioNode(ac);', 1)
     single=single.replace('const SANS =',standalone_worklet+'\nconst SANS =',1)
     single=single.replace('node = await createStasisAudioNode(ac);',
       'node = await createStasisAudioNode(ac);\n    homeEl("audio").textContent="Audio: "+node._caravelMode;',1)
