@@ -563,8 +563,14 @@ EXPORT uint32_t web_screen_draws(void) { return web_draws; }
 #if CARAVEL_ACTION_BANKS
 /* Test-only visibility for real WASM keyboard, project and display integration. */
 EXPORT uint32_t web_action_state(void) {
- return action_enabled | ((uint32_t)action_bank<<8) | (action_capture_mask?1u<<16:0u);
+ return action_enabled | (action_setup?1u<<1:0u) | ((uint32_t)action_bank<<8) | (action_capture_mask?1u<<16:0u);
 }
+/* Read/write through the same firmware controls the physical encoders use. */
+EXPORT int32_t web_action_setup_value(uint32_t slot) {return action_setup_value(slot);}
+EXPORT void web_action_setup_knob(uint32_t slot,int32_t steps)
+{if(action_enabled && action_setup && slot<4u)action_setup_turn(slot,steps);}
+EXPORT void web_action_setup_toggle(void)
+{if(action_enabled){action_setup=!action_setup;ui.force=1;}}
 EXPORT uint32_t web_action_key_note(uint32_t k) { return k<27u?kb_note[k]:0; }
 EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL]; }
 EXPORT uint32_t web_action_mute(uint32_t t) { return t<NTRK?(uint32_t)trk[t].p[P_MUTE]:0; }
