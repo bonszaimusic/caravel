@@ -694,14 +694,16 @@ static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_
         st.smooth_l=st.smooth_r=0;st.reverse_mask=0;
         stasis_layer_reset();
     }
-    /* Grain-length changes land at a cycle boundary. This keeps both
-     * read heads phase aligned, and does not rewrite any frozen bank. */
+    /* Grain-length changes land within one control block of the cycle
+     * boundary. An initial capture can reset phase at ANY sample inside a
+     * 32-sample block; testing phase==0 only at block start could miss
+     * the boundary forever. No frozen bank is rewritten. */
     uint32_t requested_min=(((4096u<<(uint32_t)clamp(st_expand.grain,0,2))+4096u+
             ST_OFFSET+421u+4096u+256u+stasis_record_factor()-1u) >> st.active_quality);
     if(st.active_grain!=st_expand.grain &&
       (!st.auto_hold || st.valid>=requested_min) &&
       (!st.gr_ready ||
-      ((st.phase&(stasis_grain_samples()-1u))==0u))){
+      ((st.phase&(stasis_grain_samples()-1u))<CTL))){
        st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
        st.gr_ready=0;st.phase=0;st.reverse_mask=0;
     }
