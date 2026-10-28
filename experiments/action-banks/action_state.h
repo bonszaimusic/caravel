@@ -5,12 +5,19 @@
  */
 #ifndef CARAVEL_ACTION_BANKS
 #define CARAVEL_ACTION_BANKS 0
+/* The UI renderer is compiled before action_control.c in the FM-1 amalgamation. */
+static void action_setup_caption(uint32_t slot,char *name,char *value);
+static void action_setup_turn(uint32_t slot,int32_t steps);
+static int32_t action_setup_value(uint32_t slot);
 #endif
 #if CARAVEL_ACTION_BANKS
 #define ACT_KEY_FIRST 22u
 #define ACT_KEY_MASK (31u << ACT_KEY_FIRST)
 #define ACT_BANKS 4u
-static volatile uint8_t action_enabled, action_bank;
+static volatile uint8_t action_enabled, action_bank, action_setup;
+static uint8_t action_bank_down, action_bank_long;
+static uint32_t action_bank_started;
+#define ACTION_LONG_MS 500u
 static volatile uint32_t action_capture_mask, action_preheld;
 static uint32_t action_home_tap_ms;
 static const char *const action_bank_names[ACT_BANKS] = {
