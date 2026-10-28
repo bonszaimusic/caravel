@@ -50,8 +50,8 @@ jobs:
           "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
       - name: Build 0.6.0 STASIS + HOME/PAIR + ACTION C/WASM Android emulator
         env:
-          ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0'
-          ACTION_EMU_VERSION: 'v0.6.0-ACTION-SNAP4'
+          ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'
+          ACTION_EMU_VERSION: 'v0.6.0-STASIS-GRAIN'
         run: |
           . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           python3 experiments/home-perf/build.py
@@ -61,6 +61,8 @@ jobs:
         run: node experiments/action-banks/action_setup_wasm_test.mjs
       - name: Four volatile snapshots via real A3/A4 keyboard hold and C/WASM morph
         run: node experiments/action-banks/action_snapshots_wasm_test.mjs
+      - name: Expanded STASIS C/WASM dual-bank grain and long recording tests
+        run: node experiments/action-banks/stasis_granular_wasm_test.mjs
       - name: HOME storage and audio regression against the ACTION profile
         run: node experiments/home-perf/home_wasm_test.mjs
       - name: Check standalone HTML and license bundle
