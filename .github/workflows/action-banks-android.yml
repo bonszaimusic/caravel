@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: ACTION banks 0.6.0 Android emulator
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/action-banks/**'
+      - 'experiments/home-perf/**'
+      - 'firmware/src/**'
+      - 'web/emu/**'
+      - '.github/workflows/action-banks-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: action-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wasm:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Download JieLi SDK
+        run: |
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+            https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+      - name: Baseline Caravel 0.6.0 build and generated firmware tables
+        env:
+          CC: cc -include stdint.h
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh
+      - name: Install pinned WebAssembly toolchain
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Build 0.6.0 STASIS + HOME/PAIR + ACTION C/WASM Android emulator
+        env:
+          ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0'
+          ACTION_EMU_VERSION: 'v0.6.0-ACTION-BANKS'
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          python3 experiments/home-perf/build.py
+      - name: Real keyboard + LCD + Random Morph WASM integration tests
+        run: node experiments/action-banks/action_wasm_test.mjs
+      - name: HOME storage and audio regression against the ACTION profile
+        run: node experiments/home-perf/home_wasm_test.mjs
+      - name: Check standalone HTML and license bundle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          p=Path('build/home-perf/Caravel-ACTION-BANKS-0.6.0-Android.html')
+          s=p.read_text()
+          assert p.stat().st_size > 250000
+          assert 'ACTION ON/OFF' in s and '0.6.0' in s
+          assert 'Uint8Array.from(atob(' in s
+          assert 'fetch("felucca.wasm")' not in s
+          with ZipFile('build/Caravel-ACTION-060-Android.zip','w',ZIP_DEFLATED) as z:
+            z.write(p,p.name)
+            for name in ['LICENSE','LICENSING.md','NOTICE','CREDITS.md']:
+              z.write(name,name)
+            for license in Path('LICENSES').glob('*'):
+              if license.is_file():z.write(license,str(license))
+          print('Android standalone:',p.stat().st_size,'bytes')
+          PY
+      - name: Upload full physical FM-1 Android emulator preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: Caravel-060-ACTION-Emulator-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            build/home-perf/Caravel-ACTION-BANKS-0.6.0-Android.html
+            build/Caravel-ACTION-060-Android.zip
