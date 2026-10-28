@@ -85,6 +85,9 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
 #if CARAVEL_REVERB_MINIMAL
                                      , "CAPT", "STR", "MOTN" /* shared STASIS bus targets */
 #endif
+#if CARAVEL_STASIS_EXPAND
+                                     , "SCAN" /* independently modulatable STASIS read position */
+#endif
 };
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
                                              "DRUM", "NOISE", "FM6",
