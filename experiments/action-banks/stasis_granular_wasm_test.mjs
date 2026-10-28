@@ -21,6 +21,8 @@ function stereoPeak(){
  return peak;
 }
 render(1300);
+/* The granular DSP activates only when REVERB TYPE is STASIS. */
+e.web_stasis_test_type(3);render(120);
 assert.equal(dsp(0),1,'Default 186ms grain');
 assert.equal(dsp(2),0,'Default HQ');
 assert.equal(dsp(1),0,'Default zero scan');
@@ -46,7 +48,6 @@ let lit=0;for(let y=24+171;y<24+200;y++)for(let x=0;x<240;x++)lit+=screen[y*240+
 assert.ok(lit>80,'real 240x240 STASIS setup LCD rendered');
 e.web_test_drone(0);
 assert.equal(e.web_pair_control(0,8,127),1,'track FX reverb send enabled');
-e.web_stasis_test_type(3);
 e.web_keys(1<<7);
 render(1500);
 assert.equal(dsp(8),1,'LONG mode active');
