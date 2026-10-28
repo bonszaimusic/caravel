@@ -56,12 +56,22 @@ Die dritte kleine HOME-Zeile zeigt die Bank und vier Aktionen. OCT+/− bleiben 
 STASIS = STR/MOTN (REVERB), AMT/TIME (LAYER), nur bei aktivem TYPE STASIS;
 PAIR = Morph und vorhandene LFO1/LFO2-MOD-Amounts (keine MOD-Slots werden überschrieben);
 LIVE = Track-Level T1–T4. Keine doppelten Projektparameter.
-RANDOM Scope-Wechsel setzt einen laufenden Morph/Snapshot zurück; Depth wirkt für das nächste Zufallsziel.</p>
-<p>Bänke: RANDOM (Random, Freeze/Resume, Return A, Capture A), STASIS
+RANDOM Scope-Wechsel setzt nur die aktuelle Morph-Bewegung zurück, nicht gespeicherte Snapshot-Slots; Depth wirkt für das nächste Zufallsziel.</p>
+<p><strong>NEU: Vier Snapshot-Slots in RANDOM:</strong> A4 kurz tippen und loslassen = S1→S2→S3→S4→S1 auswählen.
+A4 mindestens 0,5 Sekunden halten = aktuelle hörbare HOME-Parameter im gewählten Slot speichern;
+A3 = vom aktuellen Zustand in den gewählten Snapshot morphen.
+A2 = Freeze/Resume auch bei Snapshot-Morphs. A1 = weiterhin Random.
+Die Anzeige <strong>S1*</strong> bedeutet belegt, <strong>S1-</strong> bedeutet leer.
+Wenn kein Snapshot belegt ist, bleibt A3 als bisheriges Return A nutzbar, solange ein Random-Morph aktiv ist.
+Ein Snapshot kann ROW/TRACK/ALL mit jeweils den morphfähigen HOME-Parametern enthalten.
+Snapshots sind <strong>nur im RAM</strong>; Neustart löscht S1–S4. Sie gehören nicht zu Projekt-/Preset-Saves.
+Ein A4-Speichern während eines laufenden Morphs friert die aktuellen hörbaren Werte als neuen Slot
+ein und beendet die bisherige Morph-Trajektorie, ohne die Klangparameter zurückzustellen.</p>
+<p>Bänke: RANDOM (Random, Freeze/Resume, Recall/Return A, Snap wählen/speichern), STASIS
 (Hold, Add, Blend, Release), PAIR (A, 50 %, B, Motion), LIVE (Mute T1–T4).
 Die 22 übrigen physischen Tasten und externe MIDI-Noten spielen unverändert.
 Zum Testen von STASIS: FX &gt; REVERB &gt; TYPE STASIS wählen.
-<strong>Nur Emulator-Prototyp:</strong> ACTION-Bänke sind vorläufig feste Vorlagen,
+<strong>Nur Emulator-Prototyp:</strong> ACTION-Bänke sind vorläufig feste Vorlagen, Snapshot-Speicher sind RAM-only,
 nicht projektgespeichert. Keine Firmware zum Flashen.</p></section>'''
     page=page.replace('<div class="boxes">',guide+'\n<div class="boxes">')
 (out/'index.html').write_text(page)
