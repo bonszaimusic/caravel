@@ -7,6 +7,42 @@
  * hold toggles a latched encoder SETUP without switching bank.
  * Poll the physical key level so the gesture is identical in WASM and hardware.
  * All four ACTION keys stay usable in SETUP. No timer in the audio ISR. */
+/* RANDOM A4 uses exactly the same physical hold policy as BANK:
+ * tap (release < 500ms) selects the next snapshot slot, hold >=500ms
+ * captures the current live values into the selected slot. The ordinary
+ * ACTION A4 note-on is swallowed only in RANDOM; other banks are unchanged.
+ */
+static void action_snapshot_poll(uint32_t mask)
+{
+#if FELUCCA_RANDOM_MORPH
+ const uint32_t bit=1u<<(ACT_KEY_FIRST+4u);
+ if(action_bank!=0u || !action_enabled || !(mask&bit) || (action_preheld&bit)){
+  action_snap_down=0;action_snap_long=0;return;
+ }
+ if(fm1_in.notes&bit){
+  if(!action_snap_down){
+   action_snap_down=1;action_snap_long=0;action_snap_started=fm1_ms;
+  }
+  if(!action_snap_long && fm1_ms-action_snap_started>=ACTION_LONG_MS){
+   action_snap_long=1;
+   hp_rm_snapshot_store(action_snap_slot);
+  }
+ }else if(action_snap_down){
+  action_snap_down=0;
+  if(!action_snap_long){
+   action_snap_slot=(uint8_t)((action_snap_slot+1u)%HP_RM_SNAP_SLOTS);
+   char message[32];
+   perf_format(message,sizeof message,"SNAP S%u %s",action_snap_slot+1u,
+     hp_rm_snapshot_count(action_snap_slot)?"SAVED":"EMPTY");
+   ui_message(message);
+   ui.force=1;
+  }
+  action_snap_long=0;
+ }
+#else
+ (void)mask;
+#endif
+}
 static void action_refresh(void)
 {
  uint32_t mask=action_enabled && ui.home && !ui.menu && !ui.confirm &&
@@ -17,6 +53,7 @@ static void action_refresh(void)
   action_capture_mask=mask;
  }
  if(!ui.home)action_home_tap_ms=0;
+ action_snapshot_poll(mask);
  uint32_t bank_bit=1u<<ACT_KEY_FIRST;
  if(!(mask&bank_bit) || (action_preheld&bank_bit)){
   action_bank_down=0;action_bank_long=0;
@@ -53,6 +90,7 @@ static int action_home_double_tap(void)
  if(action_home_tap_ms && fm1_ms-action_home_tap_ms<=330u){
   action_enabled=!action_enabled;
   action_setup=0;action_bank_down=0;action_bank_long=0;
+  action_snap_down=0;action_snap_long=0;
   action_home_tap_ms=0;
   action_refresh();
   ui.force=1;
@@ -228,12 +266,17 @@ static void action_random(uint32_t action)
   if(hp_rm.state==HP_RM_FROZEN)hp_rm_resume(fm1_ms);
   else hp_rm_freeze();
  }
- else if(action==2u)hp_rm_return(fm1_ms);
- else {
-  /* A new snapshot is intentionally requested; no sound parameter changes. */
-  hp_rm_reset();
-  ui_message("RANDOM A RESET: NEXT CAPTURE");
+ else if(action==2u){
+  if(hp_rm_snapshot_count(action_snap_slot))
+   hp_rm_snapshot_recall(action_snap_slot,fm1_ms);
+  else if(hp_rm.state!=HP_RM_IDLE)
+   hp_rm_return(fm1_ms); /* preserve old RETURN A when slot is empty */
+  else{
+   char message[32];perf_format(message,sizeof message,"SNAP S%u EMPTY",action_snap_slot+1u);
+   ui_message(message);
+  }
  }
+ /* action 3 is handled by short/long physical A4 gesture above */
  ui.force=1;
 #else
  (void)action;ui_message("RANDOM UNAVAILABLE");
@@ -245,7 +288,8 @@ static void action_key(uint32_t key)
  if(key==ACT_KEY_FIRST)return;
  if(key<ACT_KEY_FIRST+1u || key>26u)return;
  uint32_t act=key-ACT_KEY_FIRST-1u;
- if(action_bank==0u)action_random(act);
+ if(action_bank==0u){if(act!=3u)action_random(act);}
+
  else if(action_bank==1u)action_stasis(act);
  else if(action_bank==2u)action_pair(act);
  else{
