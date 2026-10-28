@@ -401,6 +401,10 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
         c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
 #endif
+#if CARAVEL_ACTION_BANKS
+    /* The five reserved physical keys breathe, including BANK. */
+    if(action_capture_mask && br)*br |= ACT_KEY_MASK;
+#endif
     return c;
 }
 
@@ -1640,6 +1644,12 @@ static void ui_input(void)
     uint32_t oct;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
+#if CARAVEL_ACTION_BANKS
+    action_refresh();
+#if FELUCCA_RANDOM_MORPH
+    hp_rm_poll(fm1_ms);
+#endif
+#endif
 #if FELUCCA_HOME_PERF
     if(hp_combo_pending){
         if(fm1_in.buttons & ((1u<<panel.btn[B_GLO])|(1u<<panel.btn[B_HOME])))return;
@@ -1774,6 +1784,10 @@ static void ui_input(void)
     lytap = layer_gesture(now, combo);
     layer_show();
     layer_keys(lkeys);
+#if CARAVEL_ACTION_BANKS
+    action_dispatch(notes);
+    notes &= ~action_capture_mask;
+#endif
     for (k = 0; k < 4u; k++)
         if (ks[k]) {
             layer_knob(k, ks[k]);
@@ -1887,8 +1901,15 @@ static void ui_input(void)
     }
     if (lytap)                                          /* a layer's button acts on release (held: the layer; SEQ's */
         layer_tap(lytap);                               /* on every page since 1.2, its tap the SEQ pages) */
-    if (home == BT_TAP)                                 /* HOME acts on release: a hold opens the menu */
-        home_tap();
+    if (home == BT_TAP) {                                /* HOME retains its ordinary single-tap action */
+#if CARAVEL_ACTION_BANKS
+        if(!action_home_double_tap())
+#endif
+            home_tap();
+    }
+#if CARAVEL_ACTION_BANKS
+    action_refresh();
+#endif
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
     for (id = 0; id < 14u; id++) {
         if (!((pressed >> id) & 1u))
