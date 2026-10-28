@@ -168,6 +168,7 @@ const TEXT = {
     noreturn: "FM-1 が戻ってきません。電源を入れ直してください。",
     mismatch: "書き込みは終わりましたが、FM-1 が別のバージョンを報告しています: ",
     badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
+    preflightOk: "SHA-256、アプリ、ローダー、FM-1 パッケージの検証完了",
     leave: "書き込み中です。ページを閉じないでください。",
     license: "GPL-3.0、無保証。ライセンスとソースの提供:",
   },
@@ -201,6 +202,7 @@ const TEXT = {
     noreturn: "The FM-1 did not come back. Power-cycle it.",
     mismatch: "Written, but the FM-1 reports another version: ",
     badpkg: "The file to install is damaged. Reload the page.",
+    preflightOk: "SHA-256, application, loader and FM-1 package verified",
     leave: "Writing. Do not close the page.",
     license: "GPL-3.0, no warranty. Licences and source offer:",
   },
@@ -232,9 +234,10 @@ window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault
     const r = await fetch(meta.pkg);
     if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
     const pkg = new Uint8Array(await r.arrayBuffer());
-    if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
-    image = logicalImage(pkg);
-    say(`Caravel ${meta.version}`);
+    // No install or recovery-resume button until digest, image, loader and model checks pass.
+    const verified = await validateCaravelPackage(pkg, meta);
+    image = verified.image;
+    sayK("preflightOk", ` (Caravel ${meta.version})`);
     $("go").disabled = false;
   } catch (e) { sayK("loadfail", e.message); }
 })();
