@@ -57,6 +57,8 @@ jobs:
           python3 experiments/home-perf/build.py
       - name: Real keyboard + LCD + Random Morph WASM integration tests
         run: node experiments/action-banks/action_wasm_test.mjs
+      - name: Physical BANK long-press and shared ACTION SETUP firmware tests
+        run: node experiments/action-banks/action_setup_wasm_test.mjs
       - name: HOME storage and audio regression against the ACTION profile
         run: node experiments/home-perf/home_wasm_test.mjs
       - name: Check standalone HTML and license bundle
