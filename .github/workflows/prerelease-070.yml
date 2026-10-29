@@ -98,7 +98,7 @@ jobs:
           python3 tools/release_artifacts.py "$VER" --verify-only
       - name: Actual target-profile layout, snapshot packing and STASIS audio regressions
         run: |
-          mkdir -p build/host
+          mkdir -p build/host build/home-perf
           FLAGS='-O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1'
           cc $FLAGS experiments/action-banks/stasis_layout_test.c -o build/host/stasis-layout -lm
           build/host/stasis-layout
