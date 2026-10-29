@@ -40,8 +40,19 @@
 #define FM1_CPU1_USED FELUCCA_CPU2   /* hal/fm1_sys.h: the second core is built in; every reset holds it first (its
                                       * waiting loop is in RAM the ROM and the SPL use at boot) */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v0.6.0" /* Caravel 0.6.0, based on Felucca 1.6.1 (the last Custom preview was v1.6.1-bonszai-25); shown in the
+#define FELUCCA_VERSION "v0.7.0-rc1" /* Caravel 0.7.0 prerelease, based on Felucca 1.6.1; shown in the
                                    * menu, the console and the editor; build.py --release X.Y */
+#endif
+/* 0.7.0 prerelease target profile. Native legacy references do not include
+ * this target entry point; explicit build environment overrides still apply. */
+#ifndef CARAVEL_ACTION_BANKS
+#define CARAVEL_ACTION_BANKS 1
+#endif
+#ifndef FELUCCA_RANDOM_MORPH
+#define FELUCCA_RANDOM_MORPH 1
+#endif
+#ifndef CARAVEL_STASIS_EXPAND
+#define CARAVEL_STASIS_EXPAND 1
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"

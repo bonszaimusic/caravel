@@ -696,7 +696,7 @@ EXPORT uint32_t web_action_snapshot_count(uint32_t slot)
 { return hp_rm_snapshot_count(slot); }
 EXPORT int32_t web_action_snapshot_value(uint32_t slot,uint32_t index)
 { return slot<HP_RM_SNAP_SLOTS && index<hp_rm_snap[slot].count
-  ? hp_rm_snap[slot].cell[index].value : -32768; }
+  ? hp_rm_snap[slot].values[index] : -32768; }
 #endif
 #endif
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }

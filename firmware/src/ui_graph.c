@@ -1157,6 +1157,7 @@ static uint32_t strip_kind(void)
  * scale ("C MIN"); ti holds 20 (the footer, the strip) */
 static int dual_bottom(const page_t *pg);              /* ui_lfo2.c: the lower half of a two-group view */
 static const char *dual_foot(const page_t *pg);
+static const page_t *dual_top_page(const page_t *pg);
 static void page_title(char *ti)
 {
     const page_t *pg = cur_page();
@@ -1165,10 +1166,11 @@ static void page_title(char *ti)
     uint32_t i, n = 0, k = 0;
     const char *pt = pg->scope == SC_ENGINE ? e->page_title[pg->id[0] != P_E0] : 0;   /* EDIT: the engine's */
     const char *df = ui.home ? 0 : dual_foot(pg);                                    /* a two-group view: "LFO TOP" */
+    const page_t *number_page = df ? dual_top_page(pg) : pg;
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == pg->fam && page_visible(i) && !dual_bottom(&PAGES[i])) {   /* (top and bottom: one view) */
             n++;
-            if (i == ui.page || (df && dual_bottom(pg) && i + 1u == ui.page))   /* (its top page just before) */
+            if (&PAGES[i] == number_page)
                 k = n;
         }
     str_cpy(ti, df ? df : pt ? pt : grid_on() && !detail_on() ? "GRID" : pg->title, df ? 16 : 12);

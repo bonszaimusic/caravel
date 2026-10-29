@@ -55,6 +55,13 @@ jobs:
             -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 \
             tests/stasis_continuity_test.c -o build/stasis-continuity -lm
           build/stasis-continuity
+      - name: Combined STASIS layout and lossless compact snapshot references
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
+            experiments/action-banks/stasis_layout_test.c -o build/stasis-layout -lm
+          build/stasis-layout
       - name: Build 0.6.0 STASIS + HOME/PAIR + ACTION C/WASM Android emulator
         env:
           ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'

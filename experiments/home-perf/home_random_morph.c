@@ -60,8 +60,8 @@ static int hp_rm_random_allowed(hp_ref_t r,const param_desc_t*d)
  if(r.kind==HP_TRACK && hp_tid(r)==P_LEVEL)return 0;
  if(d->fmt==F_DB)return 0;
  const char *label=d->label;
- if(label && (!strcmp(label,"LEVEL") || !strcmp(label,"LVL") ||
-              !strcmp(label,"GAIN") || !strcmp(label,"VOLUME")))return 0;
+ if(label && (str_eq(label,"LEVEL") || str_eq(label,"LVL") ||
+              str_eq(label,"GAIN") || str_eq(label,"VOLUME")))return 0;
  return 1;
 }
 /* Hz constraints apply to F_CUTOFF synth and filter parameters ONLY, not
@@ -166,6 +166,28 @@ static uint32_t hp_rm_snapshot_count(uint32_t slot)
 {
  return slot<HP_RM_SNAP_SLOTS?hp_rm_snap[slot].count:0u;
 }
+_Static_assert(P_COUNT<=512u && L2_FIRST+L2_N<=512u && DX_END<=512u && FP_SIZE<=512u && NENGINES<31u && NTRK<=4u,
+               "Snapshot target packing must cover every parameter and engine");
+static int hp_rm_snapshot_packable(hp_ref_t r)
+{
+ return r.id<512u && r.kind<8u && r.track<NTRK &&
+        (r.engine==255u || r.engine<31u) && r.aux<16u;
+}
+static void hp_rm_snapshot_write_ref(hp_rm_snap_t *s,uint32_t i,hp_ref_t r)
+{
+ uint32_t engine=r.engine==255u?31u:r.engine;
+ uint32_t v=r.id|((uint32_t)r.kind<<9u)|((uint32_t)r.track<<12u)|
+            (engine<<14u)|((uint32_t)r.aux<<19u);
+ for(uint32_t b=0;b<3u;b++)s->refs[i][b]=(uint8_t)(v>>(8u*b));
+}
+static hp_ref_t hp_rm_snapshot_ref(const hp_rm_snap_t *s,uint32_t i)
+{
+ uint32_t v=s->refs[i][0]|((uint32_t)s->refs[i][1]<<8u)|((uint32_t)s->refs[i][2]<<16u);
+ hp_ref_t r={0};r.page=0xFFFFu;r.id=v&511u;r.kind=(v>>9u)&7u;
+ r.track=(v>>12u)&3u;r.engine=(v>>14u)&31u;r.aux=(v>>19u)&15u;
+ if(r.engine==31u)r.engine=255u;
+ return r;
+}
 static int hp_rm_snapshot_store(uint32_t slot)
 {
  if(slot>=HP_RM_SNAP_SLOTS)return 0;
@@ -174,9 +196,12 @@ static int hp_rm_snapshot_store(uint32_t slot)
   ui_message("SNAP: NO SAFE HOME TARGETS");ui.force=1;return 0;
  }
  hp_rm_snap_t *snap=&hp_rm_snap[slot];
+ for(uint32_t i=0;i<hp_rm.count;i++)if(!hp_rm_snapshot_packable(hp_rm.cell[i].ref)){
+  hp_rm_reset();ui_message("SNAP: TARGET TOO LARGE");ui.force=1;return 0;
+ }
  for(uint32_t i=0;i<hp_rm.count;i++){
-  snap->cell[i].ref=hp_rm.cell[i].ref;
-  snap->cell[i].value=hp_rm.cell[i].original;
+  hp_rm_snapshot_write_ref(snap,i,hp_rm.cell[i].ref);
+  snap->values[i]=hp_rm.cell[i].original;
  }
  snap->scope=hp_rm.scope;
  snap->origin_track=hp_rm.origin_track;
@@ -198,20 +223,20 @@ static int hp_rm_snapshot_recall(uint32_t slot,uint32_t now)
  const hp_rm_snap_t*snap=&hp_rm_snap[slot];
  if(snap->count>HP_RM_MAX){ui_message("SNAP: INVALID SIZE");return 0;}
  for(uint32_t i=0;i<snap->count;i++){
-  const hp_rm_snap_cell_t*c=&snap->cell[i];
-  const param_desc_t*d=hp_desc(c->ref);
-  if(!hp_rm_safe(c->ref,d) || c->value<d->min || c->value>d->max){
+  hp_ref_t r=hp_rm_snapshot_ref(snap,i);
+  const param_desc_t*d=hp_desc(r);
+  if(!hp_rm_safe(r,d) || snap->values[i]<d->min || snap->values[i]>d->max){
    ui_message("SNAP: TARGET CHANGED");ui.force=1;return 0;
   }
  }
  hp_rm_reset();
  for(uint32_t i=0;i<snap->count;i++){
-  const hp_rm_snap_cell_t*c=&snap->cell[i];
+  hp_ref_t r=hp_rm_snapshot_ref(snap,i);
   hp_rm_cell_t*dst=&hp_rm.cell[i];
-  int32_t live=hp_get(c->ref);
-  dst->ref=c->ref;
+  int32_t live=hp_get(r);
+  dst->ref=r;
   dst->original=dst->from=dst->last=(int16_t)live;
-  dst->to=c->value;
+  dst->to=snap->values[i];
  }
  hp_rm.count=snap->count;
  hp_rm.phase=0;

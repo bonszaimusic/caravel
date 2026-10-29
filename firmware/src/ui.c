@@ -502,6 +502,31 @@ static uint32_t page_first(uint32_t fam)
     return 0;
 }
 
+#if CARAVEL_STASIS_EXPAND
+/* Logical FX order only: persistent HOME references retain their page IDs. */
+static uint32_t stasis_fx_pages(uint8_t *pages)
+{
+    static const char *const names[]={"FX","DLY","CHORUS","REVERB",
+        "GRAIN","LAYER","INSERT","INSERT 2","SLICER"};
+    uint32_t n=0;
+    for(uint32_t j=0;j<sizeof names/sizeof names[0];j++)
+        for(uint32_t i=0;i<NPAGES;i++)
+            if(PAGES[i].fam==FAM_FX && page_visible(i) && str_eq(PAGES[i].title,names[j]))
+                pages[n++]=(uint8_t)i;
+    return n;
+}
+static uint32_t stasis_fx_page(uint32_t at,int32_t dir,int wrap)
+{
+    uint8_t pages[NPAGES];uint32_t n=stasis_fx_pages(pages),pos=0;
+    if(!n)return page_first(FAM_FX);
+    for(uint32_t i=0;i<n;i++)if(pages[i]==at)pos=i;
+    int32_t next=(int32_t)pos+dir;
+    if(wrap)next=next<0?(int32_t)n-1:next>=(int32_t)n?0:next;
+    else next=clamp(next,0,(int32_t)n-1);
+    return pages[next];
+}
+#endif
+
 /* transient message in the top bar, right of the transport and the BPM: a + b */
 static void ui_say(const char *a, const char *b)
 {
@@ -831,6 +856,13 @@ static uint32_t hp_global_page(uint32_t at,int32_t dir) {
 #endif
 static void open_family(uint32_t fam)
 {
+#if CARAVEL_STASIS_EXPAND
+    if(fam==FAM_FX){
+        ui.page=(uint8_t)stasis_fx_page(!ui.home && cur_page()->fam==fam?ui.page:ui.fam_last[fam],
+            !ui.home && cur_page()->fam==fam?1:0,1);
+        ui.fam_last[fam]=ui.page;ui.home=0;page_entered();return;
+    }
+#endif
 #if FELUCCA_HOME_PERF
     if(fam==FAM_GLO){ui.page=hp_global_page(ui.fam_last[FAM_GLO],0);ui.fam_last[FAM_GLO]=ui.page;ui.home=0;page_entered();return;}
 #endif
@@ -891,6 +923,12 @@ static void home_tap(void)
  * HOME, MIXER and CLOCK are one round, as HOME's taps go. A family of one page (GLO's SONG) stays */
 static void page_turn(int32_t dir)
 {
+#if CARAVEL_STASIS_EXPAND
+    if(!ui.home && cur_page()->fam==FAM_FX){
+        ui.page=(uint8_t)stasis_fx_page(ui.page,dir>0?1:-1,0);
+        ui.fam_last[FAM_FX]=ui.page;page_entered();return;
+    }
+#endif
 #if FELUCCA_HOME_PERF
     if(!ui.home&&cur_page()->fam==FAM_GLO){ui.page=hp_global_page(ui.page,dir);ui.fam_last[FAM_GLO]=ui.page;page_entered();return;}
 #endif

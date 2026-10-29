@@ -97,11 +97,14 @@ static const uint8_t hp_rm_depths[]={10,25,35,50,75,100};
 /* Volatile four-slot snapshot memory. Store refs/values only: no sound,
  * project, FX audio or duplicate synth parameter stores. No heap use. */
 #define HP_RM_SNAP_SLOTS 4u
-typedef struct { hp_ref_t ref; int16_t value; } hp_rm_snap_cell_t;
 typedef struct {
  uint16_t count;
  uint8_t scope,origin_track,origin_row,pad;
- hp_rm_snap_cell_t cell[HP_RM_MAX];
+ /* Snapshot recall never uses source-page metadata. Three bytes losslessly
+  * encode every supported pinned target; separate values avoid struct padding.
+  * Keep all four slots and all 128 targets while retaining target RAM reserves. */
+ uint8_t refs[HP_RM_MAX][3];
+ int16_t values[HP_RM_MAX];
 } hp_rm_snap_t;
 static hp_rm_snap_t hp_rm_snap[HP_RM_SNAP_SLOTS];
 #endif

@@ -45,11 +45,12 @@ if 'CARAVEL_ACTION_BANKS=1' in extra:
     guide='''<section class="home-panel" aria-label="ACTION banks v0.6.0">
 <h2>CARAVEL 0.6.0 · HOME ACTION BANKS · ANDROID PREVIEW</h2>
 <p><strong>STASIS GRAIN DIREKT:</strong> FX &gt; REVERB &gt; TYPE STASIS,
-dann FX &gt; GRAIN. Auf dem echten FM-1-Display stehen
+dann die gemeinsame STASIS-Ansicht (GRAIN oben / LAYER unten). Auf dem echten FM-1-Display stehen
 <strong>K1 GRAIN · K2 SCAN · K3 WINDOW · K4 REVERSE</strong>.
 Kein ACTION-Modus oder BANK-Langdruck erforderlich.
 Im ACTION-Modus führt STASIS &gt; BANK lang ebenfalls DIREKT zur GRAIN-Seite;
 SELECT wechselt zwischen GRAIN und FX.</p>
+<p><strong>FX-Reihenfolge:</strong> FX SENDS/DELAY → CHORUS/REVERB → STASIS (GRAIN/LAYER) → INSERT → SLICER. Beide STASIS-Zeilen bleiben sichtbar; die markierte Zeile gehört K1–K4. Auf LAYER startet oder stoppt OCT+ die gewählte Aktion.</p>
 <p><strong>RANDOM MORPH Schutz:</strong> LEVEL/Gain wird nie zufällig verändert.
 F_CUTOFF-Ziele bleiben zwischen 150 und 6000 Hz.
 Sobald ein gemorphter Parameter manuell gedreht wird, übernimmt der Encoder
@@ -88,7 +89,7 @@ nicht projektgespeichert. Keine Firmware zum Flashen.</p></section>'''
         guide += '''<section class="home-panel" aria-label="STASIS GRAIN experiment">
 <h2>STASIS GRAIN · LONG CAPTURE · ACTION SETUP</h2>
 <p><strong>Direktzugriff:</strong> FX &gt; REVERB &gt; TYPE auf STASIS setzen,
-anschließend die neue, normale Seite <strong>FX &gt; GRAIN</strong> öffnen.
+anschließend die gemeinsame <strong>STASIS-Seite</strong> öffnen: GRAIN oben, LAYER unten. SELECT wechselt die aktive Reglerzeile.
 Alternativ: HOME zweimal drücken, ACTION-Bank <strong>STASIS</strong> wählen (BANK kurz)
 und BANK ca. 0,5 s halten: GRAIN öffnet sich sofort, ohne SELECT.
 <strong>SELECT drehen</strong> wechselt im ACTION SETUP zwischen
@@ -176,6 +177,8 @@ font=json.dumps(base64.b64encode((out/'fonts/DotGothic16-subset.woff').read_byte
 single=single.replace('const SANS =','const hpFont=new FontFace("DotGothic16",Uint8Array.from(atob('+font+'),c=>c.charCodeAt(0)).buffer);document.fonts.add(hpFont);hpFont.load();\nconst SANS =')
 assert 'import ' not in single[single.index('<script>'):]
 assert 'fetch("felucca.wasm")' not in single
+if os.environ.get('ACTION_EMU_VERSION','').startswith('v0.7.0'):
+    single=single.replace('0.6.0','0.7.0-rc1')
 if 'CARAVEL_ACTION_BANKS=1' in extra:
     (out/'Caravel-ACTION-BANKS-0.6.0-Android.html').write_text(single)
 else:

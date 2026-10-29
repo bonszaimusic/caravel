@@ -207,7 +207,8 @@ def build_app():
     # inlining while retaining V4's compact policy elsewhere.
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1", "CARAVEL_REVERB_MINIMAL"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1", "CARAVEL_REVERB_MINIMAL",
+                 "CARAVEL_ACTION_BANKS", "FELUCCA_RANDOM_MORPH", "CARAVEL_STASIS_EXPAND"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")

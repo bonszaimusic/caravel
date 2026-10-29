@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0-rc1 — FM-1 hardware preview
+
+- ACTION banks, Random Morph safeguards and four volatile S1–S4 snapshots now included in the target build.
+- Expanded STASIS: 93/186/372 ms grains, HQ/LONG/DRONE capture, SCAN and per-grain reverse; smooth joins, anti-aliasing, reverse LIVE overwrite protection and capture fade-in.
+- FX order groups CHORUS before REVERB and shows GRAIN/LAYER together as one STASIS view, preserving saved HOME page references.
+- Snapshot reference packing saves 2,560 bytes without reducing four-slot/128-target capacity; RAM/POOL guards remain enforced.
+- Prerelease for owner testing; physical FM-1 CPU, installation and listening checks remain pending. ROOM/SPRING/SLICE engine omissions and project compatibility prompts remain as in 0.6.0.
+
 What Caravel adds to Felucca and what it fixes in Felucca's own behaviour. Caravel is a fork of Felucca by Leo Kuroshita and
 Hügelton Instruments (see [NOTICE](NOTICE)): it grew out of the author's use of **Felucca 1.5**, the first recorded commit builds on
 **Felucca 1.5.1**, and the 1.6 and **1.6.1** sources were taken in later. Everything below is on top of Felucca 1.6.1; Felucca's own
