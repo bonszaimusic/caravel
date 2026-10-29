@@ -1,8 +1,23 @@
-# Caravel 0.7.0-rc2 — FM-1 Testversion
+# Caravel 0.7.0-rc3 — FM-1 Testversion
 
 Diese Vorabversion enthält echte, installierbare FM-1-Firmware. Sie ist für den
 angeforderten Gerätetest gedacht; ein Hör-, Last- und Installationstest am
 physischen FM-1 steht noch aus. Der stabile 0.6.0-Release wird nicht ersetzt.
+
+## Korrektur gegenüber rc2
+
+Der Dual-Core-Planer berücksichtigt neue Stimmen bereits vor ihrem ersten
+Audioblock. Bisher nutzte er den Aufwand des vorigen Blocks: Eine neu gespielte
+DRONE galt kurz noch als stiller Track und konnte zusammen mit einer SEM auf
+einem Kern landen. Die neue Schätzung liest aktive Stimmen nach der
+Notenverarbeitung, bevor einer der beiden Kerne mit dem Rendern beginnt.
+Kein Engine-, Envelope-, Grain- oder Klangparameter wird dafür verändert.
+
+Der Startfall SEM-Pair T1/T3 plus DRONE T2 ist als Regression erfasst; der Test
+scheitert mit rc2. Serial-, automatische und wechselnde Kernaufteilung müssen
+identische PCM-Ausgaben liefern. Ein Last-/Hörvergleich auf dem echten FM-1
+steht aus: rc3 ist ein gezielter Testkandidat gegen die kurze Startspitze,
+kein bestätigter Nachweis, dass der Knarzer vollständig behoben ist.
 
 ## Korrektur gegenüber rc1
 
@@ -23,7 +38,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
 
 1. Projekte und Einstellungen vor dem Update exportieren und die bisherige
    funktionierende Firmware für den Rückweg bereithalten.
-2. Das vollständige `Caravel-0.7.0-rc2-FM1-Testpaket.zip` herunterladen und
+2. Das vollständige `Caravel-0.7.0-rc3-FM1-Testpaket.zip` herunterladen und
    entpacken. Am Mac `FM1-Installer.command` öffnen; der Starter benötigt Python 3
    und öffnet den passenden 0.7.0-Installer in Google Chrome. Das Terminal bleibt
    bis zum Abschluss offen. Alternativ im entpackten Ordner ausführen:
@@ -33,7 +48,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
    Der enthaltene Installer ist an das geprüfte 0.7.0-Paket gebunden; der
    öffentliche 0.6.0-Installer wird nicht ersetzt. Die einzelne `.fwsc` unter
    `firmware/` enthält App und Update-Loader für alternative Installationswege.
-3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc2` prüfen.
+3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc3` prüfen.
 4. Zunächst mit einem leeren Projekt testen; gewünschte alte Projekte erst
    danach laden. Eine fehlgeschlagene Installation kann den FM-1-Transporter
    zur Wiederherstellung erfordern; Downgrade allein garantiert keine Rettung.
@@ -76,6 +91,6 @@ unerwartete Pegeländerungen, hängende Noten und die CPU-Anzeige achten.
 Der Release enthält passendes vollständiges Quellarchiv einschließlich
 Felucca-Engines, Prüfsummen, Buildnachweis und Lizenztexte. Das Quellarchiv
 lässt sich mit den Voraussetzungen aus BUILDING.md über
-`sh build.sh --binary-version 0.7.0-rc2` nachbauen. Der Ziel-Einstiegspunkt
+`sh build.sh --binary-version 0.7.0-rc3` nachbauen. Der Ziel-Einstiegspunkt
 aktiviert ACTION, Random Morph und erweitertes STASIS für diese Vorabversion.
 Die automatischen Tests ersetzen keine Messung auf dem echten FM-1.

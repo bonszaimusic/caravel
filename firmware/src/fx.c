@@ -1566,7 +1566,6 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
  * engine's voices), and the DIST, INSERT and sends while it sounds or its tail runs. ENGINES[] order; DIGITAL as FM6
  * when built, nothing when retired. An estimate: it only steers the split, the sound does not depend on it */
 #if FELUCCA_CPU2
-static uint16_t part_cost[NTRK];                        /* the last block's, per part */
 static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67, 70, 174, 144, 143, 189, 309, 113, 134,
                                              181,
                                              FELUCCA_SLICE ? 129 : 0,
@@ -1605,7 +1604,6 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
     T_SPREAD(t) = !dx_track(t) && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
 #if FELUCCA_CPU2
     nr = track_render(t, b, n);
-    part_cost[(uint32_t)(t - trk) % NTRK] = (uint16_t)(nr * ENG_VCOST[t->engine % NENGINES] + (nr || t->tail ? 60u : 0u));
     if (nr)
 #else
     if (track_render(t, b, n))
@@ -1759,20 +1757,41 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
             mix_part(&trk[i], n, sm);
 }
 
-/* which parts go to the second core: the split of the last block's costs that leaves the busier core the least; none
- * when that saves less than handing them over costs (C1_HAND) */
+/* Estimate AFTER events_block has installed this block's notes and BEFORE
+ * either core starts rendering. Last-block costs miss a newly-started heavy
+ * voice: a DRONE can otherwise share a core with SEM for its first block.
+ * Count read-only live voice state here; render/envelopes remain untouched. */
+static uint32_t mix_part_cost(const track_t *t)
+{
+    uint32_t nr=0;
+    const engine_t *e=ENGINES[t->engine];
+    for(uint32_t i=0;i<NVOICE;i++) {
+        const voice_t *v=&t->v[i];
+        if(!v->active)continue;
+        /* Match track_render's already silent sustain without executing an
+         * envelope or an engine's done() callback in the scheduler. */
+        if(v->stage==2 && !v->env && !v->env_out && !e->sampled && !e->ownenv)continue;
+        nr++;
+    }
+    return nr*ENG_VCOST[t->engine]+(nr || t->tail ? 60u : 0u);
+}
+/* Split current costs to minimize the busier core; no worker job when the
+ * saving is smaller than the handover cost (C1_HAND). */
 #define C1_HAND 40u
 static uint32_t mix_split(void)
 {
     uint32_t m, i, best = 0, all = 0, lo;
-    for (i = 0; i < NPART; i++)
-        all += part_cost[i];
+    uint16_t cost[NPART];
+    for (i = 0; i < NPART; i++) {
+        cost[i]=(uint16_t)mix_part_cost(&trk[i]);
+        all += cost[i];
+    }
     lo = all;
     for (m = 1; m < (1u << NPART) - 1u; m++) {
         uint32_t a = 0, w;
         for (i = 0; i < NPART; i++)
             if (m >> i & 1u)
-                a += part_cost[i];
+                a += cost[i];
         w = (a > all - a ? a : all - a) + C1_HAND;
         if (w < lo) {
             lo = w;
