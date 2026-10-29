@@ -18,3 +18,7 @@ jobs:
         run: |
           python3 web/stasis_pages.py --check-source
           python3 tools/validate_report_060.py --self-test
+      - name: Check release website and workflow behavior
+        run: |
+          python3 tests/site_release_test.py
+          python3 tests/performance_site_test.py

@@ -14,6 +14,11 @@ on:
       - '.github/workflows/pages.yml'
   release:
     types: [published]
+  # Releases made with GITHUB_TOKEN do not trigger the release event.
+  workflow_run:
+    workflows: ['Caravel 0.7.0 release']
+    types: [completed]
+    branches: [release/0.7.0]
   workflow_dispatch:
     inputs:
       version:
@@ -31,7 +36,7 @@ concurrency:
 
 jobs:
   site:
-    if: github.repository == 'bonszaimusic/caravel' && github.event.repository.private == false && (github.event_name != 'release' || !github.event.release.prerelease)
+    if: github.repository == 'bonszaimusic/caravel' && github.event.repository.private == false && (github.event_name != 'release' || !github.event.release.prerelease) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     environment:
@@ -42,7 +47,7 @@ jobs:
         id: release
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || (github.event_name == 'workflow_run' && 'v0.7.0') || '' }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
@@ -85,21 +90,44 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          mkdir -p "$RUNNER_TEMP/release"
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir "$RUNNER_TEMP/release"
+          # Extra standalone emulators/test ZIPs are separate release downloads,
+          # not members of the strict, flat firmware SHA256SUMS inventory.
+          python3 - <<'PY'
+          import os, pathlib, re, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'release'
+          root.mkdir()
+          command = ['gh', 'release', 'download', os.environ['RELEASE_TAG'],
+                     '--repo', os.environ['GH_REPO'], '--dir', str(root)]
+          subprocess.run(command + ['--pattern', 'SHA256SUMS'], check=True)
+          names = []
+          for line in (root / 'SHA256SUMS').read_bytes().splitlines(keepends=True):
+              match = re.fullmatch(rb'[0-9a-f]{64}  ([A-Za-z0-9][A-Za-z0-9._-]*)\n', line)
+              if not match:
+                  raise SystemExit('Invalid or unsafe release manifest entry')
+              name = match[1].decode('ascii')
+              if name == 'SHA256SUMS' or name in names:
+                  raise SystemExit('Duplicate or self-referencing release manifest entry')
+              names.append(name)
+          if not names:
+              raise SystemExit('Empty release manifest')
+          subprocess.run(command + [arg for name in names for arg in ('--pattern', name)], check=True)
+          PY
       - name: Verify checksums, source identity, notices and binary record
         run: |
           python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site \
             --release-dir "$RUNNER_TEMP/release" --check-only
       - name: Install header-generation dependencies
         run: python -m pip install Pillow fonttools
-      - name: Match the selected 0.6.0 engine and effects profile
+      - name: Match the selected engine and effects profile
         run: |
-          if [ "$VER" = 0.6.0 ]; then
+          if [ "$VER" = 0.6.0 ] || [ "$VER" = 0.7.0 ]; then
             echo 'CARAVEL_REVERB_MINIMAL=1' >> "$GITHUB_ENV"
             echo 'FELUCCA_SLICE=0' >> "$GITHUB_ENV"
             echo 'EMU_CFLAGS=-DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
-            python3 web/stasis_pages.py --check-source
+          fi
+          if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-source; fi
+          if [ "$VER" = 0.7.0 ]; then
+            echo 'EMU_CFLAGS=-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
           fi
       - name: Generate headers from the selected source (no target binary rebuild)
         run: |
@@ -127,14 +155,14 @@ jobs:
             --release-dir "$RUNNER_TEMP/release" --emulator build/emu
           if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-site site; fi
       - name: Read current performance website content
-        if: env.VER == '0.6.0'
+        if: env.VER == '0.6.0' || env.VER == '0.7.0'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           path: build/site-content
           persist-credentials: false
       - name: Add performance downloads without changing release artifacts
-        if: env.VER == '0.6.0'
+        if: env.VER == '0.6.0' || env.VER == '0.7.0'
         run: |
           python3 build/site-content/tests/performance_site_test.py
           python3 build/site-content/web/performance_pages.py --site site
