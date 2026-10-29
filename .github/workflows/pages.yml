@@ -155,14 +155,14 @@ jobs:
             --release-dir "$RUNNER_TEMP/release" --emulator build/emu
           if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-site site; fi
       - name: Read current performance website content
-        if: env.VER == '0.6.0'
+        if: env.VER == '0.6.0' || env.VER == '0.7.0'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           path: build/site-content
           persist-credentials: false
       - name: Add performance downloads without changing release artifacts
-        if: env.VER == '0.6.0'
+        if: env.VER == '0.6.0' || env.VER == '0.7.0'
         run: |
           python3 build/site-content/tests/performance_site_test.py
           python3 build/site-content/web/performance_pages.py --site site

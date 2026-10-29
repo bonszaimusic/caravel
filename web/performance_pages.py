@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Add downloadable performance content to an already verified 0.6.0 site.
+"""Preserve versioned 0.6.0 performance content on a verified 0.6.0/0.7.0 site.
 
 This never builds, replaces or relabels firmware, emulator or release files.
 The Pages workflow first builds from the published tag, then applies this
@@ -13,6 +13,8 @@ import io
 import json
 from pathlib import Path
 import re
+import shutil
+import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,21 +83,40 @@ def build(site, source=ASSETS):
     # Verify the destination profile before writing any website content.
     installer = site / "webapp/installer/index.html"
     landing = site / "index.html"
-    if '"release_verified": true' not in installer.read_text() or "v0.6.0" not in landing.read_text():
-        raise ValueError("Performance content requires a verified Caravel 0.6.0 site")
+    version = re.search(r'<span class="pill">v(0\.[67]\.0)</span>', landing.read_text())
+    if '"release_verified": true' not in installer.read_text() or not version:
+        raise ValueError("Performance content requires a verified Caravel 0.6.0/0.7.0 site")
     manifest, data = load_assets(source)
+    look = make_site.look_css(installer.read_text())
+    historical = version[1] == '0.7.0'
+    source_url = 'https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz'
+    if historical:
+        # Keep established tutorial/audio URLs, explicitly labelled 0.6.0.
+        # Generate separately so the selected release's installer/editor/emulator
+        # and strict firmware inventory remain byte-for-byte unchanged.
+        with tempfile.TemporaryDirectory(prefix='caravel-historical-content-') as temp:
+            stage = Path(temp)
+            stasis_pages.build(stage, look, make_site.SHIP_PATH, ROOT)
+            for name in ('tutorials', 'sounds', 'changelog'):
+                path = stage / name / 'index.html'
+                path.write_text(path.read_text().replace('../firmware/caravel-0.6.0-source.tar.gz', source_url))
+                shutil.copytree(stage / name, site / name, dirs_exist_ok=True)
     target = site / "performance"
     target.mkdir(exist_ok=True)
     for name, raw in data.items():
         (target / name).write_bytes(raw)
     (target / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     page = stasis_pages.page("Load the performance. Make it yours.", performance_body(),
-                             make_site.look_css(installer.read_text()), make_site.SHIP_PATH)
+                             look, make_site.SHIP_PATH)
+    if historical:
+        page = page.replace('../firmware/caravel-0.6.0-source.tar.gz', source_url)
     page = page.replace("</style>", ".table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--raise);white-space:nowrap}pre{overflow-x:auto;padding:12px;background:var(--bg);border:1px solid var(--raise);border-radius:4px;font-size:13px}li{margin:12px 0}</style>")
     page = page.replace("</nav>", '<a href="./" aria-current="page">PERFORMANCE</a></nav>', 1)
     (target / "index.html").write_text(page)
     text = clean(landing.read_text())
     card = '<section class="box sec" id="performance"><span class="tag">PERFORMANCE DOWNLOAD</span><p><a href="performance/">Load the STASIS HOME setup from the feature Short.</a></p><p>Full project, MIDI notes and a step-by-step play guide.</p><p><a href="performance/' + PACKAGE + '" download>Full download · ZIP</a> · <a href="performance/' + PROJECT + '" download>Project · HPM</a></p></section>'
+    if historical:
+        card += '<section class="box sec"><span class="tag">0.6.0 STASIS RESOURCES</span><p><a href="tutorials/">Tutorials and PDF guide</a> · <a href="sounds/">Sound examples</a> · <a href="changelog/">0.6.0 changelog</a></p></section>'
     if "</section>" not in text or "</nav>" not in text:
         raise ValueError("Unexpected Caravel landing layout")
     text = text.replace("</section>", "</section>" + marked(card), 1)

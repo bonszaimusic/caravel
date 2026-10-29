@@ -69,6 +69,31 @@ class PerformanceSiteTest(unittest.TestCase):
             performance.build(self.site, source)
         self.assertEqual(before, {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob("*") if p.is_file()})
 
+    def test_070_preserves_historical_downloads_links_and_selected_release(self):
+        landing = self.site / 'index.html'
+        landing.write_text(landing.read_text().replace('v0.6.0', 'v0.7.0').replace(
+            'firmware/caravel-0.6.0-source.tar.gz', 'firmware/caravel-0.7.0-source.tar.gz'))
+        for path in (self.site / 'firmware').glob('caravel-0.6.0*'):
+            path.rename(path.with_name(path.name.replace('0.6.0', '0.7.0')))
+        for name in ('tutorials', 'sounds', 'changelog'):
+            shutil.rmtree(self.site / name)
+        before = self.protected()
+        performance.build(self.site)
+        self.assertEqual(before, self.protected())
+        stasis_pages.check_site(self.site)
+        self.assertIn('v0.7.0', landing.read_text())
+        self.assertIn('href="performance/"', landing.read_text())
+        self.assertIn('href="tutorials/"', landing.read_text())
+        for name in ('performance', 'tutorials', 'sounds', 'changelog'):
+            text = (self.site / name / 'index.html').read_text()
+            self.assertIn('v0.6.0', text)
+            self.assertIn('https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz', text)
+        self.assertEqual((self.site / 'performance' / performance.PROJECT).read_bytes(),
+                         (performance.ASSETS / performance.PROJECT).read_bytes())
+        initial = {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob('*') if p.is_file()}
+        performance.build(self.site)
+        self.assertEqual(initial, {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob('*') if p.is_file()})
+
     def test_preview_and_other_version_do_not_get_release_downloads(self):
         path = self.site / "webapp/installer/index.html"
         path.write_text(path.read_text().replace('"release_verified": true', '"release_verified": false'))
