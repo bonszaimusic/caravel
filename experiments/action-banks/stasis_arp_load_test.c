@@ -4,7 +4,9 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN arp_load_pair_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-int main(void){
+int main(int argc,char **argv){
+ uint32_t held=argc>1?(uint32_t)atoi(argv[1]):2u;
+ CHECK(held==1u || held==2u);
  web_nor_erase();web_boot();run_ms(1400);normal_off();
  CHECK(web_pair_prepare(0,2,ENGI_SEM,ENGI_HADES));
  host_preset(&trk[1],ENGI_DRONE,9);run_ms(100);
@@ -26,7 +28,7 @@ int main(void){
  song.g[G_ROUTE]=ROUTE_TRACK;run_ms(100);midi(0x90,48,100);run_ms(1800);
  song.g[G_DRLVL]=1;run_ms(100);CHECK(st.auto_hold);uint32_t writer=st.w;
  trk[1].p[P_AMODE]=1;trk[1].p[P_ARATE]=2;trk[1].p[P_AGATE]=64;
- midi(0x91,36,100);midi(0x91,43,100);CHECK(trk[1].nheld==2u);
+ midi(0x91,36,100);if(held==2u)midi(0x91,43,100);CHECK(trk[1].nheld==held);
  uint64_t hash=1469598103934665603ull;uint32_t changes=0,last=trk[1].arp_note;
  for(uint32_t ms=0;ms<6000;ms++){
   web_render(44);
@@ -37,8 +39,8 @@ int main(void){
    hash=(hash^l)*1099511628211ull;hash=(hash^r)*1099511628211ull;
   }
  }
- CHECK(changes>10u && trk[1].nheld==2u && st.w==writer);
- printf("SEM/HADES pair + TIDE internal ARP, two held keys: changes=%u hash=%016llx\n",changes,(unsigned long long)hash);
+ CHECK(changes>10u && trk[1].nheld==held && st.w==writer);
+ printf("SEM/HADES pair + TIDE internal ARP, %u held keys: changes=%u hash=%016llx\n",held,changes,(unsigned long long)hash);
  fprintf(stderr,"ARP LOAD PASS: %u checks. Host PCM identity is not a hardware CPU/deadline measurement.\n",checks);
  return 0;
 }

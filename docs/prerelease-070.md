@@ -1,8 +1,41 @@
-# Caravel 0.7.0-rc4 — FM-1 Testversion
+# Caravel 0.7.0-rc5 — FM-1 Testversion
 
 Diese Vorabversion enthält echte, installierbare FM-1-Firmware. Sie ist für den
 angeforderten Gerätetest gedacht; ein Hör-, Last- und Installationstest am
 physischen FM-1 steht noch aus. Der stabile 0.6.0-Release wird nicht ersetzt.
+
+## Audiolast gegenüber rc4: STASIS und DRONE
+
+Die rc4-Gerätemessung meldet 3796 überschrittene Audiofristen in 30 Sekunden
+(58% der gemessenen Abschnitte), 95,1% mittlere Last und 112,9% Spitze.
+CPU2 läuft ohne Fehler. Aktiv sind SEM/HADES auf T1/T3, TIDE CELLRING mit
+internem ARP und einer gehaltenen Note auf T2, sowie INSERT auf T3.
+Das ist ein belegter Überlastungsfall; rc5 ist ein Optimierungskandidat,
+noch kein bestätigter Knarz-Fix auf dem echten Gerät.
+
+- STASIS: Der Zielcompiler darf die pro Sample ausgeführten Aufnahme- und
+  Grain-Lesehelfer jetzt wie Audiocode optimieren. Die vier Grain-Leser sind
+  im Sampleloop eingebettet. Der alte Größenmodus hatte verschachtelte
+  Funktionsaufrufe erzeugt; deren Arbeit bleibt erhalten, der Aufrufaufwand fällt weg.
+- DRONE CELLS: Bereits exakt erreichte Pitch- und Einblend-Endwerte brauchen
+  bis zum nächsten Block keinen erneuten Glättungsschritt. Bewegte Werte
+  werden weiterhin für jedes Sample aktualisiert. Der Q23-Follower verwendet
+  eine vorzeichenkorrekte Multiplikation ohne zusätzlichen Vorzeichenpfad.
+- DRONE PAIRS/CHAIN/RING: Divisionen durch Zweierpotenzen werden exakt mit
+  Vorzeichenkorrektur ersetzt; die gemeinsame Drift-Rate wird einmal pro
+  Sample statt viermal berechnet. Abklingen und Modulation bleiben unverändert.
+
+Ein eingefrorener rc4-Renderer und die vorhandene CELL-Referenz prüfen PCM
+und sämtliche 352 State-Bytes mit zufälligen Blockgrößen und Modulationen.
+Der ARP-Lasttest umfasst eine und zwei gehaltene Noten und vergleicht die
+serielle mit der automatischen Dual-Core-Ausgabe. Native Laufzeiten und
+statische Zielcode-Zählungen sind keine FM-1-Lastmessung.
+
+Für den Gerätetest denselben gespeicherten Klangaufbau einschließlich ARP,
+INSERT, STASIS-Fenster und Grain-Werten wie bei rc4 verwenden. Nach dem Update
+unter INFO rc5 prüfen, 30 Sekunden während des Knarzens messen und die neue
+USB-Diagnose exportieren. Erst damit lässt sich die tatsächliche Entlastung
+beurteilen. RETURN pro Track/Zeile aus rc4 bleibt enthalten.
 
 ## Korrektur gegenüber rc3: RETURN pro Track/Zeile
 
@@ -66,7 +99,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
 
 1. Projekte und Einstellungen vor dem Update exportieren und die bisherige
    funktionierende Firmware für den Rückweg bereithalten.
-2. Das vollständige `Caravel-0.7.0-rc4-FM1-Testpaket.zip` herunterladen und
+2. Das vollständige `Caravel-0.7.0-rc5-FM1-Testpaket.zip` herunterladen und
    entpacken. Am Mac `FM1-Installer.command` öffnen; der Starter benötigt Python 3
    und öffnet den passenden 0.7.0-Installer in Google Chrome. Das Terminal bleibt
    bis zum Abschluss offen. Alternativ im entpackten Ordner ausführen:
@@ -76,7 +109,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
    Der enthaltene Installer ist an das geprüfte 0.7.0-Paket gebunden; der
    öffentliche 0.6.0-Installer wird nicht ersetzt. Die einzelne `.fwsc` unter
    `firmware/` enthält App und Update-Loader für alternative Installationswege.
-3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc4` prüfen.
+3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc5` prüfen.
 4. Zunächst mit einem leeren Projekt testen; gewünschte alte Projekte erst
    danach laden. Eine fehlgeschlagene Installation kann den FM-1-Transporter
    zur Wiederherstellung erfordern; Downgrade allein garantiert keine Rettung.
@@ -119,6 +152,6 @@ unerwartete Pegeländerungen, hängende Noten und die CPU-Anzeige achten.
 Der Release enthält passendes vollständiges Quellarchiv einschließlich
 Felucca-Engines, Prüfsummen, Buildnachweis und Lizenztexte. Das Quellarchiv
 lässt sich mit den Voraussetzungen aus BUILDING.md über
-`sh build.sh --binary-version 0.7.0-rc4` nachbauen. Der Ziel-Einstiegspunkt
+`sh build.sh --binary-version 0.7.0-rc5` nachbauen. Der Ziel-Einstiegspunkt
 aktiviert ACTION, Random Morph und erweitertes STASIS für diese Vorabversion.
 Die automatischen Tests ersetzen keine Messung auf dem echten FM-1.

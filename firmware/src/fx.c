@@ -735,8 +735,9 @@ static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
 #if CARAVEL_STASIS_EXPAND
 /* An expansion grain remains at unity speed: resampling changes only the
  * CAPTURE density, not pitch. Interpolate stored data at the original clock.
- * Reverse is latched per head at its silent crossfade boundary. */
-static inline int32_t stasis_grain_read(uint32_t start,uint32_t pos)
+ * Reverse is latched per head at its silent crossfade boundary. Force the
+ * tiny reader into the four-tap sample loop on the target compiler too. */
+static inline __attribute__((always_inline)) int32_t stasis_grain_read(uint32_t start,uint32_t pos)
 {
  uint32_t sub=pos&((1u<<st.active_quality)-1u);
  uint32_t sample=pos>>st.active_quality;

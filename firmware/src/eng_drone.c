@@ -103,6 +103,7 @@ static __attribute__((noinline)) void drone_legacy_render(track_t *t, voice_t *v
         for (uint32_t c = 0; c < DR_NCTRL; c++)
             s->ctrl[c] = drone_follow(s->ctrl[c], target[c]);
         int32_t topo = s->ctrl[DR_TOPO];
+        uint32_t rate = 1461u + (uint32_t)s->ctrl[DR_RATE] * 11u / 20u;
         /* Adjacent topologies crossfade their source signals, not oscillators.
          * All sources come from sample i-1, independent of evaluation order. */
         for (uint32_t k = 0; k < 4u; k++) {
@@ -119,7 +120,7 @@ static __attribute__((noinline)) void drone_legacy_render(track_t *t, voice_t *v
             /* Odd, monotonic cubic soft character: 1.5*x - 0.5*x^3.
              * Blend with the sine; both endpoints remain bounded by Q15. */
             int32_t cube = mulq15(mulq15(x, x), x);
-            next[k] = x + mulq15((x - cube) / 2, s->ctrl[DR_CHAR]);
+            next[k] = x + mulq15(drone_div2s(x - cube, 1), s->ctrl[DR_CHAR]);
             sum += next[k];
             /* Distinct deterministic triangle drifts; no shared RNG, no
              * discontinuous random steps and no accumulation of detuning. */
@@ -128,19 +129,19 @@ static __attribute__((noinline)) void drone_legacy_render(track_t *t, voice_t *v
                                            : 98303 - (int32_t)q * 2;
             int32_t drift = mulq15(tri, s->ctrl[DR_DRIFT]);
             s->inc[k] = drone_follow(s->inc[k], freq[k]);
-            int32_t step = s->inc[k] + ((s->inc[k] >> 16) * drift) / 128;
+            int32_t step = s->inc[k] + drone_div2s((s->inc[k] >> 16) * drift, 7);
             s->phase[k] += (uint32_t)clamp(step, 0, 0x60000000);
-            uint32_t rate = 1461u + (uint32_t)s->ctrl[DR_RATE] * 11u / 20u;
-            s->drift_phase[k] += rate * (8u + k) / 8u;
+            s->drift_phase[k] += rate * (8u + k) >> 3;
         }
         for (uint32_t k = 0; k < 4u; k++) s->prev[k] = next[k];
         /* Coupled PM can have a nonzero mean even with odd generator waves. */
-        int32_t x = sum / 4;
-        int32_t hp = x - s->dc_in + s->dc_out - s->dc_out / 512;
+        int32_t x = drone_div2s(sum, 2);
+        int32_t hp = x - s->dc_in + s->dc_out - drone_div2s(s->dc_out, 9);
         s->dc_in = x;
         s->dc_out = hp;
         int32_t g = 128 + s->ctrl[DR_TONE] * 30000 / 32512;
-        s->low += (int32_t)(((int64_t)(hp - s->low) * g) / 32768);
+        int64_t lp = (int64_t)(hp - s->low) * g;
+        s->low += (int32_t)((lp + ((lp >> 63) & 32767)) >> 15);
         /* Match the HADES/SEM voice_amp and output scaling conventions. */
         out[i] += voice_amp(soft_knee(s->low, 16000) * 2, m, i) * 2;
     }
@@ -276,8 +277,9 @@ static inline int32_t drone_cell_follow(int32_t a, int32_t b, uint32_t s, uint32
 {
     static const uint16_t recip[6] = {0, 0, 32768, 21846, 16384, 13108};
     int32_t d = b - a, q = drone_div2s(d, s);
-    int32_t step = q < 0 ? -(int32_t)(((uint32_t)-q * recip[m]) >> 16)
-                         : (int32_t)(((uint32_t)q * recip[m]) >> 16);
+    /* |q| <= 16384: the signed product fits int32. The bias rounds
+     * negative products toward zero without a sign-dependent branch. */
+    int32_t step = drone_div2s(q * (int32_t)recip[m], 16);
     return a + (step ? step : (d > 0) - (d < 0));
 }
 static inline int32_t drone_route(const int32_t *x, uint32_t k, int32_t topo)
@@ -362,7 +364,10 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
      * already at its exact endpoint also remains there until the next block.
      * Preserve every sample update for controls still moving. */
     uint8_t moving[DR_NCTRL];
-    uint32_t nmoving = 0, moving_mask = 0;
+    uint32_t nmoving = 0, moving_mask = 0, pitch_moving = 0;
+    const uint32_t mix_moving = s->cell_mix != 32767;
+    for (uint32_t k = 0; k < 4u; k++)
+        if (s->inc[k] != freq[k]) pitch_moving |= 1u << k;
     int32_t fixed_route = s->ctrl[DR_TOPO] == target[DR_TOPO] ? s->ctrl[DR_TOPO] / 32768 : -1;
     static const uint8_t routes[3][4] = {{1,0,3,2},{4,0,1,2},{3,0,1,2}};
     int32_t hold_goal[4];
@@ -382,7 +387,7 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
             uint32_t j = moving[c];
             s->ctrl[j] = drone_follow(s->ctrl[j], target[j]);
         }
-        s->cell_mix = drone_follow(s->cell_mix, 32767);
+        if (mix_moving) s->cell_mix = drone_follow(s->cell_mix, 32767);
         if (moving_mask & (1u << DR_RATE)) rate = 1461u + (uint32_t)s->ctrl[DR_RATE] * 11u / 20u;
         for (uint32_t k = 0; k < 4u; k++) activity[k] = drone_div2s(s->activity[k], 8);
         /* Life: DRIFT also lets each cell's PM depth (down to 0.4x COUPLE, never above)
@@ -459,7 +464,8 @@ static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, 
             pmsrc[k] = s->pmlp[k];
             sum += next[k];
             int32_t drift = mulq15(tri[k], s->ctrl[DR_DRIFT]);
-            s->inc[k] = drone_follow(s->inc[k], freq[k]);
+            if (pitch_moving & (1u << k))
+                s->inc[k] = drone_follow(s->inc[k], freq[k]);
             int32_t step = s->inc[k] + drone_div2s((s->inc[k] >> 16) * drift, 7);
             s->phase[k] += (uint32_t)clamp(step, 0, 0x60000000);
             s->drift_phase[k] += rate * (8u + k) >> 3;

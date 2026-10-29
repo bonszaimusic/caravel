@@ -5,7 +5,7 @@ name: Caravel 0.7.0 prerelease
 
 on:
   push:
-    branches: [prerelease/0.7.0-rc4]
+    branches: [prerelease/0.7.0-rc5]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VER: 0.7.0-rc4
+  VER: 0.7.0-rc5
   CC: cc -include stdint.h
   FELUCCA_SLICE: '0'
   CARAVEL_REVERB_MINIMAL: '1'
@@ -106,6 +106,15 @@ jobs:
             -DC1_HOST_OFF=0 experiments/action-banks/stasis_arp_load_test.c -o build/host/stasis-arp-dual -lm
           C1_MASK=auto build/host/stasis-arp-dual > build/host/stasis-arp-dual.log
           diff -u build/host/stasis-arp-serial.log build/host/stasis-arp-dual.log
+          build/host/stasis-arp-serial 1 > build/host/stasis-arp-one-serial.log
+          C1_MASK=auto build/host/stasis-arp-dual 1 > build/host/stasis-arp-one-dual.log
+          diff -u build/host/stasis-arp-one-serial.log build/host/stasis-arp-one-dual.log
+          cc $FLAGS experiments/home-perf/perf_equivalence.c -o build/host/perf-equivalence -lm
+          build/host/perf-equivalence
+          cc $FLAGS tests/drone_cells_test.c -o build/host/drone-cells -lm
+          build/host/drone-cells --dsp-only
+          cc -O2 -w -Ibuild/gen -Ifirmware/src tests/drone_cells_test.c -o build/host/drone-cells-legacy -lm
+          build/host/drone-cells-legacy
           cc $FLAGS tests/stasis_continuity_test.c -o build/host/stasis-continuity -lm
           build/host/stasis-continuity
           cc $FLAGS -DSTASIS_FULL_PROFILE=1 tests/stasis_test.c -o build/host/stasis-smoke -lm
@@ -126,7 +135,7 @@ jobs:
       - name: Build matching 0.7.0 emulator and run native firmware WASM regressions
         env:
           ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'
-          ACTION_EMU_VERSION: v0.7.0-rc4
+          ACTION_EMU_VERSION: v0.7.0-rc5
         run: |
           . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           python3 experiments/home-perf/build.py
@@ -140,9 +149,9 @@ jobs:
           cp build/home-perf/Caravel-ACTION-BANKS-0.6.0-Android.html "build/Caravel-$VER-Emulator.html"
           python3 - <<'CHECK'
           import re,pathlib
-          p=pathlib.Path('build/Caravel-0.7.0-rc4-Emulator.html')
+          p=pathlib.Path('build/Caravel-0.7.0-rc5-Emulator.html')
           s=p.read_text()
-          assert 'v0.7.0-rc4' in s and 'const STASIS_WORKLET_SOURCE =' in s
+          assert 'v0.7.0-rc5' in s and 'const STASIS_WORKLET_SOURCE =' in s
           assert 'fetch("felucca.wasm")' not in s
           pathlib.Path('build/check-standalone.js').write_text(re.findall(r'<script[^>]*>([\s\S]*?)</script>',s)[-1])
           CHECK
@@ -168,22 +177,22 @@ jobs:
           CHECK
       - uses: actions/upload-artifact@v4
         with:
-          name: Caravel-0.7.0-rc4-verified-release
+          name: Caravel-0.7.0-rc5-verified-release
           retention-days: 30
           if-no-files-found: error
-          path: build/release-0.7.0-rc4/
+          path: build/release-0.7.0-rc5/
       - uses: actions/upload-artifact@v4
         with:
-          name: Caravel-0.7.0-rc4-test-downloads
+          name: Caravel-0.7.0-rc5-test-downloads
           retention-days: 30
           if-no-files-found: error
           path: |
-            build/Caravel-0.7.0-rc4-FM1-Testpaket.zip
-            build/Caravel-0.7.0-rc4-Emulator.html
+            build/Caravel-0.7.0-rc5-FM1-Testpaket.zip
+            build/Caravel-0.7.0-rc5-Emulator.html
 
   publish:
     needs: firmware
-    if: github.event_name == 'push' && github.repository == 'bonszaimusic/caravel' && github.ref == 'refs/heads/prerelease/0.7.0-rc4'
+    if: github.event_name == 'push' && github.repository == 'bonszaimusic/caravel' && github.ref == 'refs/heads/prerelease/0.7.0-rc5'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -193,11 +202,11 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: Caravel-0.7.0-rc4-verified-release
+          name: Caravel-0.7.0-rc5-verified-release
           path: release
       - uses: actions/download-artifact@v4
         with:
-          name: Caravel-0.7.0-rc4-test-downloads
+          name: Caravel-0.7.0-rc5-test-downloads
           path: downloads
       - name: Publish owner-requested prerelease, never replace an existing tag
         env:
