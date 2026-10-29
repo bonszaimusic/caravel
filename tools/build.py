@@ -278,6 +278,7 @@ def build_app():
             img += blob
     img += b"\xff" * (-len(img) % 4)
     (OUT / "felucca.bin").write_bytes(img)
+    subprocess.run([sys.executable, SRC / "tools/check_audio_ram.py"], check=True)
     return bytes(img), syms, dis, rt
 
 
@@ -449,7 +450,6 @@ def main():
         ota = ldr.result()
     img, syms, dis, rt = build_app()
     errors, notes = check(img, syms, dis, rt)
-    subprocess.run([sys.executable, SRC / "tools/check_audio_ram.py"], check=True)
     if os.environ.get("FELUCCA_PERF_HW") == "1":
         subprocess.run([sys.executable, SRC / "tools/check_perf_audio.py", OUT / "felucca.dis"], check=True)
         subprocess.run([sys.executable, SRC / "tests/target_budget.py", OUT / "felucca.dis",

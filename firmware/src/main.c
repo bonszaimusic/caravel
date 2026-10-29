@@ -4,7 +4,9 @@
  * guards; then LCD, input (TIMER5 IRQ, 10 kHz), audio (ALNK0 IRQ). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
+#if FM1_IRQ_TARGET
 extern uint32_t _audio_start[], _audio_end[], _audio_load[];
+#endif
 #if FELUCCA_CPU2
 extern uint32_t _c1_start[], _c1_end[], _c1_load[];
 #endif
@@ -316,13 +318,17 @@ void fm1_cstart(void)
         *d = *s;
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
         *d = *s;                                /* flash driver code that must run from RAM */
+#if FM1_IRQ_TARGET
     for (s = _audio_load, d = _audio_start; d < _audio_end; s++, d++)
         *d = *s;                                /* hot DSP; before worker/audio/interrupts start */
+#endif
 #if FELUCCA_CPU2
     for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++)
         *d = *s;                                /* the second core's waiting loop (hal/fm1_cpu1.h) */
 #endif
+#if FM1_IRQ_TARGET
     fm1_code_sync();
+#endif
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_boot.p3_rst = (uint8_t)p3;
