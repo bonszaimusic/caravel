@@ -263,8 +263,14 @@ static void hp_rm_resume(uint32_t now)
 }
 static void hp_rm_start(uint32_t now)
 {
+ /* An explicit RANDOM in a different TRACK/ROW starts a fresh session.
+  * Selection alone must never redirect an already running trajectory. ALL
+  * has no selected owner and retains its original RETURN destination. */
+ int changed=hp_rm.scope!=HP_RM_ALL &&
+  (hp_rm.origin_track!=song.sel ||
+   (hp_rm.scope==HP_RM_ROW && hp_rm.origin_row!=hp.track[song.sel].active));
  if(hp_rm.state==HP_RM_IDLE||hp_rm.state==HP_RM_RECALL||
-    (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL)){
+    changed || (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL)){
   hp_rm_reset();
   if(!hp_rm_capture(1)){ui_message("RANDOM: NO SAFE CONTROLS");return;}
  }
