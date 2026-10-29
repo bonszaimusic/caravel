@@ -298,14 +298,16 @@ static void action_random(uint32_t action)
 #if FELUCCA_RANDOM_MORPH
  if(action==0u)hp_rm_start(fm1_ms);
  else if(action==1u){
-  if(hp_rm.state==HP_RM_FROZEN)hp_rm_resume(fm1_ms);
+  if(hp_rm.context!=255u && hp_rm.context!=hp_rm_current_context())
+   ui_message("MORPH: OTHER TRACK/ROW");
+  else if(hp_rm.state==HP_RM_FROZEN)hp_rm_resume(fm1_ms);
   else hp_rm_freeze();
  }
  else if(action==2u){
   if(hp_rm_snapshot_count(action_snap_slot))
    hp_rm_snapshot_recall(action_snap_slot,fm1_ms);
-  else if(hp_rm.state!=HP_RM_IDLE)
-   hp_rm_return(fm1_ms); /* preserve old RETURN A when slot is empty */
+  else if(hp_rm.used)
+   hp_rm_return(fm1_ms);
   else{
    char message[32];perf_format(message,sizeof message,"SNAP S%u EMPTY",action_snap_slot+1u);
    ui_message(message);

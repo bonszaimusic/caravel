@@ -1,8 +1,36 @@
-# Caravel 0.7.0-rc3 — FM-1 Testversion
+# Caravel 0.7.0-rc4 — FM-1 Testversion
 
 Diese Vorabversion enthält echte, installierbare FM-1-Firmware. Sie ist für den
 angeforderten Gerätetest gedacht; ein Hör-, Last- und Installationstest am
 physischen FM-1 steht noch aus. Der stabile 0.6.0-Release wird nicht ersetzt.
+
+## Korrektur gegenüber rc3: RETURN pro Track/Zeile
+
+RETURN verwendet bei SCOPE TRACK den Ausgangszustand des gewählten Tracks,
+bei ROW den der gewählten HOME-Zeile. Nach RANDOM auf T1 und anschließend T2
+kann deshalb jeder Track zu seinem eigenen Ausgangszustand zurückfahren.
+Trackwechsel allein lenkt eine laufende Bewegung nicht um. Eine neue RANDOM-
+oder RETURN-Aktion wechselt den aktiven Bereich; es läuft weiterhin nur eine
+Morph-Bewegung gleichzeitig. ALL bleibt ein gemeinsamer Rückweg über alle Tracks.
+Manuelle Eingriffe behalten Vorrang, auch wenn der betreffende Track zwischenzeitlich
+verlassen wurde. FREEZE auf einem anderen Track/ROW greift nicht in die laufende
+Bewegung ein.
+
+Die Rückwege teilen sich die vorhandenen 128 Parameterplätze. Bei voller
+Belegung erscheint RETURN MEMORY FULL; andere Rückwege werden nicht verworfen.
+Nach abgeschlossenem RETURN sind seine Plätze wieder frei. Wie die bisherige
+Random-Session werden die Rückwege durch SCOPE-Wechsel, Snapshot-Store/Recall,
+Projektwechsel oder Neustart zurückgesetzt. Die vier S1–S4-Snapshots bleiben
+unverändert: GO Sx ruft die beim Speichern festgelegten Tracks ab und ist kein
+trackrelativer RETURN. Alle Daten bleiben flüchtig.
+
+Ein zusätzlicher Hosttest umfasst SEM/HADES-Pair T1/T3 plus TIDE mit internem
+ARP auf T2 und zwei gehaltenen Noten. ARP-Tempo, Rate und STASIS-Fenster sind
+repräsentative Annahmen, weil die bisherige USB-Diagnose sie nicht exportiert.
+Die neue rc3-Messung zeigt weiterhin Überlastungen (101,3% Spitze, 7 Audiofristen
+in 30 Sekunden), bei einer anderen Engine-/FX-Konfiguration als der erste Test.
+rc4 enthält keine zusätzliche DSP-/Lastkorrektur und bestätigt das Knarzen nicht
+als behoben.
 
 ## Korrektur gegenüber rc2
 
@@ -38,7 +66,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
 
 1. Projekte und Einstellungen vor dem Update exportieren und die bisherige
    funktionierende Firmware für den Rückweg bereithalten.
-2. Das vollständige `Caravel-0.7.0-rc3-FM1-Testpaket.zip` herunterladen und
+2. Das vollständige `Caravel-0.7.0-rc4-FM1-Testpaket.zip` herunterladen und
    entpacken. Am Mac `FM1-Installer.command` öffnen; der Starter benötigt Python 3
    und öffnet den passenden 0.7.0-Installer in Google Chrome. Das Terminal bleibt
    bis zum Abschluss offen. Alternativ im entpackten Ordner ausführen:
@@ -48,7 +76,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
    Der enthaltene Installer ist an das geprüfte 0.7.0-Paket gebunden; der
    öffentliche 0.6.0-Installer wird nicht ersetzt. Die einzelne `.fwsc` unter
    `firmware/` enthält App und Update-Loader für alternative Installationswege.
-3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc3` prüfen.
+3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc4` prüfen.
 4. Zunächst mit einem leeren Projekt testen; gewünschte alte Projekte erst
    danach laden. Eine fehlgeschlagene Installation kann den FM-1-Transporter
    zur Wiederherstellung erfordern; Downgrade allein garantiert keine Rettung.
@@ -91,6 +119,6 @@ unerwartete Pegeländerungen, hängende Noten und die CPU-Anzeige achten.
 Der Release enthält passendes vollständiges Quellarchiv einschließlich
 Felucca-Engines, Prüfsummen, Buildnachweis und Lizenztexte. Das Quellarchiv
 lässt sich mit den Voraussetzungen aus BUILDING.md über
-`sh build.sh --binary-version 0.7.0-rc3` nachbauen. Der Ziel-Einstiegspunkt
+`sh build.sh --binary-version 0.7.0-rc4` nachbauen. Der Ziel-Einstiegspunkt
 aktiviert ACTION, Random Morph und erweitertes STASIS für diese Vorabversion.
 Die automatischen Tests ersetzen keine Messung auf dem echten FM-1.

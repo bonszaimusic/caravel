@@ -84,9 +84,9 @@ static void hp_rm_cut_bounds(const param_desc_t*d,int32_t*lo,int32_t*hi)
  * hp_rm_poll again. The next independently started morph may recapture it. */
 static void hp_rm_disengage(hp_ref_t r)
 {
- if(hp_rm.state==HP_RM_IDLE)return;
+ if(!hp_rm.used)return;
  if(r.track==255u)r.track=(uint8_t)song.sel;
- for(uint32_t i=0;i<hp_rm.count;i++)
+ for(uint32_t i=0;i<hp_rm.used;i++)
   if(hp_rm_same(hp_rm.cell[i].ref,r))
    hp_rm.cell[i].released=1u;
 }
@@ -100,23 +100,66 @@ static void hp_rm_reset(void)
  hp_rm.shape=shape<=HP_RM_DRIFT?shape:HP_RM_SMOOTH;
  hp_rm.seed=seed?seed:0x8C89D39Bu;
 }
+/* Origins share the existing 128 cells. Keep the current context at the
+ * front so the interpolator and its CPU cost stay unchanged. Inactive
+ * contexts retain originals; selecting a track alone never moves anything.
+ * TRACK: 128..131, ROW: 0..127, ALL: 132, snapshot recall: 255. */
+_Static_assert(NTRK==4u && HP_ROWS==32u && sizeof(hp_rm_cell_t)==18u,
+               "RETURN context must fit existing cell padding");
+static uint8_t hp_rm_current_context(void)
+{
+ return hp_rm.scope==HP_RM_ALL?132u:hp_rm.scope==HP_RM_TRACK?
+  (uint8_t)(128u+song.sel):(uint8_t)(song.sel*HP_ROWS+hp.track[song.sel].active);
+}
+static int hp_rm_context_has(uint8_t context)
+{
+ for(uint32_t i=0;i<hp_rm.used;i++)if(hp_rm.cell[i].context==context)return 1;
+ return 0;
+}
+static void hp_rm_group_context(uint8_t context)
+{
+ uint32_t n=0;
+ for(uint32_t i=0;i<hp_rm.used;i++)if(hp_rm.cell[i].context==context){
+  hp_rm_cell_t tmp=hp_rm.cell[n];hp_rm.cell[n]=hp_rm.cell[i];hp_rm.cell[i]=tmp;n++;
+ }
+ hp_rm.count=n;hp_rm.context=context;
+ hp_rm.origin_track=(uint8_t)song.sel;hp_rm.origin_row=hp.track[song.sel].active;
+}
+static void hp_rm_select_context(uint8_t context)
+{
+ if(hp_rm.context==context)return;
+ hp_rm_group_context(context);
+ hp_rm.phase=0;hp_rm.state=hp_rm.count?HP_RM_DONE:HP_RM_IDLE;
+}
+static void hp_rm_drop_context(void)
+{
+ if(hp_rm.count){
+  hp_rm.used=(uint16_t)(hp_rm.used-hp_rm.count);
+  memmove(hp_rm.cell,hp_rm.cell+hp_rm.count,hp_rm.used*sizeof(hp_rm.cell[0]));
+ }
+ hp_rm.count=0;hp_rm.phase=0;hp_rm.state=HP_RM_IDLE;
+}
 static int hp_rm_add(hp_ref_t r,int random_only)
 {
  if(!r.kind)return 1;
  if(r.track==255u)r.track=(uint8_t)song.sel; /* pin owner at capture, never follow later selection */
  const param_desc_t*d=hp_desc(r);
  if(!hp_rm_safe(r,d) || (random_only&&!hp_rm_random_allowed(r,d)))return 1;
- for(uint32_t i=0;i<hp_rm.count;i++)if(hp_rm_same(hp_rm.cell[i].ref,r))return 1;
- if(hp_rm.count==HP_RM_MAX)return 0; /* all-or-nothing, no hidden truncation */
+ for(uint32_t i=0;i<hp_rm.used;i++)
+  if(hp_rm.cell[i].context==hp_rm.context && hp_rm_same(hp_rm.cell[i].ref,r))return 1;
+ if(hp_rm.used==HP_RM_MAX)return 0; /* preserve all other RETURN origins */
  int32_t value=hp_get(r);
  if(value<d->min||value>d->max)return 1;
- hp_rm_cell_t*c=&hp_rm.cell[hp_rm.count++];
+ hp_rm_cell_t*c=&hp_rm.cell[hp_rm.used++];hp_rm.count++;
  c->ref=r;c->original=c->from=c->to=c->last=(int16_t)value;c->released=0u;
+ c->context=hp_rm.context;
  return 1;
 }
 static int hp_rm_capture(int random_only)
 {
  hp_rm.count=0;
+ uint16_t old_used=hp_rm.used;
+ hp_rm.context=hp_rm_current_context();
  uint32_t t0=song.sel;
  if(hp_rm.scope==HP_RM_ROW){
   hp_track_t*h=&hp.track[t0];uint32_t row=h->active;
@@ -138,8 +181,11 @@ static int hp_rm_capture(int random_only)
  }
  hp_rm.origin_track=(uint8_t)t0;
  hp_rm.origin_row=hp.track[t0].active;
+ hp_rm_group_context(hp_rm.context);
+ if(!hp_rm.count)ui_message("RANDOM: NO SAFE CONTROLS");
  return hp_rm.count!=0u;
- full:hp_rm.count=0;ui_message("RANDOM: TOO MANY TARGETS");return 0;
+ full:hp_rm.used=old_used;hp_rm.count=0;
+ ui_message(old_used?"RETURN MEMORY FULL":"RANDOM: TOO MANY TARGETS");return 0;
 }
 static int hp_rm_valid(void)
 {
@@ -235,10 +281,12 @@ static int hp_rm_snapshot_recall(uint32_t slot,uint32_t now)
   hp_rm_cell_t*dst=&hp_rm.cell[i];
   int32_t live=hp_get(r);
   dst->ref=r;
+  dst->context=255u;
   dst->original=dst->from=dst->last=(int16_t)live;
   dst->to=snap->values[i];
  }
  hp_rm.count=snap->count;
+ hp_rm.used=snap->count;hp_rm.context=255u;
  hp_rm.phase=0;
  hp_rm.stamp=now;
  hp_rm.state=HP_RM_RECALL;
@@ -263,18 +311,15 @@ static void hp_rm_resume(uint32_t now)
 }
 static void hp_rm_start(uint32_t now)
 {
- /* An explicit RANDOM in a different TRACK/ROW starts a fresh session.
-  * Selection alone must never redirect an already running trajectory. ALL
-  * has no selected owner and retains its original RETURN destination. */
- int changed=hp_rm.scope!=HP_RM_ALL &&
-  (hp_rm.origin_track!=song.sel ||
-   (hp_rm.scope==HP_RM_ROW && hp_rm.origin_row!=hp.track[song.sel].active));
- if(hp_rm.state==HP_RM_IDLE||hp_rm.state==HP_RM_RECALL||
-    changed || (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL)){
+ if(hp_rm.state==HP_RM_RECALL ||
+    (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL))
   hp_rm_reset();
-  if(!hp_rm_capture(1)){ui_message("RANDOM: NO SAFE CONTROLS");return;}
+ hp_rm_select_context(hp_rm_current_context());
+ if(hp_rm.state==HP_RM_IDLE){
+  hp_rm_drop_context();
+  if(!hp_rm_capture(1))return;
  }
- if(!hp_rm_valid()){hp_rm_reset();ui_message("RANDOM: TARGET CHANGED");return;}
+ if(!hp_rm_valid()){hp_rm_drop_context();ui_message("RANDOM: TARGET CHANGED");return;}
  for(uint32_t i=0;i<hp_rm.count;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
   const param_desc_t*d=hp_desc(c->ref);
@@ -305,8 +350,13 @@ static void hp_rm_start(uint32_t now)
 }
 static void hp_rm_return(uint32_t now)
 {
+ uint8_t context=hp_rm_current_context();
+ if(!hp_rm_context_has(context)){
+  ui_message("RETURN: NO ORIGIN HERE");ui.force=1;return;
+ }
+ hp_rm_select_context(context);
  if(hp_rm.state!=HP_RM_FROZEN&&hp_rm.state!=HP_RM_RANDOM&&hp_rm.state!=HP_RM_DONE)return;
- if(!hp_rm_valid()){hp_rm_reset();ui_message("RANDOM: TARGET CHANGED");return;}
+ if(!hp_rm_valid()){hp_rm_drop_context();ui_message("RANDOM: TARGET CHANGED");return;}
  for(uint32_t i=0;i<hp_rm.count;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
   if(c->released)continue; /* do not fight a manual adjustment on RETURN */
@@ -320,6 +370,7 @@ static void hp_rm_press(uint32_t oct,uint32_t now)
 {
  if(oct&2u){hp_rm_start(now);return;}
  if(oct&1u){
+  if(hp_rm.context!=hp_rm_current_context()){hp_rm_return(now);return;}
   if(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN)hp_rm_freeze();
   else if(hp_rm.state==HP_RM_FROZEN||hp_rm.state==HP_RM_DONE)hp_rm_return(now);
   else ui_message("OCT+: RANDOM FIRST");
@@ -348,6 +399,7 @@ static void hp_rm_poll(uint32_t now)
  if(hp_rm.phase==65536u){
   int returned=hp_rm.state==HP_RM_RETURN, recalled=hp_rm.state==HP_RM_RECALL;
   hp_rm.state=returned||recalled?HP_RM_IDLE:HP_RM_DONE;
+  if(returned || recalled)hp_rm_drop_context();
   ui_message(recalled?"SNAP REACHED":returned?"RANDOM RETURNED":"RANDOM DESTINATION");
  }
  ui.force=1;

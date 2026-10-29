@@ -84,11 +84,14 @@ typedef struct {
  hp_ref_t ref;
  int16_t original,from,to,last;
  uint8_t released; /* manual edit takes permanent priority for this morph */
+ uint8_t context; /* uses cell padding: TRACK/ROW owner of the RETURN origin */
 } hp_rm_cell_t;
 typedef struct {
  hp_rm_cell_t cell[HP_RM_MAX];
  uint32_t count,phase,stamp,seed;
  uint8_t state,bars,depth,scope,shape,origin_track,origin_row,frozen_from;
+ uint16_t used; /* shared 128-target arena: active prefix plus parked origins */
+ uint8_t context;
 } hp_rm_state_t;
 static hp_rm_state_t hp_rm = {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_SMOOTH,.seed=0x8C89D39Bu};
 static const uint8_t hp_rm_times[]={1,2,4,8,16,32,64};
