@@ -8,9 +8,16 @@ physischen FM-1 steht noch aus. Der stabile 0.6.0-Release wird nicht ersetzt.
 
 1. Projekte und Einstellungen vor dem Update exportieren und die bisherige
    funktionierende Firmware für den Rückweg bereithalten.
-2. `caravel-0.7.0-rc1.fwsc` herunterladen. Im bestehenden Caravel-Webinstaller
-   die lokale Datei auswählen und das Update am per USB angeschlossenen FM-1
-   durchführen. Die `.fwsc` enthält App und Update-Loader.
+2. Das vollständige `Caravel-0.7.0-rc1-FM1-Testpaket.zip` herunterladen und
+   entpacken. Am Mac `FM1-Installer.command` öffnen; der Starter benötigt Python 3
+   und öffnet den passenden 0.7.0-Installer in Google Chrome. Das Terminal bleibt
+   bis zum Abschluss offen. Alternativ im entpackten Ordner ausführen:
+   `python3 -m http.server 8070 --bind 127.0.0.1 --directory Installer`
+   und in Chrome `http://127.0.0.1:8070/webapp/installer/` öffnen.
+   FM-1 per USB anschließen und dort verbinden, sichern und installieren.
+   Der enthaltene Installer ist an das geprüfte 0.7.0-Paket gebunden; der
+   öffentliche 0.6.0-Installer wird nicht ersetzt. Die einzelne `.fwsc` unter
+   `firmware/` enthält App und Update-Loader für alternative Installationswege.
 3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc1` prüfen.
 4. Zunächst mit einem leeren Projekt testen; gewünschte alte Projekte erst
    danach laden. Eine fehlgeschlagene Installation kann den FM-1-Transporter

@@ -131,6 +131,8 @@ jobs:
         env:
           AC79_SDK: ${{ runner.temp }}/ac79-sdk
         run: |
+          python3 web/make_site.py "build/release-$VER/caravel-$VER.fwsc" "$VER" build/prerelease-installer --release-dir "build/release-$VER"
+          bash -n tools/start_prerelease_installer.command
           git diff --exit-code
           python3 - <<'CHECK'
           import pathlib,zipfile,os
@@ -138,6 +140,11 @@ jobs:
           with zipfile.ZipFile('build/Caravel-'+version+'-FM1-Testpaket.zip','w',zipfile.ZIP_DEFLATED) as z:
               for p in sorted(root.iterdir()):z.write(p,'firmware/'+p.name)
               z.write('docs/prerelease-070.md','BITTE-LESEN.md')
+              for p in sorted(pathlib.Path('build/prerelease-installer').rglob('*')):
+                  if p.is_file():z.write(p,'Installer/'+p.relative_to('build/prerelease-installer').as_posix())
+              starter=zipfile.ZipInfo('FM1-Installer.command');starter.create_system=3
+              starter.external_attr=0o100755<<16
+              z.writestr(starter,pathlib.Path('tools/start_prerelease_installer.command').read_bytes())
           CHECK
       - uses: actions/upload-artifact@v4
         with:
