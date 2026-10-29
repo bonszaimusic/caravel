@@ -22,7 +22,19 @@ env:
   CARAVEL_REVERB_MINIMAL: '1'
 
 jobs:
+  source:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require the dedicated stable release branch
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/release/0.7.0 ]; then
+            echo '::error::Run this workflow on release/0.7.0. To update the website for an existing release, run Pages on main with version 0.7.0.'
+            exit 1
+          fi
+
   firmware:
+    needs: source
+    if: github.ref == 'refs/heads/release/0.7.0'
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
@@ -210,6 +222,8 @@ jobs:
             build/Caravel-0.7.0-Emulator.html
 
   quality-gates:
+    needs: source
+    if: github.ref == 'refs/heads/release/0.7.0'
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
@@ -240,7 +254,7 @@ jobs:
 
   publish:
     needs: [firmware, quality-gates]
-    if: github.event_name == 'push' && github.repository == 'bonszaimusic/caravel' && github.ref == 'refs/heads/release/0.7.0'
+    if: github.repository == 'bonszaimusic/caravel' && github.ref == 'refs/heads/release/0.7.0'
     runs-on: ubuntu-22.04
     permissions:
       contents: write

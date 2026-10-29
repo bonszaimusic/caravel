@@ -60,7 +60,7 @@ def workflow_blocks():
 
 def workflow_python(name):
     block = workflow_blocks()[name]
-    match = re.fullmatch(r"python3 - <<'PY'\n(.*)\nPY\n", block, re.S)
+    match = re.fullmatch(r"(?:#[^\n]*\n)*python3 - <<'PY'\n(.*)\nPY\n", block, re.S)
     if not match:
         raise AssertionError("Expected one embedded Python script: " + name)
     return compile(match[1], "pages.yml: " + name, "exec")
@@ -319,6 +319,57 @@ class SiteReleaseTest(unittest.TestCase):
 
 
 class PagesBehaviorTest(unittest.TestCase):
+    def download_inventory(self, manifest):
+        script = workflow_python('Download the complete selected release inventory')
+        with tempfile.TemporaryDirectory(prefix='caravel-pages-download-') as temp:
+            commands = []
+            def download(command, *, check):
+                self.assertTrue(check)
+                commands.append(command)
+                if len(commands) == 1:
+                    (Path(temp) / 'release/SHA256SUMS').write_bytes(manifest)
+            with mock.patch.dict(os.environ, {'RUNNER_TEMP': temp, 'RELEASE_TAG': 'v0.7.0',
+                                             'GH_REPO': 'fixture/caravel'}), \
+                    mock.patch.object(subprocess, 'run', side_effect=download):
+                exec(script, {})
+            return commands
+
+    def test_pages_downloads_only_manifest_members_and_keeps_extra_assets_out(self):
+        names = ['caravel-0.7.0.fwsc', 'LICENSE', 'caravel-0.7.0-source.tar.gz']
+        commands = self.download_inventory(b''.join(b'0' * 64 + b'  ' + n.encode() + b'\n' for n in names))
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(commands[0][-2:], ['--pattern', 'SHA256SUMS'])
+        self.assertEqual(commands[1][-6:], [arg for n in names for arg in ('--pattern', n)])
+        self.assertNotIn('Caravel-0.7.0-Emulator.html', commands[1])
+        self.assertNotIn('Caravel-0.7.0-FM1-Testpaket.zip', commands[1])
+
+    def test_pages_rejects_unsafe_empty_duplicate_and_self_referencing_manifests(self):
+        for manifest in [b'', b'not a checksum\n', *[
+                b'0' * 64 + b'  ' + name + b'\n' for name in
+                [b'../secret', b'/tmp/file', b'file*', b'file?', b'file[0]', b'SHA256SUMS']],
+                (b'0' * 64 + b'  LICENSE\n') * 2]:
+            with self.subTest(manifest=manifest), self.assertRaises(SystemExit):
+                self.download_inventory(manifest)
+
+    def test_pages_uses_the_complete_070_profile_without_changing_older_releases(self):
+        block = workflow_blocks()['Match the selected engine and effects profile']
+        for version, expected in [('0.1.0', []), ('0.6.0', ['CARAVEL_REVERB_MINIMAL', 'FELUCCA_SLICE']),
+                                  ('0.7.0', ['CARAVEL_ACTION_BANKS', 'FELUCCA_RANDOM_MORPH',
+                                             'CARAVEL_REVERB_MINIMAL', 'CARAVEL_STASIS_EXPAND', 'FELUCCA_SLICE'])]:
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as temp:
+                env_file = Path(temp) / 'env'
+                env_file.touch()
+                result = subprocess.run(['bash', '-e'], input=block, text=True, capture_output=True,
+                                        cwd=ROOT, env={**os.environ, 'VER': version, 'GITHUB_ENV': str(env_file)})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                text = env_file.read_text()
+                for flag in expected:
+                    self.assertIn(flag, text)
+                if not expected:
+                    self.assertEqual(text, '')
+                if version == '0.6.0':
+                    self.assertNotIn('CARAVEL_ACTION_BANKS', text)
+
     def release_gate(self, metadata, *, version=VERSION, event_tag="", error=None):
         script = workflow_python("Select and validate the exact release tag")
         with tempfile.TemporaryDirectory(prefix="caravel-pages-gate-") as temp:
@@ -357,7 +408,7 @@ class PagesBehaviorTest(unittest.TestCase):
         text = (ROOT / ".github/workflows/pages.yml").read_text()
         query = text.index('["gh", "release", "view"')
         self.assertLess(query, text.index("uses: actions/checkout"))
-        self.assertLess(query, text.index("gh release download"))
+        self.assertLess(query, text.index("- name: Download the complete selected release inventory"))
 
     def test_release_gate_rejects_draft_unpublished_prerelease_and_wrong_tag(self):
         for field, value in (("isDraft", True), ("isPrerelease", True), ("publishedAt", None),
