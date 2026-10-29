@@ -1123,9 +1123,9 @@ static void draw_columns(void)
         const param_desc_t *d;
         if (k == EVK_TOP) {                            /* PLAY: the counts, PLAY ON / OFF (OCT+: CLEAR) */
             draw_column(0, "ROW", "ALL", "", VAL(0u), -1, ICON_AUTO);
-            fmt_int(val, (int32_t)(motion_count(t) - motion_lock_count(t)));
+            fmt_int(val, (int32_t)(ev_count(t,0) - ev_count(t,1)));
             draw_column(1, "EVENT", val, "", T_MID, -1, ICON_NONE);
-            fmt_int(val, (int32_t)motion_lock_count(t));   /* parameter locks (SEQ > STEP: a step held, a knob) */
+            fmt_int(val, (int32_t)ev_count(t,1));   /* parameter locks (SEQ > STEP: a step held, a knob) */
             draw_column(2, "LOCK", val, "", T_MID, -1, ICON_NONE);
             draw_column(3, "PLAY", motion_enabled(t) ? "ON" : "OFF", "", VAL(3u), -1, motion_icon());
             return;
@@ -1152,6 +1152,12 @@ static void draw_columns(void)
         draw_column(0, "ROW", val, "", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)step + 1);
         draw_column(1, "STEP", val, "", k != EVK_ADD || step < (uint32_t)t->p[P_SLEN] ? VAL(1u) : T_DIM, -1, ICON_AUTO);
+#if FELUCCA_HOME_PERF
+        if(k==EVK_PERF){const hp_event_t *e=&hp.event[c&255u];d=hp_vdesc(HP_VFIRST+e->control);
+            draw_column(2,"PARAM",ev_perf_name(e->control,1),"",T_MID,-1,ICON_AUTO);
+            param_format(d,e->value,val,&unit);
+            draw_column(3,e->lock?"LOCK":"AUTO",val,unit,VAL(3u),RATIO(d,enum_rank(d,e->value)),param_icon(d,e->value));return;}
+#endif
         if (k == EVK_REC && MOTION_IS_FX(&motion.event[c & 0xFFu])) {
             static const char *const short_fx[PF_NFX] = {"RPT8", "RPT16", "RPT32", "REV", "LPF", "HPF",
                 "TAPE", "FREEZ", "OCT+", "OCT-", "FLANG", "PHAS", "RTHR", "ECHO"};

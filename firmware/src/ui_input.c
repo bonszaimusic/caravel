@@ -401,6 +401,10 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
         c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
 #endif
+#if CARAVEL_ACTION_BANKS
+    /* The five reserved physical keys breathe, including BANK. */
+    if(action_capture_mask && br)*br |= ACT_KEY_MASK;
+#endif
     return c;
 }
 
@@ -1005,6 +1009,9 @@ static void step_edit(uint32_t slot, int32_t steps)
 
 static void edit_param(uint32_t slot, int32_t steps)
 {
+#if CARAVEL_STASIS_EXPAND
+    if(cur_page()->graph==GR_STGRAIN){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
+#endif
 #if FELUCCA_HOME_PERF
     if(cur_page()->graph==GR_MACRO || cur_page()->graph==GR_MACROMAP || cur_page()->graph==GR_HOMEEDIT) { hp_page_knob(slot,steps); return; }
     hp_touch(slot);
@@ -1640,6 +1647,12 @@ static void ui_input(void)
     uint32_t oct;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
+#if CARAVEL_ACTION_BANKS
+    action_refresh();
+#if FELUCCA_RANDOM_MORPH
+    hp_rm_poll(fm1_ms);
+#endif
+#endif
 #if FELUCCA_HOME_PERF
     if(hp_combo_pending){
         if(fm1_in.buttons & ((1u<<panel.btn[B_GLO])|(1u<<panel.btn[B_HOME])))return;
@@ -1774,6 +1787,10 @@ static void ui_input(void)
     lytap = layer_gesture(now, combo);
     layer_show();
     layer_keys(lkeys);
+#if CARAVEL_ACTION_BANKS
+    action_dispatch(notes);
+    notes &= ~action_capture_mask;
+#endif
     for (k = 0; k < 4u; k++)
         if (ks[k]) {
             layer_knob(k, ks[k]);
@@ -1844,7 +1861,13 @@ static void ui_input(void)
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);
             } else if (kind == CF_CLEAR_MOTION) {
                 track_t *t = &trk[ui.confirm_trk % NTRK];
-                if (!chain_busy()) { load_begin(t, UNDO_PAT); motion_clear(t); load_end(t); ui_message("AUTOMATION CLEARED"); }
+                if (!chain_busy()) {
+#if FELUCCA_HOME_PERF
+                    if(hp_auto_count(t,0)){perf_undo_take(t,0);motion_clear(t);motion_undo_done(t);}
+                    else
+#endif
+                    {load_begin(t,UNDO_PAT);motion_clear(t);load_end(t);}ui_message("AUTOMATION CLEARED");
+                }
             } else if (kind == CF_DEL_ROW) {
                 uint32_t r = ui.confirm_trk;
                 if (!chain_busy() && r < chain_config.count) {
@@ -1887,8 +1910,15 @@ static void ui_input(void)
     }
     if (lytap)                                          /* a layer's button acts on release (held: the layer; SEQ's */
         layer_tap(lytap);                               /* on every page since 1.2, its tap the SEQ pages) */
-    if (home == BT_TAP)                                 /* HOME acts on release: a hold opens the menu */
-        home_tap();
+    if (home == BT_TAP) {                                /* HOME retains its ordinary single-tap action */
+#if CARAVEL_ACTION_BANKS
+        if(!action_home_double_tap())
+#endif
+            home_tap();
+    }
+#if CARAVEL_ACTION_BANKS
+    action_refresh();
+#endif
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
     for (id = 0; id < 14u; id++) {
         if (!((pressed >> id) & 1u))
@@ -1997,7 +2027,19 @@ static void ui_input(void)
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
 #if FELUCCA_HOME_PERF
-        if (!glo && !lay && ui.home) { hp_row_turn(s); }
+        if (!glo && !lay && ui.home) {
+#if CARAVEL_ACTION_BANKS && CARAVEL_STASIS_EXPAND
+            if(action_enabled && action_setup && action_bank==1u && action_capture_mask){
+                /* SELECT switches two STASIS SETUP pages rather than editing
+                 * HOME ROW; old FX values remain in song.g, new DSP values
+                 * remain in the single opt-in expansion state. */
+                if(s&1)action_stasis_grain_page^=1u;
+                ui.force=1;
+                ui_message(action_stasis_grain_page?"STASIS GRAIN SETUP":"STASIS FX SETUP");
+            }else
+#endif
+            hp_row_turn(s);
+        }
         else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
         else
 #endif
@@ -2046,6 +2088,12 @@ static void ui_input(void)
             ui.hot_t = 40;
         }
         if (ui.home) {
+#if CARAVEL_ACTION_BANKS
+            if(action_enabled && action_setup && action_capture_mask){
+                action_setup_turn(k,s);
+                continue;
+            }
+#endif
 #if FELUCCA_HOME_PERF
             hp_turn(k,s,0); continue;
 #endif

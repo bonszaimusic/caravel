@@ -56,7 +56,12 @@ static const dual_t DUALS[] = {
     {"FILTER", "MORE", "FILTER", "MORE", "FILTER", "MORE", DK_PLAIN},        /* ANALOG only: FILTER beside MORE */
     {"LANES", "LANES 2", "LANES 1-4", "LANES 5-8", "LANES TOP", "LANES BOTTOM", DK_PLAIN},
     {"FX", "DLY", "FX SENDS", "DELAY", "FX SENDS", "DELAY", DK_PLAIN},
+#if CARAVEL_STASIS_EXPAND
+    {"CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", DK_PLAIN},
+    {"GRAIN", "LAYER", "GRAIN", "LAYER", "STASIS GRAIN", "STASIS LAYER", DK_PLAIN},
+#else
     {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
+#endif
     {"INSERT", "INSERT 2", "INSERT TYPE MIX HOLD", "INSERT A B C FILTER", "INSERT", "INSERT A-C FILT", DK_INS},
     {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
     {"SCL", "", "SCALE", "", "SCL", "", DK_GRAPH},
@@ -99,6 +104,11 @@ static const page_t *dual_row_page(const dual_t *dd, uint32_t row)
         if (str_eq(PAGES[i].title, row ? dd->bot : dd->top))
             return &PAGES[i];
     return 0;
+}
+static const page_t *dual_top_page(const page_t *pg)
+{
+    const dual_t *dd=dual_of(pg,0);
+    return dd?dual_row_page(dd,0):0;
 }
 /* the descriptor and value of one card of a row (0: an empty slot) */
 static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_t row, uint32_t col, int32_t *v)
@@ -295,6 +305,10 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
+#if CARAVEL_STASIS_EXPAND
+    if(rps[1] && rps[1]->graph==GR_STLAYER)
+        sig=sig*33u+st_layer.phase+st_layer.request*8u+st.auto_hold*32u+st.releasing*64u+st.stopping*128u;
+#endif
     if (dd->kind == DK_GRAPH && str_eq(dd->top, "CHORD")) {      /* the chord's notes: the last one played */
         uint32_t k = trk_index(TSEL);
         sig = sig * 33u + chord_last[k].n * 131u + chord_last[k].mask * 7u + (uint32_t)chord_last[k].root + trk_vmode(TSEL) * 977u +
@@ -362,6 +376,15 @@ static void lfo_cards(const page_t *pg)
             int32_t x = 6 + (int32_t)col * 58;
             if (col)
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
+#if CARAVEL_STASIS_EXPAND
+            if(rps[row] && rps[row]->graph==GR_STLAYER && col==3u){
+                const char *action=stasis_layer_can_cancel()?"CANCEL":song.g[G_STMODE]==1?"BLEND":"ADD";
+                cv_text_in(x,y+27-AF_S_CAP_Y,56,&AF_S,action,T_TEXT,T_SURF);
+                cv_text_in(x,y+44-AF_M_CAP_Y,56,&AF_M,stasis_layer_status(),T_ACCENT,T_SURF);
+                cv_text_in(x,y+65-AF_S_CAP_Y,56,&AF_S,active?"OCT+":"SELECT",T_MID,T_SURF);
+                continue;
+            }
+#endif
             if (dd->kind == DK_INS && !row && col == 3u) {     /* the fourth card: the type's curve, one card wide */
                 insert_curve(TSEL, active ? T_THEME : T_MID, x + 3, 50, y + 49, 20);
                 continue;
@@ -374,16 +397,29 @@ static void lfo_cards(const page_t *pg)
             int icon = (dd->kind == DK_LFO || dd->kind == DK_LFO2) && !row && col == 1u;      /* LFO: the WAVE card carries a pictogram */
             int disabled = !row && !col && (dd->kind == DK_LFO2 ? lfo2_config[song.sel].p[L2_SYNC] :
                                             dd->kind == DK_LFO ? TSEL->p[P_LSYNC] : 0);
+#if CARAVEL_STASIS_EXPAND
+            if(rps[row] && rps[row]->graph==GR_STLAYER &&
+                ((col==1u && song.g[G_STMODE]==1)||(col==2u && song.g[G_STMODE]!=1)))disabled=1;
+#endif
             const aafont_t *vf = &AF_M;
             param_format(d, v, val, &unit);
+#if CARAVEL_STASIS_EXPAND
+            /* The generic formatter intentionally limits values to five
+             * letters. This view has room for the complete effect name. */
+            if(rps[row] && rps[row]->id[0]==G_RTYPE && !col && v==3)
+                str_cpy(val,"STASIS",sizeof val);
+#endif
             if (rps[row] && rps[row]->graph == GR_MOD && col == 2u) {   /* MOD's DST: E1..E8 by the engine's own labels (mod.c mod_dst_name) */
                 str_cpy(val, mod_dst_name(TSEL, v), sizeof val);
                 unit = "";
             }
             if ((ui_prefs & PREF_LARGE) && !icon && large_face_has(val) && text_w(&AF_L, val) <= 48)
                 vf = &AF_L;
+#if CARAVEL_STASIS_EXPAND
+            if(text_w(vf,val)>54)vf=&AF_S; /* full STASIS name in the narrow TYPE card */
+#endif
             cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, d->label, disabled ? T_DIM : T_TEXT, T_SURF);
-            cv_text_in(x, y + (vf == &AF_L ? 40 - AF_L_CAP_Y : 44 - AF_M_CAP_Y), 56, vf, val,
+            cv_text_in(x, y + (vf == &AF_L ? 40 - AF_L_CAP_Y : vf == &AF_S ? 46 - AF_S_CAP_Y : 44 - AF_M_CAP_Y), 56, vf, val,
                        disabled ? T_DIM : T_TEXT, T_SURF);
             if (unit[0])
                 cv_text_in(x, y + 65 - AF_S_CAP_Y, 56, &AF_S, unit, T_MID, T_SURF);

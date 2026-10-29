@@ -32,6 +32,7 @@ static const uint16_t SCALE_MASK[] = {
     (1 << 0) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 6) | (1 << 8) | (1 << 9) | (1 << 11), /* DIMWH */
 };
 
+#include "../../experiments/action-banks/action_state.h"
 #define KB_SILENT 255u
 static uint32_t kb_prev;
 static volatile uint8_t kb_boot_hold;    /* #137: set from power-on to the end of the splash (main.c): the keys sound nothing,
@@ -952,6 +953,10 @@ static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch, k;
     uint32_t lay, fx, mute;
+#if CARAVEL_ACTION_BANKS
+    /* A key held before ACTION activation remains a note until released. */
+    action_preheld &= cur;
+#endif
     ch = cur ^ kb_prev;                          /* keys also sound while entering steps */
     if (perf_remap)
         perf_key_remap();
@@ -987,6 +992,12 @@ static void keyboard_block(void)
                     perf_key_press(k, 1);
                 continue;
             }
+#if CARAVEL_ACTION_BANKS
+            if ((action_capture_mask & (1u << k)) && !(action_preheld & (1u << k))) {
+                kb_note[k] = KB_SILENT;  /* no note-on, recording or MIDI */
+                continue;
+            }
+#endif
             if ((mute >> k) & 1u)                 /* NAME (ui_name.c): every key types, none sounds; SONG: A..D */
                 kb_note[k] = KB_SILENT;
             else if (song.grid == 1u)             /* the DRUM grid: a lane key plays its lane, the rest are the UI's */

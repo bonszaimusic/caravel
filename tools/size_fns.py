@@ -99,6 +99,13 @@ def main(src, dst):
         audio.update({"track_filter", "tf_wet_block", "tf_sample", "tf_pole", "pf_mix", "mulq16",
                       "track_dist", "ins_drive", "ins_shape", "softclip",
                       "master_out", "dc_block", "lowcut1"})
+        # RC5: per-sample capture/read helpers must use audio inlining,
+        # not the UI size policy (which emitted nested calls per grain tap).
+        audio.update({"osc_sine", "sine_i"})
+        audio.update({"stasis_block", "stasis_read", "stasis_grain_read", "stasis_grain_weight",
+                      "stasis_record_prefilter", "stasis_layer_tick", "stasis_layer_mix_at",
+                      "stasis_record_factor", "stasis_grain_samples", "stasis_lag_samples",
+                      "stasis_min_history"})
         if os.environ.get("CARAVEL_DUALCORE_D1")=="1":
             # Cold setup paths need no hot-loop inlining policy.
             audio -= {n for n in audio if n.endswith(("_init", "_reset", "_note_on", "_note_off")) or n in {"drone_cell_seed","drone_motion_values","drone_motion_load"}}

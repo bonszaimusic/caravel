@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "captured_controls.h"
 #include "drone_v9_reference.h"
+#include "drone_rc4_legacy_reference.h"
 #include "filter_v9_reference.h"
 #include "insert_v9_reference.h"
 static uint32_t random_state=271828183u;
@@ -24,6 +25,18 @@ int main(void){
   CHECK(!memcmp(a,b,n*sizeof *a));CHECK(!memcmp(s,&expected,sizeof *s));samples+=n;
  }
  printf("DRONE oracle: 12000 blocks, %llu samples, exact output and all 352 state bytes match V9\n",(unsigned long long)samples);
+ for(unsigned i=0;i<12000;i++){
+  unsigned n=1+random32()%128;
+  if(i%31==0){for(unsigned k=0;k<8;k++)t->p[P_E0+k]=random32()%128;t->p[P_E3]=random32()%3;}
+  vmod_t m={.inc=pitch_inc((random32()%128)*16),.pitch16=48*16,
+      .amp0=(int32_t)(random32()%32768),.amp1=(int32_t)(random32()%32768),.shape=64*256};
+  if(i%7==0){m.cutoff=(int32_t)(random32()%8193)-4096;m.shape=64*256+(int32_t)(random32()%8193)-4096;}
+  initial=*s;memset(a,0,sizeof a);memset(b,0,sizeof b);
+  drone_rc4_legacy_reference(t,&t->v[0],a,n,&m);expected=*s;*s=initial;
+  drone_legacy_render(t,&t->v[0],b,n,&m);
+  CHECK(!memcmp(a,b,n*sizeof *a));CHECK(!memcmp(s,&expected,sizeof *s));
+ }
+ printf("DRONE legacy oracle: 12000 blocks, exact output and all state bytes match rc4\n");
  tfilt_t before[NTRK],after[NTRK];int32_t x[128],y[128],side[128],side_ref[128];
  for(unsigned i=0;i<16000;i++){
   unsigned n=1+random32()%128,stereo=i%2;track_t *f=&trk[i%NTRK];

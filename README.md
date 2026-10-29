@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.6.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -22,6 +22,17 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 </table>
 
 More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+
+## Caravel 0.7.0 — smoother audio and visible performance automation
+
+[Download 0.7.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.7.0) · [Release details and installation](docs/prerelease-070.md)
+
+- Run hot DRONE, SEM, HADES, STASIS and HALL DSP from checked executable RAM. The owner reports no audible crackle and indicated load at most about 70% with the rc6 test setup; this is not a controlled speedup measurement.
+- Group STASIS GRAIN/LAYER on one view and place CHORUS before REVERB; retain reverse/scan/capture continuity fixes.
+- Keep independent Random Morph RETURN origins for each track/HOME row. Show HOME macro and Pair automation in SEQ > AUTOMATION and make its PLAY switch apply to both event stores. Pair recordings belong to member A.
+- Four S1–S4 Random Morph snapshots remain volatile. Permanent snapshot storage is deferred to a later update; saving a project retains its current sound, not the four snapshot slots or captured STASIS audio.
+
+The 0.6.0 STASIS tutorials and sound examples below remain useful for the shared controls.
 
 ## Caravel 0.6.0 - Hold a sound. Build a texture.
 

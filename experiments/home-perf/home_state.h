@@ -18,7 +18,14 @@ static hp_ref_t hp_last;
 static uint8_t hp_last_valid, hp_last_track, hp_default=1, hp_macro_sel, hp_route_sel;
 static uint8_t hp_edit_row, hp_edit_col, hp_edit_action, hp_apply_armed;
 static uint8_t hp_edit_track=255, hp_backup_track=255;
-static hp_track_t hp_edit_backup;
+/* Reuse the existing HOME undo allocation for one performance edit. */
+static union {
+ hp_track_t home;
+ struct {uint16_t count,pad;hp_event_t event[HP_EVENTS];} automation;
+} hp_edit_history;
+#define hp_edit_backup hp_edit_history.home
+static uint8_t hp_backup_automation;
+_Static_assert(sizeof(hp_edit_history)==sizeof(hp_track_t),"shared HOME/automation undo must not grow");
 /* Four macros with four routes each touch at most sixteen parameters. */
 #define HP_MACRO_TARGETS 16u
 _Static_assert(P_COUNT <= 256, "Macro IDs require more than one byte");
@@ -28,7 +35,17 @@ static uint8_t hp_dirty,hp_combo_pending;
 static int hp_virtual(uint32_t id) { return id >= HP_VFIRST && id < HP_VFIRST+8u; }
 static void hp_begin(track_t *t);
 static void hp_end(track_t *t);
-static void hp_motion_step(track_t *t, uint32_t step);
+static void hp_motion_step(track_t *t, uint32_t step, uint32_t play);
+static void hp_motion_pause(track_t *t);
+static uint32_t hp_auto_count(const track_t *t, int locks);
+static uint32_t hp_pair_auto_count(void);
+static uint32_t hp_auto_sig(const track_t *t);
+static int hp_auto_find(uint32_t track,uint32_t step,uint32_t control);
+static void hp_auto_edit(uint32_t index,uint32_t step,int32_t value,uint32_t lock);
+static void hp_auto_delete(uint32_t index);
+static void hp_auto_undo_take(const track_t *t);
+static int hp_auto_undo_ready(const track_t *t);
+static int hp_auto_undo_swap(track_t *t);
 static void hp_motion_stop(void);
 static void hp_midi(track_t *t, uint32_t id, uint32_t value);
 static const param_desc_t *hp_vdesc(uint32_t id);
@@ -63,3 +80,57 @@ static int hp_forget(uint32_t slot);
 static void hp_motion_clear(track_t*t);
 
 static int hp_sound_changed(const track_t *t);
+
+#if FELUCCA_RANDOM_MORPH
+/* Volatile HOME Random Morph state shared by the menu and performance UI. */
+#define HP_RM_MAX 128u
+#define HP_RM_IDLE 0u
+#define HP_RM_RANDOM 1u
+#define HP_RM_FROZEN 2u
+#define HP_RM_RETURN 3u
+#define HP_RM_DONE 4u
+#define HP_RM_RECALL 5u
+#define HP_RM_ROW 0u
+#define HP_RM_TRACK 1u
+#define HP_RM_ALL 2u
+#define HP_RM_LINEAR 0u
+#define HP_RM_SMOOTH 1u
+#define HP_RM_DRIFT 2u
+
+typedef struct {
+ hp_ref_t ref;
+ int16_t original,from,to,last;
+ uint8_t released; /* manual edit takes permanent priority for this morph */
+ uint8_t context; /* uses cell padding: TRACK/ROW owner of the RETURN origin */
+} hp_rm_cell_t;
+typedef struct {
+ hp_rm_cell_t cell[HP_RM_MAX];
+ uint32_t count,phase,stamp,seed;
+ uint8_t state,bars,depth,scope,shape,origin_track,origin_row,frozen_from;
+ uint16_t used; /* shared 128-target arena: active prefix plus parked origins */
+ uint8_t context;
+} hp_rm_state_t;
+static hp_rm_state_t hp_rm = {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_SMOOTH,.seed=0x8C89D39Bu};
+static const uint8_t hp_rm_times[]={1,2,4,8,16,32,64};
+static const uint8_t hp_rm_depths[]={10,25,35,50,75,100};
+#if CARAVEL_ACTION_BANKS
+/* Volatile four-slot snapshot memory. Store refs/values only: no sound,
+ * project, FX audio or duplicate synth parameter stores. No heap use. */
+#define HP_RM_SNAP_SLOTS 4u
+typedef struct {
+ uint16_t count;
+ uint8_t scope,origin_track,origin_row,pad;
+ /* Snapshot recall never uses source-page metadata. Three bytes losslessly
+  * encode every supported pinned target; separate values avoid struct padding.
+  * Keep all four slots and all 128 targets while retaining target RAM reserves. */
+ uint8_t refs[HP_RM_MAX][3];
+ int16_t values[HP_RM_MAX];
+} hp_rm_snap_t;
+static hp_rm_snap_t hp_rm_snap[HP_RM_SNAP_SLOTS];
+#endif
+
+
+static void hp_rm_reset(void);
+static void hp_rm_freeze(void);
+
+#endif /* FELUCCA_RANDOM_MORPH */

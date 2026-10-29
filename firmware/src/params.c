@@ -85,6 +85,9 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
 #if CARAVEL_REVERB_MINIMAL
                                      , "CAPT", "STR", "MOTN" /* shared STASIS bus targets */
 #endif
+#if CARAVEL_STASIS_EXPAND
+                                     , "SCAN" /* independently modulatable STASIS read position */
+#endif
 };
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
                                              "DRUM", "NOISE", "FM6",
@@ -548,6 +551,9 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
 #if CARAVEL_REVERB_MINIMAL
        , GR_STLAYER
 #endif
+#if CARAVEL_STASIS_EXPAND
+       , GR_STGRAIN
+#endif
 };
 
 typedef struct {
@@ -583,6 +589,10 @@ static const page_t PAGES[] = {
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
 #if CARAVEL_REVERB_MINIMAL
     {"LAYER", FAM_FX, SC_GLOBAL, GR_STLAYER, {G_STMODE, G_STAMT, G_STTIME, 0xFF}},
+#if CARAVEL_STASIS_EXPAND
+    /* Native FX page exposes the very SAME int16_t fields as ACTION SETUP. */
+    {"GRAIN", FAM_FX, SC_GLOBAL, GR_STGRAIN, {0xFF,0xFF,0xFF,0xFF}},
+#endif
 #endif
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IMIX, 0xFF, 0xFF}},   /* 1.5: the track's INSERT (fx.c): TYPE and dry / wet; 0.3.0: FX HOLD is KNOB 3 (no parameter), the type's curve the fourth card */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IA, P_IB, P_IC, P_FILT}},    /* .. the type's A B C (its own labels) and the track's FILTER (0.3.0) */
@@ -668,10 +678,29 @@ static const param_desc_t ST_STR_DESC = PD("STR", F_PCT, 0, 127, 90);
 /* G_DRREV preserves old EVOLV data but controls the single combined MOTN.
  * G_RDAMP continues to store HALL DAMP and is not read while STASIS plays. */
 static const param_desc_t ST_MOTION_DESC = PD("MOTN", F_PCT, 0, 127, 45);
+#if CARAVEL_STASIS_EXPAND
+static const char *const N_STGRAIN[] = {"93ms","186ms","372ms"};
+static const char *const N_STWINDOW[] = {"HQ","LONG","DRONE"};
+static const param_desc_t ST_GRAIN_DESC[4] = {
+ PE("GRAIN",N_STGRAIN,1),
+ PD("SCAN",F_PCT,0,127,0),
+ PE("WINDOW",N_STWINDOW,0),
+ PE("REVERSE",N_ONOFF,0)
+};
+#endif
 #endif
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
+#if CARAVEL_STASIS_EXPAND
+    if(pg->graph==GR_STGRAIN){
+        static int16_t *const fields[4]={
+            &st_expand.grain,&st_expand.scan,&st_expand.quality,&st_expand.reverse
+        };
+        *valp=fields[slot];
+        return &ST_GRAIN_DESC[slot];
+    }
+#endif
 #if CARAVEL_REVERB_MINIMAL
     if (pg->id[0] == G_RTYPE) {        /* the REVERB page alone */
         if (song.g[G_RTYPE] == 3) {

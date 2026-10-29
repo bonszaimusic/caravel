@@ -1,55 +1,21 @@
-# Caravel 0.6.0 - STASIS, ADD and BLEND
+# Caravel 0.7.0
 
-Capture a moment, keep its texture, and build on it while you play.
+## Audio and performance
 
-## Play it
+Hot DRONE, SEM, HADES, STASIS and HALL DSP now runs from checked executable RAM. STASIS joins/capture and reverse LIVE handling are smoother; redundant DRONE work and sample-loop calls are reduced without changing DSP reference output. Newly started voices are included before dual-core work is split. The owner reports no audible crackle and indicated maximum load around 70% with the rc6 setup. This is a listening/display report, not a controlled benchmark or a guarantee for every patch.
 
-- **STASIS HOLD:** capture recently played sound from the internal REV send.
-  STR controls the foreground texture; MOTN moves reflections, filtering and
-  HALL damping while retaining the grain playback rate.
-- **ADD:** mix a new captured sound into the held texture with adjustable AMT.
-  Complementary gains keep repeated additions bounded.
-- **BLEND:** transition into a snapshot of a new sound over 1-30 seconds, then
-  hold the destination. OCT+ explicitly starts or cancels WAIT/MIX.
-- STOP and HOLD-to-LIVE release the audible mixture into the natural HALL tail.
-  HOME, Pair Morph, macros and performance storage from 0.5.0 remain available.
+## Controls and automation
 
-## Learn and listen
+CHORUS precedes REVERB; STASIS GRAIN and LAYER share one view. Random Morph RETURN keeps independent origins per track/HOME row. HOME macro, PAIR MORPH and PAIR MOTION recordings are now visible under the owning track's SEQ > AUTOMATION. PLAY OFF pauses them and restores their baseline. Pair recordings belong to member A: A:T3 B:T1 means look on T3. Events can be edited, changed between AUTO/LOCK, deleted and undone without evicting other tracks. Existing stored PLAY OFF now pauses previously hidden performance events too. The new automation UI still needs confirmation on the physical device.
 
-- [Illustrated tutorials and downloadable PDF](https://bonszaimusic.github.io/caravel/tutorials/)
-- [Three original sound examples with cue times](https://bonszaimusic.github.io/caravel/sounds/)
-- [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)
-- [USB web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)
-- [Full changelog](https://github.com/bonszaimusic/caravel/blob/v0.6.0/CHANGELOG.md)
+## Snapshots
 
-The examples are rendered by the actual native firmware DSP, with level
-normalization and no external sound effects; they are not FM-1 recordings.
+S1–S4 Random Morph snapshots are still volatile RAM. Saving a project retains its current sound, not those four slots or captured STASIS audio. Permanent snapshot storage is explicitly deferred to a later update.
 
-## Read before upgrading
+## Install and verify
 
-0.6.0 contains HALL and STASIS. ROOM, SPRING and the SLICE engine are omitted
-to fit the target. The separate SLICER track effect remains. Projects using
-omitted features show explicit substitutions and CANCEL / TEST before loading.
-TEST converts a working copy, protects the source slot and lets you save elsewhere.
-Export a complete backup first. Keep user banks with the performance.
+Back up the FM-1 first. Download `Caravel-0.7.0-FM1-Testpaket.zip` for the local installer and firmware; the matching offline emulator is `Caravel-0.7.0-Emulator.html`. The owner's existing Android installer is updated separately. The standalone firmware is `caravel-0.7.0.fwsc`; after reboot INFO should show `v0.7.0`. [Detailed German instructions](https://github.com/bonszaimusic/caravel/blob/v0.7.0/docs/prerelease-070.md). Older releases remain available as rollbacks.
 
-STASIS uses internal REV send; there is no external microphone/USB audio capture.
-Ordinary tempo DELAY is suspended while STASIS owns the shared 128-KiB buffer.
-Project saves retain the controls, not the captured audio. Individual merged
-layers cannot be removed. ADD/BLEND add 60 bytes of management state and no audio
-allocation; target image is 554,384 bytes, RAM .data+.bss 64,460 bytes and pool
-360,164 bytes in the tested profile.
+The hardware profile still contains HALL/STASIS and omits ROOM, SPRING and the SLICE engine. The SLICER effect remains. Old projects keep compatibility prompts and source-slot protection. Ordinary tempo DELAY is suspended while STASIS owns the shared buffer.
 
-## Validation and downloads
-
-Publication is gated on the complete automated host suites, exact target profile,
-audio references, MIDI, UI/storage, web/WASM, ASan/UBSan, ThreadSanitizer and
-individual machine-readable results. The published release is rebuilt from the
-same committed source, compared with the tested app, and carries a verified
-package, complete recursive source, build record, notices and SHA256SUMS.
-
-Actual FM-1 worst-case CPU, physical USB/OTA installation and long-term stability
-remain hardware acceptance checks; host timing is not a hardware load estimate.
-Install custom firmware at your own risk. An interrupted or failed update can
-require recovery tools; reinstalling official firmware does not guarantee data
-restoration or recoverability. Caravel is independent of M-VAVE and Hugelton Instruments.
+The package includes verified source, build record, notices/licences and SHA256SUMS. Publication requires exact target, ABI, DSP/state/continuity, ARP, MIDI/UI/storage, HOME/Pair, native/WASM and complete validation gates. Hardware worst-case load and long-term stability remain practical device checks.

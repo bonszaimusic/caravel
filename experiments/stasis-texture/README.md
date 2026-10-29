@@ -104,6 +104,36 @@ unconfirmed direct restore refusal, and exact reverb/engine warning conditions.
 
 ## Verification
 
+### Opt-in expanded-grain continuity regression
+
+With `CARAVEL_STASIS_EXPAND=1`, reverse LIVE grains reserve enough captured
+history for all writes until their last playback sample. Otherwise the writer
+can overwrite the oldest end of a still-audible reverse grain, producing a
+periodic click. SCAN and stereo tap offsets are constrained when necessary
+while recording; the largest HQ reverse grain has no spare LIVE scan range.
+HOLD freezes the writer and retains the full captured scan range.
+
+Newly filled captures fade in over 512 samples, including after HOLD-to-LIVE
+and WINDOW changes. This reuses the existing transition state and adds no audio
+buffers. Without it, the initially half-open second head starts at full weight.
+
+`tests/stasis_continuity_test.c` renders both stereo channels with a continuous
+110 Hz tone across 36 grain/window/reverse/scan combinations, including LIVE
+prefill, HOLD, ADD/BLEND and STORE, SCAN/REVERSE and grain-size changes, release,
+and a new recording WINDOW. It checks the reverse overwrite horizon directly
+and retains sample slopes across block and operation boundaries. The maximum
+allowed change in slope is 4,000 internal PCM units, 10% of the test input peak;
+this detects isolated impulses without treating normal tone/grain motion as a
+click. This controlled-source regression does not establish subjective quality
+or Android scheduling behavior with arbitrary music.
+
+```sh
+cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+  -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 \
+  tests/stasis_continuity_test.c -o build/stasis-continuity -lm
+build/stasis-continuity
+```
+
 `tests/stasis_test.c` exercises capture/hold, fixed-pitch tap boundaries on MOTN knob changes, hall tail, STR dynamics, bounded sample discontinuity, the one-page layout and HALL fallback for old ROOM/SPRING projects, and STOP→release→fade→PLAY. The independent browser CI builds a WebAssembly preview only after the host tests succeed.
 
 **Not yet validated for release:** subjective sound quality, actual FM-1 worst-case CPU/stability, dense four-track audio glitches, legacy GM drum-global migration and complete web editor regression. Target compilation, static Flash/RAM/POOL limits and D3 host checks passed for the preceding test build; each new firmware build repeats them. Do not flash emulator assets.

@@ -1157,6 +1157,7 @@ static uint32_t strip_kind(void)
  * scale ("C MIN"); ti holds 20 (the footer, the strip) */
 static int dual_bottom(const page_t *pg);              /* ui_lfo2.c: the lower half of a two-group view */
 static const char *dual_foot(const page_t *pg);
+static const page_t *dual_top_page(const page_t *pg);
 static void page_title(char *ti)
 {
     const page_t *pg = cur_page();
@@ -1165,10 +1166,11 @@ static void page_title(char *ti)
     uint32_t i, n = 0, k = 0;
     const char *pt = pg->scope == SC_ENGINE ? e->page_title[pg->id[0] != P_E0] : 0;   /* EDIT: the engine's */
     const char *df = ui.home ? 0 : dual_foot(pg);                                    /* a two-group view: "LFO TOP" */
+    const page_t *number_page = df ? dual_top_page(pg) : pg;
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == pg->fam && page_visible(i) && !dual_bottom(&PAGES[i])) {   /* (top and bottom: one view) */
             n++;
-            if (i == ui.page || (df && dual_bottom(pg) && i + 1u == ui.page))   /* (its top page just before) */
+            if (&PAGES[i] == number_page)
                 k = n;
         }
     str_cpy(ti, df ? df : pt ? pt : grid_on() && !detail_on() ? "GRID" : pg->title, df ? 16 : 12);
@@ -1500,9 +1502,9 @@ static void graph_events(void)
         if (c >> 8 == EVK_TOP) {                     /* PLAY ON / OFF, the counts: "EVENT 3  LOCK 2" */
             char b[24];
             str_cpy(b, "EVENT ", sizeof b);
-            fmt_int(b + str_len(b), (int32_t)(motion_count(t) - motion_lock_count(t)));
+            fmt_int(b + str_len(b), (int32_t)(ev_count(t,0) - ev_count(t,1)));
             str_cpy(b + str_len(b), "  LOCK ", sizeof b - str_len(b));
-            fmt_int(b + str_len(b), (int32_t)motion_lock_count(t));
+            fmt_int(b + str_len(b), (int32_t)ev_count(t,1));
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
             cv_text_on(14, y + LIST_TY, &AF_M, "PLAY", sel ? T_INK : T_MID, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
@@ -1524,6 +1526,15 @@ static void graph_events(void)
             cv_text_r(226, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
             continue;
         }
+#if FELUCCA_HOME_PERF
+        if(c>>8==EVK_PERF){const hp_event_t *e=&hp.event[c&255u];char b[16];const char *unit;
+            const param_desc_t *d=hp_vdesc(HP_VFIRST+e->control);int32_t x;
+            b[0]=(char)('0'+(e->step+1u)/10u);b[1]=(char)('0'+(e->step+1u)%10u);b[2]=0;
+            cv_text_on(14,y+LIST_TY,&AF_M,e->lock?"LOCK":"AUTO",sel?T_INK:e->lock?T_ACCENT:T_MID,bg);
+            cv_text_on(EV_SX,y+LIST_TY,&AF_M,b,sel?T_INK:T_MID,bg);
+            param_format(d,e->value,b,&unit);x=ev_value(y,b,unit,sel?T_INK:T_TEXT,bg);
+            cv_free_text(EV_NX,y+LIST_TY,&AF_M,ev_perf_name(e->control,0),sel?T_INK:T_TEXT,bg,x-8-EV_NX);continue;}
+#endif
         if (c >> 8 != EVK_REC) {                     /* a step's CHANCE / RATCH / NUDGE: "STEP 05 CHANCE  50%" */
             uint32_t s = c & 0xFFu, kd = c >> 8;
             int32_t v = ev_sval(&t->step[s], kd);
@@ -2384,6 +2395,12 @@ static void draw_graph(void)
             cv_oy = 0;
             panel_note(stasis_layer_status(), stasis_layer_can_cancel() ? "[OCT+] CANCEL" : "[OCT+] ADD / BLEND", 0);
             break;
+#if CARAVEL_STASIS_EXPAND
+        case GR_STGRAIN:
+            cv_oy = 0;
+            panel_note("STASIS GRAIN", "K1 SIZE / K2 SCAN / K3 WINDOW / K4 REV", 0);
+            break;
+#endif
 #endif
 #if FELUCCA_SLICE
         case GR_SLICES:

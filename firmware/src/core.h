@@ -8,6 +8,18 @@
 #include <stdint.h>
 #include "voice_policy.h"
 
+/* Hot DSP may run from the existing executable RAM window on the FM-1.
+ * Keep host/WASM placement unchanged; no DSP arithmetic depends on it.
+ * The build places these roots after LLVM inlining and bridges far calls. */
+#ifndef CARAVEL_AUDIO_RAM
+#define CARAVEL_AUDIO_RAM 0
+#endif
+#if CARAVEL_AUDIO_RAM && defined(__PI32V2__)
+#define CARAVEL_AUDIO_HOT __attribute__((noinline))
+#else
+#define CARAVEL_AUDIO_HOT
+#endif
+
 /* Product identity. Caravel is a fork of Felucca 1.6.1 (NOTICE, LICENSING.md); these are display strings only. Identifiers
  * (FELUCCA_*, felucca.c), data formats, package markers and the Felucca-Engines names stay as in Felucca, so settings,
  * projects, presets and tools remain compatible. "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments:
@@ -31,8 +43,34 @@
 #endif
 /* Experimental lean reverb: omit ROOM/SPRING DSP, retain saved IDs
  * 0 and 1 as HALL aliases. Default 0 preserves stock Caravel behavior. */
+/* HOME ACTION/RANDOM prototypes are opt-in. Published firmware is unchanged. */
+#ifndef CARAVEL_ACTION_BANKS
+#define CARAVEL_ACTION_BANKS 0
+#endif
+#ifndef FELUCCA_RANDOM_MORPH
+#define FELUCCA_RANDOM_MORPH 0
+#endif
 #ifndef CARAVEL_REVERB_MINIMAL
 #define CARAVEL_REVERB_MINIMAL 0
+#endif
+/* Opt-in granular STASIS experiment: default release and project formats are unchanged. */
+#ifndef CARAVEL_STASIS_EXPAND
+#define CARAVEL_STASIS_EXPAND 0
+#endif
+#if CARAVEL_STASIS_EXPAND && !CARAVEL_REVERB_MINIMAL
+#error "Expanded STASIS requires the experimental minimal reverb implementation"
+#endif
+#if CARAVEL_STASIS_EXPAND
+/* These four new settings are RAM-only but have one authoritative store.
+ * int16_t matches the firmware's page_desc / param_turn ABI exactly:
+ * FX > GRAIN and ACTION > STASIS edit the same fields, never shadow copies.
+ * Existing STR/MOTN/LAYER continue to live only in song.g. */
+static struct {
+ int16_t grain;    /* 0=4096, 1=8192, 2=16384 output samples */
+ int16_t quality;  /* 0=44.1k, 1=22.05k, 2=11.025k capture */
+ int16_t scan;     /* 0..127; modulation may offset this */
+ int16_t reverse;  /* 0 forward, 1 reverse per grain */
+} st_expand = {.grain=1u,.quality=0u,.scan=0u,.reverse=0u};
 #endif
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built

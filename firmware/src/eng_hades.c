@@ -15,7 +15,7 @@ static void hades_note_on(track_t *t, voice_t *v)
     v->s[6] = va_pair(clamp(t->p[P_E1] * 256, 8 * 256, 120 * 256), t->p[P_E7] * 258);
     v->s[7] = va_pair(t->p[P_E4] * 256, t->p[P_E0] * 16384);
 }
-static void hades_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+static CARAVEL_AUDIO_HOT void hades_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     if (!n) return;
     const int16_t *p = t->p;

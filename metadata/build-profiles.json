@@ -52,6 +52,30 @@
         "FELUCCA_SLICE": 1
       },
       "purpose": "Existing golden audio, MIDI, UI and engine regressions; distinct from the actual reduced target build."
+    },
+    "caravel_070_prerelease": {
+      "name": "Caravel 0.7.0-rc1 FM-1 hardware preview",
+      "status": "prerelease_hardware_audition_pending",
+      "release_default": false,
+      "flags": {
+        "CARAVEL_REVERB_MINIMAL": 1,
+        "FELUCCA_SLICE": 0,
+        "FELUCCA_FM4": 0,
+        "FELUCCA_HOME_PERF": 1,
+        "FELUCCA_PAIR_MORPH": 1,
+        "FELUCCA_PERF_HW": 1,
+        "CARAVEL_ACTION_BANKS": 1,
+        "FELUCCA_RANDOM_MORPH": 1,
+        "CARAVEL_STASIS_EXPAND": 1
+      },
+      "navigation": "FX SENDS/DELAY -> CHORUS/REVERB -> STASIS GRAIN/LAYER -> INSERT -> SLICER; SELECT chooses the active row. Existing page IDs preserved.",
+      "snapshots": "S1-S4, 128 targets per slot, volatile; packed references preserve target RAM reserves.",
+      "retained": "Full existing synth profile, HOME, Pair, Random Morph, four snapshots, expanded STASIS, SLICER and existing I/O.",
+      "omitted": [
+        "ROOM",
+        "SPRING",
+        "SLICE engine"
+      ]
     }
   },
   "resource_notes": {

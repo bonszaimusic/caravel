@@ -234,14 +234,15 @@ static void motion_set_enabled(track_t *t, uint32_t on)
         for (uint32_t e = 0; e < PF_NFX; e++)
             if (motion_fx_owner[e] == trk_index(t) + 1u) motion_fx_capture(e, 0);
     motion.on = (uint8_t)(on ? motion.on | b : motion.on & ~b);
-    if (!on) { motion_restore(t); motion_fx_reset(t); }
+    if (!on) { motion_restore(t); motion_fx_reset(t);
+#if FELUCCA_HOME_PERF
+        hp_motion_pause(t);
+#endif
+    }
     motion_unguard(f);
 }
-static void motion_clear(track_t *t)
+static void motion_clear_native(track_t *t)
 {
-#if FELUCCA_HOME_PERF
- hp_motion_clear(t);
-#endif
     uint32_t f = motion_guard(), k = trk_index(t), i, n = 0;
     motion_restore(t);
     for (i = 0; i < motion.count; i++)
@@ -255,6 +256,13 @@ static void motion_clear(track_t *t)
     for (uint32_t e = 0; e < PF_NFX; e++)
         if (motion_fx_owner[e] == k + 1u) { motion_fx_owner[e] = 0; motion_fx_recording &= (uint16_t)~PF_BIT(e); }
     motion_unguard(f);
+}
+static void motion_clear(track_t *t)
+{
+#if FELUCCA_HOME_PERF
+    hp_motion_clear(t);
+#endif
+    motion_clear_native(t);
 }
 static void motion_reset(track_t *t) { motion_clear(t); }
 /* a record of kind 0 (automation) or MOTION_LOCK on track t's step / id: a new one, or the one there (of either kind)
@@ -364,11 +372,10 @@ static __attribute__((noinline)) void motion_unlock(track_t *t, uint32_t step, c
 static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, const motion_store_t *m, uint32_t play)
 {
     uint32_t k = trk_index(t), i, w, any = 0;
-#if FELUCCA_HOME_PERF
-    hp_motion_step(t, step);
-#endif
-
     if (!((m->on >> k) & 1u)) return;
+#if FELUCCA_HOME_PERF
+    hp_motion_step(t, step, play);
+#endif
     if (!((motion_base_valid >> k) & 1u)) {
         memcpy(motion_base[k], t->p, sizeof t->p);
         motion_base_valid |= (uint8_t)(1u << k);
@@ -402,7 +409,7 @@ static void motion_snapshot_track(track_t *t, motion_store_t *out)
         if (motion_fx_owner[e] == k + 1u) { motion_fx_snapshot(out, 1u << k); break; }
     motion_unguard(f);
 }
-static int motion_replace_track(track_t *t, const motion_store_t *in)
+static int motion_replace_native(track_t *t, const motion_store_t *in)
 {
     uint32_t k = trk_index(t), n = motion.count - motion_count(t), f, reserved = 0;
     for (uint32_t e = 0; e < PF_NFX; e++)
@@ -410,13 +417,22 @@ static int motion_replace_track(track_t *t, const motion_store_t *in)
     if (!motion_valid(in) || n + in->count + reserved > MOTION_MAX) return 2;
     for (uint32_t i = 0; i < in->count; i++) if ((in->event[i].place >> 6) != k) return 1;
     f = motion_guard();
-    motion_clear(t);
+    motion_clear_native(t);
     memcpy(motion.event + motion.count, in->event, in->count * sizeof in->event[0]);
     motion.count += in->count;
     motion.on |= in->on & (uint8_t)(1u << k);
     motion_fx_meta(&motion);
     motion_unguard(f);
     return 0;
+}
+
+static int motion_replace_track(track_t *t,const motion_store_t *in)
+{
+    int result=motion_replace_native(t,in);
+#if FELUCCA_HOME_PERF
+    if(!result)hp_motion_clear(t);
+#endif
+    return result;
 }
 
 /* ---- 1.1.5: SEQ > AUTOMATION (ui_events.c ev_*): the records of a track as a list, edited one by one ---- */

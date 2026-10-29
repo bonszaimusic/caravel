@@ -171,6 +171,7 @@ static void lcd_init(void) {}
 #include "../../firmware/src/ui_graph.c"
 #include "../../firmware/src/ui_draw.c"
 #include "../../firmware/src/ui_menu.c"
+#include "../../experiments/action-banks/action_control.c"
 #include "../../firmware/src/ui_input.c"
 #include "../../firmware/src/ui_layer.c"
 
@@ -559,6 +560,145 @@ EXPORT uint32_t web_test_fx_edge(uint32_t on)
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }
+#if CARAVEL_ACTION_BANKS
+/* Test-only visibility for real WASM keyboard, project and display integration. */
+EXPORT uint32_t web_action_state(void) {
+ return action_enabled | (action_setup?1u<<1:0u) | ((uint32_t)action_bank<<8) | (action_capture_mask?1u<<16:0u);
+}
+/* Read/write through the same firmware controls the physical encoders use. */
+EXPORT int32_t web_action_setup_value(uint32_t slot) {return action_setup_value(slot);}
+EXPORT void web_action_setup_knob(uint32_t slot,int32_t steps)
+{if(action_enabled && action_setup && slot<4u)action_setup_turn(slot,steps);}
+EXPORT void web_action_setup_toggle(void)
+{if(action_enabled){action_setup=!action_setup;ui.force=1;}}
+EXPORT uint32_t web_action_key_note(uint32_t k) { return k<27u?kb_note[k]:0; }
+EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL]; }
+#if CARAVEL_STASIS_EXPAND
+/* Read-only C/WASM hardware regressions. The browser UI itself always
+ * uses the actual physical HOME/SELECT/K1..K4 and ACTION note gestures. */
+/* Deterministic per-sample test of the ACTUAL DSP anti-alias filter and
+ * cubic overlap. These test-only globals are never used by hardware or the
+ * live emulator audio path. */
+static int32_t stasis_probe_filter[3],stasis_probe_sum;
+static uint32_t stasis_probe_count;
+EXPORT void web_stasis_probe_reset(void)
+{
+ memset(stasis_probe_filter,0,sizeof stasis_probe_filter);
+ stasis_probe_sum=0;stasis_probe_count=0;
+}
+EXPORT int32_t web_stasis_probe_capture(int32_t value,uint32_t quality)
+{
+ quality=quality>2u?2u:quality;
+ value=clamp(value,-32768,32767);
+ stasis_probe_sum+=stasis_record_prefilter(value,stasis_probe_filter,quality);
+ if(++stasis_probe_count==(1u<<quality)){
+  int32_t result=stasis_probe_sum>>(quality);
+  stasis_probe_sum=0;stasis_probe_count=0;
+  return result;
+ }
+ return 0x10000; /* no decimated sample yet */
+}
+EXPORT uint32_t web_stasis_grain_envelope(uint32_t triangle,uint32_t grain)
+{
+ grain=grain>2u?2u:grain;
+ uint32_t half=2048u<<grain;
+ return stasis_grain_weight(triangle>half?half:triangle,grain);
+}
+/* Native FX > GRAIN page verification; values are the same C fields as
+ * ACTION > STASIS > GRAIN (not mirrored emulator settings). */
+EXPORT uint32_t web_stasis_grain_page(void)
+{
+ for(uint32_t i=0;i<NPAGES;i++)
+  if(PAGES[i].graph==GR_STGRAIN)return i;
+ return 0xFFFFFFFFu;
+}
+EXPORT uint32_t web_stasis_grain_visible(void)
+{
+ uint32_t page=web_stasis_grain_page();
+ return page<NPAGES && page_visible(page);
+}
+EXPORT void web_stasis_grain_open(void)
+{
+ uint32_t p=web_stasis_grain_page();
+ if(p<NPAGES&&page_visible(p)){ui.home=0;ui.page=p;ui.force=1;page_entered();}
+}
+EXPORT uint32_t web_stasis_granular_get(uint32_t field)
+{
+ switch(field){
+ case 0:return st_expand.grain;
+ case 1:return st_expand.scan;
+ case 2:return st_expand.quality;
+ case 3:return st_expand.reverse;
+ case 4:return st.valid;
+ case 5:return st.w;
+ case 6:return st_layer.valid;
+ case 7:return st_layer.phase;
+ case 8:return st.active_quality;
+ case 9:return st.active_grain;
+ case 10:return st.gr_ready;
+ case 11:return st.auto_hold;
+ case 12:return stasis_min_history();
+ case 13:return mod_stasis.scan;
+ case 14:return action_stasis_grain_page;
+ default:return 0;
+ }
+}
+EXPORT void web_stasis_test_type(uint32_t type)
+{song.g[G_RTYPE]=(int16_t)clamp(type,0,3);ui.force=1;}
+EXPORT void web_stasis_test_hold(uint32_t hold)
+{song.g[G_DRLVL]=(int16_t)!!hold;ui.force=1;}
+EXPORT uint32_t web_stasis_scan_mod(uint32_t source,int32_t amount)
+{
+ if(source==0u){trk[0].p[P_M1SRC]=0;trk[0].p[P_M1DST]=0;trk[0].p[P_M1AMT]=0;}
+ else {
+  trk[0].p[P_M1SRC]=(int16_t)clamp(source,1,MS_N-1);
+  trk[0].p[P_M1DST]=MD_STSCAN;
+  trk[0].p[P_M1AMT]=(int16_t)clamp(amount,-64,63);
+ }
+ return MD_STSCAN;
+}
+#endif
+EXPORT uint32_t web_action_mute(uint32_t t) { return t<NTRK?(uint32_t)trk[t].p[P_MUTE]:0; }
+#if FELUCCA_RANDOM_MORPH
+EXPORT uint32_t web_action_random_state(void) { return hp_rm.state; }
+EXPORT uint32_t web_action_random_count(void) { return hp_rm.count; }
+EXPORT uint32_t web_action_random_cell(uint32_t index,uint32_t field)
+{
+ if(index>=hp_rm.count)return 0xFFFFFFFFu;
+ const hp_rm_cell_t*c=&hp_rm.cell[index];
+ switch(field){
+ case 0:return c->ref.kind;
+ case 1:return c->ref.id;
+ case 2:return c->ref.track;
+ case 3:return (uint32_t)(int32_t)c->from;
+ case 4:return (uint32_t)(int32_t)c->to;
+ case 5:return c->released;
+ case 6:return c->ref.aux;
+ default:return 0;
+ }
+}
+/* Diagnostics expose actual descriptors/table, not hardcoded cutoff limits. */
+EXPORT int32_t web_action_find_cutoff(uint32_t track)
+{
+ if(track>=NTRK)return -1;
+ for(uint32_t id=P_E0;id<P_E0+8u;id++)
+  if(track_desc(&trk[track],id)->fmt==F_CUTOFF)return (int32_t)id;
+ return -1;
+}
+EXPORT uint32_t web_action_cutoff_hz(uint32_t index)
+{ return CUTOFF_HZ[index&127u]; }
+EXPORT uint32_t web_action_engine_base(void){return P_E0;}
+
+/* Read-only snapshot diagnostics; all writes still use the real physical
+ * A4 tap/hold and A3 recall pathways in action_control.c. */
+EXPORT uint32_t web_action_snapshot_slot(void) { return action_snap_slot; }
+EXPORT uint32_t web_action_snapshot_count(uint32_t slot)
+{ return hp_rm_snapshot_count(slot); }
+EXPORT int32_t web_action_snapshot_value(uint32_t slot,uint32_t index)
+{ return slot<HP_RM_SNAP_SLOTS && index<hp_rm_snap[slot].count
+  ? hp_rm_snap[slot].values[index] : -32768; }
+#endif
+#endif
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return song.playing; }
 EXPORT uint32_t web_sample_rate(void) { return FS; }

@@ -42,7 +42,7 @@ static uint32_t sem_tune(uint32_t inc, int32_t q20)
     return inc + (uint32_t)((int32_t)(inc >> 11) * q20 / 512);
 }
 
-static void sem_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+static CARAVEL_AUDIO_HOT void sem_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     const int16_t *p = t->p;
     int32_t vint = p[P_E7], drift, fixed, cut, k;

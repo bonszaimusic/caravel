@@ -45,10 +45,29 @@ static void confirm_open(uint32_t kind, uint32_t trk);
 #define EV_NUDGE 0xFCu                                  /* a NUDGE, */
 #define EV_CHANCE 0xFDu                                 /* a CHANCE, */
 #define EV_RATCH 0xFEu                                  /* a RATCH (0xFF: none) */
-enum { EVK_TOP, EVK_REC, EVK_CHANCE, EVK_RATCH, EVK_ADD, EVK_NUDGE, EVK_QNT, EVK_VEL };   /* (NUDGE, QUANTIZE: 1.2,
+enum { EVK_TOP, EVK_REC, EVK_CHANCE, EVK_RATCH, EVK_ADD, EVK_NUDGE, EVK_QNT, EVK_VEL, EVK_PERF };   /* (NUDGE, QUANTIZE: 1.2,
                                                                                            * #162; VEL: 1.5, #173) */
 #define EVC(k, a) ((uint16_t)((uint32_t)(k) << 8 | (a)))   /* a row: its kind, its record (EVK_REC) or its step */
+#if FELUCCA_HOME_PERF
+#define EV_ROWS (3u + MOTION_MAX + HP_EVENTS + 4u * NSTEP)
+#else
 #define EV_ROWS (3u + MOTION_MAX + 4u * NSTEP)
+#endif
+static uint32_t ev_count(const track_t *t,int locks)
+{
+ uint32_t n=locks?motion_lock_count(t):motion_count(t);
+#if FELUCCA_HOME_PERF
+ n+=hp_auto_count(t,locks);
+#endif
+ return n;
+}
+#if FELUCCA_HOME_PERF
+static const char *ev_perf_name(uint32_t c,int short_name)
+{
+ static const char *const mac[]={"MAC 1","MAC 2","MAC 3","MAC 4"};
+ return c<4?mac[c]:c==6?(short_name?"PR MRF":"PAIR MORPH"):(short_name?"PR MOT":"PAIR MOTION");
+}
+#endif
 static int ev_sid(uint32_t id) { return id >= EV_VEL && id <= EV_RATCH; }   /* a step's own field */
 static int ev_skd(uint32_t k) { return k == EVK_CHANCE || k == EVK_RATCH || k == EVK_NUDGE || k == EVK_VEL; }
 
@@ -210,6 +229,10 @@ static uint32_t ev_list(uint16_t *rw)
                 rw[n++] = EVC(SK[k], s);
         for (; j < m && (motion.event[idx[j]].place & 63u) == s; j++)
             rw[n++] = EVC(EVK_REC, idx[j]);
+#if FELUCCA_HOME_PERF
+        for(uint32_t h=0;h<hp.events;h++)if(hp.event[h].track==song.sel&&hp.event[h].step==s)
+            rw[n++]=EVC(EVK_PERF,h);
+#endif
     }
     rw[n++] = EVC(EVK_ADD, 0);
     return n;
@@ -227,6 +250,9 @@ static uint32_t ev_cur(uint16_t *rw, uint32_t *np)
 static uint32_t ev_step_of(uint32_t c)
 {
     uint32_t k = c >> 8, a = c & 0xFFu;
+#if FELUCCA_HOME_PERF
+    if(k==EVK_PERF)return hp.event[a].step;
+#endif
     return k == EVK_REC ? motion.event[a].place & 63u : k == EVK_ADD ? ui.ev_step : k == EVK_QNT ? 0u : a;
 }
 
@@ -272,6 +298,10 @@ static uint32_t ev_sig(void)
         if (c >> 8 == EVK_REC)
             c ^= (uint32_t)motion.event[c & 0xFFu].place << 24 | (uint32_t)motion.event[c & 0xFFu].param << 16 |
                  (uint32_t)(uint16_t)motion.event[c & 0xFFu].value << 8;
+    #if FELUCCA_HOME_PERF
+        else if(c>>8==EVK_PERF){const hp_event_t *e=&hp.event[c&255u];
+            c^=(uint32_t)e->step<<24|(uint32_t)(e->control|(e->lock<<7))<<16|(uint32_t)(uint16_t)e->value; }
+#endif
         else if (ev_skd(c >> 8))
             c ^= (uint32_t)ev_sval(&t->step[c & 0xFFu], c >> 8) << 16;
         h = (h ^ c) * 16777619u;
@@ -289,6 +319,9 @@ static const char *ev_act_name(void)
         return "CLEAR";
     if (k == EVK_ADD)
         return ui.ev_id != EV_VEL ? "ADD" : ui.ev_vel ? "HIDE" : "SHOW";
+#if FELUCCA_HOME_PERF
+    if(k==EVK_PERF)return hp.event[c&255u].lock?"AUTO":"LOCK";
+#endif
     if (k != EVK_REC)
         return "--";
     if (MOTION_IS_FX(&motion.event[c & 0xFFu])) return "--";
@@ -301,9 +334,12 @@ static int ev_act_ready(void)
     if (chain_busy())
         return 0;
     if (k == EVK_TOP)
-        return motion_count(TSEL) != 0u;
+        return ev_count(TSEL,0) != 0u;
     if (k == EVK_ADD)
         return ev_sid(ui.ev_id) || (motion.count < MOTION_MAX && ev_id_ok(TSEL, ui.ev_id));
+#if FELUCCA_HOME_PERF
+    if(k==EVK_PERF)return 1;
+#endif
     return k == EVK_REC && !MOTION_IS_FX(&motion.event[c & 0xFFu]);
 }
 
@@ -394,6 +430,20 @@ static void ev_knob(uint32_t slot, int32_t s)
                 ui.ev_id = (uint8_t)ev_id_step(t, NSTEP, ui.ev_id, s > 0 ? 1 : -1);
         return;
     }
+#if FELUCCA_HOME_PERF
+    if(k==EVK_PERF){
+        uint32_t h=c&255u;hp_event_t e=hp.event[h];uint32_t to=e.step;int32_t v=e.value;
+        if(slot==1u){
+            int32_t at=e.step;uint32_t m=(uint32_t)(s>0?s:-s),top=ev_len(t)>to?ev_len(t):to+1u;
+            while(m--){do at+=s>0?1:-1;while(at>=0&&at<(int32_t)top&&hp_auto_find(song.sel,(uint32_t)at,e.control)>=0);
+                if(at<0||at>=(int32_t)top)break;to=(uint32_t)at;}
+        }else if(slot==3u){const param_desc_t *pd=hp_vdesc(HP_VFIRST+e.control);
+            v=param_turn(pd,v,accel(EN_K1+slot,s,pd->fmt==F_ENUM?0:pd->max-pd->min));
+        }else return;
+        if(to==e.step&&v==e.value)return;
+        perf_undo_take(t,0x800u|slot|h<<4);hp_auto_edit(h,to,v,e.lock);motion_undo_done(t);ev_follow(c);return;
+    }
+#endif
     if (k != EVK_REC) {
         ev_step_knob(t, slot, s, c);
         return;
@@ -470,7 +520,7 @@ static void ev_oct(void)
     if (ev_busy())
         return;
     if (k == EVK_TOP) {
-        if (!motion_count(t))
+        if (!ev_count(t,0))
             ui_message("NOTHING TO CLEAR");
         else
             confirm_open(CF_CLEAR_MOTION, song.sel);
@@ -519,6 +569,11 @@ static void ev_oct(void)
         ui_message("LOCK ADDED");
         return;
     }
+#if FELUCCA_HOME_PERF
+    if(k==EVK_PERF){hp_event_t e=hp.event[c&255u];perf_undo_take(t,0);
+        hp_auto_edit(c&255u,e.step,e.value,!e.lock);motion_undo_done(t);
+        ui_message(e.lock?"NOW AUTOMATION":"NOW A LOCK");return;}
+#endif
     if (k == EVK_REC) {
         const motion_event_t e = motion.event[c & 0xFFu];
         if (MOTION_IS_FX(&e)) return;
@@ -549,6 +604,9 @@ static void ev_delete(void)
     }
     if (ev_busy())
         return;
+#if FELUCCA_HOME_PERF
+    if(k==EVK_PERF){perf_undo_take(t,0);hp_auto_delete(c&255u);motion_undo_done(t);ui.ev_row=(uint16_t)r;ui_message("DELETED");return;}
+#endif
     if (k == EVK_REC) {
         e = &motion.event[c & 0xFFu];
         if (MOTION_IS_FX(e) && motion_fx_delete_ok(t, c & 0xFFu)) {

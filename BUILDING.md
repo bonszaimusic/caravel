@@ -154,6 +154,26 @@ full ROOM/SPRING/SLICE reference. STASIS shares the ordinary delay allocation;
 tempo DELAY cannot run with it. See [the STASIS guide](docs/tutorials/README.md)
 for controls, safe project substitutions and the remaining hardware checks.
 
+## Prerelease DSP in executable RAM
+
+The 0.7.0-rc6 target defaults to `CARAVEL_AUDIO_RAM=1`. It moves selected
+DRONE, SEM, HADES, STASIS and HALL functions into `.audio_text` in the existing
+24 KiB RAMTEXT window. The flash-off driver remains in `.ram_text` with its
+strict no-call check. Worker stacks follow the code and retain their full size;
+the separate 8 KiB debug window, data/bss and pool budgets remain unchanged.
+
+LLVM optimization runs before DSP placement so the old compiler still inlines
+small XIP helpers. `tools/audio_ram_ir.py` then places seven retained roots and
+uses volatile local function pointers for calls across the pi32v2 branch range.
+The stack slot is allocated once per caller, including calls in loops.
+`tools/check_audio_ram.py` checks linked addresses, exact packaged code bytes,
+the target startup-copy loop/fence, executable guard window and worker stacks.
+
+`CARAVEL_AUDIO_RAM=0 sh build.sh --binary-version 0.7.0-rc6` retains XIP DSP
+placement for development comparisons. The distributed prerelease uses the
+default RAM variant. This switch is a build option, not a device setting or a
+claim of measured hardware improvement. Host/WASM retain their normal placement.
+
 ## Samples
 
 The CC0 instrument samples that the SAMPLE engine uses are in `assets/samples-cc0/`
