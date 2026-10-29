@@ -403,6 +403,12 @@ static void lfo_cards(const page_t *pg)
 #endif
             const aafont_t *vf = &AF_M;
             param_format(d, v, val, &unit);
+#if CARAVEL_STASIS_EXPAND
+            /* The generic formatter intentionally limits values to five
+             * letters. This view has room for the complete effect name. */
+            if(rps[row] && rps[row]->id[0]==G_RTYPE && !col && v==3)
+                str_cpy(val,"STASIS",sizeof val);
+#endif
             if (rps[row] && rps[row]->graph == GR_MOD && col == 2u) {   /* MOD's DST: E1..E8 by the engine's own labels (mod.c mod_dst_name) */
                 str_cpy(val, mod_dst_name(TSEL, v), sizeof val);
                 unit = "";
