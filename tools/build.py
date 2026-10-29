@@ -208,7 +208,7 @@ def build_app():
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
                  "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1", "CARAVEL_REVERB_MINIMAL",
-                 "CARAVEL_ACTION_BANKS", "FELUCCA_RANDOM_MORPH", "CARAVEL_STASIS_EXPAND"):
+                 "CARAVEL_ACTION_BANKS", "FELUCCA_RANDOM_MORPH", "CARAVEL_STASIS_EXPAND", "CARAVEL_AUDIO_RAM"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -221,8 +221,9 @@ def build_app():
     # felucca.c goes to LLVM IR without the optimizer, the main-loop functions (UI, stores, editor) are
     # marked minsize (tools/size_fns.py), then the IR is compiled at -Os. FELUCCA_SIZE=0: -Os everywhere
     size = os.environ.get("FELUCCA_SIZE") != "0"
+    audio_ram = os.environ.get("CARAVEL_AUDIO_RAM", "1") != "0"
     cmain = (("cc", *flags, "-S", "-emit-llvm", "-Xclang", "-disable-llvm-optzns", "-c",
-              FW / "src" / "felucca.c", "-o", OUT / "felucca.ll") if size else
+              FW / "src" / "felucca.c", "-o", OUT / "felucca.ll") if size or audio_ram else
              ("cc", *flags, "-c", FW / "src" / "felucca.c", "-o", OUT / "felucca.o"))
     (OUT / "fm1_cpu1.o").unlink(missing_ok=True)
     tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
@@ -233,16 +234,26 @@ def build_app():
     if size:
         subprocess.run([sys.executable, SRC / "tools" / "size_fns.py", OUT / "felucca.ll", OUT / "felucca_size.ll"],
                        check=True)
-        tc("cc", *[f for f in flags if not f.startswith(("-I", "-D", "-W"))], "-c",
-           OUT / "felucca_size.ll", "-o", OUT / "felucca.o")
+    if size or audio_ram:
+        codeflags = [f for f in flags if not f.startswith(("-I", "-D", "-W"))]
+        source_ir = OUT / ("felucca_size.ll" if size else "felucca.ll")
+        if audio_ram:
+            tc("cc", *codeflags, "-S", "-emit-llvm", source_ir, "-o", OUT / "felucca_opt.ll")
+            subprocess.run([sys.executable, SRC / "tools" / "audio_ram_ir.py",
+                            OUT / "felucca_opt.ll", OUT / "felucca_audio.ll"], check=True)
+            tc("cc", *codeflags, "-Xclang", "-disable-llvm-optzns", "-c",
+               OUT / "felucca_audio.ll", "-o", OUT / "felucca.o")
+        else:
+            tc("cc", *codeflags, "-c", source_ir, "-o", OUT / "felucca.o")
     elf = OUT / "felucca.elf"
     tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
        *([OUT / "fm1_cpu1.o"] if CPU2 else []), OUT / "felucca.o", "-o", elf)
-    for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin"):
+    for sect in ("text.bin", "data.bin", "ramtext.bin", "audiotext.bin", "c1text.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".data", elf, OUT / "data.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".ram_text", elf, OUT / "ramtext.bin"),
+                               *([("common/bin/objcopy", "-O", "binary", "-j", ".audio_text", elf, OUT / "audiotext.bin")] if audio_ram else []),
                                *([("common/bin/objcopy", "-O", "binary", "-j", ".c1_text", elf, OUT / "c1text.bin")]
                                  if CPU2 else []),
                                ("common/bin/objdump", "-t", elf),
@@ -254,8 +265,8 @@ def build_app():
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
     img = bytearray((OUT / "text.bin").read_bytes())
-    # .ram_text, .c1_text and .data follow .text at their load addresses; crt0 / main copy them by words
-    for sect, lname in (("ramtext.bin", "_rt_load"), ("c1text.bin", "_c1_load"), ("data.bin", "_data_load")):
+    # RAM code and data follow .text at their load addresses; main copies each by words
+    for sect, lname in (("ramtext.bin", "_rt_load"), ("audiotext.bin", "_audio_load"), ("c1text.bin", "_c1_load"), ("data.bin", "_data_load")):
         load = symv(lname)
         if load % 4:
             raise SystemExit(f"{lname} {load:#x} is not word aligned")
@@ -438,6 +449,7 @@ def main():
         ota = ldr.result()
     img, syms, dis, rt = build_app()
     errors, notes = check(img, syms, dis, rt)
+    subprocess.run([sys.executable, SRC / "tools/check_audio_ram.py"], check=True)
     if os.environ.get("FELUCCA_PERF_HW") == "1":
         subprocess.run([sys.executable, SRC / "tools/check_perf_audio.py", OUT / "felucca.dis"], check=True)
         subprocess.run([sys.executable, SRC / "tests/target_budget.py", OUT / "felucca.dis",

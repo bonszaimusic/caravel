@@ -407,7 +407,7 @@ static inline void hall_end_lp(const int16_t *b, int16_t *y, uint32_t n, int32_t
  * sample, low cut, diffusers (hl.bx); the lines' ends at their drifting taps, low-passed, scaled (hl.y); the
  * outputs and the matrix; back into the lines; the outputs back to 44.1 kHz. */
 #define HL_LFO ((uint32_t)(0.37 * CTL / FS * 4294967296.0))   /* the drift: 0.37 Hz (even lines), 0.74 Hz (odd) */
-static __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *out, uint32_t n)
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *out, uint32_t n)
 {
     int16_t *b = rev_comb, *a = rev_ap;
     uint32_t i, k, s, m, d;
@@ -776,7 +776,7 @@ static inline void stasis_transport_start(void)
 /* Independent STASIS texture: the raw short grains never substitute for the
  * long decay; they slowly excite HALL. No new audio delay buffers required.
  * Wet stereo adds a quiet textured layer over the already diffused tail. */
-static __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_t *wet, uint32_t n)
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_t *wet, uint32_t n)
 {
     int32_t hall_in[CTL], mid[CTL], side[CTL];
 #if CARAVEL_REVERB_MINIMAL

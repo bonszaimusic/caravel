@@ -38,10 +38,10 @@
 extern char _guard0[], _ustack_lo[], _guard1[], _sstack_lo[], _sstack_top[], _etext[];
 #if FM1_CPU1_USED
 extern uint32_t _rt_start[], _rt_end[], _c1_end[];
-#define FM1_RAMCODE_END _c1_end                  /* .ram_text, then .c1_text (the second core's loop, app.ld) */
+#define FM1_RAMCODE_END _c1_end                  /* flash driver, hot audio, then the worker loop (app.ld) */
 #else
-extern uint32_t _rt_start[], _rt_end[];
-#define FM1_RAMCODE_END _rt_end
+extern uint32_t _rt_start[], _rt_end[], _audio_end[];
+#define FM1_RAMCODE_END _audio_end
 #endif
 
 enum { FM1_GUARD_STACK = 1, FM1_GUARD_WRITE = 2, FM1_GUARD_BUS = 4, FM1_GUARD_PC = 8 };
@@ -82,7 +82,7 @@ static void fm1_guard_enable(uint32_t which)
     if (which & FM1_GUARD_PC) {
         FM1_PC_LIMIT0_L = 0x02000120u;
         FM1_PC_LIMIT0_H = (uint32_t)(uintptr_t)_etext;
-        {   /* RAM code (.ram_text, .c1_text: one window, app.ld); with none, repeat the XIP window */
+        {   /* RAM code (.ram_text, .audio_text, .c1_text: one window, app.ld); with none, repeat the XIP window */
             volatile uint32_t rs = (uint32_t)(uintptr_t)_rt_start, re = (uint32_t)(uintptr_t)FM1_RAMCODE_END;
             FM1_PC_LIMIT1_L = re > rs ? rs : 0x02000120u;
             FM1_PC_LIMIT1_H = re > rs ? re - 1u : (uint32_t)(uintptr_t)_etext;

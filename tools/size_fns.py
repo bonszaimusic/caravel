@@ -101,6 +101,7 @@ def main(src, dst):
                       "master_out", "dc_block", "lowcut1"})
         # RC5: per-sample capture/read helpers must use audio inlining,
         # not the UI size policy (which emitted nested calls per grain tap).
+        audio.update({"osc_sine", "sine_i"})
         audio.update({"stasis_block", "stasis_read", "stasis_grain_read", "stasis_grain_weight",
                       "stasis_record_prefilter", "stasis_layer_tick", "stasis_layer_mix_at",
                       "stasis_record_factor", "stasis_grain_samples", "stasis_lag_samples",

@@ -36,6 +36,7 @@ enum { FM1_IRQ_EXCEPTION = 1, FM1_IRQ_ALNK0 = 11, FM1_IRQ_SPI1 = 16, FM1_IRQ_UAR
 
 static inline uint32_t fm1_icfg(void) { uint32_t v; __asm__ volatile("%0 = icfg" : "=r"(v)); return v; }
 static inline void fm1_icfg_set(uint32_t v) { __asm__ volatile("icfg = %0" ::"r"(v) : "memory"); }
+static inline void fm1_code_sync(void) { __asm__ volatile("csync" ::: "memory"); }
 static inline void fm1_irq_off(void) { __asm__ volatile("cli" ::: "memory"); }
 static inline void fm1_irq_on(void) { __asm__ volatile("csync\n\tsti" ::: "memory"); }
 

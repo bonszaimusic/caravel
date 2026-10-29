@@ -77,7 +77,7 @@ static void drone_note_on(track_t *t, voice_t *v)
     drone_controls(t, 0, s->ctrl);
     s->ready = 1u; /* first render installs pitch without a glide from zero */
 }
-static __attribute__((noinline)) void drone_legacy_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void drone_legacy_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     if (!n) return;
     drone_part_t *s = drone_state(t);
@@ -312,7 +312,7 @@ static const uint16_t BREATH_INC[4] = {16556u, 22400u, 30191u, 41878u};   /* 0.1
  * per-cell COUPLE and CHAR factors that follow from it, and BREATH (each cell's loudness moves on its own slow
  * triangle, 0.17 / 0.23 / 0.31 / 0.43 Hz, up to 25 % deep at DRIFT 127; DRIFT 0 takes nothing). A call of its
  * own: the sample loop stays small, and the cost it is budgeted at (tests/target_budget.py) is the per-sample one. */
-static __attribute__((noinline)) void drone_slow_tick(drone_part_t *s, const int32_t *rough_goal, int32_t drift)
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void drone_slow_tick(drone_part_t *s, const int32_t *rough_goal, int32_t drift)
 {
     int32_t bdepth = mulq15(8192, drift);
     for (uint32_t k = 0; k < 4u; k++) {
@@ -326,7 +326,7 @@ static __attribute__((noinline)) void drone_slow_tick(drone_part_t *s, const int
         s->chrk[k] = c > 32512 ? 32512 : c;
     }
 }
-static __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, int32_t *out,
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void drone_cell_render(track_t *t, voice_t *v, int32_t *out,
                                                        uint32_t n, const vmod_t *m)
 {
     drone_part_t *s = drone_state(t);

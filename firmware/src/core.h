@@ -8,6 +8,18 @@
 #include <stdint.h>
 #include "voice_policy.h"
 
+/* Hot DSP may run from the existing executable RAM window on the FM-1.
+ * Keep host/WASM placement unchanged; no DSP arithmetic depends on it.
+ * The build places these roots after LLVM inlining and bridges far calls. */
+#ifndef CARAVEL_AUDIO_RAM
+#define CARAVEL_AUDIO_RAM 0
+#endif
+#if CARAVEL_AUDIO_RAM && defined(__PI32V2__)
+#define CARAVEL_AUDIO_HOT __attribute__((noinline))
+#else
+#define CARAVEL_AUDIO_HOT
+#endif
+
 /* Product identity. Caravel is a fork of Felucca 1.6.1 (NOTICE, LICENSING.md); these are display strings only. Identifiers
  * (FELUCCA_*, felucca.c), data formats, package markers and the Felucca-Engines names stay as in Felucca, so settings,
  * projects, presets and tools remain compatible. "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments:

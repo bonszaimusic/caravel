@@ -1,8 +1,45 @@
-# Caravel 0.7.0-rc5 — FM-1 Testversion
+# Caravel 0.7.0-rc6 — FM-1 Testversion
 
 Diese Vorabversion enthält echte, installierbare FM-1-Firmware. Sie ist für den
 angeforderten Gerätetest gedacht; ein Hör-, Last- und Installationstest am
 physischen FM-1 steht noch aus. Der stabile 0.6.0-Release wird nicht ersetzt.
+
+## Gegenüber rc5: Audioschleifen im Code-RAM
+
+Der Gerätetest zeigt auch mit rc5 weiter Knarzen. Die neue Messung meldet
+3576 überschrittene Audiofristen in 30 Sekunden, 92,0% mittlere Last und
+108,1% Spitze; CPU2 läuft ohne Fehler. TIDE und CELL RNG knarzen laut
+Rückmeldung gleichermaßen. Der Patch unterscheidet sich zwischen den
+Aufzeichnungen, deshalb ist dies kein kontrollierter Versionsvergleich.
+
+rc6 testet einen anderen Ansatz: Die rechenintensiven DRONE-, SEM-, HADES-,
+STASIS- und HALL-Schleifen werden aus dem vorhandenen ausführbaren RAM
+statt aus dem Flash ausgeführt. Das soll Flash-/Cache-Zugriffe auf dem
+kritischen Audiopfad reduzieren. Ein tatsächlicher CPU-Gewinn ist erst am
+FM-1 messbar; rc6 ist noch kein bestätigter Knarz-Fix.
+
+Der Standardbuild belegt dafür rund 13 KiB bisher freien Code-RAM. Die
+Audio-/Projekt-Datenbudgets, vier KiB Worker-Stack, Schutzabstände und der
+separate Debug-Bereich werden nicht verkleinert. Klangformeln, Sample-Rate,
+Anzahl der Zellen/Stimmen und Modulationsraten bleiben unverändert.
+
+Die Platzierung erfolgt nach dem LLVM-Inlining. Aufrufe über die begrenzte
+Flash/RAM-Sprungweite verwenden lokale volatile Funktionszeiger, nach dem
+Vorbild des vorhandenen Flash-Treibers. Jede aufrufende Funktion verwendet
+höchstens einen solchen temporären Stack-Platz. Die unveränderte strenge
+Flash-off-Prüfung gilt weiterhin ausschließlich für den Flash-Treiber.
+
+Der Build prüft die tatsächlichen ELF-Grenzen, den vollständigen Code im
+Firmwarepaket, die begrenzte Startkopie vor IRQ-Freigabe, die Sichtbarkeitsbarriere,
+das PC-Schutzfenster und getrennte Worker-Stacks. Ein nativer ABI-Test vergleicht
+direkte und über Zeiger ausgeführte Aufrufketten mit einer Million Schleifen.
+Zusätzlich werden RAM-DSP mit einem Kern und die XIP-Variante gebaut, bevor
+der eigentliche Release erneut mit den Standardflags gebaut wird.
+
+Bitte nach der Installation unter INFO rc6 prüfen und den bisherigen
+Knarzfall mit Pair und ARP spielen. Sobald er wieder auftritt, dieselbe
+30-Sekunden-Diagnose aufnehmen. rc5 bleibt als Rückweg verfügbar. Ein
+weiterer TIDE-/CELL-RNG-Presetvergleich ist dafür nicht erforderlich.
 
 ## Audiolast gegenüber rc4: STASIS und DRONE
 
@@ -31,11 +68,8 @@ Der ARP-Lasttest umfasst eine und zwei gehaltene Noten und vergleicht die
 serielle mit der automatischen Dual-Core-Ausgabe. Native Laufzeiten und
 statische Zielcode-Zählungen sind keine FM-1-Lastmessung.
 
-Für den Gerätetest denselben gespeicherten Klangaufbau einschließlich ARP,
-INSERT, STASIS-Fenster und Grain-Werten wie bei rc4 verwenden. Nach dem Update
-unter INFO rc5 prüfen, 30 Sekunden während des Knarzens messen und die neue
-USB-Diagnose exportieren. Erst damit lässt sich die tatsächliche Entlastung
-beurteilen. RETURN pro Track/Zeile aus rc4 bleibt enthalten.
+Die rc5-Optimierungen und RETURN pro Track/Zeile bleiben in rc6 enthalten.
+Die aktuelle Anleitung zum Gerätetest steht im Abschnitt zu rc6 oben.
 
 ## Korrektur gegenüber rc3: RETURN pro Track/Zeile
 
@@ -99,7 +133,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
 
 1. Projekte und Einstellungen vor dem Update exportieren und die bisherige
    funktionierende Firmware für den Rückweg bereithalten.
-2. Das vollständige `Caravel-0.7.0-rc5-FM1-Testpaket.zip` herunterladen und
+2. Das vollständige `Caravel-0.7.0-rc6-FM1-Testpaket.zip` herunterladen und
    entpacken. Am Mac `FM1-Installer.command` öffnen; der Starter benötigt Python 3
    und öffnet den passenden 0.7.0-Installer in Google Chrome. Das Terminal bleibt
    bis zum Abschluss offen. Alternativ im entpackten Ordner ausführen:
@@ -109,7 +143,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
    Der enthaltene Installer ist an das geprüfte 0.7.0-Paket gebunden; der
    öffentliche 0.6.0-Installer wird nicht ersetzt. Die einzelne `.fwsc` unter
    `firmware/` enthält App und Update-Loader für alternative Installationswege.
-3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc5` prüfen.
+3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc6` prüfen.
 4. Zunächst mit einem leeren Projekt testen; gewünschte alte Projekte erst
    danach laden. Eine fehlgeschlagene Installation kann den FM-1-Transporter
    zur Wiederherstellung erfordern; Downgrade allein garantiert keine Rettung.
@@ -152,6 +186,6 @@ unerwartete Pegeländerungen, hängende Noten und die CPU-Anzeige achten.
 Der Release enthält passendes vollständiges Quellarchiv einschließlich
 Felucca-Engines, Prüfsummen, Buildnachweis und Lizenztexte. Das Quellarchiv
 lässt sich mit den Voraussetzungen aus BUILDING.md über
-`sh build.sh --binary-version 0.7.0-rc5` nachbauen. Der Ziel-Einstiegspunkt
+`sh build.sh --binary-version 0.7.0-rc6` nachbauen. Der Ziel-Einstiegspunkt
 aktiviert ACTION, Random Morph und erweitertes STASIS für diese Vorabversion.
 Die automatischen Tests ersetzen keine Messung auf dem echten FM-1.
