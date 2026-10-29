@@ -135,7 +135,9 @@ static void hp_rm_drop_context(void)
 {
  if(hp_rm.count){
   hp_rm.used=(uint16_t)(hp_rm.used-hp_rm.count);
-  memmove(hp_rm.cell,hp_rm.cell+hp_rm.count,hp_rm.used*sizeof(hp_rm.cell[0]));
+  /* Destination precedes source; copy whole cells forward. The target
+   * runtime provides memcpy but no memmove. */
+  for(uint32_t i=0;i<hp_rm.used;i++)hp_rm.cell[i]=hp_rm.cell[i+hp_rm.count];
  }
  hp_rm.count=0;hp_rm.phase=0;hp_rm.state=HP_RM_IDLE;
 }
