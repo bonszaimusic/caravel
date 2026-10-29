@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0] - 2026-10-29
+
+- Move optimized DRONE/SEM/HADES/STASIS/HALL audio roots into checked executable RAM; retain stack/debug/data guards and direct-versus-far-call ABI regression gates. The owner reports clean rc6 playback and indicated peak load around 70% in the tested setup, without a new comparable USB trace.
+- Reduce STASIS sample-loop call overhead and redundant DRONE calculations, preserving differential PCM/state results. Balance newly started voices before the first dual-core audio block.
+- Smooth STASIS grain joins, improve LONG/DRONE prefiltering, protect reverse LIVE grain reads and fade capture startup. Group GRAIN/LAYER and place CHORUS before REVERB.
+- Capture RANDOM targets from the selected track/row and retain independent RETURN origins in the existing bounded arena.
+- Expose Pair/HOME macro events and locks in SEQ > AUTOMATION, including counts, step/value/kind editing, delete and undo. PLAY OFF pauses those events and restores their baseline. Pair events/locks belong to canonical member A, visible in the Pair footer.
+- Retain other tracks during automation undo/redo and reject full-capacity restoration without eviction. Reuse the HOME edit history buffer without increasing target data/pool allocations.
+- S1–S4 snapshots remain RAM-only; permanent project snapshot storage is deferred by request. Captured STASIS audio is also volatile.
+
 ## 0.7.0-rc1 — FM-1 hardware preview
 
 - ACTION banks, Random Morph safeguards and four volatile S1–S4 snapshots now included in the target build.
