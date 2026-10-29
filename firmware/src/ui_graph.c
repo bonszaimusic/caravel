@@ -1502,9 +1502,9 @@ static void graph_events(void)
         if (c >> 8 == EVK_TOP) {                     /* PLAY ON / OFF, the counts: "EVENT 3  LOCK 2" */
             char b[24];
             str_cpy(b, "EVENT ", sizeof b);
-            fmt_int(b + str_len(b), (int32_t)(motion_count(t) - motion_lock_count(t)));
+            fmt_int(b + str_len(b), (int32_t)(ev_count(t,0) - ev_count(t,1)));
             str_cpy(b + str_len(b), "  LOCK ", sizeof b - str_len(b));
-            fmt_int(b + str_len(b), (int32_t)motion_lock_count(t));
+            fmt_int(b + str_len(b), (int32_t)ev_count(t,1));
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
             cv_text_on(14, y + LIST_TY, &AF_M, "PLAY", sel ? T_INK : T_MID, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
@@ -1526,6 +1526,15 @@ static void graph_events(void)
             cv_text_r(226, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
             continue;
         }
+#if FELUCCA_HOME_PERF
+        if(c>>8==EVK_PERF){const hp_event_t *e=&hp.event[c&255u];char b[16];const char *unit;
+            const param_desc_t *d=hp_vdesc(HP_VFIRST+e->control);int32_t x;
+            b[0]=(char)('0'+(e->step+1u)/10u);b[1]=(char)('0'+(e->step+1u)%10u);b[2]=0;
+            cv_text_on(14,y+LIST_TY,&AF_M,e->lock?"LOCK":"AUTO",sel?T_INK:e->lock?T_ACCENT:T_MID,bg);
+            cv_text_on(EV_SX,y+LIST_TY,&AF_M,b,sel?T_INK:T_MID,bg);
+            param_format(d,e->value,b,&unit);x=ev_value(y,b,unit,sel?T_INK:T_TEXT,bg);
+            cv_free_text(EV_NX,y+LIST_TY,&AF_M,ev_perf_name(e->control,0),sel?T_INK:T_TEXT,bg,x-8-EV_NX);continue;}
+#endif
         if (c >> 8 != EVK_REC) {                     /* a step's CHANCE / RATCH / NUDGE: "STEP 05 CHANCE  50%" */
             uint32_t s = c & 0xFFu, kd = c >> 8;
             int32_t v = ev_sval(&t->step[s], kd);

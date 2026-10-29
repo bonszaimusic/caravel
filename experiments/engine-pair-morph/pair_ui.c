@@ -89,7 +89,8 @@ static void pair_ui_graph(void)
                  (unsigned)(ep.base*100/32767), (unsigned)(ep.effective*100/32767));
         cv_text(10, 96, &AF_S, line, T_MID);
 #if FELUCCA_HOME_PERF
-        if(ep.cells) perf_format(line,sizeof line,"%u NOTES / %s",ep.budget,
+        if(hp_pair_auto_count())perf_format(line,sizeof line,"SEQ T%u: PAIR AUTO %s",ep.a+1,motion_enabled(&trk[ep.a])?"ON":"OFF");
+        else if(ep.cells) perf_format(line,sizeof line,"%u NOTES / %s",ep.budget,
             ep.cells==3 ? "TWO CELL NETWORKS" : "CELLS + POLY");
         else perf_format(line,sizeof line,"%u %s / GLO+HOME: ADD",ep.budget,ep.budget==1?"NOTE":"NOTES");
 #else

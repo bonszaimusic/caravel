@@ -47,7 +47,7 @@ static void hp_event_put(uint32_t t,uint32_t step,uint32_t control,int32_t value
  uint32_t irq=perf_irq_save();
  uint32_t i;for(i=0;i<hp.events;i++)if(hp.event[i].track==t&&hp.event[i].step==step&&hp.event[i].control==control)break;
  if(i==HP_EVENTS){perf_irq_restore(irq);ui_message("PERF AUTOMATION FULL");return;}
- hp.event[i]=(hp_event_t){t,step,control,!!lock,value,0};if(i==hp.events)hp.events++;hp_dirty=1;perf_irq_restore(irq);
+ hp.event[i]=(hp_event_t){t,step,control,!!lock,value,0};if(i==hp.events)hp.events++;motion.on|=(uint8_t)(1u<<t);hp_dirty=1;perf_irq_restore(irq);
 }
 static void hp_special_set(uint32_t t,uint32_t c,int32_t value,int capture)
 {
@@ -128,7 +128,7 @@ static void hp_init(void)
 #endif
  for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);hp_last_valid=0;hp_apply_armed=0;hp_edit_track=hp_backup_track=255;perf_irq_restore(irq);
 }
-static void hp_backup_take(uint32_t t){hp_edit_backup=hp.track[t];hp_backup_track=t;}
+static void hp_backup_take(uint32_t t){hp_edit_backup=hp.track[t];hp_backup_track=t;hp_backup_automation=0;}
 static void hp_apply_template(uint32_t t,uint32_t set){if(t>=NTRK||set>2)return;hp_backup_take(t);hp_apply(t,set);hp_edit_track=255;}
 static void hp_add_last(void)
 {
@@ -167,20 +167,20 @@ static void hp_lock_turn(uint32_t slot,int32_t steps,uint64_t held)
  hp_ref_t r=hp_current(slot);const param_desc_t*d=hp_desc(r);uint32_t id=hp_lock_id(slot);
  if(chain_busy()){ui_message("STOP SONG TO EDIT LOCKS");return;}if(!d){ui_message("NO LOCKS FOR THIS CONTROL");return;}
  if(id!=0xFF){motion_undo_take(TSEL,0x100|slot);for(uint32_t i=0;i<NSTEP;i++)if((held>>i)&1){int16_t v;if(!motion_lock_get(TSEL,i,id,&v))v=motion_base_value(TSEL,id);motion_set_lock(TSEL,i,id,param_turn(d,v,steps));}motion_undo_done(TSEL);}
- else if((r.kind==HP_MACRO||(r.kind==HP_PAIR&&r.id>=2))&&hp_owner(r)==song.sel){for(uint32_t i=0;i<NSTEP;i++)if((held>>i)&1)hp_event_put(song.sel,i,(r.kind==HP_PAIR?4:0)+r.id,param_turn(d,hp_get(r),steps),1);}
+ else if((r.kind==HP_MACRO||(r.kind==HP_PAIR&&r.id>=2))&&hp_owner(r)==song.sel){for(uint32_t i=0;i<NSTEP;i++)if((held>>i)&1)hp_event_put(r.kind==HP_PAIR&&ep.on?ep.a:song.sel,i,(r.kind==HP_PAIR?4:0)+r.id,param_turn(d,hp_get(r),steps),1);}
  else ui_message(hp_owner(r)!=song.sel&&r.kind!=HP_GLOBAL?"SELECT TARGET TRACK FOR LOCK":"NO LOCKS FOR THIS CONTROL");
  ui.plk_rm&=~held;
 }
-static void hp_motion_step(track_t*t,uint32_t step)
+static void hp_motion_step(track_t*t,uint32_t step,uint32_t play)
 {
  uint32_t tr=trk_index(t);for(uint32_t c=0;c<4;c++){
  int16_t value=hp.macro[tr][c].base;int best=-1;
  for(uint32_t i=0;i<hp.events;i++){hp_event_t*e=&hp.event[i];if(e->track==tr&&e->control==c&&!e->lock&&e->step<=step&&(int)e->step>best){best=e->step;value=e->value;}}
- for(uint32_t i=0;i<hp.events;i++){hp_event_t*e=&hp.event[i];if(e->track==tr&&e->control==c&&e->lock&&e->step==step)value=e->value;}
+ for(uint32_t i=0;i<hp.events;i++){hp_event_t*e=&hp.event[i];if(e->track==tr&&e->control==c&&e->lock&&play&&e->step==step)value=e->value;}
  hp_macro_live[tr][c]=value;}
  if(ep.on&&tr==ep.a){int32_t value[2]={hp.pair_base*127/32767,hp.pair_motion};int best[2]={-1,-1};uint32_t used=0;
  for(uint32_t i=0;i<hp.events;i++){hp_event_t*e=&hp.event[i];if(e->track!=tr||e->control<6)continue;used=1;uint32_t c=e->control-6;if(!e->lock&&e->step<=step&&(int)e->step>best[c]){best[c]=e->step;value[c]=e->value;}}
- for(uint32_t i=0;i<hp.events;i++){hp_event_t*e=&hp.event[i];if(e->track==tr&&e->control>=6&&e->lock&&e->step==step)value[e->control-6]=e->value;}
+ for(uint32_t i=0;i<hp.events;i++){hp_event_t*e=&hp.event[i];if(e->track==tr&&e->control>=6&&e->lock&&play&&e->step==step)value[e->control-6]=e->value;}
  if(used){ep.base=value[0]*32767/127;ep.motion=!!value[1];}}
 
 }
@@ -222,7 +222,7 @@ static void hp_editor_apply(void)
 {
  hp_editor_sync();
  hp_track_t*h=&hp.track[song.sel];uint32_t r=hp_edit_row,k=hp_edit_col;if(hp_edit_action==0){hp_source();return;}
- if(hp_edit_action==8){if(hp_backup_track==song.sel){hp_track_t v=*h;*h=hp_edit_backup;hp_edit_backup=v;hp_edit_row=h->active;hp_dirty=1;ui.force=1;ui_message("HOME UNDO / REDO");}else ui_message("NO HOME EDIT TO UNDO");return;}
+ if(hp_edit_action==8){if(!hp_backup_automation&&hp_backup_track==song.sel){hp_track_t v=*h;*h=hp_edit_backup;hp_edit_backup=v;hp_edit_row=h->active;hp_dirty=1;ui.force=1;ui_message("HOME UNDO / REDO");}else ui_message("NO HOME EDIT TO UNDO");return;}
  if(hp_edit_action==6&&h->count==HP_ROWS){ui_message("HOME FULL: 32 ROWS");return;}
  if(hp_edit_action==1&&!h->cell[r][k].kind){ui_message("CELL ALREADY EMPTY");return;}
  if((hp_edit_action==2&&r*4+k==0)||(hp_edit_action==3&&r*4+k+1==h->count*4)){ui_message("NO CELL IN THIS DIRECTION");return;}
@@ -442,4 +442,76 @@ static void hp_draw_home(void)
  cv_oy=0;
 }
 
-static void hp_motion_clear(track_t*t){uint32_t irq=perf_irq_save();uint32_t tr=trk_index(t),n=0;for(uint32_t i=0;i<hp.events;i++)if(hp.event[i].track!=tr)hp.event[n++]=hp.event[i];memset(hp.event+n,0,(HP_EVENTS-n)*sizeof hp.event[0]);hp.events=n;for(uint32_t c=0;c<4;c++)hp_macro_live[tr][c]=hp.macro[tr][c].base;hp_dirty=1;perf_irq_restore(irq);}
+static void hp_motion_clear(track_t*t){uint32_t irq=perf_irq_save();hp_motion_pause(t);uint32_t tr=trk_index(t),n=0;for(uint32_t i=0;i<hp.events;i++)if(hp.event[i].track!=tr)hp.event[n++]=hp.event[i];memset(hp.event+n,0,(HP_EVENTS-n)*sizeof hp.event[0]);hp.events=n;for(uint32_t c=0;c<4;c++)hp_macro_live[tr][c]=hp.macro[tr][c].base;hp_dirty=1;perf_irq_restore(irq);}
+
+/* Performance records share the track's existing AUTOMATION PLAY switch. */
+static uint32_t hp_auto_count(const track_t*t,int locks)
+{
+ uint32_t n=0,tr=trk_index(t);for(uint32_t i=0;i<hp.events;i++)
+  n+=hp.event[i].track==tr&&(!locks||hp.event[i].lock);return n;
+}
+static uint32_t hp_pair_auto_count(void)
+{
+ uint32_t n=0;if(ep.on)for(uint32_t i=0;i<hp.events;i++)
+  n+=hp.event[i].track==ep.a&&hp.event[i].control>=6&&hp.event[i].control<8;return n;
+}
+static uint32_t hp_auto_sig(const track_t*t)
+{
+ uint32_t h=2166136261u,tr=trk_index(t);for(uint32_t i=0;i<hp.events;i++)
+  if(hp.event[i].track==tr)h=fnv(h,&hp.event[i],sizeof hp.event[i]);return h;
+}
+static int hp_auto_find(uint32_t tr,uint32_t step,uint32_t control)
+{
+ for(uint32_t i=0;i<hp.events;i++)if(hp.event[i].track==tr&&hp.event[i].step==step&&hp.event[i].control==control)return (int)i;
+ return -1;
+}
+static void hp_auto_reset_control(uint32_t tr,uint32_t control)
+{
+ if(control<4)hp_macro_live[tr][control]=hp.macro[tr][control].base;
+ else if(ep.on&&ep.a==tr&&hp.pair_valid){if(control==6)ep.base=hp.pair_base;if(control==7)ep.motion=hp.pair_motion;}
+}
+static void hp_motion_pause(track_t*t)
+{
+ uint32_t irq=perf_irq_save(),tr=trk_index(t);for(uint32_t c=0;c<4;c++)hp_auto_reset_control(tr,c);
+ if(ep.on&&ep.a==tr)for(uint32_t i=0;i<hp.events;i++)if(hp.event[i].track==tr&&hp.event[i].control>=6)
+  hp_auto_reset_control(tr,hp.event[i].control);
+ perf_irq_restore(irq);
+}
+static void hp_auto_edit(uint32_t index,uint32_t step,int32_t value,uint32_t lock)
+{
+ uint32_t irq=perf_irq_save();if(index<hp.events){hp.event[index].step=(uint8_t)step;
+ hp.event[index].value=(int16_t)value;hp.event[index].lock=(uint8_t)!!lock;hp_dirty=1;ui.force=1;}perf_irq_restore(irq);
+}
+static void hp_auto_delete(uint32_t index)
+{
+ uint32_t irq=perf_irq_save();if(index<hp.events){hp_event_t e=hp.event[index];
+ for(uint32_t i=index;i+1<hp.events;i++)hp.event[i]=hp.event[i+1];
+ memset(&hp.event[--hp.events],0,sizeof hp.event[0]);
+ uint32_t left=0;for(uint32_t i=0;i<hp.events;i++)left|=hp.event[i].track==e.track&&hp.event[i].control==e.control;
+ if(!left)hp_auto_reset_control(e.track,e.control);hp_dirty=1;ui.force=1;}perf_irq_restore(irq);
+}
+static void hp_auto_undo_take(const track_t*t)
+{
+ uint32_t irq=perf_irq_save(),tr=trk_index(t),n=0;
+ for(uint32_t i=0;i<hp.events;i++)if(hp.event[i].track==tr)hp_edit_history.automation.event[n++]=hp.event[i];
+ memset(hp_edit_history.automation.event+n,0,(HP_EVENTS-n)*sizeof hp.event[0]);
+ hp_edit_history.automation.count=(uint16_t)n;hp_backup_track=(uint8_t)tr;hp_backup_automation=1;perf_irq_restore(irq);
+}
+static int hp_auto_undo_ready(const track_t*t)
+{
+ return hp_backup_automation&&hp_backup_track==trk_index(t)&&
+ hp.events-hp_auto_count(t,0)+hp_edit_history.automation.count<=HP_EVENTS;
+}
+static int hp_auto_undo_swap(track_t*t)
+{
+ hp_event_t current[HP_EVENTS];uint32_t irq=perf_irq_save(),tr=trk_index(t),n=0,other=0;
+ if(!hp_auto_undo_ready(t)){perf_irq_restore(irq);return 0;}
+ hp_motion_pause(t);
+ for(uint32_t i=0;i<hp.events;i++)if(hp.event[i].track==tr)current[n++]=hp.event[i];else hp.event[other++]=hp.event[i];
+ memcpy(hp.event+other,hp_edit_history.automation.event,hp_edit_history.automation.count*sizeof hp.event[0]);
+ hp.events=(uint16_t)(other+hp_edit_history.automation.count);
+ memset(hp.event+hp.events,0,(HP_EVENTS-hp.events)*sizeof hp.event[0]);
+ memcpy(hp_edit_history.automation.event,current,n*sizeof current[0]);
+ memset(hp_edit_history.automation.event+n,0,(HP_EVENTS-n)*sizeof current[0]);hp_edit_history.automation.count=(uint16_t)n;
+ hp_dirty=1;perf_irq_restore(irq);return 1;
+}

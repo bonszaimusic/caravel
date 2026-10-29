@@ -34,14 +34,14 @@ int main(void)
  /* MIDI Learn targets the actual macro, including persistence-safe virtual ID. */
  CHECK(ml_learn(22,0,HP_VFIRST)==1);midi(0xB0,22,100);CHECK(hp.macro[0][0].base==100);
  /* Macro automation and locks have their own event namespace. */
- hp_event_put(0,0,0,17,0);hp_event_put(0,2,0,99,1);hp_motion_step(&trk[0],2);CHECK(hp_macro_live[0][0]==99);hp_motion_step(&trk[0],3);CHECK(hp_macro_live[0][0]==17);hp_motion_stop();CHECK(hp_macro_live[0][0]==100);
+ hp_event_put(0,0,0,17,0);hp_event_put(0,2,0,99,1);hp_motion_step(&trk[0],2,1);CHECK(hp_macro_live[0][0]==99);hp_motion_step(&trk[0],3,1);CHECK(hp_macro_live[0][0]==17);hp_motion_stop();CHECK(hp_macro_live[0][0]==100);
  /* Complete A-D capsule: different layouts, macros and sound; reload and checksum validation. */
  CHECK(!hp_project_save(0,0));hp_apply(0,0);hp.macro[0][0].base=0;trk[0].p[P_FILT]=-20;CHECK(!hp_project_save(1,0));CHECK(hp_project_load(0));CHECK(hp.track[0].count==2&&hp.macro[0][0].base==100&&trk[0].p[P_FILT]==base);CHECK(hp_project_load(1));CHECK(!hp.track[0].cell[0][0].kind&&trk[0].p[P_FILT]==-20);
  CHECK(hp_project_load(0));uint32_t size=web_home_export(0);CHECK(size==sizeof hp_io);hp_io.model.track[0].count=255;CHECK(!web_home_import(size));CHECK(hp.track[0].count==2);
  CHECK(hp_project_load(0));CHECK(!hp_project_save(0,0));const hp_store_t*latest=hp_slot(0);CHECK(latest&&latest->seq==2);((uint8_t*)latest)[80]^=1;CHECK(hp_slot(0)&&hp_slot(0)->seq==1);CHECK(hp_project_load(0));
  /* Pair state is saved alongside HOME and restored without held notes. */
  prepare(ENGI_DRONE);hp_apply(0,0);CHECK(web_home_assign(0,0,0,HP_PAIR,0,2));ep.base=12345;ep.motion=1;CHECK(!hp_project_save(2,0));pair_disable();run_ms(80);hp_apply(0,2);CHECK(hp_project_load(2));CHECK(ep.on&&ep.base==12345&&ep.motion&&hp.track[0].cell[0][0].kind==HP_PAIR);CHECK(!gates(0)&&!gates(2));go_home();ui.msg_t=0;run_ms(80);shot("home-pair-cell");
- hp.pair_base=12345;hp.pair_motion=1;hp_event_put(ep.a,0,6,20,0);hp_event_put(ep.a,2,6,100,1);hp_motion_step(&trk[ep.a],2);CHECK(ep.base==100*32767/127);hp_motion_step(&trk[ep.a],3);CHECK(ep.base==20*32767/127);hp_motion_stop();CHECK(ep.base==12345);hp.events=0;
+ hp.pair_base=12345;hp.pair_motion=1;hp_event_put(ep.a,0,6,20,0);hp_event_put(ep.a,2,6,100,1);hp_motion_step(&trk[ep.a],2,1);CHECK(ep.base==100*32767/127);hp_motion_step(&trk[ep.a],3,1);CHECK(ep.base==20*32767/127);hp_motion_stop();CHECK(ep.base==12345);hp.events=0;
  CHECK(!hp_project_save(3,0));CHECK(hp_slot(3));CHECK(!project_erase(3));CHECK(!hp_slot(3));
  /* Autosave and boot preserve metadata, default template and pair. */
  hp_default=2;hp.track[0].active=0;hp_as_seen=0;hp_as_saved=0;run_ms(12000);CHECK(hp_slot(4));hp_apply(0,0);pair_disable();CHECK(hp_autosave_boot(1));CHECK(ep.on&&hp_default==2&&hp.track[0].cell[0][0].kind==HP_PAIR);

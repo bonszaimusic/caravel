@@ -18,7 +18,14 @@ static hp_ref_t hp_last;
 static uint8_t hp_last_valid, hp_last_track, hp_default=1, hp_macro_sel, hp_route_sel;
 static uint8_t hp_edit_row, hp_edit_col, hp_edit_action, hp_apply_armed;
 static uint8_t hp_edit_track=255, hp_backup_track=255;
-static hp_track_t hp_edit_backup;
+/* Reuse the existing HOME undo allocation for one performance edit. */
+static union {
+ hp_track_t home;
+ struct {uint16_t count,pad;hp_event_t event[HP_EVENTS];} automation;
+} hp_edit_history;
+#define hp_edit_backup hp_edit_history.home
+static uint8_t hp_backup_automation;
+_Static_assert(sizeof(hp_edit_history)==sizeof(hp_track_t),"shared HOME/automation undo must not grow");
 /* Four macros with four routes each touch at most sixteen parameters. */
 #define HP_MACRO_TARGETS 16u
 _Static_assert(P_COUNT <= 256, "Macro IDs require more than one byte");
@@ -28,7 +35,17 @@ static uint8_t hp_dirty,hp_combo_pending;
 static int hp_virtual(uint32_t id) { return id >= HP_VFIRST && id < HP_VFIRST+8u; }
 static void hp_begin(track_t *t);
 static void hp_end(track_t *t);
-static void hp_motion_step(track_t *t, uint32_t step);
+static void hp_motion_step(track_t *t, uint32_t step, uint32_t play);
+static void hp_motion_pause(track_t *t);
+static uint32_t hp_auto_count(const track_t *t, int locks);
+static uint32_t hp_pair_auto_count(void);
+static uint32_t hp_auto_sig(const track_t *t);
+static int hp_auto_find(uint32_t track,uint32_t step,uint32_t control);
+static void hp_auto_edit(uint32_t index,uint32_t step,int32_t value,uint32_t lock);
+static void hp_auto_delete(uint32_t index);
+static void hp_auto_undo_take(const track_t *t);
+static int hp_auto_undo_ready(const track_t *t);
+static int hp_auto_undo_swap(track_t *t);
 static void hp_motion_stop(void);
 static void hp_midi(track_t *t, uint32_t id, uint32_t value);
 static const param_desc_t *hp_vdesc(uint32_t id);

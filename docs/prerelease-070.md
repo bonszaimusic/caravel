@@ -1,10 +1,54 @@
-# Caravel 0.7.0-rc6 — FM-1 Testversion
+# Caravel 0.7.0-rc7 — FM-1 Testversion
 
-Diese Vorabversion enthält echte, installierbare FM-1-Firmware. Sie ist für den
-angeforderten Gerätetest gedacht; ein Hör-, Last- und Installationstest am
-physischen FM-1 steht noch aus. Der stabile 0.6.0-Release wird nicht ersetzt.
+Diese Vorabversion enthält installierbare FM-1-Firmware für den angeforderten
+Gerätetest. Der stabile 0.6.0-Release wird nicht ersetzt. Die RAM-Audiooptimierung
+aus rc6 bleibt enthalten. Rückmeldung zum rc6-Gerätetest am 29.10.2026:
+kein hörbares Knarzen mehr, angezeigte Last höchstens etwa 70%. Das ist eine
+Rückmeldung für das getestete Setup; eine neue vergleichbare USB-Diagnose liegt
+noch nicht vor.
 
-## Gegenüber rc5: Audioschleifen im Code-RAM
+## Gegenüber rc6: sichtbare und abschaltbare Pair-/HOME-Automation
+
+HOME-Makro-, Pair-MORPH- und Pair-MOTION-Aufnahmen lagen bisher in einem
+separaten Ereignisspeicher. SEQ > AUTOMATION zeigte diese Aufnahmen nicht an;
+sie liefen sogar bei ausgeschaltetem Automations-PLAY weiter. rc7 zeigt sie
+nun mit Schritt, Wert und AUTO-/LOCK-Art in derselben Liste samt Zählern an.
+PLAY OFF pausiert auch diese Aufnahmen und stellt deren Grundwerte wieder her.
+Die Aufnahmen bleiben gespeichert. Neue Aufnahmen schalten PLAY ihres Tracks
+ein, wie normale Parameteraufnahmen.
+
+Pair-Aufnahmen gehören dem im Pair-Fuß angezeigten Track A. Bei A:T3 B:T1
+stehen sie unter T3 > SEQ > AUTOMATION, auch wenn T1 ausgewählt war, als MORPH
+bewegt wurde. Auf der Pair-Seite zeigt eine zusätzliche Zeile beispielsweise
+`SEQ T3: PAIR AUTO ON`. Das zeigt vorhandene Aufnahmen und ihren PLAY-Zustand;
+es ist kein Echtzeitnachweis, dass gerade diese Quelle den Morph verändert.
+MIDI CC119 oder ein HOME Random Morph können den Grundwert ebenfalls verändern.
+
+In der Liste wählt K1 die Zeile, K2 ihren Schritt und K4 ihren Wert. Der
+Parameter bleibt fest (PAIR MORPH, PAIR MOTION oder MAC 1–4). OCT+ wechselt
+AUTO/LOCK; EDIT löscht die ausgewählte Aufnahme; SAVE halten macht die
+Bearbeitung rückgängig bzw. erneut wirksam. CLEAR auf der PLAY-Zeile löscht
+nach Bestätigung beide Automationsarten dieses Tracks, ohne Notenschritte
+oder andere Tracks zu löschen. Auch das lässt sich zurücknehmen. Der
+vorhandene HOME-Undo-Speicher wird dafür wiederverwendet: Eine spätere
+strukturelle HOME-Bearbeitung ersetzt diesen Undo-Zustand; ein veraltetes Undo
+wird dann abgewiesen. Bei voller Ereigniskapazität werden keine Aufnahmen
+anderer Tracks verdrängt.
+
+Vorhandene Projekte und ihre Ereignisse werden unverändert gelesen. Ein dort
+bereits gespeichertes PLAY OFF pausiert nun auch die bislang versteckten
+HOME-/Pair-Aufnahmen. Bei Bedarf unter Track A > SEQ > AUTOMATION PLAY ON
+wählen. Die Ereigniskapazitäten und Dateiformate ändern sich nicht.
+
+Die Ursache der konkret gemeldeten Bewegung ist ohne Projektdaten noch nicht
+endgültig nachgewiesen. Dass sie nur bei laufendem Transport und auch am
+MORPH-Grundwert auftritt, passt zur nun sichtbaren Performance-Automation.
+Der Regressionstest reproduziert PLAY OFF mit zwei ansonsten unsichtbaren
+Pair-Ereignissen und prüft außerdem T3 als A/T1 als B, echte Aufnahme, Liste,
+Wert/Schritt/Art, fehlgeschlagene Step-Chance, Löschen, Undo/Redo, bestätigtes
+CLEAR und volle Kapazität. Das Gerät muss anschließend rc7 noch bestätigen.
+
+## Verlauf rc6: Audioschleifen im Code-RAM
 
 Der Gerätetest zeigt auch mit rc5 weiter Knarzen. Die neue Messung meldet
 3576 überschrittene Audiofristen in 30 Sekunden, 92,0% mittlere Last und
@@ -15,8 +59,8 @@ Aufzeichnungen, deshalb ist dies kein kontrollierter Versionsvergleich.
 rc6 testet einen anderen Ansatz: Die rechenintensiven DRONE-, SEM-, HADES-,
 STASIS- und HALL-Schleifen werden aus dem vorhandenen ausführbaren RAM
 statt aus dem Flash ausgeführt. Das soll Flash-/Cache-Zugriffe auf dem
-kritischen Audiopfad reduzieren. Ein tatsächlicher CPU-Gewinn ist erst am
-FM-1 messbar; rc6 ist noch kein bestätigter Knarz-Fix.
+kritischen Audiopfad reduzieren. Die spätere Geräterückmeldung zu rc6 steht oben; sie ersetzt keinen
+kontrollierten Lastvergleich.
 
 Der Standardbuild belegt dafür rund 13 KiB bisher freien Code-RAM. Die
 Audio-/Projekt-Datenbudgets, vier KiB Worker-Stack, Schutzabstände und der
@@ -36,10 +80,9 @@ direkte und über Zeiger ausgeführte Aufrufketten mit einer Million Schleifen.
 Zusätzlich werden RAM-DSP mit einem Kern und die XIP-Variante gebaut, bevor
 der eigentliche Release erneut mit den Standardflags gebaut wird.
 
-Bitte nach der Installation unter INFO rc6 prüfen und den bisherigen
-Knarzfall mit Pair und ARP spielen. Sobald er wieder auftritt, dieselbe
-30-Sekunden-Diagnose aufnehmen. rc5 bleibt als Rückweg verfügbar. Ein
-weiterer TIDE-/CELL-RNG-Presetvergleich ist dafür nicht erforderlich.
+Bitte nach der Installation unter INFO rc7 prüfen. Für den aktuellen
+Pair-Morph-Fall zuerst die nun sichtbaren Aufnahmen auf Track A prüfen und
+PLAY OFF testen. rc6 bleibt als Rückweg verfügbar.
 
 ## Audiolast gegenüber rc4: STASIS und DRONE
 
@@ -69,7 +112,7 @@ serielle mit der automatischen Dual-Core-Ausgabe. Native Laufzeiten und
 statische Zielcode-Zählungen sind keine FM-1-Lastmessung.
 
 Die rc5-Optimierungen und RETURN pro Track/Zeile bleiben in rc6 enthalten.
-Die aktuelle Anleitung zum Gerätetest steht im Abschnitt zu rc6 oben.
+Die aktuelle Anleitung zum Gerätetest steht im Abschnitt zu rc7 oben.
 
 ## Korrektur gegenüber rc3: RETURN pro Track/Zeile
 
@@ -133,7 +176,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
 
 1. Projekte und Einstellungen vor dem Update exportieren und die bisherige
    funktionierende Firmware für den Rückweg bereithalten.
-2. Das vollständige `Caravel-0.7.0-rc6-FM1-Testpaket.zip` herunterladen und
+2. Das vollständige `Caravel-0.7.0-rc7-FM1-Testpaket.zip` herunterladen und
    entpacken. Am Mac `FM1-Installer.command` öffnen; der Starter benötigt Python 3
    und öffnet den passenden 0.7.0-Installer in Google Chrome. Das Terminal bleibt
    bis zum Abschluss offen. Alternativ im entpackten Ordner ausführen:
@@ -143,7 +186,7 @@ enthält Audiofristen, verspätete Puffer und Spitzenlast.
    Der enthaltene Installer ist an das geprüfte 0.7.0-Paket gebunden; der
    öffentliche 0.6.0-Installer wird nicht ersetzt. Die einzelne `.fwsc` unter
    `firmware/` enthält App und Update-Loader für alternative Installationswege.
-3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc6` prüfen.
+3. Nach dem Neustart unter INFO die Versionsanzeige `v0.7.0-rc7` prüfen.
 4. Zunächst mit einem leeren Projekt testen; gewünschte alte Projekte erst
    danach laden. Eine fehlgeschlagene Installation kann den FM-1-Transporter
    zur Wiederherstellung erfordern; Downgrade allein garantiert keine Rettung.
@@ -186,6 +229,6 @@ unerwartete Pegeländerungen, hängende Noten und die CPU-Anzeige achten.
 Der Release enthält passendes vollständiges Quellarchiv einschließlich
 Felucca-Engines, Prüfsummen, Buildnachweis und Lizenztexte. Das Quellarchiv
 lässt sich mit den Voraussetzungen aus BUILDING.md über
-`sh build.sh --binary-version 0.7.0-rc6` nachbauen. Der Ziel-Einstiegspunkt
+`sh build.sh --binary-version 0.7.0-rc7` nachbauen. Der Ziel-Einstiegspunkt
 aktiviert ACTION, Random Morph und erweitertes STASIS für diese Vorabversion.
 Die automatischen Tests ersetzen keine Messung auf dem echten FM-1.

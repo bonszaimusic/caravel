@@ -5,7 +5,7 @@
 from pathlib import Path
 import os,subprocess,shlex
 r=Path(__file__).resolve().parents[1];out=r/'build/release-prep';out.mkdir(parents=True,exist_ok=True);(r/'build/home-perf').mkdir(parents=True,exist_ok=True)
-cases=['experiments/home-perf/home_d3_test.c','experiments/home-perf/home_test.c','experiments/home-perf/hardware_test.c','experiments/home-perf/backup_test.c','experiments/home-perf/diag_test.c','experiments/home-perf/usability_test.c','experiments/home-perf/macro_audio_test.c','experiments/home-perf/cell_pair_test.c','tests/track_mute_test.c','tests/delay_ext_test.c']
+cases=['experiments/home-perf/automation_test.c','experiments/home-perf/home_d3_test.c','experiments/home-perf/home_test.c','experiments/home-perf/hardware_test.c','experiments/home-perf/backup_test.c','experiments/home-perf/diag_test.c','experiments/home-perf/usability_test.c','experiments/home-perf/macro_audio_test.c','experiments/home-perf/cell_pair_test.c','tests/track_mute_test.c','tests/delay_ext_test.c']
 for case in cases:
  name=Path(case).stem;exe=out/name
  subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-O2','-w','-ffp-contract=off','-Ibuild/gen','-Ifirmware/src',case,'-lm','-o',str(exe)],cwd=r,check=True)

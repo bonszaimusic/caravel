@@ -982,7 +982,7 @@ static int seq_is_empty(const track_t *t)
  * takes the copy too (UNDO_MOT: SAVE held puts the track's motion back, the sound and the steps stay; motion_undo_take).
  * A sound load keeps the track's motion on the parameters every engine has (load_end, motion.c motion_sound_loaded);
  * a pattern load drops it all (the steps it was on are gone) */
-enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4 };
+enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_PERF = 8 };
 static struct {
     uint8_t trk;                 /* track + 1, 0 = nothing to undo */
     uint8_t keep;                /* the track is as the last load left it (undo.after): a next load keeps the copy */
@@ -1165,7 +1165,13 @@ static void load_extend(track_t *t)
  * motion_undo_done after each */
 static uint32_t undo_mot_tag;
 /* what an edit's copy compares (undo.after): the motion; with the steps (UNDO_PAT: step_undo_take) the steps too */
-static uint32_t edit_sig(const track_t *t) { return undo.what & UNDO_PAT ? motion_sig(t) ^ steps_sig(t) : motion_sig(t); }
+static uint32_t edit_sig(const track_t *t) {
+ uint32_t h=undo.what&UNDO_PAT?motion_sig(t)^steps_sig(t):motion_sig(t);
+#if FELUCCA_HOME_PERF
+ if(undo.what&UNDO_PERF)h^=hp_auto_sig(t);
+#endif
+ return h;
+}
 static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
 {
     uint32_t i = trk_index(t);
@@ -1189,9 +1195,15 @@ static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
     undo.from_h = pat_from_h[i];
     undo.patn = pat_last[i];
     motion_snapshot_track(t, &undo.motion_backup);
+#if FELUCCA_HOME_PERF
+    if(what&UNDO_PERF)hp_auto_undo_take(t);
+#endif
     undo.keep = 0;
 }
 static void motion_undo_take(track_t *t, uint32_t tag) { edit_undo_take(t, tag, UNDO_MOT); }
+#if FELUCCA_HOME_PERF
+static void perf_undo_take(track_t*t,uint32_t tag){edit_undo_take(t,tag,UNDO_MOT|UNDO_PERF);}
+#endif
 /* 1.2: a step's CHANCE / RATCH edited on SEQ > AUTOMATION (ui_events.c): the swap puts back the steps (and LEN DIV
  * SWING GATE, as copied) and the motion, the sound stays. motion_undo_done after each, as for a lock */
 static void step_undo_take(track_t *t, uint32_t tag) { edit_undo_take(t, tag, UNDO_MOT | UNDO_PAT); }
@@ -1218,15 +1230,23 @@ static void undo_swap(void)
         return;
     }
     t = &trk[(undo.trk - 1u) % NTRK];
+#if FELUCCA_HOME_PERF
+    if((undo.what&UNDO_PERF)&&!hp_auto_undo_ready(t)){ui_message("PERF UNDO UNAVAILABLE");return;}
+#endif
     motion_restore(t);
     motion_store_t current_motion;
     motion_snapshot_track(t, &current_motion);
-    if (motion_replace_track(t, &undo.motion_backup) != 0) {
+    if (motion_replace_native(t, &undo.motion_backup) != 0) {
         ui_message("AUTOMATION FULL");
         return;
     }
+#if FELUCCA_HOME_PERF
+    if((undo.what&UNDO_PERF)&&!hp_auto_undo_swap(t)){
+        (void)motion_replace_native(t,&current_motion);ui_message("PERF UNDO UNAVAILABLE");return;
+    }
+#endif
     undo.motion_backup = current_motion;
-    if (undo.what == UNDO_MOT) motion_fx_refresh(t);
+    if ((undo.what & ~UNDO_PERF) == UNDO_MOT) motion_fx_refresh(t);
     fm1_irq_off();                                /* the audio ISR must not see half a sound */
     if (undo.what & UNDO_SOUND) {
         uint8_t e = t->eng_req, pr = t->preset, u = t->user;
