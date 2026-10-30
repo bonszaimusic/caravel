@@ -21,7 +21,7 @@ try:
  catalog=c.catalog();assert set(catalog)==set(b.IDS)
  items={k:c.get(k,catalog[k]) for k in b.IDS}
  for k,data in items.items():b.validate(k,data)
- capsule=items[2];assert len(capsule)==10000
+ capsule=items[2];assert len(capsule) in (7200,10000)
  c.put(4,capsule);cat=c.catalog();restored=c.get(4,cat[4]);assert restored[32:]==capsule[32:]
  c.put(0,capsule);assert c.get(0,c.catalog()[0])[32:]==capsule[32:]
  with tempfile.TemporaryDirectory() as d:

@@ -2,6 +2,10 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Installing Caravel
 
+**Connection or update problem?** See the [Troubleshooting & FAQ](faq.md), including
+[USB detection](faq.md#usb-device-not-recognized), [stock-return error -5](faq.md#stock-return-error--5)
+and [M-Flasher / m-bootloader](faq.md#recovery-tools).
+
 Two ways to put a Caravel package (`.fwsc`) on an FM-1: the **web installer** in a browser, or `tools/fm1_install.py` from a terminal.
 Both run the same update over USB-MIDI and check the installed identity afterwards. Hardware acceptance of Caravel on a real FM-1 is
 still pending: read the notes below first.

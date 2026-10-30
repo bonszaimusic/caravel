@@ -69,7 +69,7 @@ class Client:
         out={}
         for at in range(3,len(p),11):
             k=p[at];out[k]=(r32(p[at+1:at+6]),r32(p[at+6:at+11]))
-        if out.get(0,(0,))[0]!=10000:raise ValueError("This tool requires the Performance V4 test firmware")
+        if out.get(0,(0,))[0] not in (7200,10000):raise ValueError("This tool requires Caravel performance project backup support")
         return out
     def get(self,k,entry):
         n,crc=entry;out=bytearray()
@@ -116,9 +116,27 @@ def validate(k,b):
         if magic!=0x504D5346 or version!=1 or not 1<=nz<=16 or n!=len(b)-512 or zlib.crc32(b[512:])!=crc:raise ValueError("Invalid sample header/CRC")
     elif k==0 or 2<=k<=5:
         if not b and k!=0:return
-        if len(b)==10000:
+        if len(b) in (7200,10000):
             magic,version,size,seq,crc,hcrc=struct.unpack_from("<6I",b)
-            if magic!=0x314D5048 or version!=1 or size!=10000 or fnv(b[32:])!=crc or fnv(b[:20])!=hcrc:raise ValueError("Invalid HPM1 capsule")
+            if magic!=0x314D5048 or (version,size) not in ((1,10000),(2,7200)) or size!=len(b) or fnv(b[32:])!=crc or fnv(b[:20])!=hcrc:raise ValueError("Invalid HPM1 capsule")
+            if version==2:
+                clen,rawlen=struct.unpack_from("<II",b,24)
+                if not 0<clen<=3328 or rawlen!=5518:raise ValueError("Invalid snapshot payload length")
+                raw=bytearray();src=memoryview(b)[3872:3872+clen];at=0
+                while at<len(src):
+                    tag=src[at];at+=1
+                    if tag<128:
+                        n=tag+1
+                        if n>len(src)-at:raise ValueError("Truncated snapshot literal")
+                        raw.extend(src[at:at+n]);at+=n
+                    else:
+                        n=tag-128+3
+                        if len(src)-at<2:raise ValueError("Truncated snapshot match")
+                        dist=src[at]|src[at+1]<<8;at+=2
+                        if not 0<dist<=min(len(raw),4096):raise ValueError("Invalid snapshot match")
+                        for _ in range(n):raw.append(raw[-dist])
+                    if len(raw)>rawlen:raise ValueError("Oversize snapshot payload")
+                if len(raw)!=rawlen:raise ValueError("Truncated snapshot payload")
         elif len(b)>3840 or len(b)<4 or struct.unpack_from("<I",b)[0]>>8!=0x46554E:raise ValueError("Invalid native project")
 
 

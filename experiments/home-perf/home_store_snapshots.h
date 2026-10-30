@@ -87,6 +87,7 @@ static int hp_v2_decode(const hp_store_t*p,uint8_t*raw)
 static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_t*pair,const hp_rm_snap_t*snaps)
 {
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
+ if(snaps&&!hp_snapshots_valid(snaps))return 0;
  hp_meta_pack(raw,m,pair);if(snaps)memcpy(raw+HP_HW_META,snaps,sizeof hp_rm_snap);else memset(raw+HP_HW_META,0,sizeof hp_rm_snap);
  return hp_zip(out,HP_V2_META,raw,sizeof raw);
 }

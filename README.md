@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.1**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -24,6 +24,17 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 </table>
 
 More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+
+## Caravel 0.7.1 — keep your performance snapshots
+
+[Download 0.7.1 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.7.1) · [Installation, snapshots and compatibility](docs/release-071.md)
+
+- S1–S4 Random Morph parameter snapshots are saved with each performance project, including scope and pinned targets. Project load, RESTORE LAST and USB backups restore them; legacy projects start with empty slots.
+- Save A–D to keep your slots. A4 short selects S1–S4, A4 held captures, A3 morphs to the selected slot and A2 freezes/resumes. Saving during playback stays RAM-only until STOP commits it.
+- The installer verifies the exact package size, SHA-256, product, layout and app/loader CRC before install or resume. USB/recovery help is linked in the FAQ.
+- New project files need 0.7.1 or later. Back up before upgrading or rolling back. Extremely dense, incompressible projects are rejected before writing with `PROJECT TOO LARGE / NOT SAVED`.
+
+STASIS captured audio, active morph motion and RETURN origins remain volatile. Automated tests and physical FM-1 acceptance are distinct; see the release guide for validation scope.
 
 ## Caravel 0.7.0 — smoother audio and visible performance automation
 

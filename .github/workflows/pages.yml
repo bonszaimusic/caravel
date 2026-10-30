@@ -20,9 +20,9 @@ on:
     types: [published]
   # Releases made with GITHUB_TOKEN do not trigger the release event.
   workflow_run:
-    workflows: ['Caravel 0.7.0 release']
+    workflows: ['Caravel 0.7.0 release', 'Caravel 0.7.1 release']
     types: [completed]
-    branches: [release/0.7.0]
+    branches: [release/0.7.0, release/0.7.1]
   workflow_dispatch:
     inputs:
       version:
@@ -51,7 +51,7 @@ jobs:
         id: release
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          TAG: ${{ github.event.release.tag_name || (github.event_name == 'workflow_run' && 'v0.7.0') || '' }}
+          TAG: ${{ github.event.release.tag_name || (github.event_name == 'workflow_run' && (github.event.workflow_run.name == 'Caravel 0.7.1 release' && 'v0.7.1' || 'v0.7.0')) || '' }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
@@ -124,13 +124,13 @@ jobs:
         run: python -m pip install Pillow fonttools
       - name: Match the selected engine and effects profile
         run: |
-          if [ "$VER" = 0.6.0 ] || [ "$VER" = 0.7.0 ]; then
+          if [ "$VER" = 0.6.0 ] || [ "$VER" = 0.7.0 ] || [ "$VER" = 0.7.1 ]; then
             echo 'CARAVEL_REVERB_MINIMAL=1' >> "$GITHUB_ENV"
             echo 'FELUCCA_SLICE=0' >> "$GITHUB_ENV"
             echo 'EMU_CFLAGS=-DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
           fi
           if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-source; fi
-          if [ "$VER" = 0.7.0 ]; then
+          if [ "$VER" = 0.7.0 ] || [ "$VER" = 0.7.1 ]; then
             echo 'EMU_CFLAGS=-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
           fi
       - name: Generate headers from the selected source (no target binary rebuild)
@@ -165,7 +165,7 @@ jobs:
           path: build/site-content
           persist-credentials: false
       - name: Add performance downloads without changing release artifacts
-        if: env.VER == '0.6.0' || env.VER == '0.7.0'
+        if: env.VER == '0.6.0' || env.VER == '0.7.0' || env.VER == '0.7.1'
         run: |
           python3 build/site-content/tests/performance_site_test.py
           python3 build/site-content/web/performance_pages.py --site site

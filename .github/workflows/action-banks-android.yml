@@ -33,10 +33,42 @@ jobs:
         run: python -m pip install Pillow fonttools
       - name: Install JieLi toolchain
         run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
-      - name: Download JieLi SDK
+      - name: Fetch and hash-verify pinned JieLi AC79 SDK files
+        shell: bash
         run: |
-          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
-            https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          # Only three SDK binaries are used by our package builder. Gitee
+          # full-repository git clones can stall indefinitely: first try raw
+          # downloads; independently verify exact versioned SHA-256 hashes.
+          set -eu
+          root="$RUNNER_TEMP/ac79-sdk/cpu/wl82/tools"
+          base="https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/raw/AC79NN_SDK_V1.2.1_2023-12-13/cpu/wl82/tools"
+          mkdir -p "$root/cfg"
+          ok=1
+          for f in uboot.boot cfg_tool.bin cfg/eq_cfg_hw.bin; do
+            curl -fLsS --connect-timeout 8 --max-time 25 --retry 2 --retry-delay 2 \
+              -o "$root/$f" "$base/$f" || ok=0
+          done
+          if [ "$ok" -eq 1 ] && python3 - <<'PY'
+          import hashlib, pathlib, os
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"ac79-sdk/cpu/wl82/tools"
+          expected={
+              "uboot.boot":"4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
+              "cfg_tool.bin":"276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
+              "cfg/eq_cfg_hw.bin":"41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
+          }
+          assert all((root/name).exists() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+                     for name,sha in expected.items()), "SDK raw downloads did not match locked hashes"
+          print("SDK binaries match pinned SHA-256 fingerprints")
+          PY
+          then
+            echo "Using verified pinned SDK binaries"
+          else
+            echo "Raw SDK unavailable/mismatched; retrying bounded full-repo clone"
+            rm -rf "$RUNNER_TEMP/ac79-sdk"
+            timeout 240 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 clone \
+              --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          fi
       - name: Baseline Caravel 0.6.0 build and generated firmware tables
         env:
           CC: cc -include stdint.h
@@ -62,6 +94,13 @@ jobs:
             -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
             experiments/action-banks/stasis_layout_test.c -o build/stasis-layout -lm
           build/stasis-layout
+      - name: Persistent snapshots and interrupted migration in the actual target profile
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
+            experiments/home-perf/snapshot_persistence_test.c -o build/snapshot-persistence -lm
+          build/snapshot-persistence
       - name: Build 0.6.0 STASIS + HOME/PAIR + ACTION C/WASM Android emulator
         env:
           ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'
@@ -73,7 +112,7 @@ jobs:
         run: node experiments/action-banks/action_wasm_test.mjs
       - name: Physical BANK long-press and shared ACTION SETUP firmware tests
         run: node experiments/action-banks/action_setup_wasm_test.mjs
-      - name: Four volatile snapshots via real A3/A4 keyboard hold and C/WASM morph
+      - name: Four project-persistent snapshots via real A3/A4 keyboard hold and C/WASM morph
         run: node experiments/action-banks/action_snapshots_wasm_test.mjs
       - name: Expanded STASIS C/WASM dual-bank grain and long recording tests
         run: node experiments/action-banks/stasis_granular_wasm_test.mjs

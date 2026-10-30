@@ -17,5 +17,5 @@ console.log(`HOME WASM: actual GLO+HOME, rows, track focus, A-D, one-MiB NOR reb
 
 // A capsule written by the previously delivered V1 emulator stays compatible.
 const legacy=await device(),le=legacy.e,fixture=fs.readFileSync('experiments/home-perf/fixtures/home-v1.hpm');
-assert.equal(fixture.length,le.web_home_project_size());new Uint8Array(le.memory.buffer,le.web_home_project_buf(),fixture.length).set(fixture);assert.equal(le.web_home_import(fixture.length),1);assert.equal(le.web_home_get(0,0,0,0),3);assert.equal(le.web_home_get(3,0,0,0),6);assert.equal(le.web_home_macro_get(0,0),64);assert.equal(le.web_home_get(6,0,2,0),2);
-console.log('V1 -> current: unchanged HPM1 project schema, three HOME rows, foreign track cell and macro restored.');
+assert.equal(fixture.length,10000);new Uint8Array(le.memory.buffer,le.web_home_project_buf(),fixture.length).set(fixture);assert.equal(le.web_home_import(fixture.length),1);assert.equal(le.web_home_get(0,0,0,0),3);assert.equal(le.web_home_get(3,0,0,0),6);assert.equal(le.web_home_macro_get(0,0),64);assert.equal(le.web_home_get(6,0,2,0),2);
+console.log('V1 -> current: legacy HPM1 migration, three HOME rows, foreign track cell and macro restored.');

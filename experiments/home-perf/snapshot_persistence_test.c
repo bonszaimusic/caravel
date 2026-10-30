@@ -25,6 +25,22 @@ int main(void){
  CHECK(hp_capture(&hp_io));seal(&hp_io);CHECK(hp_io.version==2&&hp_io.size==7200&&hp_capsule_ok(&hp_io));
  printf("v2 metadata: %u/%u bytes, 4x128 targets\n",hp_io.reserved[1],HP_V2_META);
  capsule=hp_io;hp_init();CHECK(!hp_rm_snap[0].count);CHECK(hp_restore(&capsule));CHECK(!memcmp(expected,hp_rm_snap,sizeof expected));
+ /* Full HOME rows, macro routes and 128 automation events coexist with 4x128. */
+ for(unsigned t=0;t<4;t++){
+  hp.track[t].count=32;hp.track[t].active=31;
+  for(unsigned i=0;i<128;i++)hp.track[t].cell[i/4][i%4]=hp_rm_snapshot_ref(&hp_rm_snap[0],i);
+  for(unsigned m=0;m<4;m++){hp.macro[t][m].base=20+m;for(unsigned j=0;j<4;j++)hp.macro[t][m].route[j]=(hp_route_t){hp_rm_snapshot_ref(&hp_rm_snap[0],t*16+m*4+j),(int)(j*32)-64,0};}
+ }
+ hp.events=128;for(unsigned i=0;i<128;i++)hp.event[i]=(hp_event_t){i%4,i/4,i%4,i%2,(i*17)%128,0};
+ CHECK(hp_capture(&hp_io));seal(&hp_io);CHECK(hp_capsule_ok(&hp_io));
+ printf("full HOME + 128 events + 4x128 snapshots: %u/%u bytes\n",hp_io.reserved[1],HP_V2_META);
+ CHECK(!hp_project_save(0,0));hp_init();CHECK(hp_project_load(0));CHECK(hp.track[3].count==32&&hp.events==128);CHECK(!memcmp(expected,hp_rm_snap,sizeof expected));
+ /* Incompressible input fails closed, and decompression rejects malformed spans. */
+ uint8_t noise[HP_RAW_META],out[HP_V2_META];uint32_t seed=0xDEADBEEFu;
+ for(unsigned i=0;i<sizeof noise;i++){seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;noise[i]=(uint8_t)seed;}
+ CHECK(!hp_zip(out,sizeof out,noise,sizeof noise));
+ uint8_t invalid[]={128,0,0};CHECK(!hp_unzip(noise,sizeof noise,invalid,sizeof invalid));
+ for(unsigned t=0;t<4;t++)hp_apply(t,2);hp.events=0;memset(hp.macro,0,sizeof hp.macro);
  /* A-D own independent snapshot sets, not the currently selected live slots. */
  for(unsigned s=0;s<4;s++){fill(s*17);memcpy(saved_slots[s],hp_rm_snap,sizeof hp_rm_snap);CHECK(!hp_project_save(s,0));}
  hp_init();CHECK(!hp_autosave_boot(0));

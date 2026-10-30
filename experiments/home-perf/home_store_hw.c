@@ -47,9 +47,10 @@ static int hp_hw_current(uint32_t slot,hp_hw_header_t*h){hp_hw_header_t a,b;int 
 static void hp_hw_seal(void){hp_io.magic=HP_MAGIC;hp_io.crc=hp_hash((uint8_t*)&hp_io+32,hp_io.size-32);hp_io.reserved[0]=hp_hash(&hp_io,20);}
 static int hp_pending_pack(uint8_t*out,const hp_store_t*p){
 #if HP_SNAPSHOT_STORE
- uint32_t n=p->version==2?p->reserved[1]:hp_v2_encode(out+2,&p->model,&p->pair,0);
+ uint8_t temp[HP_V2_META];
+ uint32_t n=p->version==2?p->reserved[1]:hp_v2_encode(temp,&p->model,&p->pair,0);
  if(!n||n>HP_V2_META)return 0;
- if(p->version==2)memcpy(out+2,&p->model,n);hp_put(out,n,2);
+ memcpy(out+2,p->version==2?(const uint8_t*)&p->model:temp,n);hp_put(out,n,2);
 #else
  hp_meta_pack(out,&p->model,&p->pair);
 #endif

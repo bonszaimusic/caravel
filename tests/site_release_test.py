@@ -362,6 +362,8 @@ class PagesBehaviorTest(unittest.TestCase):
         block = workflow_blocks()['Match the selected engine and effects profile']
         for version, expected in [('0.1.0', []), ('0.6.0', ['CARAVEL_REVERB_MINIMAL', 'FELUCCA_SLICE']),
                                   ('0.7.0', ['CARAVEL_ACTION_BANKS', 'FELUCCA_RANDOM_MORPH',
+                                             'CARAVEL_REVERB_MINIMAL', 'CARAVEL_STASIS_EXPAND', 'FELUCCA_SLICE']),
+                                  ('0.7.1', ['CARAVEL_ACTION_BANKS', 'FELUCCA_RANDOM_MORPH',
                                              'CARAVEL_REVERB_MINIMAL', 'CARAVEL_STASIS_EXPAND', 'FELUCCA_SLICE'])]:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as temp:
                 env_file = Path(temp) / 'env'

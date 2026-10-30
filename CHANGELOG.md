@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1] - 2026-10-30
+
+- Persist all four S1–S4 Random Morph parameter snapshots with performance projects, RESTORE LAST and USB backup/import. Retain four slots and 128 pinned targets per slot, scope and captured owner/row. Legacy HPM1 projects remain readable with empty slots.
+- Add bounded HPM1 v2 compression within the existing 7,168-byte protected flash copy. Keep header-last dual-copy commits, reject oversize saves before erase and preserve native originals under interrupted first migration. New 7,200-byte project files require 0.7.1 or later.
+- Preserve snapshot-only edits in autosave; keep running morphs, RETURN origins and STASIS audio volatile. Project INIT and native imports clear the slots.
+- Verify the installer package SHA-256, exact bytes, product, package layout and application/loader CRC before install/resume; retain FAQ/recovery links.
+- DIVE is not included. No audio-engine or ordinary STR/MOTN range changes.
+
 ## [0.7.0] - 2026-10-29
 
 - Move optimized DRONE/SEM/HADES/STASIS/HALL audio roots into checked executable RAM; retain stack/debug/data guards and direct-versus-far-call ABI regression gates. The owner reports clean rc6 playback and indicated peak load around 70% in the tested setup, without a new comparable USB trace.

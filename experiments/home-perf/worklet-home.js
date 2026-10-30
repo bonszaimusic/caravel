@@ -20,7 +20,7 @@
         const bytes=new Uint8Array(ex.memory.buffer,ex.web_home_project_buf(),size).slice();this.port.postMessage({type:'home-project',slot,bytes},[bytes.buffer]);return;
       }
       if(m.op==='import'){
-        let ok=0;if(m.bytes instanceof Uint8Array&&m.bytes.length===ex.web_home_project_size()){
+        let ok=0;if(m.bytes instanceof Uint8Array&&(m.bytes.length===ex.web_home_project_size()||m.bytes.length===10000)){
           new Uint8Array(ex.memory.buffer,ex.web_home_project_buf(),m.bytes.length).set(m.bytes);ok=ex.web_home_import(m.bytes.length);
         }
         this.port.postMessage({type:'home-result',message:ok?'Projekt importiert. Mit A–D speichern dauerhaft ablegen.':'Ungültiges Projekt; Import abgelehnt.'});

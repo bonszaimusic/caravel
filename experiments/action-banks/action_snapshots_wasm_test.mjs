@@ -108,9 +108,22 @@ assert.equal(e.web_action_key_note(26),255,'A4 is consumed, not sounded');
 tap(6);tap(6);
 assert.equal(e.web_action_state()&1,0,'ACTION OFF restores keyboard');
 assert.notEqual((()=>{e.web_keys(1<<26);render(90);let n=e.web_action_key_note(26);e.web_keys(0);render(100);return n;})(),255,'ordinary high note returned');
-// A genuine new device session has empty snapshots: no project schema change.
+// A blank device starts empty; a saved project persists the four slots.
 const fresh=(await WebAssembly.instantiate(code,{})).instance.exports;
 fresh._initialize();fresh.web_nor_erase();fresh.web_boot();
-assert.equal(fresh.web_action_snapshot_count(0),0,'snapshots are intentionally volatile');
+assert.equal(fresh.web_action_snapshot_count(0),0,'blank flash has no saved snapshots');
 assert.equal(fresh.web_action_snapshot_count(1),0);
-console.log('SNAPSHOTS C/WASM PASS: four slots, A4 tap/hold, real LCD, deep HOME capture, exact bidirectional 1-bar morph, freeze/resume, empty-slot safe, overwrite isolated, Random retained, A4 audio-safe, session volatile.');
+console.log('SNAPSHOTS C/WASM PASS: four slots, A4 tap/hold, real LCD, deep HOME capture, exact bidirectional 1-bar morph, freeze/resume, empty-slot safe, overwrite isolated, Random retained, A4 audio-safe, blank-device default.');
+
+// Project persistence and physical-sized NOR reboot use the exact C backend.
+assert.equal(e.web_home_save(0),1);
+const savedCounts=[0,1,2,3].map(s=>e.web_action_snapshot_count(s));
+const savedValues=[0,1,2,3].map(s=>e.web_action_snapshot_value(s,0));
+const nor=new Uint8Array(e.memory.buffer,e.web_nor(),e.web_nor_size()).slice();
+new Uint8Array(fresh.memory.buffer,fresh.web_nor(),fresh.web_nor_size()).set(nor);
+fresh.web_boot();for(let i=0;i<1400;i++)fresh.web_render(44);
+assert.equal(fresh.web_home_load(0),1);
+assert.deepEqual([0,1,2,3].map(s=>fresh.web_action_snapshot_count(s)),savedCounts);
+assert.deepEqual([0,1,2,3].map(s=>fresh.web_action_snapshot_value(s,0)),savedValues);
+assert.equal(fresh.web_action_random_state(),0,'project load cancels old trajectory');
+console.log('SNAPSHOTS persistence C/WASM PASS: parameter slots/counts/values survive saved project + fresh-instance NOR reboot.');

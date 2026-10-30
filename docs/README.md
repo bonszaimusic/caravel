@@ -6,6 +6,7 @@ What Caravel adds to Felucca 1.6.1 and how it works. The list of changes is in [
 [../NOTICE](../NOTICE), [../LICENSING.md](../LICENSING.md) and [../CREDITS.md](../CREDITS.md). Hardware acceptance on a real FM-1 is pending
 for everything here unless a guide says otherwise; host tests are not hardware measurements.
 
+- **[0.7.1 release and snapshot storage](release-071.md)**: saving S1–S4, compatibility, backup and installation.
 - **[0.6.0 illustrated STASIS and performance tutorials](tutorials/README.md)**:
   HOLD, ADD/BLEND, safe project loading, HOME, Pair Morph, macros and saving.
 - **[Original STASIS sound examples](https://bonszaimusic.github.io/caravel/sounds/)**:

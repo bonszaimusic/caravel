@@ -76,15 +76,14 @@ A2 = Freeze/Resume auch bei Snapshot-Morphs. A1 = weiterhin Random.
 Die Anzeige <strong>S1*</strong> bedeutet belegt, <strong>S1-</strong> bedeutet leer.
 Wenn kein Snapshot belegt ist, bleibt A3 als bisheriges Return A nutzbar, solange ein Random-Morph aktiv ist.
 Ein Snapshot kann ROW/TRACK/ALL mit jeweils den morphfähigen HOME-Parametern enthalten.
-Snapshots sind <strong>nur im RAM</strong>; Neustart löscht S1–S4. Sie gehören nicht zu Projekt-/Preset-Saves.
+Snapshots gehören zum Performance-Projekt: A–D speichern und laden S1–S4 mit, ebenso RESTORE LAST und USB-Backups. Alte Projekte beginnen mit leeren Slots. STASIS-Audio und laufende Morph-Bewegungen bleiben flüchtig.
 Ein A4-Speichern während eines laufenden Morphs friert die aktuellen hörbaren Werte als neuen Slot
 ein und beendet die bisherige Morph-Trajektorie, ohne die Klangparameter zurückzustellen.</p>
 <p>Bänke: RANDOM (Random, Freeze/Resume, Recall/Return A, Snap wählen/speichern), STASIS
 (Hold, Add, Blend, Release), PAIR (A, 50 %, B, Motion), LIVE (Mute T1–T4).
 Die 22 übrigen physischen Tasten und externe MIDI-Noten spielen unverändert.
 Zum Testen von STASIS: FX &gt; REVERB &gt; TYPE STASIS wählen.
-<strong>Nur Emulator-Prototyp:</strong> ACTION-Bänke sind vorläufig feste Vorlagen, Snapshot-Speicher sind RAM-only,
-nicht projektgespeichert. Keine Firmware zum Flashen.</p></section>'''
+<strong>Projektformat ab 0.7.1:</strong> Ältere Firmware kann neue Snapshot-Projekte nicht lesen. Vor dem Update sichern. Sehr dichte, nicht komprimierbare Projekte werden vor dem Schreiben mit PROJECT TOO LARGE abgewiesen; bestehende Saves bleiben erhalten.</p></section>'''
     if 'CARAVEL_STASIS_EXPAND=1' in extra:
         guide += '''<section class="home-panel" aria-label="STASIS GRAIN experiment">
 <h2>STASIS GRAIN · LONG CAPTURE · ACTION SETUP</h2>
@@ -177,8 +176,8 @@ font=json.dumps(base64.b64encode((out/'fonts/DotGothic16-subset.woff').read_byte
 single=single.replace('const SANS =','const hpFont=new FontFace("DotGothic16",Uint8Array.from(atob('+font+'),c=>c.charCodeAt(0)).buffer);document.fonts.add(hpFont);hpFont.load();\nconst SANS =')
 assert 'import ' not in single[single.index('<script>'):]
 assert 'fetch("felucca.wasm")' not in single
-if os.environ.get('ACTION_EMU_VERSION','').startswith('v0.7.0'):
-    single=single.replace('0.6.0','0.7.0-rc1')
+if os.environ.get('ACTION_EMU_VERSION','').startswith('v0.7.'):
+    single=single.replace('0.6.0',os.environ['ACTION_EMU_VERSION'].removeprefix('v'))
 if 'CARAVEL_ACTION_BANKS=1' in extra:
     (out/'Caravel-ACTION-BANKS-0.6.0-Android.html').write_text(single)
 else:
