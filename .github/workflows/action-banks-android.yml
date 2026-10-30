@@ -10,6 +10,7 @@ on:
       - 'web/emu/**'
       - 'tests/stasis_continuity_test.c'
       - '.github/workflows/action-banks-android.yml'
+      - '.github/workflows/release-071.yml'
   workflow_dispatch:
 
 permissions:

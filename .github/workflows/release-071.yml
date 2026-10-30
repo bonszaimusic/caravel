@@ -201,7 +201,7 @@ jobs:
           version=os.environ['VER'];root=pathlib.Path('build')/('release-'+version)
           with zipfile.ZipFile('build/Caravel-'+version+'-FM1-Testpaket.zip','w',zipfile.ZIP_DEFLATED) as z:
               for p in sorted(root.iterdir()):z.write(p,'firmware/'+p.name)
-              z.write('docs/prerelease-071.md','BITTE-LESEN.md')
+              z.write('docs/release-071.md','BITTE-LESEN.md')
               for p in sorted(pathlib.Path('build/prerelease-installer').rglob('*')):
                   if p.is_file():z.write(p,'Installer/'+p.relative_to('build/prerelease-installer').as_posix())
               starter=zipfile.ZipInfo('FM1-Installer.command');starter.create_system=3
