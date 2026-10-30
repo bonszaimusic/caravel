@@ -6,6 +6,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
+**[Troubleshooting & FAQ](docs/faq.md)** — USB detection, switching firmware, stock-return error -5, UBOOT and recovery tools.
+
 Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
 [Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
 has ended. 0.1.0 is the first version under this name. Caravel is **not affiliated with, endorsed or supported by Hügelton

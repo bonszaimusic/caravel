@@ -11,6 +11,10 @@ on:
       - 'docs/performance/**'
       - 'web/performance_pages.py'
       - 'tests/performance_site_test.py'
+      - 'docs/faq.md'
+      - 'web/index_pkg.html'
+      - 'web/faq_links.py'
+      - 'tests/faq_links_test.py'
       - '.github/workflows/pages.yml'
   release:
     types: [published]
@@ -155,7 +159,6 @@ jobs:
             --release-dir "$RUNNER_TEMP/release" --emulator build/emu
           if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-site site; fi
       - name: Read current performance website content
-        if: env.VER == '0.6.0' || env.VER == '0.7.0'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
@@ -166,6 +169,10 @@ jobs:
         run: |
           python3 build/site-content/tests/performance_site_test.py
           python3 build/site-content/web/performance_pages.py --site site
+      - name: Add current troubleshooting links without changing release artifacts
+        run: |
+          python3 build/site-content/tests/faq_links_test.py
+          python3 build/site-content/web/faq_links.py --site site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -10,6 +10,7 @@ for everything here unless a guide says otherwise; host tests are not hardware m
   HOLD, ADD/BLEND, safe project loading, HOME, Pair Morph, macros and saving.
 - **[Original STASIS sound examples](https://bonszaimusic.github.io/caravel/sounds/)**:
   native firmware DSP renders with cue times, not recordings of an FM-1.
+- [Troubleshooting & FAQ](faq.md): USB detection, firmware changes, stock-return error -5, UBOOT and recovery tools.
 - [Installing Caravel](installing.md): web installer, command line, a specific release, going back to the official firmware.
 - [Pages, groups and the settings menu](menus-and-pages.md): two parameter groups per screen, numbered footer, SELECT, MORE, EDIT and CLEAR STEP.
 - [Per-track voice reservations](voice-reservations.md)
