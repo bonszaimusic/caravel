@@ -87,8 +87,15 @@ static int hp_v2_decode(const hp_store_t*p,uint8_t*raw)
 static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_t*pair,const hp_rm_snap_t*snaps)
 {
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
- if(snaps&&!hp_snapshots_valid(snaps))return 0;
+ hp_pair_store_t captured;int live=pair==0;
+ /* MIDI and sequencer ISRs may edit HOME automation and Pair controls.
+  * Capture one coherent input, then restore IRQs before validation/compression. */
+ uint32_t irq=perf_irq_save();
+ if(live){hp_pair_capture(&captured);pair=&captured;}
  hp_meta_pack(raw,m,pair);if(snaps)memcpy(raw+HP_HW_META,snaps,sizeof hp_rm_snap);else memset(raw+HP_HW_META,0,sizeof hp_rm_snap);
+ if(live)for(uint32_t t=0;t<NTRK;t++){uint32_t v=hp_take(raw+2*t,2);hp_put(raw+2*t,(v&1023u)|(uint32_t)trk[t].user<<10,2);}
+ perf_irq_restore(irq);
+ if(!hp_meta_valid(raw))return 0;
  return hp_zip(out,HP_V2_META,raw,sizeof raw);
 }
 #endif

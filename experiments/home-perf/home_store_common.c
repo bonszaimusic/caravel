@@ -51,10 +51,7 @@ static int hp_capture(hp_store_t*p)
  memset(p,0,HP_CAPTURE_BYTES);p->magic=HP_MAGIC;p->version=1;p->size=sizeof*p;
  project_capture(&proj_scratch);proj_pack(&p->native,&proj_scratch);
 #if HP_SNAPSHOT_STORE
- hp_pair_store_t pair;hp_pair_capture(&pair);
- /* Preset-origin bytes are owned by the control thread, like project capture. */
- for(uint32_t t=0;t<NTRK;t++)hp.track[t].pad[0]=trk[t].user;
- p->reserved[1]=hp_v2_encode((uint8_t*)&p->model,&hp,&pair,hp_rm_snap);
+ p->reserved[1]=hp_v2_encode((uint8_t*)&p->model,&hp,0,hp_rm_snap);
  if(!p->reserved[1]){p->magic=0;return 0;}
  p->version=2;p->size=HP_V2_SIZE;p->reserved[2]=HP_RAW_META;
 #else
