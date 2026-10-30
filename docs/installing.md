@@ -2,10 +2,6 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Installing Caravel
 
-**Connection or update problem?** See the [Troubleshooting & FAQ](faq.md), including
-[USB detection](faq.md#usb-device-not-recognized), [stock-return error -5](faq.md#stock-return-error--5)
-and [M-Flasher / m-bootloader](faq.md#recovery-tools).
-
 Two ways to put a Caravel package (`.fwsc`) on an FM-1: the **web installer** in a browser, or `tools/fm1_install.py` from a terminal.
 Both run the same update over USB-MIDI and check the installed identity afterwards. Hardware acceptance of Caravel on a real FM-1 is
 still pending: read the notes below first.
@@ -42,6 +38,21 @@ Open the [web installer](https://bonszaimusic.github.io/caravel/webapp/installer
 FM-1 over USB and follow the page. It installs the package of the published release. The
 [web editor](https://bonszaimusic.github.io/caravel/webapp/editor/) and the
 [browser emulator](https://bonszaimusic.github.io/caravel/emulator/) are on the same site.
+
+Before the **Install** button is enabled, the browser now checks the exact package
+size and SHA-256 from the built site's release metadata, verifies the FM-1 product
+identity, decodes the UFW/flash headers, checks the application CRC and flash
+layout, and validates the OTA loader header and CRC. It refuses to start *or
+resume* an update if the package fails. These checks also apply to locally built
+preview sites, with hashes pinned to the local build. A digest embedded in the
+same site as its package is a consistency check, **not** a cryptographic signature
+of the publisher; verified releases are checked against source/build records
+when the site is generated.
+
+This prevents known malformed or mismatched files reaching the update process.
+It does **not** prevent a power cut, an interrupted USB transfer during writing,
+or a firmware application that cannot boot. Keep your backups and official V15.
+
 
 To go back to the stock firmware, use **Return to official V15** on the installer page and select the unmodified official `FM-1.fwsc`
 from M-VAVE. The browser validates the file locally; nothing is sent to a server. Caravel projects do not open in the official V15.

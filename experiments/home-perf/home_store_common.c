@@ -30,24 +30,49 @@ static int hp_model_valid(const hp_model_t*m)
  for(uint32_t i=0;i<m->events;i++){const hp_event_t*e=&m->event[i];if(e->track>=NTRK||e->step>=NSTEP||e->control>7||e->control==4||e->control==5||e->lock>1||e->value<0||e->value>127)return 0;}
  return 1;
 }
+#include "home_store_snapshots.h"
 static int hp_capsule_ok(const hp_store_t*p)
 {
- if(p->magic!=HP_MAGIC||p->version!=1||p->size!=sizeof*p||p->reserved[0]!=hp_hash(p,20)||p->crc!=hp_hash((const uint8_t*)p+32,sizeof*p-32)||!hp_model_valid(&p->model))return 0;
+ if(p->magic!=HP_MAGIC||p->reserved[0]!=hp_hash(p,20))return 0;
+#if HP_SNAPSHOT_STORE
+ if(p->version==2){
+  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
+  return p->size==HP_V2_SIZE&&p->crc==hp_hash((const uint8_t*)p+32,HP_V2_SIZE-32)&&hp_v2_decode(p,raw);
+ }
+#endif
+ if(p->version!=1||p->size!=sizeof*p||p->crc!=hp_hash((const uint8_t*)p+32,sizeof*p-32)||!hp_model_valid(&p->model))return 0;
  const hp_pair_store_t*q=&p->pair;if(q->on>1||q->motion>1||q->base<0)return 0;
  if(q->on&&(q->a>=NTRK||q->b>=NTRK||q->a==q->b))return 0;
  for(uint32_t i=0;i<NSTEP;i++)if(q->lane[i]<-1)return 0;
  return 1;
 }
-static void hp_capture(hp_store_t*p)
+static int hp_capture(hp_store_t*p)
 {
- memset(p,0,sizeof*p);p->magic=HP_MAGIC;p->version=1;p->size=sizeof*p;
+ memset(p,0,HP_CAPTURE_BYTES);p->magic=HP_MAGIC;p->version=1;p->size=sizeof*p;
  project_capture(&proj_scratch);proj_pack(&p->native,&proj_scratch);
+#if HP_SNAPSHOT_STORE
+ hp_pair_store_t pair;hp_pair_capture(&pair);
+ /* Preset-origin bytes are owned by the control thread, like project capture. */
+ for(uint32_t t=0;t<NTRK;t++)hp.track[t].pad[0]=trk[t].user;
+ p->reserved[1]=hp_v2_encode((uint8_t*)&p->model,&hp,&pair,hp_rm_snap);
+ if(!p->reserved[1]){p->magic=0;return 0;}
+ p->version=2;p->size=HP_V2_SIZE;p->reserved[2]=HP_RAW_META;
+#else
  uint32_t irq=perf_irq_save();p->model=hp;for(uint32_t t=0;t<NTRK;t++)p->model.track[t].pad[0]=trk[t].user;hp_pair_capture(&p->pair);perf_irq_restore(irq);
+#endif
+ return 1;
 }
 static int hp_restore(const hp_store_t*p)
 {
  if(!hp_capsule_ok(p))return 0;
- memcpy(&hp_io,p,sizeof hp_io);
+#if HP_SNAPSHOT_STORE
+ uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
+ int v2=p->version==2;if(v2&&!hp_v2_decode(p,raw))return 0;
+#endif
+ if(p!=&hp_io)memcpy(&hp_io,p,p->size);
+#if HP_SNAPSHOT_STORE
+ if(v2)hp_meta_unpack(&hp_io.model,&hp_io.pair,raw);
+#endif
  if(!proj_import(&proj_scratch,&hp_io.native,sizeof hp_io.native))return 0;
  hp_pair_store_t*pair=&hp_io.pair;
  if(pair->on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?pair->b:pair->a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}
@@ -61,11 +86,19 @@ static int hp_restore(const hp_store_t*p)
   ep.base=ep.effective=pair->base;ep.motion=pair->motion;hp.pair_base=pair->base;hp.pair_motion=pair->motion;hp.pair_valid=1;memcpy(ep.lane,pair->lane,sizeof ep.lane);
   for(uint32_t t=0;t<NTRK;t++)for(uint32_t k=0;k<NMSLOT;k++)if(pair->mod[t][k])trk[t].p[P_M1DST+3*k]=MD_PAIR;
  }
+#if HP_SNAPSHOT_STORE
+ hp_rm_reset();hp_rm_snapshot_clear();action_snap_slot=0;
+ if(v2)memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap);
+#endif
  perf_irq_restore(irq);hp_dirty=0;ui.force=1;return 1;
 }
 static uint32_t hp_signature(void)
 {
- hp_pair_store_t p;hp_pair_capture(&p);return autosave_sig()^hp_hash(&hp,sizeof hp)^hp_hash(&p,sizeof p)^((uint32_t)trk[0].user|(uint32_t)trk[1].user<<8|(uint32_t)trk[2].user<<16|(uint32_t)trk[3].user<<24);
+ hp_pair_store_t p;hp_pair_capture(&p);return autosave_sig()
+#if HP_SNAPSHOT_STORE
+ ^hp_hash(hp_rm_snap,sizeof hp_rm_snap)
+#endif
+ ^hp_hash(&hp,sizeof hp)^hp_hash(&p,sizeof p)^((uint32_t)trk[0].user|(uint32_t)trk[1].user<<8|(uint32_t)trk[2].user<<16|(uint32_t)trk[3].user<<24);
 }
 
 /* Canonical sound comparison; no flags, snapshots, flash writes or DSP changes. */

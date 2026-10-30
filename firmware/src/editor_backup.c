@@ -15,7 +15,7 @@ static const uint8_t ED_BK_IDS[13] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34};
 _Static_assert(sizeof proj_wire_u.raw >= sizeof(upf_t) && sizeof proj_wire_u.raw >= sizeof(fm6_bank_t), "backup staging");
 #if FELUCCA_PERF_HW
 /* A stable working snapshot while slot GETs reuse hp_io / proj_wire. */
-static hp_store_t ed_bk_performance __attribute__((section(".pool")));
+static uint8_t ed_bk_performance[HP_CAPTURE_BYTES] __attribute__((section(".pool"),aligned(4)));
 #endif
 static persist_t ed_bk_settings __attribute__((section(".pool")));
 static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id, ed_bk_gen;
@@ -48,7 +48,7 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
     if (id == 1u) { *len = sizeof ed_bk_settings; return (const uint8_t *)&ed_bk_settings; }
     if (id >= 2u && id <= 5u) {
 #if FELUCCA_PERF_HW
-        const hp_store_t*p=hp_slot(id-2u);if(p){*len=sizeof*p;return (const uint8_t*)p;}
+        const hp_store_t*p=hp_slot(id-2u);if(p){*len=p->size;return (const uint8_t*)p;}
 #endif
         if (project_used(id - 2u)) *len = sizeof proj_slot[0];
         return (const uint8_t *)&proj_slot[id - 2u];
@@ -76,9 +76,8 @@ static uint32_t ed_bk_capture(void)
 {
     if (ed_flash_stop()) return 3;
 #if FELUCCA_PERF_HW
-    hp_capture(&ed_bk_performance);
-    ed_bk_performance.crc=hp_hash((const uint8_t*)&ed_bk_performance+32,sizeof ed_bk_performance-32);
-    ed_bk_performance.reserved[0]=hp_hash(&ed_bk_performance,20);
+    hp_store_t*p=(void*)ed_bk_performance;if(!hp_capture(p))return 2;
+    p->crc=hp_hash((const uint8_t*)p+32,p->size-32);p->reserved[0]=hp_hash(p,20);
 #else
     project_capture(&proj_scratch);
     if (!proj_pack((project_store_t *)ED_BK_RAW, &proj_scratch)) return 2;
@@ -114,7 +113,8 @@ static uint32_t ed_bk_commit(void)
     if (ed_bk_pos != ed_bk_len || st_crc32(raw, ed_bk_len) != ed_bk_crc) return 2;
     if (ed_bk_id == 0u || (ed_bk_id >= 2u && ed_bk_id <= 5u)) {
 #if FELUCCA_PERF_HW
-        if(ed_bk_len==sizeof(hp_store_t)){
+        if(ed_bk_len==sizeof(hp_store_t)||ed_bk_len==HP_V2_SIZE){
+            if(hp_io.size!=ed_bk_len)return 2;
             if(!hp_capsule_ok(&hp_io))return 2;
             if(ed_bk_id==0u)return hp_restore(&hp_io)?0u:2u;
             if(!proj_import(&proj_scratch,&hp_io.native,sizeof hp_io.native))return 2;
@@ -206,7 +206,7 @@ static int proj_store_len(uint32_t len)
 {
     return
 #if FELUCCA_PERF_HW
-        len==sizeof(hp_store_t)||
+        len==sizeof(hp_store_t)||len==HP_V2_SIZE||
 #endif
         len == sizeof(project_store_t) || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
 }

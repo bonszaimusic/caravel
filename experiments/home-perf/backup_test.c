@@ -113,7 +113,10 @@ static int bridge(void){
   uint8_t size[2]={rep_n&255,rep_n>>8};fwrite(size,1,2,stdout);fwrite(rep,1,rep_n,stdout);fflush(stdout);
  }return 0;
 }
-int main(int argc,char**argv){
+#ifndef BACKUP_TEST_MAIN
+#define BACKUP_TEST_MAIN main
+#endif
+int BACKUP_TEST_MAIN(int argc,char**argv){
  if(argc>1)return bridge();
  web_nor_erase();web_boot();run_ms(1400);CHECK(web_pair_prepare(0,2,ENGI_SEM,ENGI_DRONE));run_ms(40);
  hp_apply(0,2);hp.macro[0][0].base=66;hp_event_put(0,4,0,91,1);hp.macro[0][0].route[0]=(hp_route_t){hp_track_ref(0,P_FILT,0xFFFF),24,0};CHECK(!hp_project_save(0,0));

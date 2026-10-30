@@ -2,6 +2,7 @@
 /* Emulator-only, combined A/B project capsule in EXTENDED virtual NOR.
  * Not a hardware flash allocation. Legacy native objects remain readable. */
 #include "home_store_types.h"
+#include "home_store_codec.h"
 #define HP_EXT 0x100000u
 #define HP_COPY 16384u
 #define HP_PREF 0x13F000u
@@ -26,19 +27,19 @@ static void hp_commit(uint32_t slot,hp_store_t*p)
 {
  const hp_store_t*old=hp_slot_disk(slot);uint32_t off=HP_EXT+slot*2*HP_COPY;
  if(old==(const hp_store_t*)(nor+off))off+=HP_COPY;
- p->seq=old?old->seq+1:1;p->crc=hp_hash((const uint8_t*)p+32,sizeof*p-32);p->reserved[0]=hp_hash(p,20);
- memset(nor+off,255,HP_COPY);memcpy(nor+off+4,(const uint8_t*)p+4,sizeof*p-4);memcpy(nor+off,&p->magic,4);web_flash_writes++;
+ p->seq=old?old->seq+1:1;p->crc=hp_hash((const uint8_t*)p+32,p->size-32);p->reserved[0]=hp_hash(p,20);
+ memset(nor+off,255,HP_COPY);memcpy(nor+off+4,(const uint8_t*)p+4,p->size-4);memcpy(nor+off,&p->magic,4);web_flash_writes++;
 }
 
 static int hp_project_save(uint32_t slot,const char*name)
 {
  if(project_compat_save_blocked(slot))return 1;
  if(slot>=4||chain_busy()){ui_message("STOP SONG FIRST");return 1;}
- hp_capture(&hp_io);
+ if(!hp_capture(&hp_io)){ui_message("PROJECT TOO LARGE / NOT SAVED");return 2;}
  if(name){memset(proj_scratch.name,0,sizeof proj_scratch.name);memcpy(proj_scratch.name,name,str_len(name)<PROJ_NAME_LEN?str_len(name):PROJ_NAME_LEN);proj_scratch.sum=proj_sum(&proj_scratch);if(!proj_pack(&hp_io.native,&proj_scratch))return 2;}
  memcpy(&proj_slot[slot],&hp_io.native,sizeof hp_io.native);proj_cur=slot;pat_from_set(slot+1);proj_name_get(proj_name,(uint8_t*)proj_scratch.name);
  if(transport_busy()){
-  hp_io.seq=0;hp_io.crc=hp_hash((const uint8_t*)&hp_io+32,sizeof hp_io-32);hp_io.reserved[0]=hp_hash(&hp_io,20);
+  hp_io.seq=0;hp_io.crc=hp_hash((const uint8_t*)&hp_io+32,hp_io.size-32);hp_io.reserved[0]=hp_hash(&hp_io,20);
   hp_pending[slot]=hp_io;hp_pending_mask|=1u<<slot;project_ram_set(project_ram_mask()|(1u<<slot));ui_message("SAVED RAM / STOP TO COMMIT");project_compat_saved();return 0;
  }
  if(st_save(OBJ_PROJECT0+slot,&hp_io.native,sizeof hp_io.native)){ui_message("SAVE ERROR");return 2;}
@@ -62,7 +63,7 @@ static void hp_autosave_poll(void)
  if(nor[HP_PREF]!=hp_default||nor[HP_PREF+1]!=(uint8_t)~hp_default){nor[HP_PREF]=hp_default;nor[HP_PREF+1]=(uint8_t)~hp_default;web_flash_writes++;}
  uint32_t sig=hp_signature();if(sig!=hp_as_seen||!autosave_quiet()){hp_as_seen=sig;hp_as_time=fm1_ms;return;}
  if(sig==hp_as_saved||(ui_prefs&PREF_RESTORE_OFF)||fm1_ms-hp_as_time<10000)return;
- hp_capture(&hp_io);hp_commit(4,&hp_io);hp_as_saved=sig;hp_dirty=0;
+ if(!hp_capture(&hp_io))return;hp_commit(4,&hp_io);hp_as_saved=sig;hp_dirty=0;
 }
 static int hp_autosave_boot(int allowed)
 {

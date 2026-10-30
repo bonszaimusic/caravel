@@ -251,6 +251,9 @@ static int hp_rm_snapshot_store(uint32_t slot)
   hp_rm_snapshot_write_ref(snap,i,hp_rm.cell[i].ref);
   snap->values[i]=hp_rm.cell[i].original;
  }
+ memset(snap->refs+hp_rm.count,0,(HP_RM_MAX-hp_rm.count)*3u);
+ memset(snap->values+hp_rm.count,0,(HP_RM_MAX-hp_rm.count)*sizeof snap->values[0]);
+ snap->pad=0;hp_dirty=1;
  snap->scope=hp_rm.scope;
  snap->origin_track=hp_rm.origin_track;
  snap->origin_row=hp_rm.origin_row;

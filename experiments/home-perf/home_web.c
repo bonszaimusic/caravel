@@ -16,10 +16,10 @@ EXPORT uint32_t web_home_assign(uint32_t t,uint32_t row,uint32_t col,uint32_t ki
 }
 EXPORT uint32_t web_home_save(uint32_t slot){return slot<4&&!hp_project_save(slot,0);}
 EXPORT uint32_t web_home_load(uint32_t slot){return slot<4&&hp_project_load(slot);}
-EXPORT uint32_t web_home_project_size(void){return sizeof(hp_store_t);}
+EXPORT uint32_t web_home_project_size(void){return HP_CAPTURE_BYTES;}
 EXPORT uint8_t*web_home_project_buf(void){return (uint8_t*)&hp_io;}
-EXPORT uint32_t web_home_export(uint32_t slot){const hp_store_t*p=hp_slot(slot);if(!p)return 0;memcpy(&hp_io,p,sizeof hp_io);return sizeof hp_io;}
-EXPORT uint32_t web_home_import(uint32_t n){return n==sizeof hp_io&&hp_restore(&hp_io);}
+EXPORT uint32_t web_home_export(uint32_t slot){const hp_store_t*p=hp_slot(slot);if(!p)return 0;if(p!=&hp_io)memcpy(&hp_io,p,p->size);return p->size;}
+EXPORT uint32_t web_home_import(uint32_t n){return (n==sizeof hp_io||n==HP_V2_SIZE)&&hp_io.size==n&&hp_restore(&hp_io);}
 EXPORT uint32_t web_home_macro_route(uint32_t t,uint32_t m,uint32_t route,uint32_t id,int32_t amount)
 {if(t>=NTRK||m>=4||route>=4||id>=P_COUNT)return 0;const param_desc_t*d=track_desc(&trk[t],id);if(!motion_param(id)||d->fmt==F_ENUM||d->fmt==F_ONOFF)return 0;hp.macro[t][m].route[route].ref=hp_track_ref(t,id,0xFFFF);hp.macro[t][m].route[route].amount=clamp(amount,-64,63);return 1;}
 EXPORT uint32_t web_home_macro_set(uint32_t t,uint32_t m,int32_t value){if(t>=NTRK||m>=4)return 0;hp_special_set(t,m,clamp(value,0,127),1);return 1;}

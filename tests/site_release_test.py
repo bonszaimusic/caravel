@@ -7,6 +7,7 @@ Reuse the release suite's disposable fixture, never canonical Git history or bui
 outputs. No network, GitHub workflow execution, device access or deployment.
 """
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -133,6 +134,10 @@ class SiteReleaseTest(unittest.TestCase):
         self.assertIn('href="../../firmware/caravel-0.1.0-source.tar.gz"', inst)
         self.assertIn('href="../firmware/caravel-0.1.0-source.tar.gz"', emu)
         self.assertIn('"release_verified": true', inst)
+        self.assertIn('"sha256": "' + hashlib.sha256(self.package.read_bytes()).hexdigest() + '"', inst)
+        self.assertIn('"size": ' + str(self.package.stat().st_size), inst)
+        self.assertIn('validateCaravelPackage(pkg, meta)', inst)
+        self.assertIn('image = verified.image;', inst)
         for path in self.out.rglob("*.html"):
             parser = Links()
             parser.feed(path.read_text())
@@ -198,6 +203,8 @@ class SiteReleaseTest(unittest.TestCase):
         text = (self.out / "webapp/installer/index.html").read_text()
         self.assertIn("not release-verified", text)
         self.assertIn('"release_verified": false', text)
+        self.assertIn('"sha256": "' + hashlib.sha256(self.package.read_bytes()).hexdigest() + '"', text)
+        self.assertIn('validateCaravelPackage(pkg, meta)', text)
         self.assertFalse((self.out / "firmware/caravel-0.1.0-source.tar.gz").exists())
 
     def test_preview_accepts_default_build_identity_without_release_claim(self):

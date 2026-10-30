@@ -13,6 +13,7 @@ No network access, device access or deployment is performed by this program.
 """
 import argparse
 import html as markup
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -242,7 +243,9 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
     text = (HERE / "index_pkg.html").read_text(encoding="utf-8")
     lib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8"))
                     for n in ("fm1pkg.js", "fm1ota.js", "fm1backup.js"))
+    # Bind the exact site-packaged binary to its verified/preview HTML before any Web MIDI access.
     meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
+                       "sha256": hashlib.sha256(raw).hexdigest(), "size": len(raw),
                        "source": source_url, "release_verified": not preview})
     for mark in ("/*LIB*/", "/*META*/"):
         release.require(text.count(mark) == 1, "installer metadata/library marker count changed")
