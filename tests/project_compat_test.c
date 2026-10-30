@@ -8,6 +8,23 @@
 #include "../experiments/engine-pair-morph/pair_test.c"
 static project_store_t original, disk;
 static uint8_t before_flash[sizeof nor];
+static void compat_seal(hp_store_t*p)
+{
+    p->crc=hp_hash((const uint8_t*)p+32,p->size-32);
+    p->reserved[0]=hp_hash(p,20);
+}
+static void compat_set_macro(hp_store_t*p,int value)
+{
+#if HP_SNAPSHOT_STORE
+    if(p->version==2){
+        uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
+        CHECK(hp_v2_decode(p,raw));raw[HP_HW_MAC]=(uint8_t)value;
+        p->reserved[1]=hp_zip((uint8_t*)&p->model,HP_V2_META,raw,sizeof raw);
+        CHECK(p->reserved[1]);return;
+    }
+#endif
+    p->model.macro[0][0].base=value;
+}
 static void tap_compat(uint32_t b)
 {
     web_buttons(1u << b); run_ms(70);
@@ -105,8 +122,7 @@ int main(void)
     const hp_store_t *saved = hp_slot(1); CHECK(saved);
     memcpy(&hp_io, saved, sizeof hp_io);
     hp_io.native = original;
-    hp_io.crc = hp_hash((const uint8_t *)&hp_io + 32, sizeof hp_io - 32);
-    hp_io.reserved[0] = hp_hash(&hp_io, 20);
+    compat_seal(&hp_io);
 #if FELUCCA_PERF_HW
     CHECK(hp_project_import(2, &hp_io));
 #else
@@ -150,11 +166,14 @@ int main(void)
     /* A combined autosave must not fall through to the native fallback. */
     saved = hp_slot(3); CHECK(saved);
     memcpy(&hp_io, saved, sizeof hp_io); hp_io.native = original;
-    hp_io.model.macro[0][0].base = 73;
-    hp_io.crc = hp_hash((const uint8_t *)&hp_io + 32, sizeof hp_io - 32);
-    hp_io.reserved[0] = hp_hash(&hp_io, 20);
+    compat_set_macro(&hp_io,73);
+    compat_seal(&hp_io);
 #if FELUCCA_PERF_HW
+#if HP_SNAPSHOT_STORE
+    uint8_t meta[HP_PENDING_BYTES];CHECK(hp_pending_pack(meta,&hp_io));
+#else
     uint8_t meta[HP_HW_META]; hp_meta_pack(meta, &hp_io.model, &hp_io.pair);
+#endif
     CHECK(hp_hw_commit(4, meta, &original, 0));
 #else
     hp_commit(4, &hp_io);

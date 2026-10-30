@@ -123,6 +123,13 @@ static int hp_project_load(uint32_t slot){const hp_store_t*p=hp_slot(slot);if(!p
 static int hp_project_import(uint32_t slot,const hp_store_t*p){
  if(slot>=4||transport_busy()||!flash_ok||project_compat_save_blocked(slot))return 0;
  if(!hp_capsule_ok(p)||!proj_import(&proj_scratch,&p->native,sizeof p->native)||!proj_engines_ok(&proj_scratch))return 0;
+#if HP_SNAPSHOT_STORE
+ if(p->version==2){
+  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));if(!hp_v2_decode(p,raw))return 0;
+  const hp_pair_store_t*q=(const void*)(raw+HP_HW_PAIR);
+  if(q->on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?q->b:q->a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}
+ }
+#endif
  if(p->version==1&&p->pair.on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?p->pair.b:p->pair.a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}
  if(!hp_pending_pack(hp_pending[slot],p))return 0;proj_slot[slot]=p->native;
  hp_pending_mask|=1u<<slot;project_ram_set(project_ram_mask()|(1u<<slot));

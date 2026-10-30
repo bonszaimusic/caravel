@@ -65,6 +65,11 @@ int main(void){
  CHECK(hp_v2_decode(&capsule,raw));sn[0].origin_track=4;bad=capsule;bad.reserved[1]=hp_zip((uint8_t*)&bad.model,HP_V2_META,raw,sizeof raw);seal(&bad);CHECK(!hp_restore(&bad));
  CHECK(hp_v2_decode(&capsule,raw));sn[0].values[0]=32767;bad=capsule;bad.reserved[1]=hp_zip((uint8_t*)&bad.model,HP_V2_META,raw,sizeof raw);seal(&bad);CHECK(!hp_restore(&bad));
  CHECK(hp_v2_decode(&capsule,raw));sn[0].refs[0][2]|=128;bad=capsule;bad.reserved[1]=hp_zip((uint8_t*)&bad.model,HP_V2_META,raw,sizeof raw);seal(&bad);CHECK(!hp_restore(&bad));
+ /* A valid codec must not hide an impossible Pair in the native sound. */
+ CHECK(hp_v2_decode(&capsule,raw));hp_pair_store_t*pair=(void*)(raw+HP_HW_PAIR);pair->on=1;pair->a=0;pair->b=1;
+ bad=capsule;CHECK(proj_import(&proj_scratch,&bad.native,sizeof bad.native));proj_scratch.t[0].engine=ENGI_DRUM;
+ CHECK(proj_pack(&bad.native,&proj_scratch));bad.reserved[1]=hp_zip((uint8_t*)&bad.model,HP_V2_META,raw,sizeof raw);seal(&bad);
+ uint32_t writes=web_flash_writes;CHECK(!hp_project_import(1,&bad));CHECK(web_flash_writes==writes);
  /* Every interruption keeps the previous complete combined copy. */
  CHECK(hp_restore(&capsule));CHECK(!hp_project_save(0,0));memcpy(flash_before,nor,sizeof nor);fill(39);hp_capture(&hp_io);uint8_t meta[HP_PENDING_BYTES];CHECK(hp_pending_pack(meta,&hp_io));project_store_t native=hp_io.native;
  unsigned successes=0;
