@@ -114,6 +114,12 @@ static int ota_fread(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + of
 static void ota_show(uint32_t step, int32_t code) { if (step == 9) last_code = code; }
 static void ota_commit(const uint8_t *parm) { committed = 1; memcpy(committed_parm, parm, 112); }
 
+/* the "official writer" (the one that rewrites the package's whole flash.bin, boot area included) is recognised by its
+ * CRCs; the host test has no M-VAVE binary, so the package's own loader stands in for it when these are set (#4) */
+static uint32_t off_hcrc, off_dcrc, off_len;
+#define OTA_LDR_HCRC off_hcrc
+#define OTA_LDR_DCRC off_dcrc
+#define OTA_LDR_LEN off_len
 #include "../firmware/src/ota.c"
 
 static uint32_t ota_body_off(void)                  /* ota.bin data + 0x20 in the logical image */
@@ -152,6 +158,68 @@ static void set_fl_size(uint8_t *lg, uint32_t size)
     ota_jl_enc(h, 0x40);
     memcpy(lg, h, 0x40 + n * 0x50u);
 }
+
+static uint32_t entry_off(uint32_t type)             /* data offset of a UFW entry in the logical image, 0 if absent */
+{
+    uint8_t h[0x400];
+    uint32_t i, n;
+    memcpy(h, logical, sizeof h);
+    ota_jl_enc(h, 0x40);
+    n = ota_rd16(h + 8);
+    for (i = 0; i < n; i++) {
+        uint8_t *e = h + 0x40 + i * 0x50u;
+        ota_jl_enc(e, 0x50);
+        if (ota_rd16(e) == type) return ota_rd32(e + 8);
+    }
+    return 0;
+}
+
+/* rewrite the package's boot area as the ROM reads it: decode, let mut() change the container (16-byte header,
+ * payload), then seal every CRC again, so that only what mut() changed can be wrong. mut == NULL: the same bytes */
+static void boot_edit(uint32_t at, void (*mut)(uint8_t *hdr, uint8_t *pl))
+{
+    uint8_t *f = logical + at, hd[32], rec[32], c[0x4000];
+    uint32_t len;
+    memcpy(hd, f, 32);
+    memcpy(rec, f + 32, 32);
+    ota_jl_enc(hd, 32);
+    ota_jl_enc(rec, 32);
+    len = ota_rd32(rec + 8);
+    memcpy(c, f + 0xA0, len);
+    ota_jl_enc(c, 16);
+    ota_jl_enc_k(c + 16, len - 16, 0xFFFFu);
+    if (mut)
+        mut(c, c + 16);
+    ota_wr16(c + 12, ota_crc16(c + 16, len - 16, 0));
+    ota_wr16(c + 14, ota_crc16(c, 14, 0));
+    ota_wr16(rec + 2, ota_crc16(c, len, 0));
+    ota_wr16(rec, ota_crc16(rec + 2, 30, 0));
+    ota_wr16(hd, ota_crc16(hd + 2, 30, 0));
+    ota_jl_enc(hd, 32);
+    ota_jl_enc(rec, 32);
+    ota_jl_enc(c, 16);
+    ota_jl_enc_k(c + 16, len - 16, 0xFFFFu);
+    memcpy(f, hd, 32);
+    memcpy(f + 32, rec, 32);
+    memcpy(f + 0xA0, c, len);
+}
+/* the package's boot area is the SDK's uboot.boot in the clear (a Caravel package never writes its head); the flash
+ * image of an official package holds it as burned: the container's header and payload each ciphered from 0xFFFF */
+static void boot_burn(uint32_t at)
+{
+    uint8_t rec[32];
+    uint32_t len;
+    memcpy(rec, logical + at + 32, 32);
+    ota_jl_enc(rec, 32);
+    len = ota_rd32(rec + 8);
+    ota_jl_enc(logical + at + 0xA0, 16);
+    ota_jl_enc_k(logical + at + 0xA0 + 16, len - 16, 0xFFFFu);
+}
+static void mut_addr(uint8_t *h, uint8_t *pl) { (void)pl; ota_wr32(h + 4, 0x01C02100u); }
+static void mut_banks(uint8_t *h, uint8_t *pl) { (void)pl; ota_wr16(h, 2); }
+static void mut_pos(uint8_t *h, uint8_t *pl) { (void)pl; ota_wr32(h + 8, 32); }
+static void mut_fm1(uint8_t *h, uint8_t *pl) { (void)h; memcpy(pl + 0x40, "AC79BLID", 8); memcpy(pl + 0x48, "fm1", 4); }
+static void mut_other(uint8_t *h, uint8_t *pl) { (void)h; memcpy(pl + 0x40, "AC79BLID", 8); memcpy(pl + 0x48, "fm2", 4); }
 
 static int check(const char *what, int ok)
 {
@@ -254,6 +322,115 @@ int main(int argc, char **argv)
         bad += check("no 'success' -> -13, no commit, area clean", rc == -13 && !committed && area_erased());
     }
 
+    /* #4: the official writer rewrites the head, and the package's must be a bootable one: it need not equal the device's */
+    {
+        uint32_t fl = entry_off(0), ob = entry_off(100);
+        uint8_t keep[0x4400], dev_head[0x4000];
+        if (!fl || !ob || fl + 0x4000u > sizeof keep * 4 || fl + sizeof keep > logical_len) {
+            printf("no flash.bin / ota.bin entry in %s\n", argv[1]);
+            return 2;
+        }
+        boot_burn(fl);
+        memcpy(keep, logical + fl, 0x4000);
+        {
+            uint8_t b[512];
+            memcpy(b, logical + ob, 512);
+            off_hcrc = ota_rd16(b);
+            off_dcrc = ota_rd16(b + 2);
+            off_len = ota_rd32(b + 8);
+        }
+        printf("official-writer path (the package's loader stands in)\n");
+
+        reset_dev();
+        bad += check("boot area as packaged: valid", (rc = ota_session()) == 0 && committed);
+        boot_edit(fl, NULL);
+        reset_dev();
+        bad += check("re-sealed unchanged: still valid", ota_session() == 0 && committed);
+        memcpy(logical + fl, keep, 0x4000);
+
+        reset_dev();                                         /* device head: nothing like the package's */
+        memset(nor, 0xA5, 0x4000);
+        memcpy(dev_head, nor, 0x4000);
+        rc = ota_session();
+        bad += check("device head differs completely: accepted", rc == 0 && committed && erases > 0);
+        bad += check("... and the head is not read or written", !memcmp(nor, dev_head, 0x4000));
+        reset_dev();
+        for (i = 0; i < 0x4000; i++) nor[i] = (uint8_t)(nor[i] ^ (i * 131u + 7u));
+        bad += check("device head scrambled: accepted", ota_session() == 0 && committed);
+        reset_dev();
+        memset(nor, 0xFF, 0x4000);
+        bad += check("device head blank: accepted", ota_session() == 0 && committed);
+
+        /* a boot area the ROM would not boot: refused in step 2, before any erase */
+        {
+            static const struct { const char *what; uint32_t at; } flip[] = {
+                {"flash header byte", 5}, {"boot record CRC", 32}, {"boot record data CRC", 34},
+                {"boot record offset (0xA0)", 36}, {"boot record length", 40}, {"container header", 0xA0 + 4},
+                {"container payload CRC (header)", 0xA0 + 12}, {"payload first byte", 0xA0 + 16}, {"payload middle", 0xA0 + 300},
+                {"payload last byte", 0},
+            };
+            uint32_t len;
+            uint8_t rec[32];
+            memcpy(rec, logical + fl + 32, 32);
+            ota_jl_enc(rec, 32);
+            len = ota_rd32(rec + 8);
+            for (i = 0; i < sizeof flip / sizeof flip[0]; i++) {
+                uint32_t at = flip[i].at ? flip[i].at : 0xA0 + len - 1;
+                char what[96];
+                logical[fl + at] ^= 0x04;
+                reset_dev();
+                rc = ota_session();
+                snprintf(what, sizeof what, "%s damaged: -5, nothing erased", flip[i].what);
+                bad += check(what, rc == -5 && !committed && erases == 0 && area_erased() && bad_erase == 0);
+                logical[fl + at] ^= 0x04;
+            }
+        }
+        {
+            static const struct { const char *what; void (*mut)(uint8_t *, uint8_t *); int rc; } m[] = {
+                {"load address 0x01C02100 (CRCs right)", mut_addr, -5}, {"two banks (CRCs right)", mut_banks, -5},
+                {"payload not at +16 (CRCs right)", mut_pos, -5}, {"names the FM-1 (AC79BLID fm1)", mut_fm1, 0},
+                {"names another board (AC79BLID fm2)", mut_other, -5},
+            };
+            for (i = 0; i < sizeof m / sizeof m[0]; i++) {
+                char what[96];
+                boot_edit(fl, m[i].mut);
+                reset_dev();
+                rc = ota_session();
+                snprintf(what, sizeof what, "%s: %s", m[i].what, m[i].rc ? "refused, nothing erased" : "accepted");
+                bad += check(what, m[i].rc ? (rc == m[i].rc && !committed && erases == 0 && area_erased())
+                                           : (rc == 0 && committed));
+                memcpy(logical + fl, keep, 0x4000);
+            }
+        }
+        {                                                    /* a flash.bin too short for a boot area is another board's: -15 first */
+            uint8_t ent[0x40 + 11 * 0x50];
+            memcpy(ent, logical, sizeof ent);
+            reset_dev();
+            set_fl_size(logical, 0x3000u);
+            bad += check("flash.bin of 0x3000: -15, nothing erased", ota_session() == -15 && erases == 0);
+            memcpy(logical, ent, sizeof ent);
+        }
+        {                                                    /* the host goes away, or never confirms, on this path too */
+            uint32_t total;
+            reset_dev();
+            rc = ota_session();
+            total = requests;
+            for (i = 3; i < 8; i++) {                        /* mid-UFW header, loader header, boot area reads */
+                char what[96];
+                reset_dev();
+                mute_after = (uint32_t)i;
+                rc = ota_session();
+                snprintf(what, sizeof what, "host gone after %u requests: no commit, nothing staged", (unsigned)i);
+                bad += check(what, rc < 0 && !committed && erases == 0 && area_erased());
+            }
+            reset_dev();
+            mute_after = total - 1;
+            rc = ota_session();
+            bad += check("no 'success': -13, no commit, area clean", rc == -13 && !committed && area_erased());
+        }
+        reset_dev();                                         /* and the package is whole again */
+        bad += check("restored package: valid again", ota_session() == 0 && committed);
+    }
     printf("%s\n", bad ? "OTA TEST FAILED" : "ota test passed");
     return bad != 0;
 }
