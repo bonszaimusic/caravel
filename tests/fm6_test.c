@@ -656,6 +656,29 @@ static void demo(const char *dir, uint32_t pi)
     fclose(w);
 }
 
+/* #304: AMS (an operator's amplitude-modulation sensitivity) as msfa has it: with the LFO's AMD at 0 the level is
+ * barely lower (pt = exp(12.2): about 1 dB), never full scale; AMD 50 at the LFO's depth (here it stands still) lower
+ * still but not silent (msfa: AMS 3 with AMD 99 there is silence) */
+static void ams(void)
+{
+    static double y[3][48000];
+    uint8_t v[FP_SIZE + 1u];
+    double r[3];
+    uint32_t i;
+    for (i = 0; i < 3u; i++) {
+        init_patch(v);
+        v[(6u - 1u) * FP_OP + FP_OL] = 80;              /* op 1, the carrier, below full */
+        v[(6u - 1u) * FP_OP + FP_AMS] = (uint8_t)(i ? 3 : 0);
+        v[FP_LAMD] = (uint8_t)(i == 2u ? 50 : 0);
+        v[FP_LFS] = 35;
+        setup(v, 0);
+        voice_render(60, 100, y[i], 48000, 0);
+        r[i] = rms(y[i], 4800, 48000);
+    }
+    check("#304 AMS 3, AMD 0: the carrier about 1 dB lower than AMS 0, not full scale", r[1] < r[0] && r[1] > r[0] * 0.8);
+    check("#304 AMS 3, AMD 50: lower again, not silent", r[2] < r[1] && r[2] > r[0] * 0.1);
+}
+
 int main(int argc, char **argv)
 {
     uint32_t pi;
@@ -666,6 +689,7 @@ int main(int argc, char **argv)
     macros();
     formats();
     voices();
+    ams();
     if (!getenv("NOCOST"))
         cost();
     if (argc > 1) {
