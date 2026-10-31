@@ -115,8 +115,9 @@ static void ota_show(uint32_t step, int32_t code) { if (step == 9) last_code = c
 static void ota_commit(const uint8_t *parm) { committed = 1; memcpy(committed_parm, parm, 112); }
 
 /* the "official writer" (the one that rewrites the package's whole flash.bin, boot area included) is recognised by its
- * CRCs; the host test has no M-VAVE binary, so the package's own loader stands in for it when these are set (#4) */
-static uint32_t off_hcrc, off_dcrc, off_len;
+ * CRCs: M-VAVE's, as in ota.c. A Caravel package has no such writer, so the official-writer checks below stand its own
+ * loader in for it; given M-VAVE's own package (FM-1_015, `ota_test FM-1.fwsc`) they run on the real thing (#4) */
+static uint32_t off_hcrc = 0xEBAAu, off_dcrc = 0x5881u, off_len = 0x4DE1u;
 #define OTA_LDR_HCRC off_hcrc
 #define OTA_LDR_DCRC off_dcrc
 #define OTA_LDR_LEN off_len
@@ -276,7 +277,8 @@ int main(int argc, char **argv)
     rc = ota_session();
     printf("  %u requests\n", requests);
     bad += check("session commits (flash.bin exactly 0x93000)", rc == 0 && committed);
-    bad += check("headers + loader + confirm, no head reads", requests >= 10 && requests <= 30);
+    bad += check("headers + loader + confirm, no head reads",     /* (M-VAVE's loader and boot area: ~20 KiB more) */
+                 requests >= 10 && requests <= (off_hcrc == 0xEBAAu && off_len == 0x4DE1u ? 100u : 30u));
     {
         uint8_t *h = nor + 0xE0000, *p = committed_parm;
         bad += check("staged body == the package's loader", !memcmp(nor + 0xE0020, logical + ota_body_off(), 64));
@@ -326,20 +328,24 @@ int main(int argc, char **argv)
     {
         uint32_t fl = entry_off(0), ob = entry_off(100);
         uint8_t keep[0x4400], dev_head[0x4000];
+        int real;
         if (!fl || !ob || fl + 0x4000u > sizeof keep * 4 || fl + sizeof keep > logical_len) {
             printf("no flash.bin / ota.bin entry in %s\n", argv[1]);
             return 2;
         }
-        boot_burn(fl);
-        memcpy(keep, logical + fl, 0x4000);
         {
             uint8_t b[512];
             memcpy(b, logical + ob, 512);
-            off_hcrc = ota_rd16(b);
-            off_dcrc = ota_rd16(b + 2);
-            off_len = ota_rd32(b + 8);
+            real = ota_rd16(b) == off_hcrc && ota_rd16(b + 2) == off_dcrc && ota_rd32(b + 8) == off_len;
+            if (!real) {
+                off_hcrc = ota_rd16(b);
+                off_dcrc = ota_rd16(b + 2);
+                off_len = ota_rd32(b + 8);
+                boot_burn(fl);                               /* (an official package's head is already as burned) */
+            }
         }
-        printf("official-writer path (the package's loader stands in)\n");
+        memcpy(keep, logical + fl, 0x4000);
+        printf("official-writer path (%s)\n", real ? "M-VAVE's own package" : "the package's loader stands in");
 
         reset_dev();
         bad += check("boot area as packaged: valid", (rc = ota_session()) == 0 && committed);
