@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-name: Caravel 0.6.0 Complete Validation
+name: Caravel Complete Validation
 on:
   push:
     branches: [main, experiment/stasis-texture-v0]
@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: all-060-${{ github.ref }}
+  group: validation-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   prepare:
@@ -71,7 +71,7 @@ jobs:
               --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
               https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
           fi
-      - name: Build actual reduced 0.6.0 target, then prepare full host fixtures
+      - name: Build the actual production-profile target (version string 0.6.0 for this test build), then prepare full host fixtures
         env:
           CC: cc -include stdint.h
           FELUCCA_SLICE: '0'
@@ -90,7 +90,7 @@ jobs:
           git rev-parse HEAD > build/validation-source-sha.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: validation-060-inputs
+          name: validation-inputs
           retention-days: 7
           path: |
             build/gen/
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: validation-060-build-diagnostics
+          name: validation-build-diagnostics
           retention-days: 7
           path: |
             build/*.txt
@@ -132,7 +132,7 @@ jobs:
       - run: python -m pip install Pillow fonttools
       - uses: actions/download-artifact@v4
         with:
-          name: validation-060-inputs
+          name: validation-inputs
           path: build
       - name: Pin DaisySP float reference for PHYS
         if: matrix.shard == 'engines_samples'
@@ -164,7 +164,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: validation-060-${{ matrix.shard }}
+          name: validation-${{ matrix.shard }}
           retention-days: 14
           path: |
             build/validation/
@@ -195,7 +195,7 @@ jobs:
       - run: python -m pip install Pillow fonttools
       - uses: actions/download-artifact@v4
         with:
-          name: validation-060-inputs
+          name: validation-inputs
           path: build
       - name: Install pinned Emscripten for all experimental browser tests
         if: matrix.suite != 'target'
@@ -237,7 +237,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: validation-060-experiment-${{ matrix.suite }}
+          name: validation-experiment-${{ matrix.suite }}
           retention-days: 14
           path: |
             build/validation/
@@ -253,7 +253,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:
-          pattern: validation-060-*
+          pattern: validation-*
           path: reports
       - name: Record complete validation scope and gate
         env:
@@ -263,23 +263,23 @@ jobs:
         run: |
           python3 tools/validate_report_060.py reports
           {
-            echo '# Caravel 0.6.0 automated validation'
+            echo '# Caravel automated validation'
             echo "Source: $GITHUB_SHA"
             echo "Target build: $PREPARE"
             echo "Eight complete host-suite shards: $HOST"
             echo "Pair, HOME and exact STASIS target checks: $EXPERIMENTS"
-            echo 'Legacy host checks retain ROOM/SPRING/SLICE; the actual 0.6.0 target is minimal STASIS with SLICE omitted.'
+            echo 'Legacy host checks retain ROOM/SPRING/SLICE; the actual target build is the production profile: minimal STASIS, HOME/PAIR, SLICE omitted.'
             echo 'No golden audio or CPU/target budgets were automatically updated.'
             echo 'Actual FM-1 sound, worst-case deadlines, physical USB/MIDI/OTA and long hardware soak tests remain unverified.'
-          } | tee VALIDATION-0.6.0.txt >> "$GITHUB_STEP_SUMMARY"
+          } | tee VALIDATION-REPORT.txt >> "$GITHUB_STEP_SUMMARY"
           [ "$PREPARE" = success ] && [ "$HOST" = success ] && [ "$EXPERIMENTS" = success ]
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Caravel-0.6.0-complete-test-report
+          name: Caravel-complete-test-report
           retention-days: 30
           path: |
-            VALIDATION-0.6.0.txt
+            VALIDATION-REPORT.txt
             reports/
   publish-060:
     name: Publish authorized Caravel 0.6.0
@@ -302,7 +302,7 @@ jobs:
       - run: python -m pip install Pillow fonttools
       - uses: actions/download-artifact@v4
         with:
-          name: validation-060-inputs
+          name: validation-inputs
           path: build
       - name: Install the target toolchain
         run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"

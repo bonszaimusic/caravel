@@ -235,7 +235,7 @@ jobs:
         run: |
           python3 - <<'PYGATE'
           import json, os, time, urllib.request
-          required = {'Caravel 0.6.0 Complete Validation', 'ACTION banks 0.6.0 Android emulator', 'Source and release metadata'}
+          required = {'Caravel Complete Validation', 'ACTION banks Android emulator', 'Source and release metadata'}
           url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs?head_sha={os.environ['GITHUB_SHA']}&per_page=100"
           headers = {'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'User-Agent': 'caravel-release-071'}
           deadline=time.monotonic()+3300
