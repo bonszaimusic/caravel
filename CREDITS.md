@@ -31,7 +31,9 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
   [zednaked](https://github.com/zednaked) (ratchets, #100),
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
   [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
-  [gospodindilly-ops](https://github.com/gospodindilly-ops) (the second core, #247)
+  [gospodindilly-ops](https://github.com/gospodindilly-ops) (the second core, #247),
+  [fenderberg](https://github.com/fenderberg) (the BPM 0 divide and the Linux stress-test build, Felucca #281, #282),
+  [hellsend](https://github.com/hellsend) (the FM6 AMS report, Felucca #304)
 
 - LOFI BYTE/FLOAT formula helpers: ported from [JIANT](https://github.com/juanjiant-bit/JIANT/tree/d5f99ee2d4277adefcdf8f892e34133d33ec27a6), GPL-3.0-only; source retains Leo Kuroshita / Hügelton attribution and formula acknowledgements (Tejeez, xpansive, viznut). The Felucca integration preserves the original five LOFI waves.
 
