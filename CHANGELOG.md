@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.2] - 2026-10-31
+
+- Stock return (issue #4): the update entry no longer requires the first 16 KiB of M-VAVE's official V15 package to equal the device's raw flash head. It checks that the package's boot area is structurally valid (header and boot record, boot container, CRCs, load address, FM-1 board tag) and still refuses a damaged one before anything is erased. Ported from felucca-bsp afd83ed. Package size check, loader recognition, staging and the host's final confirmation are unchanged. Candidate fix: tested on the host (including M-VAVE's V15 package) and on one FM-1 whose boot area equals V15's; not yet confirmed on a unit that showed -5.
+- Fix a divide by zero in `beat_samples()` when the BPM is briefly 0 (Felucca #282); `stdint.h` in the drum fuzz test (#281).
+- Fix FM6 operators with AMS other than 0 going silent or full scale even with AMD at 0 (Felucca #304). Factory voices have AMS 0 and sound the same; voices imported with AMS set now follow the LFO as intended.
+- CI only: draft pull requests and documentation-only changes no longer start the complete validation; workflow and report names no longer carry 0.6.0. No firmware change.
+- No project-format, storage, audio-engine or USB changes. INFO shows `v0.7.2`.
+
 ## [0.7.1] - 2026-10-30
 
 - Persist all four S1–S4 Random Morph parameter snapshots with performance projects, RESTORE LAST and USB backup/import. Retain four slots and 128 pinned targets per slot, scope and captured owner/row. Legacy HPM1 projects remain readable with empty slots.

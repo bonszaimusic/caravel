@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Preserve versioned 0.6.0 performance content on a verified 0.6.0/0.7.0/0.7.1 site.
+"""Preserve versioned 0.6.0 performance content on a verified 0.6.0/0.7.0/0.7.1/0.7.2 site.
 
 This never builds, replaces or relabels firmware, emulator or release files.
 The Pages workflow first builds from the published tag, then applies this
@@ -83,12 +83,12 @@ def build(site, source=ASSETS):
     # Verify the destination profile before writing any website content.
     installer = site / "webapp/installer/index.html"
     landing = site / "index.html"
-    version = re.search(r'<span class="pill">v(0\.6\.0|0\.7\.[01])</span>', landing.read_text())
+    version = re.search(r'<span class="pill">v(0\.6\.0|0\.7\.[012])</span>', landing.read_text())
     if '"release_verified": true' not in installer.read_text() or not version:
-        raise ValueError("Performance content requires a verified Caravel 0.6.0/0.7.0/0.7.1 site")
+        raise ValueError("Performance content requires a verified Caravel 0.6.0/0.7.0/0.7.1/0.7.2 site")
     manifest, data = load_assets(source)
     look = make_site.look_css(installer.read_text())
-    historical = version[1] in ('0.7.0','0.7.1')
+    historical = version[1] in ('0.7.0','0.7.1','0.7.2')
     source_url = 'https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz'
     if historical:
         # Keep established tutorial/audio URLs, explicitly labelled 0.6.0.

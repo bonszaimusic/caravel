@@ -11,6 +11,7 @@ on:
       - 'tests/stasis_continuity_test.c'
       - '.github/workflows/action-banks-android.yml'
       - '.github/workflows/release-071.yml'
+      - '.github/workflows/release-072.yml'
   workflow_dispatch:
 
 permissions:

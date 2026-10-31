@@ -1,0 +1,288 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Owner-requested stable 0.7.2. Persistent S1–S4 and installer preflight; DIVE excluded.
+# Publish only after exact-profile gates and complete source validation.
+name: Caravel 0.7.2 release
+
+on:
+  push:
+    branches: [release/0.7.2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release-072-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VER: 0.7.2
+  CC: cc -include stdint.h
+  FELUCCA_SLICE: '0'
+  CARAVEL_REVERB_MINIMAL: '1'
+
+jobs:
+  source:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require the dedicated stable release branch
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/release/0.7.2 ]; then
+            echo '::error::Run this workflow on release/0.7.2. To update the website for an existing release, run Pages on main with version 0.7.2.'
+            exit 1
+          fi
+
+  firmware:
+    needs: source
+    if: github.ref == 'refs/heads/release/0.7.2'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install build dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi pi32v2 toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Fetch and hash-verify pinned JieLi AC79 SDK files
+        shell: bash
+        run: |
+          # Only three SDK binaries are used by our package builder. Gitee
+          # full-repository git clones can stall indefinitely: first try raw
+          # downloads; independently verify exact versioned SHA-256 hashes.
+          set -eu
+          root="$RUNNER_TEMP/ac79-sdk/cpu/wl82/tools"
+          base="https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/raw/AC79NN_SDK_V1.2.1_2023-12-13/cpu/wl82/tools"
+          mkdir -p "$root/cfg"
+          ok=1
+          for f in uboot.boot cfg_tool.bin cfg/eq_cfg_hw.bin; do
+            curl -fLsS --connect-timeout 8 --max-time 25 --retry 2 --retry-delay 2 \
+              -o "$root/$f" "$base/$f" || ok=0
+          done
+          if [ "$ok" -eq 1 ] && python3 - <<'PY'
+          import hashlib, pathlib, os
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"ac79-sdk/cpu/wl82/tools"
+          expected={
+              "uboot.boot":"4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
+              "cfg_tool.bin":"276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
+              "cfg/eq_cfg_hw.bin":"41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
+          }
+          assert all((root/name).exists() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+                     for name,sha in expected.items()), "SDK raw downloads did not match locked hashes"
+          print("SDK binaries match pinned SHA-256 fingerprints")
+          PY
+          then
+            echo "Using verified pinned SDK binaries"
+          else
+            echo "Raw SDK unavailable/mismatched; retrying bounded full-repo clone"
+            rm -rf "$RUNNER_TEMP/ac79-sdk"
+            timeout 240 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 clone \
+              --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          fi
+      - name: Verify far-call ABI and bounded startup-copy guards
+        env:
+          AUDIO_RAM_REQUIRE_RUNTIME: '1'
+        run: |
+          if ! command -v clang >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y clang
+          fi
+          python3 tests/audio_ram_ir_test.py -v
+      - name: Validate RAM-code placement with one core and with RAM DSP disabled
+        env:
+          JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
+          AC79_SDK: ${{ runner.temp }}/ac79-sdk
+        run: |
+          FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER"
+          CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER"
+      - name: Build release package and verify target reserves and source archive
+        env:
+          JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
+          AC79_SDK: ${{ runner.temp }}/ac79-sdk
+        run: |
+          sh build.sh --release "$VER"
+          python3 experiments/dualcore-d1/check_layout.py
+          python3 tools/release_artifacts.py "$VER" --verify-only
+      - name: Actual target-profile layout, snapshot packing and STASIS audio regressions
+        run: |
+          mkdir -p build/host build/home-perf
+          FLAGS='-O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1'
+          cc $FLAGS experiments/home-perf/snapshot_persistence_test.c -o build/host/snapshot-persistence -lm
+          build/host/snapshot-persistence
+          cc $FLAGS experiments/action-banks/stasis_layout_test.c -o build/host/stasis-layout -lm
+          build/host/stasis-layout
+          cc $FLAGS experiments/home-perf/automation_test.c -o build/host/perf-automation -lm
+          build/host/perf-automation
+          cc $FLAGS experiments/action-banks/random_track_test.c -o build/host/random-track -lm
+          build/host/random-track
+          cc $FLAGS experiments/action-banks/random_return_track_test.c -o build/host/random-return-track -lm
+          build/host/random-return-track
+          cc $FLAGS -DCARAVEL_DUALCORE_D1=1 experiments/action-banks/note_start_split_test.c -o build/host/note-start-split -lm
+          build/host/note-start-split
+          cc $FLAGS experiments/action-banks/stasis_three_track_test.c -o build/host/stasis-three-track -lm
+          build/host/stasis-three-track > build/host/stasis-three-track-serial.log
+          cc $FLAGS -pthread -DFELUCCA_CPU2=1 -DCARAVEL_DUALCORE_D1=1 -include tests/c1_host.h \
+            -DC1_HOST_OFF=0 experiments/action-banks/stasis_three_track_test.c -o build/host/stasis-three-track-dual -lm
+          C1_MASK=rot build/host/stasis-three-track-dual > build/host/stasis-three-track-dual.log
+          diff -u build/host/stasis-three-track-serial.log build/host/stasis-three-track-dual.log
+          C1_MASK=auto build/host/stasis-three-track-dual > build/host/stasis-three-track-auto.log
+          diff -u build/host/stasis-three-track-serial.log build/host/stasis-three-track-auto.log
+          cc $FLAGS experiments/action-banks/stasis_arp_load_test.c -o build/host/stasis-arp-serial -lm
+          build/host/stasis-arp-serial > build/host/stasis-arp-serial.log
+          cc $FLAGS -pthread -DFELUCCA_CPU2=1 -DCARAVEL_DUALCORE_D1=1 -include tests/c1_host.h \
+            -DC1_HOST_OFF=0 experiments/action-banks/stasis_arp_load_test.c -o build/host/stasis-arp-dual -lm
+          C1_MASK=auto build/host/stasis-arp-dual > build/host/stasis-arp-dual.log
+          diff -u build/host/stasis-arp-serial.log build/host/stasis-arp-dual.log
+          build/host/stasis-arp-serial 1 > build/host/stasis-arp-one-serial.log
+          C1_MASK=auto build/host/stasis-arp-dual 1 > build/host/stasis-arp-one-dual.log
+          diff -u build/host/stasis-arp-one-serial.log build/host/stasis-arp-one-dual.log
+          cc $FLAGS experiments/home-perf/perf_equivalence.c -o build/host/perf-equivalence -lm
+          build/host/perf-equivalence
+          cc $FLAGS tests/drone_cells_test.c -o build/host/drone-cells -lm
+          build/host/drone-cells --dsp-only
+          cc -O2 -w -Ibuild/gen -Ifirmware/src tests/drone_cells_test.c -o build/host/drone-cells-legacy -lm
+          build/host/drone-cells-legacy
+          cc $FLAGS tests/stasis_continuity_test.c -o build/host/stasis-continuity -lm
+          build/host/stasis-continuity
+          cc $FLAGS -DSTASIS_FULL_PROFILE=1 tests/stasis_test.c -o build/host/stasis-smoke -lm
+          build/host/stasis-smoke
+          cc $FLAGS tests/stasis_layer_test.c -o build/host/stasis-layer -lm
+          build/host/stasis-layer
+          cc $FLAGS tests/project_compat_test.c -o build/host/project-compat -lm
+          build/host/project-compat
+      - name: Retained D3 and HOME hardware-facing regressions
+        env:
+          JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
+        run: python3 tools/check_050.py
+      - name: Install pinned Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Build matching 0.7.2 emulator and run native firmware WASM regressions
+        env:
+          ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'
+          ACTION_EMU_VERSION: v0.7.2
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          python3 experiments/home-perf/build.py
+          node experiments/action-banks/action_wasm_test.mjs
+          node experiments/action-banks/action_setup_wasm_test.mjs
+          node experiments/action-banks/action_snapshots_wasm_test.mjs
+          node experiments/action-banks/stasis_granular_wasm_test.mjs
+          node experiments/action-banks/morph_safety_wasm_test.mjs
+          node experiments/action-banks/stasis_antialias_audio_wasm_test.mjs
+          node experiments/home-perf/home_wasm_test.mjs
+          cp build/home-perf/Caravel-ACTION-BANKS-0.6.0-Android.html "build/Caravel-$VER-Emulator.html"
+          python3 - <<'CHECK'
+          import re,pathlib
+          p=pathlib.Path('build/Caravel-0.7.2-Emulator.html')
+          s=p.read_text()
+          assert 'v0.7.2' in s and 'const STASIS_WORKLET_SOURCE =' in s
+          assert 'fetch("felucca.wasm")' not in s
+          pathlib.Path('build/check-standalone.js').write_text(re.findall(r'<script[^>]*>([\s\S]*?)</script>',s)[-1])
+          CHECK
+          node --check build/check-standalone.js
+      - name: Ensure tested source is unchanged and package verified source bundle
+        env:
+          AC79_SDK: ${{ runner.temp }}/ac79-sdk
+        run: |
+          python3 web/make_site.py "build/release-$VER/caravel-$VER.fwsc" "$VER" build/prerelease-installer --release-dir "build/release-$VER"
+          bash -n tools/start_prerelease_installer.command
+          git diff --exit-code
+          python3 - <<'CHECK'
+          import pathlib,zipfile,os
+          version=os.environ['VER'];root=pathlib.Path('build')/('release-'+version)
+          with zipfile.ZipFile('build/Caravel-'+version+'-FM1-Testpaket.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in sorted(root.iterdir()):z.write(p,'firmware/'+p.name)
+              z.write('docs/release-072.md','BITTE-LESEN.md')
+              for p in sorted(pathlib.Path('build/prerelease-installer').rglob('*')):
+                  if p.is_file():z.write(p,'Installer/'+p.relative_to('build/prerelease-installer').as_posix())
+              starter=zipfile.ZipInfo('FM1-Installer.command');starter.create_system=3
+              starter.external_attr=0o100755<<16
+              z.writestr(starter,pathlib.Path('tools/start_prerelease_installer.command').read_bytes())
+          CHECK
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Caravel-0.7.2-verified-release
+          retention-days: 30
+          if-no-files-found: error
+          path: build/release-0.7.2/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Caravel-0.7.2-test-downloads
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            build/Caravel-0.7.2-FM1-Testpaket.zip
+            build/Caravel-0.7.2-Emulator.html
+
+  quality-gates:
+    needs: source
+    if: github.ref == 'refs/heads/release/0.7.2'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Require complete validation, ACTION/WASM and metadata on this exact source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYGATE'
+          import json, os, time, urllib.request
+          required = {'Caravel Complete Validation', 'ACTION banks Android emulator', 'Source and release metadata'}
+          url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs?head_sha={os.environ['GITHUB_SHA']}&per_page=100"
+          headers = {'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'User-Agent': 'caravel-release-072'}
+          deadline=time.monotonic()+3300
+          while time.monotonic()<deadline:
+              with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
+                  runs=json.load(response)['workflow_runs']
+              latest={}
+              for run in sorted(runs,key=lambda r:r['id']):
+                  if run['name'] in required:latest[run['name']]=run
+              failed=[name for name,run in latest.items() if run['status']=='completed' and run['conclusion']!='success']
+              if failed:raise SystemExit('Required gates failed: '+', '.join(failed))
+              pending=sorted(name for name in required if name not in latest or latest[name]['status']!='completed')
+              print('Waiting for: '+', '.join(pending) if pending else 'All exact-source quality gates passed',flush=True)
+              if not pending:break
+              time.sleep(20)
+          else:raise SystemExit('Timed out waiting for exact-source quality gates')
+          PYGATE
+
+  publish:
+    needs: [firmware, quality-gates]
+    if: github.repository == 'bonszaimusic/caravel' && github.ref == 'refs/heads/release/0.7.2'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Caravel-0.7.2-verified-release
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: Caravel-0.7.2-test-downloads
+          path: downloads
+      - name: Publish owner-requested stable release, never replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$VER"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)"
+            test "$TAG_SHA" = "$GITHUB_SHA" || { echo 'Existing release belongs to another source; refusing overwrite'; exit 1; }
+            echo "Existing release already matches $GITHUB_SHA"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --latest \
+              --title "Caravel $VER" --notes-file RELEASE-NOTES.md \
+              release/* downloads/*
+          fi

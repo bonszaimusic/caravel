@@ -15,7 +15,7 @@ permissions:
 jobs:
   release:
     # 0.7.0 and its RCs belong to the profile-specific release workflows.
-    if: github.repository == 'bonszaimusic/caravel' && github.ref_name != 'v0.7.1' && github.ref_name != 'v0.7.0' && !startsWith(github.ref_name, 'v0.7.0-rc')
+    if: github.repository == 'bonszaimusic/caravel' && github.ref_name != 'v0.7.2' && github.ref_name != 'v0.7.1' && github.ref_name != 'v0.7.0' && !startsWith(github.ref_name, 'v0.7.0-rc')
     runs-on: ubuntu-22.04
     timeout-minutes: 75
     steps:

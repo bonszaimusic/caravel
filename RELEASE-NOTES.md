@@ -1,26 +1,29 @@
-# Caravel 0.7.1
+# Caravel 0.7.2
 
-**Keep your four Random Morph destinations.** S1–S4 parameter snapshots now
-travel with projects, RESTORE LAST and USB backups. Four slots retain 128
-pinned targets each. A4 short selects, A4 held captures, A3 morphs to the slot
-and A2 freezes/resumes. Save A–D; STOP commits saves made during playback.
+**A candidate fix for the stock return (-5, issue #4).** *Return to official V15*
+used to require the official package's first 16 KiB to match your unit's flash
+head byte for byte, and stopped with *Update Failed -5* when they differed. It now
+checks that the package's boot area is valid (header, boot record, container,
+CRCs, load address, FM-1 board tag) and still refuses a damaged one before
+anything is erased.
 
-The installer checks package size/SHA-256, product, layout and app/loader CRC
-before install/resume. DIVE is excluded. STASIS audio, running morphs and
-RETURN origins stay volatile.
+**What is tested.** The check ran against M-VAVE's V15 package on the host with
+valid, damaged and differing device heads, and in the public build and
+validation. On one FM-1 whose boot area equals V15's, the 0.7.2 build installed,
+went straight back to the official V15 and ran normally. **It is not yet
+confirmed on a unit that showed -5.** Back up first; the return can erase projects.
 
-**Back up before installing.** Old HPM1 projects load with empty slots. New
-7,200-byte v2 projects need 0.7.1 or later; 0.7.0 cannot read them. Fixed flash
-space and atomic dual copies remain. Incompressible data is rejected before
-writing with `PROJECT TOO LARGE / NOT SAVED`.
+Also: a divide by zero when the BPM is briefly 0 is fixed, and FM6 operators
+with AMS other than 0 no longer go silent or full scale (imported voices only;
+factory voices are unchanged). CI-only changes do not touch the firmware.
 
-Download `Caravel-0.7.1-FM1-Testpaket.zip` for the local installer, firmware,
-verified source and notices, or `Caravel-0.7.1-Emulator.html` for the offline
-emulator. Firmware: `caravel-0.7.1.fwsc`. INFO must show `v0.7.1` after reboot.
-[Install, snapshot workflow and rollback details](https://github.com/bonszaimusic/caravel/blob/v0.7.1/docs/release-071.md).
+No project-format, storage, audio-engine or USB changes; 0.7.1 projects load as
+before. Download `Caravel-0.7.2-FM1-Testpaket.zip` for the local installer,
+firmware, verified source and notices, or `Caravel-0.7.2-Emulator.html` for the
+offline emulator. Firmware: `caravel-0.7.2.fwsc`. INFO must show `v0.7.2` after reboot.
+[Details](https://github.com/bonszaimusic/caravel/blob/v0.7.2/docs/release-072.md).
 
 Publication requires exact-source target/resource, native/USB/storage, audio,
 sanitizer, WASM and complete validation. These do not establish physical FM-1
-installation, power-cut, save/reboot/recall or USB install/resume acceptance
-for 0.7.1; none is claimed. HALL/STASIS still omit ROOM, SPRING and the SLICE
+acceptance beyond what is stated above. HALL/STASIS still omit ROOM, SPRING and the SLICE
 engine; SLICER remains. Tempo DELAY is suspended while STASIS owns its buffer.

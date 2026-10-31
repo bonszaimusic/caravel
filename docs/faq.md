@@ -83,22 +83,29 @@ open Caravel projects. If the return fails with -5, follow the next entry.
 
 ## Stock return error -5
 
-**Known open investigation — [issue #4](https://github.com/bonszaimusic/caravel/issues/4).**
+**Fixed in 0.7.2 as a candidate — [issue #4](https://github.com/bonszaimusic/caravel/issues/4).**
 The reported sequence is verification reaching request 4, followed by
 **Update Failed -5**; Caravel itself continues working.
 
-The maintainer traced that refusal to a comparison of the package's first
-16 KiB against the device's flash head, before staging or flash writing.
-A valid package hash alone does not establish a matching device head.
-Successful Caravel-to-Caravel updates do not prove stock restoration will work.
+**Cause.** Up to 0.7.1 the running firmware compared the official package's
+first 16 KiB with the device's own flash head, before staging or flash writing.
+Units whose head differs from the package's were refused, although the package
+was the genuine one. A matching package hash does not establish a matching head.
 
-Keep the complete log, installed Caravel version and exact official package
-identity/hash. Follow the current diagnostic instructions in issue #4.
-There is **no confirmed fix for the affected unit** in that issue as of the review
-date. Do not bypass the head check or treat the diagnostic build as a stock-return fix.
+**What to do.**
+1. Update to **0.7.2** or later with the web installer (Caravel to Caravel works as before).
+2. **Back up first.** Official firmware does not open Caravel projects, and the return can erase them.
+3. Try **Return to official V15** again with the unmodified official `FM-1.fwsc`.
 
-M-Flasher uses a different recovery path, but it is not a confirmed solution
-for the specific -5 report. Its availability depends on USB download-mode detection.
+0.7.2 checks that the package's boot area is valid instead of requiring it to equal
+yours, and still refuses a damaged package before erasing anything. This is a
+**candidate fix**: it is tested on the host and on one FM-1 whose head equals V15's,
+not yet on a unit that showed -5. If you still get -5, note the exact number, your
+installed version and the package hash and write to the issue.
+
+**Workaround before 0.7.2:** a reporter returned to V15 by installing Felucca 1.7.0 first
+and then using that installer's return. M-Flasher uses a different recovery path, but it
+is not a confirmed solution for -5 and depends on USB download-mode detection.
 
 ## UBOOT and the normal update loader
 

@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.1**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.2**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -24,6 +24,14 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 </table>
 
 More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+
+## Caravel 0.7.2 — candidate fix for the stock return (-5)
+
+[Download 0.7.2 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.7.2) · [What changed and what is tested](docs/release-072.md)
+
+- **Return to official V15:** the updater now checks that the official package's boot area is valid instead of requiring it to equal your unit's. If you got *Update Failed -5* on 0.7.1 or earlier, update to 0.7.2 and try again. This is a candidate fix: it is tested on the host and on one FM-1, not yet on a unit that showed -5. Back up first and see the [FAQ](docs/faq.md#stock-return-error--5).
+- Two small fixes from Felucca: a divide by zero when the BPM is briefly 0, and FM6 operators with AMS other than 0 (imported voices only; factory voices are unchanged).
+- No project-format, audio-engine or USB changes; 0.7.1 projects load as before.
 
 ## Caravel 0.7.1 — keep your performance snapshots
 
