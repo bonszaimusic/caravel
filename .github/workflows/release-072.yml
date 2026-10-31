@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Owner-requested stable 0.7.2. Persistent S1–S4 and installer preflight; DIVE excluded.
+# Owner-requested stable 0.7.2: candidate fix for the stock return (-5, issue #4) and two small Felucca fixes.
+# Built from the 0.7.1 release workflow with the same gates.
 # Publish only after exact-profile gates and complete source validation.
 name: Caravel 0.7.2 release
 
