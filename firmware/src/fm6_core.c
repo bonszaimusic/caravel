@@ -535,7 +535,8 @@ static int fm6_note_compute(fm6_note_t *n, const uint8_t *p, int32_t *out, int32
         if (ams) {                                 /* msfa: pt = exp(sensamp / 262144 * 0.07 + 12.2) */
             uint32_t sensamp = (uint32_t)(((uint64_t)amod * ams) >> 24);
             int32_t lg = FM6_AMS_C0 + (int32_t)(((uint64_t)sensamp * FM6_AMS_K) >> 10);
-            uint32_t pt = fm6_mant(lg) << ((lg >> 24) - 16);   /* (2^17.6 .. 2^24.1: shift 1..8) */
+            uint32_t pt = fm6_mant(lg) >> (30 - (lg >> 24));   /* 2^17.6 .. 2^24.1; the mantissa is Q30 (#304: was
+                                                                * shifted left, 2^14 too far, and overflowed) */
             level -= (int32_t)(((uint64_t)(uint32_t)level * ((uint64_t)pt << 4)) >> 28);
         }
         if (!((car >> k) & 1u))
