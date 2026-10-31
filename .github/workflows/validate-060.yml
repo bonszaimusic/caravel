@@ -3,8 +3,19 @@ name: Caravel 0.6.0 Complete Validation
 on:
   push:
     branches: [main, experiment/stasis-texture-v0]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSES/**'
+      - 'NOTICE'
   pull_request:
-  workflow_dispatch:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSES/**'
+      - 'NOTICE'
+  workflow_dispatch:                 # a draft PR is not validated on every push: run this by hand, or mark it ready
 permissions:
   contents: read
 concurrency:
@@ -12,6 +23,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   prepare:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
@@ -235,7 +247,7 @@ jobs:
             build/home-perf/*.txt
   report:
     needs: [prepare, host, experiments]
-    if: always()
+    if: always() && needs.prepare.result != 'skipped'      # (a draft PR: nothing ran, nothing to report)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
