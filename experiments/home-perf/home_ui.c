@@ -438,9 +438,8 @@ static void hp_draw_home(void)
   #if HP_JVN
   if(action_bank==ACT_BANK_JOURNEY){
    uint32_t js=hp_j.on?hp_j.tgt:action_snap_slot;
-   if(action_setup)perf_format(title,sizeof title,"SETUP 5/5 JOURNEY TRACKS");
-   else perf_format(title,sizeof title,"JOURNEY 5/5 T%u S%u%s %s",
-     hp_rm_snapshot_count(js)?(uint32_t)hp_rm_snap[js].origin_track+1u:0u,action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-",
+   perf_format(title,sizeof title,"%s 5/5 T%u S%u %s",action_setup?"SETUP":"JOURNEY",
+     hp_rm_snapshot_count(js)?(uint32_t)hp_rm_snap[js].origin_track+1u:0u,action_snap_slot+1u,
      !hp_j.on?"OFF":hp_j.paused?"PAUSE":hp_j.held?"HOLD":hp_j.phase?"WAIT":"PLAY");
   }
   else
@@ -493,18 +492,20 @@ static void hp_draw_home(void)
   int jb=0;
 #endif
   /* What is moving right now: there is one morph engine for all tracks, so say which track owns it, in every bank. */
-  if(0){}
+  if(!jb&&
 #if HP_JVN
-  else if(!jb&&hp_j.on){
-   uint32_t js=hp_j.tgt;
-   perf_format(running,sizeof running,"JOURNEY T%u >S%u %s",(uint32_t)hp_rm_snap[js].origin_track+1u,js+1u,
-     hp_j.paused?"PAUSE":hp_j.held?"HELD BY RANDOM":hp_j.phase?"WAIT":"PLAY");
-   action_help=running;
-  }
+     (hp_j.on||
+#else
+     (
 #endif
-  else if(!jb&&(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN)){
-   perf_format(running,sizeof running,"%s T%u %s",hp_rm.state==HP_RM_RETURN?"RETURN":hp_rm.state==HP_RM_RECALL?"GO SNAP":"RANDOM",
-     (uint32_t)hp_rm.origin_track+1u,hp_rm.state==HP_RM_FROZEN?"FROZEN":"RUNNING");
+      hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN)){
+   static const char*const names[]={"RANDOM","RETURN","GO SNAP","JOURNEY"};
+   static const char*const states[]={"RUNNING","FROZEN","PLAY","PAUSE","HELD","WAIT"};
+   uint32_t n=hp_rm.state==HP_RM_RETURN?1u:hp_rm.state==HP_RM_RECALL?2u:0u,st=hp_rm.state==HP_RM_FROZEN,tr=hp_rm.origin_track;
+#if HP_JVN
+   if(hp_j.on){n=3u;tr=hp_rm_snap[hp_j.tgt].origin_track;st=hp_j.paused?3u:hp_j.held?4u:hp_j.phase?5u:2u;}
+#endif
+   perf_format(running,sizeof running,"%s T%u %s",names[n],tr+1u,states[st]);
    action_help=running;
   }
 #endif

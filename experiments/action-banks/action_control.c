@@ -42,12 +42,7 @@ static void action_snapshot_poll(uint32_t mask)
    if(action_bank==ACT_BANK_JOURNEY){hp_j_set_wait((hp_j.wait+1u)%6u);action_snap_long=0;return;} /* tap A4: WAIT 0/1/2/4/8/16 bars */
 #endif
    action_snap_slot=(uint8_t)((action_snap_slot+1u)%HP_RM_SNAP_SLOTS);
-   char message[32];
-   char owner[4];hp_rm_snapshot_owner(action_snap_slot,owner);
-   if(hp_rm_snapshot_count(action_snap_slot))perf_format(message,sizeof message,"SNAP S%u IS %s",action_snap_slot+1u,owner);
-   else perf_format(message,sizeof message,"SNAP S%u EMPTY",action_snap_slot+1u);
-   ui_message(message);
-   ui.force=1;
+   hp_rm_snapshot_say(action_snap_slot);
   }
   action_snap_long=0;
  }

@@ -36,7 +36,6 @@ int main(void){
  CHECK(hp_j.on&&hp_j.phase==0u&&hp_j.held==0u&&hp_rm.state==HP_RM_RECALL);
  sel(1);bank(0u);tap(1);run_ms(300);                                          /* T2 RANDOM */
  CHECK(hp_j.on&&hp_j.held==1u&&hp_rm.state==HP_RM_RANDOM&&hp_rm.origin_track==1u);
- CHECK(strstr(ui.msg,"HELD BY T2")!=NULL||hp_j.held==1u);
  {int32_t r=trk[0].p[P_REV],p=trk[0].p[P_PAN];run_ms(600);CHECK(trk[0].p[P_REV]==r&&trk[0].p[P_PAN]==p);}   /* T1 stands still while held */
  {uint32_t g=0;while(hp_j.held&&g++<3000u)run_ms(10);}
  run_ms(100);CHECK(hp_j.on&&hp_j.held==0u&&hp_rm.state==HP_RM_RECALL&&hp_j.tgt==0u);              /* it went on by itself, same target */
@@ -87,7 +86,7 @@ int main(void){
  hp_rm_reset();set_all(33,0,50,0);action_snap_slot=2;hold(4,700);CHECK(hp_rm_snapshot_count(2)>0u&&strstr(ui.msg,"SAVED")!=NULL);
  hold(0,700);CHECK(action_setup==1u);
  hold(4,700);CHECK(hp_rm_snapshot_count(2)==0u&&strstr(ui.msg,"S3 DELETED")!=NULL);
- hold(4,700);CHECK(strstr(ui.msg,"ALREADY EMPTY")!=NULL);
+ hold(4,700);CHECK(strstr(ui.msg,"S3 EMPTY")!=NULL);
  CHECK(hp_rm_snapshot_count(0)>0u&&hp_rm_snapshot_count(1)>0u);
  hold(0,700);CHECK(action_setup==0u);
  /* deleting a slot while a journey runs ends it (its set of slots changed) */

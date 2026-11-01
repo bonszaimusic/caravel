@@ -222,6 +222,7 @@ static uint32_t hp_rm_snapshot_count(uint32_t slot)
 {
  return slot<HP_RM_SNAP_SLOTS?hp_rm_snap[slot].count:0u;
 }
+static void hp_rm_snapshot_say(uint32_t slot);
 static void hp_rm_snapshot_owner(uint32_t slot,char*b)   /* who a slot belongs to: "T2" (a track), "ALL" or "-" (empty) */
 {
  const hp_rm_snap_t*s=&hp_rm_snap[slot%HP_RM_SNAP_SLOTS];
@@ -291,7 +292,7 @@ static int hp_rm_snapshot_store(uint32_t slot)
 static void hp_rm_snapshot_delete(uint32_t slot)      /* RANDOM SETUP, A4 hold: empty the selected slot */
 {
  if(slot>=HP_RM_SNAP_SLOTS)return;
- if(!hp_rm_snap[slot].count){ui_message("SNAP: ALREADY EMPTY");ui.force=1;return;}
+ if(!hp_rm_snap[slot].count){hp_rm_snapshot_say(slot);return;}
  hp_rm_reset();
  memset(&hp_rm_snap[slot],0,sizeof hp_rm_snap[slot]);
  hp_dirty=1;
@@ -306,6 +307,12 @@ static void hp_rm_snapshot_delete(uint32_t slot)      /* RANDOM SETUP, A4 hold: 
  * entire morph without partially moving any control.
  * Morph starts from the ACTUAL live values, including manual/frozen edits.
  */
+static void hp_rm_snapshot_say(uint32_t slot)       /* "SNAP S2 IS T1" or "SNAP S2 EMPTY" */
+{
+ char o[4],m[32];hp_rm_snapshot_owner(slot,o);
+ if(hp_rm_snap[slot].count)perf_format(m,sizeof m,"SNAP S%u IS %s",slot+1u,o);else perf_format(m,sizeof m,"SNAP S%u EMPTY",slot+1u);
+ ui_message(m);ui.force=1;
+}
 static uint8_t hp_rm_skip;   /* bit t: a journey leg leaves track t's controls alone (set only around the leg's recall) */
 static int hp_rm_skipped(hp_ref_t r)
 {
@@ -574,7 +581,7 @@ static void hp_j_select(uint32_t s,uint32_t now)   /* the shared slot; a running
  if(s==action_snap_slot)return;
  action_snap_slot=(uint8_t)s;
  if(hp_rm_snap[s].count&&hp_j.on&&!hp_j.paused){if(hp_j_leg(s,now))hp_j_say("JOURNEY >S%u",s+1u,0u);}
- else{char o[4],m[32];hp_rm_snapshot_owner(s,o);if(hp_rm_snap[s].count)perf_format(m,sizeof m,"SNAP S%u IS %s",s+1u,o);else perf_format(m,sizeof m,"SNAP S%u EMPTY",s+1u);ui_message(m);ui.force=1;}
+ else hp_rm_snapshot_say(s);
 }
 static void hp_j_button(uint32_t i,uint32_t now)
 {
@@ -588,7 +595,7 @@ static void hp_j_button(uint32_t i,uint32_t now)
    ui_message("JOURNEY PAUSED");
   }else if(hp_j.held==2u){                               /* paused while held: the leg starts again from the live values */
    hp_j.paused=0;
-   if(hp_j.phase==0){hp_j_leg(hp_j.tgt,now);hp_j_say("JOURNEY PLAY >S%u",hp_j.tgt+1u,0u);}
+   if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
    else{hp_j.held=0;hp_j.t0=now;ui_message("JOURNEY PLAY");}
   }else{
    hp_j.paused=0;
@@ -609,8 +616,7 @@ static void hp_j_button(uint32_t i,uint32_t now)
 static void hp_j_hold(uint32_t now)               /* another morph took the engine: the journey waits and goes on by itself when it is done */
 {
  if(hp_j.phase==1u){uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
- hp_j.held=1u;
- char m[32];perf_format(m,sizeof m,"JOURNEY HELD BY T%u",(uint32_t)hp_rm.origin_track+1u);ui_message(m);ui.force=1;
+ hp_j.held=1u;ui.force=1;
 }
 static void hp_journey_poll(uint32_t now)
 {
@@ -634,7 +640,7 @@ static void hp_journey_poll(uint32_t now)
  if(hp_j.held==1u){                                  /* held: wait until the other morph has ended (arrived, or reset) */
   if(hp_j_moving())return;
   hp_j.held=0;
-  if(hp_j.phase==0){if(hp_j_leg(hp_j.tgt,now))hp_j_say("JOURNEY GOES ON >S%u",hp_j.tgt+1u,0u);}
+  if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
   else hp_j.t0=now;
   return;
  }

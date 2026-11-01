@@ -63,13 +63,13 @@ nothing moves. Hold BANK again to leave SETUP. The choice is saved with the proj
   to the same slot (or, if it was resting, with the rest of the pause). The picture below shows it. **A1 while held is PAUSE**: then it stays
   paused until you press A1 again. **A3 NEXT** or **A3 GO Sx** in RANDOM steer the journey to a slot at once. RANDOM's A2 FREEZE on the journey's own
   leg holds it like PAUSE does; a frozen RANDOM morph keeps the journey held.
-- **What is running is always shown.** In the JOURNEY bank the title reads `JOURNEY 5/5 T1 S2* PLAY` (the track that owns the snapshots, the slot, and
-  `PLAY`, `HOLD`, `WAIT`, `PAUSE` or `OFF`). In the other banks the line below the keys says `JOURNEY T1 >S2 PLAY` or `HELD BY RANDOM`, and
-  for a RANDOM morph `RANDOM T2 RUNNING`, `RETURN T2` or `GO SNAP T1`, so you can tell which track owns the one running morph.
+- **What is running is always shown.** In the JOURNEY bank the title reads `JOURNEY 5/5 T1 S2 PLAY` (the owner of the slot being approached, the slot, and
+  `PLAY`, `HOLD`, `WAIT`, `PAUSE` or `OFF`). In the other banks the line below the keys says `JOURNEY T1 PLAY`, `JOURNEY T1 HELD` and so on, and
+  for a RANDOM morph `RANDOM T2 RUNNING`, `RETURN T2 RUNNING` or `GO SNAP T1 RUNNING`, so you can tell which track owns the one running morph.
 - **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
-- **SETUP is one switch for the other banks.** Changing bank with SETUP on gives the knobs the new bank's values; the JOURNEY bank has none.
+- **SETUP is one switch for the other banks.** Entering the JOURNEY bank leaves SETUP; hold BANK there to open its own (the tracks).
 
 ![Diagram: a RANDOM morph on T2 holds the journey of T1, which goes on by itself](tutorials/img/journey-hold.png)
 

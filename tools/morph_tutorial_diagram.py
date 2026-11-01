@@ -32,7 +32,7 @@ def poly(y,pts,col):
 poly(350,[(a,5),(b,28),(c,28),(e,50),(f,50)],AMB)
 poly(450,[(a,20),(b,20),(c,45),(f,45)],CYAN)
 for x in (b,c):d.line((x,128,x,640),fill=LINE,width=1)
-for x,l1,l2,col in ((a,"JOURNEY T1 >S1","PLAY",GREEN),(b+8,"JOURNEY T1 >S1","HELD BY RANDOM",RED),(c+8,"JOURNEY T1 >S1","PLAY (message: GOES ON)",GREEN)):
+for x,l1,l2,col in ((a,"JOURNEY T1","PLAY",GREEN),(b+8,"JOURNEY T1","HELD",RED),(c+8,"JOURNEY T1","PLAY",GREEN)):
     text((x,540),l1,col,FS);text((x,564),l2,col,FS)
 # notes
 text((b,112),"1  T2: A1 RANDOM",CYAN,FS,"ma");text((c,112),"2  T2 morph is done",CYAN,FS,"ma")

@@ -5,7 +5,8 @@ snapshots S1–S4 into one long, hands-free movement: the sound morphs to a slot
 rests, moves on to the next slot and loops. A1 PLAY/PAUSE, A2 direction, A3 NEXT,
 A4 tap WAIT, A4 hold saves. Leg length and curve are RANDOM SETUP's BARS and
 SHAPE. It keeps running when you change bank, and MIDI Learn can map it to a
-controller. [Step-by-step tutorial](https://github.com/bonszaimusic/caravel/blob/v0.8.0/docs/tutorials/random-morph-journey.md).
+controller. A RANDOM morph on another track only holds it; it goes on by itself afterwards. Hold BANK in the JOURNEY bank to leave tracks out.
+Snapshot slots are shared by the whole project: their owners are shown, and A4 held in RANDOM's SETUP deletes one. [Step-by-step tutorial](https://github.com/bonszaimusic/caravel/blob/v0.8.0/docs/tutorials/random-morph-journey.md).
 
 **A MIDI CC now wins over a running morph for every target.** LFO2 and DRUM-X
 controls kept being overwritten by the morph, because the ownership check

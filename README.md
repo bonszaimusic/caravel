@@ -42,7 +42,8 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 
 [Download 0.8.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.8.0) · [What changed and what is tested](docs/release-080.md) · [Tutorial](docs/tutorials/random-morph-journey.md) · [Reference](docs/morph-journey.md)
 
-- **Morph Journey:** a fifth ACTION bank (BANK, after LIVE) chains the Random Morph snapshots S1–S4 into one hands-free movement. A1 PLAY/PAUSE, A2 direction, A3 NEXT, A4 tap WAIT, A4 hold saves; leg length and curve are RANDOM SETUP's BARS and SHAPE. It keeps running when you change bank and can be mapped with MIDI Learn.
+- **Morph Journey:** a fifth ACTION bank (BANK, after LIVE) chains the Random Morph snapshots S1–S4 into one hands-free movement. A1 PLAY/PAUSE, A2 direction, A3 NEXT, A4 tap WAIT, A4 hold saves; leg length and curve are RANDOM SETUP's BARS and SHAPE. It keeps running when you change bank, a RANDOM morph on another track only holds it (it goes on by itself afterwards), tracks can be left out (hold BANK in the JOURNEY bank) and MIDI Learn can map it.
+- **Snapshots:** the four slots are shared by the whole project and always show their owner (`S1:T3`, `S2:ALL`); hold A4 in RANDOM's SETUP to delete one.
 - **A learned MIDI CC wins over a running morph for every target** (LFO2 and DRUM-X controls were being overwritten).
 - BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction are saved with each project. **Back up first: 0.7.x and earlier refuse a project saved by 0.8.0**; older projects load with the defaults.
 - Tested on the host, in CI and in the complete validation; **not verified** with a controller on a real FM-1, with external MIDI clock or in long runs. Flash is tight: 1,116 B left in the app slot.

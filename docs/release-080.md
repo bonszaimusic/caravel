@@ -12,6 +12,13 @@ LIVE, and is played from the panel; MIDI Learn can also map it to a controller.
 2. Tap BANK until the title reads JOURNEY. **A1** PLAY / PAUSE / RESUME, **A2** direction (the running leg finishes,
    then the next one goes the new way), **A3** NEXT, **A4** tap WAIT (0, 1, 2, 4, 8, 16 bars of rest), A4 hold saves.
 3. Leg length and curve are RANDOM SETUP's BARS and SHAPE. A journey keeps running when you change bank.
+4. **One morph engine, one morph at a time.** A RANDOM morph on any track holds the journey and it goes on by itself when that morph is
+   done; A1 while held pauses it. Saving or deleting a snapshot ends it. The title and the line under the keys always say which track owns
+   what is running.
+5. **Four slots for the whole project.** Every slot is a scene: a leg moves exactly the controls stored in its target slot, so slots of
+   different tracks (and an ALL slot) form one journey. The owner of each slot is shown (`S1:T1 S2:T3 S3:ALL S4:-`).
+6. **Tracks left out:** hold BANK in the JOURNEY bank, K1 to K4 are TRACK 1 to 4, `ON` or `SKIP` (saved with the project).
+7. **Delete a slot:** in RANDOM's SETUP, select it and hold A4.
 
 Step-by-step with real firmware screens: [Random Morph and Morph Journey tutorial](tutorials/random-morph-journey.md).
 Reference, rules and MIDI table: [MORPH JOURNEY](morph-journey.md).
