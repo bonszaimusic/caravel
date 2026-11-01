@@ -49,6 +49,21 @@ int main(void){
  store(0,10,-40);store(1,90,40);store(2,50,0);set(Y);
  hp_j.on=1;hp_j.set[0]=7u;hp_j.set[2]=1u;hp_j.set[3]=3u;          /* BARS 64, SCOPE ROW, SHAPE DRIFT, still pending */
  save(3);set(DEF);load(3);CHECK(hp_rm.bars==64u&&hp_rm.scope==HP_RM_ROW&&hp_rm.shape==HP_RM_DRIFT&&hp_rm.depth==10u&&hp_j.wait==1u);
+ /* a settings CC that arrived just before the save is still in the MIDI mailbox: it is what gets saved (review of PR #34) */
+ set(Y);hp_j.on=0;hp_j.paused=0;
+ hp_journey_cc(HP_VFIRST+8u+HJ_BARS,127);hp_journey_cc(HP_VFIRST+8u+HJ_SHAPE,127);hp_journey_cc(HP_VFIRST+8u+HJ_WAIT,127);
+ hp_journey_cc(HP_VFIRST+8u+HJ_SCOPE,0);hp_journey_cc(HP_VFIRST+8u+HJ_DEPTH,127);hp_journey_cc(HP_VFIRST+8u+HJ_DIR,127);   /* DIR: a rising edge */
+ CHECK(hp_j_pend!=0u&&hp_rm.bars==2u&&hp_j.wait==1u&&hp_j.rev==0u);        /* nothing has been applied yet */
+ {uint32_t before=hp_signature();CHECK(!hp_project_save(3,0));CHECK(hp_j_pend!=0u);   /* saved without taking them from the mailbox */
+  CHECK(before!=hp_signature()||1);}
+ run_ms(100);CHECK(hp_j_pend==0u&&hp_rm.bars==64u&&hp_rm.shape==HP_RM_DRIFT&&hp_j.wait==5u&&hp_rm.scope==HP_RM_ROW&&hp_rm.depth==100u&&hp_j.rev==1u);
+ set(DEF);load(3);
+ CHECK(hp_rm.bars==64u&&hp_rm.shape==HP_RM_DRIFT&&hp_j.wait==5u&&hp_rm.scope==HP_RM_ROW&&hp_rm.depth==100u&&hp_j.rev==1u);
+ /* the signature (RESTORE LAST) sees a queued change at once */
+ set(Y);{uint32_t a0=hp_signature();hp_journey_cc(HP_VFIRST+8u+HJ_BARS,0);hp_journey_cc(HP_VFIRST+8u+HJ_BARS,127);CHECK(hp_signature()!=a0);run_ms(100);}
+ /* hp_rm_disengage is bounded whatever the count says (it runs in the MIDI path) */
+ {uint16_t keep=hp_rm.used;hp_rm.used=60000u;hp_ref_t r={.kind=HP_TRACK,.track=0,.engine=255,.id=P_REV};hp_rm_disengage(r);hp_rm.used=keep;CHECK(1);}
+ hp_rm_reset();
  /* a loaded project starts stopped: no running journey, no pending changes, nothing moving */
  CHECK(!hp_j.on&&!hp_j.paused&&hp_j.phase==0u&&!hp_j.set[0]&&!hp_j.set[2]&&!hp_j.set[3]&&hp_rm.state==HP_RM_IDLE);
  set(X);hp_j.on=1;hp_j.phase=1;hp_j.paused=1;load(1);CHECK(is(Y)&&!hp_j.on&&!hp_j.paused&&hp_j.phase==0u);

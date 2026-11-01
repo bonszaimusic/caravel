@@ -64,12 +64,23 @@ static int hp_ps_valid(const hp_rm_snap_t*s)
 static uint32_t hp_ps_idx(const uint8_t*tab,uint32_t n,uint32_t v,uint32_t fallback){for(uint32_t i=0;i<n;i++)if(tab[i]==v)return i;return fallback;}
 static uint32_t hp_ps_word(void)                      /* low byte: slot 0's pad, next byte: slot 1's pad */
 {
+ uint16_t pend;uint8_t val[HP_JVN];
+ {uint32_t irq=perf_irq_save();pend=hp_j_pend;for(uint32_t i=0;i<HP_JVN;i++)val[i]=hp_j_val[i];perf_irq_restore(irq);}
  uint32_t bars=hp_j.set[0]?hp_j.set[0]-1u:hp_ps_idx(hp_rm_times,7u,hp_rm.bars,3u);
  uint32_t depth=hp_j.set[1]?hp_j.set[1]-1u:hp_ps_idx(hp_rm_depths,6u,hp_rm.depth,2u);
  uint32_t scope=hp_j.set[2]?hp_j.set[2]-1u:hp_rm.scope;
  uint32_t shape=hp_j.set[3]?hp_j.set[3]-1u:hp_rm.shape;
+ uint32_t wait=hp_j.wait<6u?hp_j.wait:0u,rev=hp_j.rev&1u;
+ /* A settings CC that arrived since the last frame is still in the MIDI mailbox (hp_journey_poll has not taken it): it is the latest
+  * intended value and is saved, without taking it from the mailbox. A DIR button edge in the mailbox will toggle the direction. */
+ if(pend&(1u<<HJ_BARS))bars=hp_j_band(val[HJ_BARS],7u);
+ if(pend&(1u<<HJ_DEPTH))depth=hp_j_band(val[HJ_DEPTH],6u);
+ if(pend&(1u<<HJ_SCOPE))scope=hp_j_band(val[HJ_SCOPE],3u);
+ if(pend&(1u<<HJ_SHAPE))shape=hp_j_band(val[HJ_SHAPE],3u);
+ if(pend&(1u<<HJ_WAIT))wait=hp_j_band(val[HJ_WAIT],6u);
+ if(pend&(1u<<HJ_DIR))rev^=1u;
  uint32_t a=HP_PS_PRESENT|bars|depth<<3;
- uint32_t b=(scope&3u)|(shape&3u)<<2|(uint32_t)(hp_j.rev&1u)<<4|(uint32_t)(hp_j.wait<6u?hp_j.wait:0u)<<5;
+ uint32_t b=(scope&3u)|(shape&3u)<<2|rev<<4|wait<<5;
  return a|b<<8;
 }
 static void hp_ps_pack(hp_rm_snap_t*s){uint32_t w=hp_ps_word();s[0].pad=(uint8_t)w;s[1].pad=(uint8_t)(w>>8);}

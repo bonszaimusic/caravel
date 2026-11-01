@@ -26,8 +26,8 @@ snapshot or sound is changed, and a journey simply ends when you stop it.
 | --- | --- | --- |
 | leg length | RANDOM SETUP, **K1 BARS** | the same value RANDOM uses; during a running journey a change waits for the next leg and the display shows it (likewise **K3 SCOPE**) |
 | curve | RANDOM SETUP, **K4 SHAPE** | likewise shared and latched |
-| WAIT | **A4 tap** in either bank | journey only |
-| slot | RANDOM **A4 tap**, or the journey itself | the selected slot follows the journey; there is nothing to set |
+| WAIT | **A4 tap in the JOURNEY bank** (steps 0 / 1 / 2 / 4 / 8 / 16 bars), or a CC | journey only. **In RANDOM, A4 tap selects the next snapshot slot instead** |
+| slot | RANDOM **A4 tap** (next slot), or the journey itself | the selected slot follows the journey; in the JOURNEY bank A4 tap is WAIT, so the slot is not changed there |
 
 Holding BANK in the JOURNEY bank only reminds you of this (`LEG+SHAPE: RANDOM SETUP`), and entering the bank leaves SETUP.
 DEPTH and SCOPE exist only in RANDOM: a leg goes to stored values, and the controls it moves are already in the snapshot.
@@ -58,7 +58,7 @@ The storage grows by nothing (the values use bytes that earlier firmware require
 ## MIDI (optional)
 
 Start MIDI Learn (GLO + D4), go to HOME with ACTION on and pick a target: in RANDOM's SETUP K1–K4 pick BARS, DEPTH, SCOPE and SHAPE; in
-either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SLOT (the keys only pick while learning).
+either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SLOT (only while learning; outside learning, A4 tap is WAIT in the JOURNEY bank and the next slot in RANDOM).
 
 | Target | CC behaviour |
 | --- | --- |
