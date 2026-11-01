@@ -17,7 +17,7 @@ static void store(uint32_t slot,int32_t r,int32_t p){
  trk[0].p[P_REV]=(int16_t)r;trk[0].p[P_PAN]=(int16_t)p;
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;CHECK(hp_rm_snapshot_store(slot));
 }
-enum{C_PLAY=20,C_DIR=21,C_NEXT=22,C_WAIT=23,C_SLOT=24,C_BARS=25,C_SCOPE=26};
+enum{C_PLAY=20,C_DIR=21,C_NEXT=22,C_WAIT=23,C_BARS=25,C_SCOPE=26};
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);normal_off();pair_disable();
  for(uint32_t t=0;t<NTRK;t++)hp_apply(t,0);
@@ -27,7 +27,7 @@ int main(void){
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=1;hp_rm.depth=100;hp_rm.shape=HP_RM_LINEAR;
  /* the targets are learnable and the learned CCs survive as ordinary virtual entries */
  learn(HJ_PLAY,C_PLAY);learn(HJ_DIR,C_DIR);learn(HJ_NEXT,C_NEXT);learn(HJ_WAIT,C_WAIT);
- learn(HJ_SLOT,C_SLOT);learn(HJ_BARS,C_BARS);learn(HJ_SCOPE,C_SCOPE);
+ learn(HJ_BARS,C_BARS);learn(HJ_SCOPE,C_SCOPE);
  /* fewer than two snapshots: nothing starts, nothing moves */
  store(0,10,-40);action_snap_slot=0;
  trk[0].p[P_REV]=77;
@@ -80,10 +80,6 @@ int main(void){
   CHECK(hp_j.phase==1u);int32_t at=rev();run_ms(1500);CHECK(rev()==at&&hp_j.phase==1u&&hp_j.cur==t0);
   run_ms(2800);CHECK(hp_j.phase==0u);}
  midi(0xB0,C_WAIT,0);run_ms(30);CHECK(hp_j.wait==0u);
- /* SLOT is absolute and never saves: band 3 is the empty S4, band 1 steers the running journey to S2 */
- {uint32_t n3=hp_rm_snapshot_count(3);midi(0xB0,C_SLOT,100);run_ms(60);
-  CHECK(action_snap_slot==3u&&hp_rm_snapshot_count(3)==n3&&n3==0u);
-  midi(0xB0,C_SLOT,40);run_ms(60);CHECK(action_snap_slot==1u&&hp_j.tgt==1u&&hp_j.on);}
  /* BARS from a CC is latched while a leg moves and takes effect at the next leg */
  midi(0xB0,C_BARS,0);run_ms(30);CHECK(hp_rm.bars==1u);
  midi(0xB0,C_BARS,127);run_ms(30);CHECK(hp_rm.bars==1u&&hp_j.set[0]==7u);
@@ -106,7 +102,7 @@ int main(void){
  web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(120);web_keys(0);run_ms(60);   /* tap A4 */
  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_WAIT);ui.ml.pick=0;
  {uint32_t n=hp_rm_snapshot_count(0);web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(700);web_keys(0);run_ms(60);   /* hold A4 */
-  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_SLOT&&hp_rm_snapshot_count(0)==n);ui.ml.pick=0;}
+  CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0)==n);ui.ml.pick=0;}      /* nothing is learned and nothing is saved while learning */
  action_setup_turn(2,1);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_BARS+2u);ui.ml.pick=0;
  ui.ml.on=0;
  printf("MORPH JOURNEY PASS: %u checks.\n",checks);

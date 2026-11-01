@@ -26,7 +26,7 @@ static void action_snapshot_poll(uint32_t mask)
   if(!action_snap_long && fm1_ms-action_snap_started>=ACTION_LONG_MS){
    action_snap_long=1;
 #if HP_JVN
-   if(ui.ml.on)ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_SLOT); /* MIDI LEARN: hold A4 picks JOURNEY SLOT, nothing is saved */
+   if(ui.ml.on){}                                                /* MIDI LEARN: hold A4 learns nothing and saves nothing */
    else
 #endif
    if(action_bank==0u&&action_setup)hp_rm_snapshot_delete(action_snap_slot);   /* RANDOM SETUP: A4 hold deletes the selected slot */

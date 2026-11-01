@@ -74,7 +74,7 @@ int main(void){
    else if(ev==1){press(HJ_DIR);presses++;}
    else if(ev==2||ev==3){press(HJ_NEXT);presses++;}
    else if(ev==4)cc(HJ_WAIT,st_rnd()%128u);
-   else if(ev==5)cc(HJ_SLOT,st_rnd()%128u);
+   else if(ev==5)cc(HJ_WAIT,st_rnd()%128u);
    else if(ev==6)cc(HJ_BARS,st_rnd()%128u);
    else if(ev==7)cc(HJ_DEPTH,st_rnd()%128u);
    else if(ev==8)cc(HJ_SCOPE,st_rnd()%128u);

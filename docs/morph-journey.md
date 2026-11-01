@@ -93,13 +93,12 @@ The storage grows by nothing (the values use bytes that earlier firmware require
 ## MIDI (optional)
 
 Start MIDI Learn (GLO + D4), go to HOME with ACTION on and pick a target: in RANDOM's SETUP K1–K4 pick BARS, DEPTH, SCOPE and SHAPE; in
-either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SLOT (only while learning; outside learning, A4 tap is WAIT in the JOURNEY bank and the next slot in RANDOM).
+either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT (while learning, a hold of A4 learns nothing and saves nothing; outside learning, A4 tap is WAIT in the JOURNEY bank and the next slot in RANDOM).
 
 | Target | CC behaviour |
 | --- | --- |
 | PLAY, DIR, NEXT | buttons: rising edge through 64 (a repeated high value or the release does not trigger again) |
 | WAIT | absolute, 6 bands |
-| SLOT | absolute, 4 bands: selects, never saves |
 | BARS / DEPTH / SCOPE / SHAPE | absolute, 7 / 6 / 3 / 3 bands; held back while a leg moves, applied at the next leg (SCOPE resets the morph, so it must wait) |
 
 ## Limits

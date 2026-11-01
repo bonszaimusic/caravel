@@ -472,14 +472,14 @@ static void hp_rm_poll(uint32_t now)
  * knob or CC that owns a parameter (hp_rm_disengage) keeps it until the leg ends; the next leg moves it again.
  *
  * Controls are MIDI Learn targets (HP_VFIRST+8 ..): PLAY (button: play / pause), DIR (button: forward / reverse),
- * NEXT (button), WAIT (absolute, 6 bands: 0/1/2/4/8/16 bars of rest after each arrival), SLOT (absolute, 4 bands:
- * selects S1..S4, never saves), and the RANDOM settings BARS 7 / DEPTH 6 / SCOPE 3 / SHAPE 3 bands (absolute).
+ * NEXT (button), WAIT (absolute, 6 bands: 0/1/2/4/8/16 bars of rest after each arrival), and the RANDOM settings
+ * BARS 7 / DEPTH 6 / SCOPE 3 / SHAPE 3 bands (absolute).
  * Buttons act on the rising edge through 64, so a release or a repeated high value does not trigger twice.
  * The MIDI side (an interrupt context) only leaves a message in the mailbox; hp_rm and the snapshots are touched by
  * the UI thread alone (hp_journey_poll). Pilot limits: 2..4 populated snapshots of one TRACK scope, one owner track and
  * one pinned target set (checked before start, nothing moves otherwise); it loops until stopped. A RANDOM, RETURN or
  * other morph started by hand ends it; a physical A3 recall during a journey is not followed. */
-enum {HJ_PLAY,HJ_DIR,HJ_NEXT,HJ_WAIT,HJ_SLOT,HJ_BARS,HJ_DEPTH,HJ_SCOPE,HJ_SHAPE};
+enum {HJ_PLAY,HJ_DIR,HJ_NEXT,HJ_WAIT,HJ_BARS,HJ_DEPTH,HJ_SCOPE,HJ_SHAPE};
 static const uint8_t hp_j_waits[]={0,1,2,4,8,16};
 static volatile uint16_t hp_j_pend;      /* ISR -> UI: bit i = target i has news */
 static volatile uint8_t hp_j_val[HP_JVN];
@@ -575,14 +575,6 @@ static void hp_j_set_wait(uint32_t w)              /* 0..5: rest 0/1/2/4/8/16 ba
  hp_j.wait=(uint8_t)(w<6u?w:5u);hp_dirty=1;
  hp_j_say("JOURNEY WAIT %u BAR",hp_j_waits[hp_j.wait],0u);
 }
-static void hp_j_select(uint32_t s,uint32_t now)   /* the shared slot; a running journey steers there smoothly; never saves */
-{
- s%=HP_RM_SNAP_SLOTS;
- if(s==action_snap_slot)return;
- action_snap_slot=(uint8_t)s;
- if(hp_rm_snap[s].count&&hp_j.on&&!hp_j.paused){if(hp_j_leg(s,now))hp_j_say("JOURNEY >S%u",s+1u,0u);}
- else hp_rm_snapshot_say(s);
-}
 static void hp_j_button(uint32_t i,uint32_t now)
 {
  if(i==HJ_PLAY){
@@ -626,7 +618,6 @@ static void hp_journey_poll(uint32_t now)
   for(uint32_t i=0;i<HP_JVN;i++)if(pend&(1u<<i)){
    if(i<=HJ_NEXT)hp_j_button(i,now);
    else if(i==HJ_WAIT)hp_j_set_wait(hp_j_band(val[i],6u));
-   else if(i==HJ_SLOT)hp_j_select(hp_j_band(val[i],HP_RM_SNAP_SLOTS),now);
    else{
     static const uint8_t counts[4]={7u,6u,3u,3u};
     uint32_t k=i-HJ_BARS;hp_j.set[k]=(uint8_t)(hp_j_band(val[i],counts[k])+1u);

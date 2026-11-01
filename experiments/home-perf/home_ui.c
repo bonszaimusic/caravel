@@ -17,7 +17,7 @@ static const param_desc_t HP_PDESC[4]={
 #if HP_JVN
 static const param_desc_t HP_JDESC[HP_JVN]={
  {"JRN PLAY",F_PCT,0,127,0,0,0},{"JRN DIR",F_PCT,0,127,0,0,0},{"JRN NEXT",F_PCT,0,127,0,0,0},
- {"JRN WAIT",F_PCT,0,127,0,0,0},{"JRN SLOT",F_PCT,0,127,0,0,0},{"RM BARS",F_PCT,0,127,0,0,0},
+ {"JRN WAIT",F_PCT,0,127,0,0,0},{"RM BARS",F_PCT,0,127,0,0,0},
  {"RM DEPTH",F_PCT,0,127,0,0,0},{"RM SCOPE",F_PCT,0,127,0,0,0},{"RM SHAPE",F_PCT,0,127,0,0,0}};
 #endif
 static const param_desc_t *hp_vdesc(uint32_t id){

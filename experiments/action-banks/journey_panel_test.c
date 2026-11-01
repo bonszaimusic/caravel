@@ -85,7 +85,7 @@ int main(void){
   CHECK(hp_rm.bars==8u&&hp_rm.shape==2u&&hp_rm.scope==HP_RM_ALL&&hp_j.on);}
  hp_rm.scope=HP_RM_TRACK;
  hold(0,700);CHECK(action_setup==0u);
- /* MIDI LEARN in the JOURNEY bank: A1..A3 as before, A4 tap WAIT, hold SLOT; BARS and SHAPE are picked in RANDOM's SETUP */
+ /* MIDI LEARN in the JOURNEY bank: A1..A3 as before, A4 tap WAIT, hold learns nothing; BARS and SHAPE are picked in RANDOM's SETUP */
  tap(0);tap(0);tap(0);tap(0);CHECK(action_bank==ACT_BANK_JOURNEY);
  ui.ml.on=1;ui.ml.pick=0;
  tap(1);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_PLAY);ui.ml.pick=0;
@@ -93,7 +93,7 @@ int main(void){
  tap(3);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_NEXT);ui.ml.pick=0;
  web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(120);web_keys(0);run_ms(60);
  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_WAIT);ui.ml.pick=0;
- {uint32_t n=hp_rm_snapshot_count(0);hold(4,700);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_SLOT&&hp_rm_snapshot_count(0)==n);ui.ml.pick=0;}
+ {uint32_t n=hp_rm_snapshot_count(0);hold(4,700);CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0)==n);ui.ml.pick=0;}
  ui.ml.on=0;
  /* BANK from JOURNEY wraps to RANDOM */
  tap(0);CHECK(action_bank==0u);
