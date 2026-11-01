@@ -87,14 +87,15 @@ static void hp_rm_disengage(hp_ref_t r)
  /* Also called from the MIDI path, in the audio block, while the UI may rebuild the cells (reset, capture, recall). Safe by
   * construction: the count is read once and bounded, every index stays inside the cell array, and the only write is a one-byte
   * flag, so a race can at worst release a cell that is being replaced anyway (the flag is cleared when a cell is filled) or miss
-  * one for a block. The scan is at most 128 id compares per control change (a few microseconds), not per audio sample. */
+  * one for a block. The scan is at most 128 cells per control change (about 5 instructions per cell that does not match), not per audio sample. */
  uint32_t n=hp_rm.used;
  if(!n)return;
  if(n>HP_RM_MAX)n=HP_RM_MAX;
  if(r.track==255u)r.track=(uint8_t)song.sel;
  for(uint32_t i=0;i<n;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
-  if(c->ref.id==r.id&&hp_rm_same(c->ref,r))c->released=1u;
+  /* fields compared in place (hp_rm_same takes its refs by value: two memcpy calls per id match on the target) */
+  if(c->ref.id==r.id&&c->ref.kind==r.kind&&c->ref.track==r.track&&c->ref.aux==r.aux&&c->ref.engine==r.engine)c->released=1u;
  }
 }
 static void hp_rm_reset(void)
