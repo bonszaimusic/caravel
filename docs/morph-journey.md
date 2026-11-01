@@ -9,7 +9,7 @@ snapshot or sound is changed, and a journey simply ends when you stop it.
 
 1. **Save snapshots in RANDOM** (HOME with ACTION on): set the sound, hold **A4** to save it into the selected slot; tap **A4** to move to
    the next slot, change the sound, hold A4 again. You need two to four snapshots of **one track** (TRACK scope).
-2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The title shows the slot and the state (`OFF`, `PLAY`, `REST`, `PAUSE`).
+2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The title shows the slot and the state (`OFF`, `PLAY`, `WAIT`, `PAUSE`).
 3. **A1 PLAY** starts: the sound morphs to the selected snapshot, rests, moves on to the next populated slot and loops
    (S1 → S2 → S3 → S1 …). Every leg starts from the values the sound has at that moment, so nothing jumps.
 
@@ -18,18 +18,19 @@ snapshot or sound is changed, and a journey simply ends when you stop it.
 | A1 | **PLAY** / **PAUSE** / **RESUME**: starts, freezes the movement in place, continues |
 | A2 | **DIR FWD / REV**: sets the direction. The running leg finishes, then the next one goes the new way (`REVERSE AFTER S3`) |
 | A3 | **NEXT Sx**: skips the rest of the leg at once and goes to the next slot in the current direction |
-| A4 | tap: **REST** steps 0 / 1 / 2 / 4 / 8 / 16 bars (the pause after each arrival); hold: **saves** the live sound into the selected slot |
+| A4 | tap: **WAIT** steps 0 / 1 / 2 / 4 / 8 / 16 bars (the pause after each arrival); hold: **saves** the live sound into the selected slot |
 
-**SETUP** (hold BANK 0.5 s; hold again to leave) puts the four knobs on the bank's values:
+**The JOURNEY bank has no SETUP of its own.** What a journey needs is already somewhere you know:
 
-| Knob | JOURNEY | Note |
+| Value | Where | Note |
 | --- | --- | --- |
-| K1 | **LEG** (bars per leg) | the same value as BARS in RANDOM; takes effect at the next leg |
-| K2 | **REST** | journey only |
-| K3 | **SLOT** | selects S1–S4 (a running journey steers there smoothly; never saves) |
-| K4 | **SHAPE** | the same value as SHAPE in RANDOM; takes effect at the next leg |
+| leg length | RANDOM SETUP, **K1 BARS** | the same value RANDOM uses; during a running journey a change waits for the next leg and the display shows it |
+| curve | RANDOM SETUP, **K4 SHAPE** | likewise shared and latched |
+| WAIT | **A4 tap** in either bank | journey only |
+| slot | RANDOM **A4 tap**, or the journey itself | the selected slot follows the journey; there is nothing to set |
 
-DEPTH and SCOPE only exist in RANDOM: a leg goes to stored values, and the controls it moves are already in the snapshot.
+Holding BANK in the JOURNEY bank only reminds you of this (`LEG+SHAPE: RANDOM SETUP`), and entering the bank leaves SETUP.
+DEPTH and SCOPE exist only in RANDOM: a leg goes to stored values, and the controls it moves are already in the snapshot.
 
 ## How RANDOM and JOURNEY work together
 
@@ -41,17 +42,17 @@ DEPTH and SCOPE only exist in RANDOM: a leg goes to stored values, and the contr
 - **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
-- **SETUP is one switch for all banks.** Changing bank with SETUP on gives the knobs the new bank's values.
+- **SETUP is one switch for the other banks.** Changing bank with SETUP on gives the knobs the new bank's values; the JOURNEY bank has none.
 
 ## MIDI (optional)
 
-Start MIDI Learn (GLO + D4), go to HOME with ACTION on and pick a target; in the JOURNEY bank K1–K4 pick LEG, REST, SLOT and SHAPE, in RANDOM
-BARS, DEPTH, SCOPE and SHAPE; A1–A3 pick PLAY, DIR and NEXT, tap A4 REST, hold A4 SLOT (the keys only pick while learning).
+Start MIDI Learn (GLO + D4), go to HOME with ACTION on and pick a target: in RANDOM's SETUP K1–K4 pick BARS, DEPTH, SCOPE and SHAPE; in
+either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SLOT (the keys only pick while learning).
 
 | Target | CC behaviour |
 | --- | --- |
 | PLAY, DIR, NEXT | buttons: rising edge through 64 (a repeated high value or the release does not trigger again) |
-| REST | absolute, 6 bands |
+| WAIT | absolute, 6 bands |
 | SLOT | absolute, 4 bands: selects, never saves |
 | BARS / DEPTH / SCOPE / SHAPE | absolute, 7 / 6 / 3 / 3 bands; held back while a leg moves, applied at the next leg |
 

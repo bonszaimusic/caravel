@@ -31,7 +31,7 @@ static const char *const action_labels[ACT_BANKS][4] = {
  {"HOLD","ADD","BLEND","RELEASE"},
  {"A 0%","MID 50%","B 100%","MOTION"},
  {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"},
- {"PLAY","DIR","NEXT","REST"}
+ {"PLAY","DIR","NEXT","WAIT"}
 };
 /* The UI renderer is compiled before action_control.c in the FM-1 amalgamation. */
 static void action_setup_caption(uint32_t slot,char *name,char *value);

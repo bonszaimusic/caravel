@@ -436,9 +436,9 @@ static void hp_draw_home(void)
   else
   #if HP_JVN
   if(action_bank==ACT_BANK_JOURNEY)
-   perf_format(title,sizeof title,action_setup?"SETUP %u/%u JOURNEY S%u%s %s":"ACTION %u/%u JOURNEY S%u%s %s",
+   perf_format(title,sizeof title,"ACTION %u/%u JOURNEY S%u%s %s",
      action_bank+1u,ACT_BANKS,action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-",
-     !hp_j.on?"OFF":hp_j.paused?"PAUSE":hp_j.phase?"REST":"PLAY");
+     !hp_j.on?"OFF":hp_j.paused?"PAUSE":hp_j.phase?"WAIT":"PLAY");
   else
   #endif
   #endif
@@ -467,13 +467,13 @@ static void hp_draw_home(void)
      int nx=hp_j_next(hp_j.on?hp_j.tgt:action_snap_slot,hp_j.rev);
      if(nx>=0)perf_format(custom,sizeof custom,"NEXT S%u",(uint32_t)nx+1u);else perf_format(custom,sizeof custom,"NEXT --");
      label=custom;
-    }else{perf_format(custom,sizeof custom,"REST %u",(uint32_t)hp_j_waits[hp_j.wait<6u?hp_j.wait:0u]);label=custom;}
+    }else{perf_format(custom,sizeof custom,"WAIT %u",(uint32_t)hp_j_waits[hp_j.wait<6u?hp_j.wait:0u]);label=custom;}
    }
    #endif
    #endif
    cv_free_text(7+(int)k*59,185,&AF_S,label,T_TEXT,T_SURF,52);
   }
-  const char *action_help=action_bank==0u?"A4 TAP SLOT / HOLD SAVE":action_bank==ACT_BANK_JOURNEY?"A4 TAP REST / HOLD SAVE":"BANK TAP NEXT / HOLD SETUP";
+  const char *action_help=action_bank==0u?"A4 TAP SLOT / HOLD SAVE":action_bank==ACT_BANK_JOURNEY?"A4 TAP WAIT / HOLD SAVE":"BANK TAP NEXT / HOLD SETUP";
 #if CARAVEL_STASIS_EXPAND
   if(action_bank==1u && action_setup)action_help="SELECT: FX/GRAIN  |  BANK HOLD EXIT";
 #endif

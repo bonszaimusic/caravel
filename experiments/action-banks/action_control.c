@@ -38,7 +38,7 @@ static void action_snapshot_poll(uint32_t mask)
 #endif
   if(!action_snap_long){
 #if HP_JVN
-   if(action_bank==ACT_BANK_JOURNEY){hp_j_set_wait((hp_j.wait+1u)%6u);action_snap_long=0;return;} /* tap A4: REST 0/1/2/4/8/16 bars */
+   if(action_bank==ACT_BANK_JOURNEY){hp_j_set_wait((hp_j.wait+1u)%6u);action_snap_long=0;return;} /* tap A4: WAIT 0/1/2/4/8/16 bars */
 #endif
    action_snap_slot=(uint8_t)((action_snap_slot+1u)%HP_RM_SNAP_SLOTS);
    char message[32];
@@ -76,6 +76,10 @@ static void action_refresh(void)
   }
   if(!action_bank_long && fm1_ms-action_bank_started>=ACTION_LONG_MS){
    action_bank_long=1;
+#if HP_JVN
+   if(action_bank==ACT_BANK_JOURNEY){ui_message("LEG+SHAPE: RANDOM SETUP");ui.force=1;}
+   else{
+#endif
    action_setup=!action_setup;
 #if CARAVEL_STASIS_EXPAND
    if(action_setup && action_bank==1u)action_stasis_grain_page=1u;
@@ -86,11 +90,15 @@ static void action_refresh(void)
       action_bank==1u?"STASIS GRAIN: K1-K4":
 #endif
       "ACTION SETUP: K1-K4"):"ACTION PERFORM: K1-K4 HOME");
+#if HP_JVN
+   }
+#endif
   }
  }else if(action_bank_down){
   action_bank_down=0;
   if(!action_bank_long){
    action_bank=(uint8_t)((action_bank+1u)%ACT_BANKS);
+   if(action_bank==ACT_BANK_JOURNEY)action_setup=0;
    ui.force=1;
    ui_message(action_bank_names[action_bank]);
   }
@@ -134,9 +142,13 @@ static uint32_t action_pair_mod_slot(uint32_t source)
 }
 static int32_t action_setup_value(uint32_t slot)
 {
- if(slot>=4u)return -1;
+ if(slot>=4u||action_bank==ACT_BANK_JOURNEY)return -1;
  if(action_bank==0u){
 #if FELUCCA_RANDOM_MORPH
+#if HP_JVN
+  if(slot==0u&&hp_j.set[0])return hp_rm_times[hp_j.set[0]-1u];   /* a change waiting for the running journey's leg to end */
+  if(slot==3u&&hp_j.set[3])return hp_j.set[3]-1u;
+#endif
   return slot==0u?hp_rm.bars:slot==1u?hp_rm.depth:slot==2u?hp_rm.scope:hp_rm.shape;
 #else
   return -1;
@@ -155,11 +167,6 @@ static int32_t action_setup_value(uint32_t slot)
   return -1;
 #endif
  }
-#if HP_JVN
- if(action_bank==ACT_BANK_JOURNEY)
-  return slot==0u?(hp_j.set[0]?hp_rm_times[hp_j.set[0]-1u]:hp_rm.bars):slot==1u?hp_j_waits[hp_j.wait]:
-         slot==2u?action_snap_slot:(hp_j.set[3]?hp_j.set[3]-1u:hp_rm.shape);
-#endif
  if(action_bank==2u){
   if(!ep.on)return -1;
   if(slot==0u)return (ep.base*127+16383)/32767;
@@ -176,7 +183,7 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   {"STR","MOTN","AMT","TIME"},
   {"MORPH","LFO1>PAIR","LFO2>PAIR","--"},
   {"LVL T1","LVL T2","LVL T3","LVL T4"},
-  {"LEG","REST","SLOT","SHAPE"}
+  {"--","--","--","--"}                   /* JOURNEY has no SETUP of its own */
  };
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
@@ -198,15 +205,6 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
    str_cpy(value,v==0?"HQ 0.74s":v==1?"LONG 1.49s":"DRONE 2.97s",24);return;
   }
   str_cpy(value,v?"ON":"OFF",24);return;
- }
-#endif
-#if HP_JVN
- if(action_bank==ACT_BANK_JOURNEY){
-  if(slot==0u)perf_format(value,24,"%u BAR",v);
-  else if(slot==1u){if(v)perf_format(value,24,"%u BAR",v);else str_cpy(value,"NONE",24);}
-  else if(slot==2u)perf_format(value,24,"S%u%s",v+1,hp_rm_snapshot_count((uint32_t)v)?"*":"-");
-  else str_cpy(value,v==0?"LINEAR":v==1?"SMOOTH":"DRIFT",24);
-  return;
  }
 #endif
  if(action_bank==0u && slot==2u){
@@ -234,12 +232,25 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
 }
 static void action_setup_turn(uint32_t slot,int32_t steps)
 {
- if(slot>=4u||!steps)return;
+ if(slot>=4u||!steps||action_bank==ACT_BANK_JOURNEY)return;
  if(action_bank==0u){
 #if HP_JVN
   if(ui.ml.on){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_BARS+slot);return;} /* MIDI LEARN: K1..K4 pick BARS DEPTH SCOPE SHAPE */
 #endif
 #if FELUCCA_RANDOM_MORPH
+#if HP_JVN
+  if(hp_j.on&&(slot==0u||slot==3u)){   /* the journey's legs use them: wait for the next leg */
+   if(slot==0u){
+    int32_t i=0;
+    if(hp_j.set[0])i=(int32_t)hp_j.set[0]-1;else while(i<6&&hp_rm_times[i]!=hp_rm.bars)i++;
+    hp_j.set[0]=(uint8_t)(clamp(i+steps,0,6)+1);
+   }else{
+    int32_t sh=hp_j.set[3]?(int32_t)hp_j.set[3]-1:(int32_t)hp_rm.shape;
+    hp_j.set[3]=(uint8_t)(clamp(sh+steps,0,2)+1);
+   }
+   hp_j_apply_settings();ui.force=1;return;
+  }
+#endif
   if(slot<=1u){
    const uint8_t *values=slot==0u?hp_rm_times:hp_rm_depths;
    uint32_t n=slot==0u?7u:6u;
@@ -258,19 +269,6 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
   }else hp_rm.shape=(uint8_t)clamp((int32_t)hp_rm.shape+steps,0,2);
 #else
   ui_message("RANDOM UNAVAILABLE");
-#endif
- }else if(action_bank==ACT_BANK_JOURNEY){
-#if HP_JVN
-  if(ui.ml.on){static const uint8_t ids[4]={HJ_BARS,HJ_WAIT,HJ_SLOT,HJ_SHAPE};ml_knob(&trk[song.sel],HP_VFIRST+8u+ids[slot]);return;}
-  if(slot==0u){                                   /* LEG: latched, a running leg keeps its speed */
-   int32_t i=hp_j.set[0]?(int32_t)hp_j.set[0]-1:0;
-   if(!hp_j.set[0])while(i<6&&hp_rm_times[i]!=hp_rm.bars)i++;
-   hp_j.set[0]=(uint8_t)(clamp(i+steps,0,6)+1);hp_j_apply_settings();
-  }else if(slot==1u)hp_j_set_wait((uint32_t)clamp((int32_t)hp_j.wait+steps,0,5));
-  else if(slot==2u)hp_j_select((uint32_t)clamp((int32_t)action_snap_slot+steps,0,(int32_t)HP_RM_SNAP_SLOTS-1),fm1_ms);
-  else{int32_t sh=hp_j.set[3]?(int32_t)hp_j.set[3]-1:(int32_t)hp_rm.shape;hp_j.set[3]=(uint8_t)(clamp(sh+steps,0,2)+1);hp_j_apply_settings();}
-#else
-  ui_message("JOURNEY UNAVAILABLE");
 #endif
  }else if(action_bank==1u){
 #if CARAVEL_REVERB_MINIMAL
@@ -378,7 +376,7 @@ static void action_key(uint32_t key)
 #endif
   if(action_bank==0u){if(act!=3u)action_random(act);}
 #if HP_JVN
-  else if(act<3u)hp_j_button(act,fm1_ms);       /* A4 is the tap / hold gesture (REST / save) */
+  else if(act<3u)hp_j_button(act,fm1_ms);       /* A4 is the tap / hold gesture (WAIT / save) */
 #else
   else ui_message("JOURNEY UNAVAILABLE");
 #endif

@@ -532,7 +532,7 @@ static void hp_j_wait_begin(uint32_t now)
 static void hp_j_set_wait(uint32_t w)              /* 0..5: rest 0/1/2/4/8/16 bars after each arrival */
 {
  hp_j.wait=(uint8_t)(w<6u?w:5u);
- hp_j_say("JOURNEY REST %u BAR",hp_j_waits[hp_j.wait],0u);
+ hp_j_say("JOURNEY WAIT %u BAR",hp_j_waits[hp_j.wait],0u);
 }
 static void hp_j_select(uint32_t s,uint32_t now)   /* the shared slot; a running journey steers there smoothly; never saves */
 {
