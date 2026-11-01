@@ -94,6 +94,28 @@ int main(void){
  hp_j.skip=0u;bank(ACT_BANK_JOURNEY);set_all(50,0,50,0);action_snap_slot=0;tap(1);run_ms(300);CHECK(hp_j.on);
  bank(0u);hold(0,700);action_snap_slot=1;hold(4,700);CHECK(!hp_j.on&&hp_rm_snapshot_count(1)==0u);
  hold(0,700);CHECK(action_setup==0u);
+ /* 7. every slot is a scene: slots of different tracks (and an ALL slot) are one journey; a leg moves only what its target slot stores */
+ hp_rm_snapshot_clear();hp_rm_reset();hp_rm.bars=1;hp_j.skip=0;hp_j.wait=1;hp_rm.scope=HP_RM_TRACK;
+ hp_j.on=hp_j.paused=hp_j.held=0;
+ set_all(10,-40,15,-35);sel(0);action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));                   /* S1 = T1 (its HOME pins T1 and T2 controls) */
+ sel(1);                                                                                           /* T2's own HOME pins T2 controls only */
+ set_all(10,-40,70,30);action_snap_slot=1;CHECK(hp_rm_snapshot_store(1));                           /* S2 = T2 */
+ {char o[4];hp_rm_snapshot_owner(0,o);CHECK(!strcmp(o,"T1"));hp_rm_snapshot_owner(1,o);CHECK(!strcmp(o,"T2"));hp_rm_snapshot_owner(2,o);CHECK(!strcmp(o,"-"));}
+ set_all(50,0,50,0);bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(100);CHECK(hp_j.on&&hp_rm.state==HP_RM_RECALL);      /* mixed owners start */
+ {uint32_t g=0;while(hp_j.phase==0u&&g++<6000u)run_ms(10);}
+ CHECK(hp_j.phase==1u&&absd(trk[0].p[P_REV]-10)<=1&&absd(trk[1].p[P_REV]-15)<=1);                   /* S1 moved T1 and the T2 controls T1's HOME pins */
+ {int32_t t1=trk[0].p[P_REV],t1p=trk[0].p[P_PAN];
+  {uint32_t g=0;while(hp_j.phase==1u&&g++<6000u)run_ms(10);}
+  {uint32_t g=0;while(hp_j.phase==0u&&g++<6000u)run_ms(10);}
+  CHECK(hp_j.phase==1u&&hp_j.cur==1u&&absd(trk[1].p[P_REV]-70)<=1&&absd(trk[1].p[P_PAN]-30)<=1);    /* S2 moved T2 */
+  CHECK(trk[0].p[P_REV]==t1&&trk[0].p[P_PAN]==t1p);}                                                /* ... and left T1 where it stood */
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();hp_j.wait=0;
+ /* an ALL slot: one snapshot of every track's HOME controls */
+ hp_rm.scope=HP_RM_ALL;set_all(90,40,85,35);action_snap_slot=2;sel(0);CHECK(hp_rm_snapshot_store(2));
+ {char o[4];hp_rm_snapshot_owner(2,o);CHECK(!strcmp(o,"ALL"));}
+ hp_rm.scope=HP_RM_TRACK;
+ /* saving over a slot that belongs to another track says so */
+ sel(1);set_all(10,-40,20,-20);action_snap_slot=0;hold(4,700);CHECK(strstr(ui.msg,"WAS T1")!=NULL);
  printf("JOURNEY HOLD PASS: %u checks.\n",checks);
  return 0;
 }

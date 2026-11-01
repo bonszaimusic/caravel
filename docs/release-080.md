@@ -8,7 +8,7 @@ slot, rests, moves on to the next slot that holds a sound and loops. It has its 
 LIVE, and is played from the panel; MIDI Learn can also map it to a controller.
 
 1. Double-tap HOME for ACTION. In the RANDOM bank hold A4 to save a sound into the selected slot, tap A4 to select
-   the next slot. Two to four slots of one track are enough.
+   the next slot. Two to four slots are enough; the four slots are shared by all tracks, and the owner of each is shown (`S1:T1 S2:T3 S3:ALL S4:-`).
 2. Tap BANK until the title reads JOURNEY. **A1** PLAY / PAUSE / RESUME, **A2** direction (the running leg finishes,
    then the next one goes the new way), **A3** NEXT, **A4** tap WAIT (0, 1, 2, 4, 8, 16 bars of rest), A4 hold saves.
 3. Leg length and curve are RANDOM SETUP's BARS and SHAPE. A journey keeps running when you change bank.

@@ -10,8 +10,8 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 ## Play it from the panel
 
 1. **Save snapshots in RANDOM** (HOME with ACTION on): set the sound, hold **A4** to save it into the selected slot; tap **A4** to move to
-   the next slot, change the sound, hold A4 again. You need two to four snapshots of **one track** (TRACK scope).
-2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The title shows the slot and the state (`OFF`, `PLAY`, `WAIT`, `PAUSE`).
+   the next slot, change the sound, hold A4 again. You need two to four snapshots (see *Slots belong to tracks* below).
+2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The title shows the track that owns the slot being approached, the slot and the state (`OFF`, `PLAY`, `HOLD`, `WAIT`, `PAUSE`).
 3. **A1 PLAY** starts: the sound morphs to the selected snapshot, rests, moves on to the next populated slot and loops
    (S1 → S2 → S3 → S1 …). Every leg starts from the values the sound has at that moment, so nothing jumps.
 
@@ -32,6 +32,19 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 | slot | RANDOM **A4 tap** (next slot), or the journey itself | the selected slot follows the journey; in the JOURNEY bank A4 tap is WAIT, so the slot is not changed there |
 
 DEPTH and SCOPE exist only in RANDOM: a leg goes to stored values, and the controls it moves are already in the snapshot.
+
+## Slots belong to tracks
+
+There are **four snapshot slots for the whole project**, not four per track. A slot holds what was saved into it last: the controls pinned on the
+selected track's HOME page (SCOPE TRACK; ROW: the active row only; ALL: the HOME controls of every track, up to 128 targets) with their values at
+that moment, not the other tracks' state. Saving on another track into an occupied slot **replaces** it (`S1 SAVED, WAS T1`).
+
+So that this is never a surprise, the owner is shown: the RANDOM title and the A4 label read `S1:T3`, `S2:ALL` or `S3:-` (empty), tapping A4 says
+`SNAP S2 IS T1`, and in the RANDOM and JOURNEY banks the line under the keys lists all four, for example `S1:T1 S2:T1 S3:ALL S4:-`.
+
+A journey treats every slot as a **scene**: a leg moves exactly the controls stored in its target slot and leaves everything else where it is.
+S1 and S2 from T1 and S3 from T3 are one journey: at S3 only T3's controls move, T1 stands still. An `ALL` slot moves all tracks, and
+**Which tracks a journey takes along** (below) can leave some out. The title names the owner of the slot being approached.
 
 ## Which tracks a journey takes along
 
@@ -91,6 +104,5 @@ either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SL
 
 ## Limits
 
-2 to 4 populated snapshots of one track, TRACK scope and the same pinned controls, otherwise PLAY says `JOURNEY: SNAPS DIFFER` or
-`NEED 2 SNAPS` and nothing moves. Starting replaces pending RANDOM return points, like an A3 recall. Leg lengths follow the tempo setting,
+At least two populated snapshots, otherwise PLAY says `NEED 2 SNAPS` and nothing moves; slots of different tracks and scopes are fine. Starting replaces pending RANDOM return points, like an A3 recall. Leg lengths follow the tempo setting,
 not an external MIDI clock. **Not verified:** a controller on a real FM-1, external MIDI clock, CPU and memory under real load, long real-device runs, every engine.

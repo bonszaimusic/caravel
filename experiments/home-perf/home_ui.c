@@ -430,9 +430,10 @@ static void hp_draw_home(void)
   cv_rrect(3,171,234,28,4,T_SURF,T_BG);
   cv_bg=T_SURF;
   #if FELUCCA_RANDOM_MORPH
+  char owner[4];hp_rm_snapshot_owner(action_snap_slot,owner);              /* T2, ALL or - : who the selected slot belongs to */
   if(action_bank==0u)
-   perf_format(title,sizeof title,action_setup?"SETUP 1/%u RANDOM S%u%s":"ACTION 1/%u RANDOM S%u%s",
-     ACT_BANKS,action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-");
+   perf_format(title,sizeof title,action_setup?"SETUP 1/%u RANDOM S%u:%s":"ACTION 1/%u RANDOM S%u:%s",
+     ACT_BANKS,action_snap_slot+1u,owner);
   else
   #if HP_JVN
   if(action_bank==ACT_BANK_JOURNEY){
@@ -459,8 +460,7 @@ static void hp_draw_home(void)
    if(action_bank==0u && k==2u && hp_rm_snapshot_count(action_snap_slot)){
     perf_format(custom,sizeof custom,"GO S%u",action_snap_slot+1u);label=custom;
    }else if(action_bank==0u && k==3u){
-    perf_format(custom,sizeof custom,"S%u%s NEXT",action_snap_slot+1u,
-       hp_rm_snapshot_count(action_snap_slot)?"*":"-");label=custom;
+    perf_format(custom,sizeof custom,"S%u:%s >",action_snap_slot+1u,owner);label=custom;
    }
    #if HP_JVN
    else if(action_bank==ACT_BANK_JOURNEY){
@@ -477,6 +477,14 @@ static void hp_draw_home(void)
    cv_free_text(7+(int)k*59,185,&AF_S,label,T_TEXT,T_SURF,52);
   }
   const char *action_help=action_bank==0u?(action_setup?"A4 HOLD DELETE SLOT":"A4 TAP SLOT / HOLD SAVE"):action_bank==ACT_BANK_JOURNEY?(action_setup?"K1-K4 TRACK ON / SKIP":"A4 TAP WAIT / HOLD SAVE"):"BANK TAP NEXT / HOLD SETUP";
+#if FELUCCA_RANDOM_MORPH
+  char slots[40];
+  if((action_bank==0u||action_bank==ACT_BANK_JOURNEY)&&!action_setup){      /* who owns S1..S4: a slot another track filled is visible before it is overwritten */
+   char o[4][4];for(uint32_t q=0;q<4u;q++)hp_rm_snapshot_owner(q,o[q]);
+   perf_format(slots,sizeof slots,"S1:%s S2:%s S3:%s S4:%s",o[0],o[1],o[2],o[3]);
+   action_help=slots;
+  }
+#endif
 #if FELUCCA_RANDOM_MORPH
   char running[32];
 #if HP_JVN

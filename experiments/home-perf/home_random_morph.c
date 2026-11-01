@@ -222,6 +222,13 @@ static uint32_t hp_rm_snapshot_count(uint32_t slot)
 {
  return slot<HP_RM_SNAP_SLOTS?hp_rm_snap[slot].count:0u;
 }
+static void hp_rm_snapshot_owner(uint32_t slot,char*b)   /* who a slot belongs to: "T2" (a track), "ALL" or "-" (empty) */
+{
+ const hp_rm_snap_t*s=&hp_rm_snap[slot%HP_RM_SNAP_SLOTS];
+ if(!s->count){b[0]='-';b[1]=0;}
+ else if(s->scope==HP_RM_ALL){b[0]='A';b[1]=b[2]='L';b[3]=0;}
+ else{b[0]='T';b[1]=(char)('1'+(s->origin_track&3u));b[2]=0;}
+}
 _Static_assert(P_COUNT<=512u && L2_FIRST+L2_N<=512u && DX_END<=512u && FP_SIZE<=512u && NENGINES<31u && NTRK<=4u,
                "Snapshot target packing must cover every parameter and engine");
 static int hp_rm_snapshot_packable(hp_ref_t r)
@@ -251,6 +258,7 @@ static uint8_t hp_j_arrived;     /* set by hp_rm_poll when a recall really reach
 static int hp_rm_snapshot_store(uint32_t slot)
 {
  if(slot>=HP_RM_SNAP_SLOTS)return 0;
+ char was[4];hp_rm_snapshot_owner(slot,was);uint8_t had=hp_rm_snap[slot].count!=0u;
  hp_rm_reset(); /* preserve current live sound; discard obsolete morph */
  if(!hp_rm_capture(0)){
   ui_message("SNAP: NO SAFE HOME TARGETS");ui.force=1;return 0;
@@ -274,7 +282,9 @@ static int hp_rm_snapshot_store(uint32_t slot)
 #if HP_JVN
  hp_j_captured(); /* saving cancels the moving leg: a running journey ends here, PLAY continues from the selected slot */
 #endif
- char message[32];perf_format(message,sizeof message,"SNAP S%u SAVED",slot+1u);
+ char message[32],now_owner[4];hp_rm_snapshot_owner(slot,now_owner);
+ if(had&&strcmp(was,now_owner))perf_format(message,sizeof message,"S%u SAVED, WAS %s",slot+1u,was);   /* it replaced another track's snapshot */
+ else perf_format(message,sizeof message,"SNAP S%u SAVED",slot+1u);
  ui_message(message);ui.force=1;
  return 1;
 }
@@ -484,28 +494,11 @@ static void hp_journey_cc(uint32_t id,uint32_t value)
   hp_j_hi[i]=hi;}
 }
 static uint32_t hp_j_band(uint32_t v,uint32_t n){uint32_t b=v*n/128u;return b<n?b:n-1u;}
-static int hp_j_same_refs(const hp_rm_snap_t*a,const hp_rm_snap_t*b)
+static int hp_j_ready(const char**why)           /* any two snapshots will do: each slot is a scene, a leg moves exactly the controls stored in its target */
 {
- if(a->count!=b->count)return 0;
- for(uint32_t i=0;i<a->count;i++){
-  int found=0;
-  for(uint32_t k=0;k<b->count&&!found;k++)found=!memcmp(a->refs[i],b->refs[k],3);
-  if(!found)return 0;
- }
- return 1;
-}
-static int hp_j_ready(const char**why)
-{
- uint32_t n=0,first=HP_RM_SNAP_SLOTS;
- for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[s].count){n++;if(first==HP_RM_SNAP_SLOTS)first=s;}
+ uint32_t n=0;
+ for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[s].count)n++;
  if(n<2u){*why="JOURNEY: NEED 2 SNAPS";return 0;}
- const hp_rm_snap_t*a=&hp_rm_snap[first];
- for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[s].count){
-  const hp_rm_snap_t*b=&hp_rm_snap[s];
-  if(b->scope!=HP_RM_TRACK||b->origin_track!=a->origin_track||!hp_j_same_refs(a,b)){
-   *why="JOURNEY: SNAPS DIFFER";return 0;
-  }
- }
  return 1;
 }
 static int hp_j_next(uint32_t from,uint32_t rev)   /* the next populated slot in the direction; -1 none */
@@ -581,7 +574,7 @@ static void hp_j_select(uint32_t s,uint32_t now)   /* the shared slot; a running
  if(s==action_snap_slot)return;
  action_snap_slot=(uint8_t)s;
  if(hp_rm_snap[s].count&&hp_j.on&&!hp_j.paused){if(hp_j_leg(s,now))hp_j_say("JOURNEY >S%u",s+1u,0u);}
- else hp_j_say(hp_rm_snap[s].count?"SNAP S%u SAVED":"SNAP S%u EMPTY",s+1u,0u);
+ else{char o[4],m[32];hp_rm_snapshot_owner(s,o);if(hp_rm_snap[s].count)perf_format(m,sizeof m,"SNAP S%u IS %s",s+1u,o);else perf_format(m,sizeof m,"SNAP S%u EMPTY",s+1u);ui_message(m);ui.force=1;}
 }
 static void hp_j_button(uint32_t i,uint32_t now)
 {

@@ -43,8 +43,9 @@ static void action_snapshot_poll(uint32_t mask)
 #endif
    action_snap_slot=(uint8_t)((action_snap_slot+1u)%HP_RM_SNAP_SLOTS);
    char message[32];
-   perf_format(message,sizeof message,"SNAP S%u %s",action_snap_slot+1u,
-     hp_rm_snapshot_count(action_snap_slot)?"SAVED":"EMPTY");
+   char owner[4];hp_rm_snapshot_owner(action_snap_slot,owner);
+   if(hp_rm_snapshot_count(action_snap_slot))perf_format(message,sizeof message,"SNAP S%u IS %s",action_snap_slot+1u,owner);
+   else perf_format(message,sizeof message,"SNAP S%u EMPTY",action_snap_slot+1u);
    ui_message(message);
    ui.force=1;
   }

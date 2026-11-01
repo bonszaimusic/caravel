@@ -33,9 +33,6 @@ int main(void){
  trk[0].p[P_REV]=77;
  press(C_PLAY);run_ms(100);CHECK(!hp_j.on);CHECK(rev()==77);
  store(1,90,40);store(2,50,0);
- /* snapshots of another owner/ref set are refused before anything moves */
- {hp_rm_snap_t keep=hp_rm_snap[2];hp_rm_snap[2].refs[0][0]^=1u;
-  trk[0].p[P_REV]=77;press(C_PLAY);run_ms(100);CHECK(!hp_j.on);CHECK(rev()==77);hp_rm_snap[2]=keep;}
  /* the full loop with a one-bar rest: every arrival really reaches its snapshot's values (S1 S2 S3 S1) */
  midi(0xB0,C_WAIT,25);run_ms(30);CHECK(hp_j.wait==1u);
  trk[0].p[P_REV]=77;trk[0].p[P_PAN]=5;action_snap_slot=0;
