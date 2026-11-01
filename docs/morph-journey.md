@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # MORPH JOURNEY
 
-**Released in 0.8.0; tested on the host and in CI, not verified with a controller on a real FM-1.** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
+**Released in 0.8.0; tested on the host and in CI and tried on an FM-1 by the maintainer; not verified with a controller or external clock.** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
 It is played from the panel (the JOURNEY ACTION bank) and, if you like, from MIDI controllers. Playing a journey changes no snapshot and
 no stored sound, and it ends when you stop it. What *is* kept with the project are the snapshots S1–S4 and the performance settings (BARS,
 DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, the countdown, the selected slot) is not saved, see
@@ -105,4 +105,4 @@ either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SL
 ## Limits
 
 At least two populated snapshots, otherwise PLAY says `NEED 2 SNAPS` and nothing moves; slots of different tracks and scopes are fine. Starting replaces pending RANDOM return points, like an A3 recall. Leg lengths follow the tempo setting,
-not an external MIDI clock. **Not verified:** a controller on a real FM-1, external MIDI clock, CPU and memory under real load, long real-device runs, every engine.
+not an external MIDI clock. **Not verified:** a controller, external MIDI clock, CPU and memory under real load, long real-device runs, every engine.

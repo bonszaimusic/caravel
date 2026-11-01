@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Random Morph and Morph Journey - tutorial
 
-**Status:** Caravel 0.8.0. Everything below is tested on the host and in CI with the real firmware; a controller on a real FM-1 has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
+**Status:** Caravel 0.8.0. Everything below is tested on the host and in CI with the real firmware and tried on an FM-1 by the maintainer; a controller has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
 The same tutorials, in one place: [README](../../README.md#tutorials) · [all tutorials](README.md) · [reference: MORPH JOURNEY](../morph-journey.md).
 
 Random Morph moves the controls on your HOME page, by hand or to a stored sound. Morph Journey chains those moves into one long, hands-free

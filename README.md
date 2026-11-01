@@ -46,7 +46,7 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 - **Snapshots:** the four slots are shared by the whole project and always show their owner (`S1:T3`, `S2:ALL`); hold A4 in RANDOM's SETUP to delete one.
 - **A learned MIDI CC wins over a running morph for every target** (LFO2 and DRUM-X controls were being overwritten).
 - BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction are saved with each project. **Back up first: 0.7.x and earlier refuse a project saved by 0.8.0**; older projects load with the defaults.
-- Tested on the host, in CI and in the complete validation; **not verified** with a controller on a real FM-1, with external MIDI clock or in long runs. Flash is tight: 1,116 B left in the app slot.
+- Tested on the host, in CI and in the complete validation, and tried on an FM-1 by the maintainer (a first trial); **not verified** with a controller, with external MIDI clock or in long runs. Flash is nearly full: 156 B left in the app slot.
 
 ## Caravel 0.7.2 — candidate fix for the stock return (-5)
 
