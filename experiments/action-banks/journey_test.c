@@ -17,7 +17,7 @@ static void store(uint32_t slot,int32_t r,int32_t p){
  trk[0].p[P_REV]=(int16_t)r;trk[0].p[P_PAN]=(int16_t)p;
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;CHECK(hp_rm_snapshot_store(slot));
 }
-enum{C_PLAY=20,C_DIR=21,C_NEXT=22,C_WAIT=23,C_SLOT=24,C_BARS=25};
+enum{C_PLAY=20,C_DIR=21,C_NEXT=22,C_WAIT=23,C_SLOT=24,C_BARS=25,C_SCOPE=26};
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);normal_off();pair_disable();
  for(uint32_t t=0;t<NTRK;t++)hp_apply(t,0);
@@ -27,7 +27,7 @@ int main(void){
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=1;hp_rm.depth=100;hp_rm.shape=HP_RM_LINEAR;
  /* the targets are learnable and the learned CCs survive as ordinary virtual entries */
  learn(HJ_PLAY,C_PLAY);learn(HJ_DIR,C_DIR);learn(HJ_NEXT,C_NEXT);learn(HJ_WAIT,C_WAIT);
- learn(HJ_SLOT,C_SLOT);learn(HJ_BARS,C_BARS);
+ learn(HJ_SLOT,C_SLOT);learn(HJ_BARS,C_BARS);learn(HJ_SCOPE,C_SCOPE);
  /* fewer than two snapshots: nothing starts, nothing moves */
  store(0,10,-40);action_snap_slot=0;
  trk[0].p[P_REV]=77;
@@ -86,7 +86,14 @@ int main(void){
  /* BARS from a CC is latched while a leg moves and takes effect at the next leg */
  midi(0xB0,C_BARS,0);run_ms(30);CHECK(hp_rm.bars==1u);
  midi(0xB0,C_BARS,127);run_ms(30);CHECK(hp_rm.bars==1u&&hp_j.set[0]==7u);
- {uint32_t guard=0;while(hp_rm.bars==1u&&guard++<8000u)run_ms(10);CHECK(hp_rm.bars==64u);}
+ /* SCOPE resets the morph: from a CC it is held back like BARS, it must not wipe the running leg (review of PR #34) */
+ {uint8_t scope=hp_rm.scope;midi(0xB0,C_SCOPE,127);run_ms(30);
+  CHECK(hp_rm.scope==scope&&hp_j.set[2]==3u&&hp_j.on&&hp_rm.state==HP_RM_RECALL&&hp_j.phase==0u);}
+ {uint32_t guard=0;while((hp_j.set[0]||hp_j.set[2])&&guard++<8000u)run_ms(10);CHECK(hp_rm.bars==64u&&hp_rm.scope==HP_RM_ALL&&hp_j.on);}
+ /* anything else that resets the morph (a project load, a scope change from elsewhere ...) is not an arrival: the journey stops */
+ hp_rm.scope=HP_RM_TRACK;
+ hp_rm_reset();run_ms(100);CHECK(!hp_j.on&&hp_rm.state==HP_RM_IDLE&&hp_j.phase==0u);
+ hp_rm.bars=1;press(C_PLAY);run_ms(100);CHECK(hp_j.on&&hp_rm.state==HP_RM_RECALL);
  /* starting a RANDOM morph by hand ends the journey */
  random_press();run_ms(100);CHECK(!hp_j.on);
  /* MIDI LEARN entry points on the ACTION controls */

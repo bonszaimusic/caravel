@@ -124,6 +124,13 @@ jobs:
             -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
             experiments/action-banks/journey_panel_test.c -o build/journey-panel -lm
           build/journey-panel
+      - name: MORPH JOURNEY settings are saved with each project - A to D, USB, RESTORE LAST, older projects
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
+            experiments/action-banks/journey_project_test.c -o build/journey-project -lm
+          build/journey-project
       - name: Build 0.6.0 STASIS + HOME/PAIR + ACTION C/WASM Android emulator
         env:
           ACTION_EMU_CFLAGS: '-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0'

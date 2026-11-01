@@ -72,8 +72,12 @@ int main(void){
  tap(0);CHECK(action_bank==0u);hold(0,700);CHECK(action_setup==1u);
  action_setup_turn(0,3);CHECK(hp_rm.bars==1u&&hp_j.set[0]!=0u&&action_setup_value(0)==(int32_t)hp_rm_times[hp_j.set[0]-1u]);
  action_setup_turn(3,2);CHECK(hp_rm.shape==HP_RM_LINEAR&&hp_j.set[3]!=0u&&action_setup_value(3)==2);
- {uint32_t guard=0;while((hp_j.set[0]||hp_j.set[3])&&guard++<8000u)run_ms(10);
-  CHECK(hp_rm.bars==8u&&hp_rm.shape==2u);}
+ /* SCOPE resets the morph: in RANDOM's SETUP it waits for the next leg too and does not wipe the running one (review of PR #34) */
+ {uint8_t scope=hp_rm.scope;action_setup_turn(2,1);
+  CHECK(hp_rm.scope==scope&&hp_j.set[2]==(uint8_t)(scope+2u)&&action_setup_value(2)==(int32_t)scope+1&&hp_j.on&&hp_rm.state==HP_RM_RECALL);}
+ {uint32_t guard=0;while((hp_j.set[0]||hp_j.set[2]||hp_j.set[3])&&guard++<8000u)run_ms(10);
+  CHECK(hp_rm.bars==8u&&hp_rm.shape==2u&&hp_rm.scope==HP_RM_ALL&&hp_j.on);}
+ hp_rm.scope=HP_RM_TRACK;
  hold(0,700);CHECK(action_setup==0u);
  /* MIDI LEARN in the JOURNEY bank: A1..A3 as before, A4 tap WAIT, hold SLOT; BARS and SHAPE are picked in RANDOM's SETUP */
  tap(0);tap(0);tap(0);tap(0);CHECK(action_bank==ACT_BANK_JOURNEY);

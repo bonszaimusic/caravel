@@ -45,10 +45,48 @@ static int hp_unzip(uint8_t*out,uint32_t size,const uint8_t*in,uint32_t n)
  }
  return w==size;
 }
+/* The RANDOM / JOURNEY performance settings of a project travel in the one-byte pad fields of snapshot slots 0 and 1, which every earlier
+ * firmware insists are zero (so an older firmware refuses such a project instead of misreading it; nothing is lost):
+ *   slot 0 pad: bit 7 present, bits 0..2 BARS index (hp_rm_times), bits 3..5 DEPTH index (hp_rm_depths), bit 6 zero
+ *   slot 1 pad: bits 0..1 SCOPE, bits 2..3 SHAPE, bit 4 DIRECTION (1 = reverse), bits 5..7 WAIT index (0/1/2/4/8/16 bars)
+ * Both zero = a project made before this: the defaults apply. Slots 2 and 3 stay zero. The size and layout of the block do not
+ * change. A journey is never stored as running: a loaded project starts stopped, with the first slot selected. A change that is
+ * waiting for the next leg is saved as the intended value. */
+#define HP_PS_PRESENT 0x80u
+static int hp_ps_valid(const hp_rm_snap_t*s)
+{
+ uint32_t a=s[0].pad,b=s[1].pad;
+ if(s[2].pad||s[3].pad)return 0;
+ if(!a)return !b;
+ return (a&HP_PS_PRESENT)&&!(a&0x40u)&&(a&7u)<7u&&((a>>3)&7u)<6u&&(b&3u)<3u&&((b>>2)&3u)<3u&&((b>>5)&7u)<6u;
+}
+#define HP_PS_DEFAULT_WORD (HP_PS_PRESENT|3u|(2u<<3)|((1u|(1u<<2))<<8))   /* BARS 8, DEPTH 35, TRACK, SMOOTH; WAIT 0, forward */
+static uint32_t hp_ps_idx(const uint8_t*tab,uint32_t n,uint32_t v,uint32_t fallback){for(uint32_t i=0;i<n;i++)if(tab[i]==v)return i;return fallback;}
+static uint32_t hp_ps_word(void)                      /* low byte: slot 0's pad, next byte: slot 1's pad */
+{
+ uint32_t bars=hp_j.set[0]?hp_j.set[0]-1u:hp_ps_idx(hp_rm_times,7u,hp_rm.bars,3u);
+ uint32_t depth=hp_j.set[1]?hp_j.set[1]-1u:hp_ps_idx(hp_rm_depths,6u,hp_rm.depth,2u);
+ uint32_t scope=hp_j.set[2]?hp_j.set[2]-1u:hp_rm.scope;
+ uint32_t shape=hp_j.set[3]?hp_j.set[3]-1u:hp_rm.shape;
+ uint32_t a=HP_PS_PRESENT|bars|depth<<3;
+ uint32_t b=(scope&3u)|(shape&3u)<<2|(uint32_t)(hp_j.rev&1u)<<4|(uint32_t)(hp_j.wait<6u?hp_j.wait:0u)<<5;
+ return a|b<<8;
+}
+static void hp_ps_pack(hp_rm_snap_t*s){uint32_t w=hp_ps_word();s[0].pad=(uint8_t)w;s[1].pad=(uint8_t)(w>>8);}
+static void hp_ps_apply(hp_rm_snap_t*s)               /* s: the loaded snapshots (the pads are cleared again), 0 = a project without any */
+{
+ uint32_t a=s?s[0].pad:0,b=s?s[1].pad:0;
+ if(!a){a=HP_PS_DEFAULT_WORD&255u;b=HP_PS_DEFAULT_WORD>>8;}
+ hp_rm.bars=hp_rm_times[a&7u];hp_rm.depth=hp_rm_depths[(a>>3)&7u];hp_rm.scope=(uint8_t)(b&3u);hp_rm.shape=(uint8_t)((b>>2)&3u);
+ hp_j.rev=(uint8_t)((b>>4)&1u);hp_j.wait=(uint8_t)((b>>5)&7u);
+ hp_j.on=hp_j.paused=0;hp_j.phase=0;hp_j.cur=hp_j.tgt=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;hp_j_arrived=0;
+ if(s){s[0].pad=s[1].pad=0;}
+}
 static int hp_snapshots_valid(const hp_rm_snap_t*s)
 {
+ if(!hp_ps_valid(s))return 0;
  for(uint32_t slot=0;slot<4;slot++){
-  const hp_rm_snap_t*q=&s[slot];if(q->count>128||q->scope>HP_RM_ALL||q->origin_track>=NTRK||q->origin_row>=HP_ROWS||q->pad)return 0;
+  const hp_rm_snap_t*q=&s[slot];if(q->count>128||q->scope>HP_RM_ALL||q->origin_track>=NTRK||q->origin_row>=HP_ROWS)return 0;
   for(uint32_t i=0;i<q->count;i++){
    hp_ref_t r=hp_rm_snapshot_ref(q,i);const param_desc_t*d=0;
    if(q->refs[i][2]&128u||!hp_ref_valid(r)||!r.kind)return 0;
@@ -93,6 +131,7 @@ static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_
  uint32_t irq=perf_irq_save();
  if(live){hp_pair_capture(&captured);pair=&captured;}
  hp_meta_pack(raw,m,pair);if(snaps)memcpy(raw+HP_HW_META,snaps,sizeof hp_rm_snap);else memset(raw+HP_HW_META,0,sizeof hp_rm_snap);
+ if(snaps==hp_rm_snap)hp_ps_pack((hp_rm_snap_t*)(void*)(raw+HP_HW_META));   /* the live project: its performance settings go with the snapshots */
  if(live)for(uint32_t t=0;t<NTRK;t++){uint32_t v=hp_take(raw+2*t,2);hp_put(raw+2*t,(v&1023u)|(uint32_t)trk[t].user<<10,2);}
  perf_irq_restore(irq);
  if(!hp_meta_valid(raw))return 0;

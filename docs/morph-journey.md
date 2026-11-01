@@ -24,7 +24,7 @@ snapshot or sound is changed, and a journey simply ends when you stop it.
 
 | Value | Where | Note |
 | --- | --- | --- |
-| leg length | RANDOM SETUP, **K1 BARS** | the same value RANDOM uses; during a running journey a change waits for the next leg and the display shows it |
+| leg length | RANDOM SETUP, **K1 BARS** | the same value RANDOM uses; during a running journey a change waits for the next leg and the display shows it (likewise **K3 SCOPE**) |
 | curve | RANDOM SETUP, **K4 SHAPE** | likewise shared and latched |
 | WAIT | **A4 tap** in either bank | journey only |
 | slot | RANDOM **A4 tap**, or the journey itself | the selected slot follows the journey; there is nothing to set |
@@ -44,6 +44,17 @@ DEPTH and SCOPE exist only in RANDOM: a leg goes to stored values, and the contr
   moves it again.
 - **SETUP is one switch for the other banks.** Changing bank with SETUP on gives the knobs the new bank's values; the JOURNEY bank has none.
 
+## Saved with the project
+
+The performance settings are saved with each project, next to the snapshots S1–S4 (slots A–D, RESTORE LAST, USB backup, export and import):
+**BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction**. A project saved with BARS 16, SHAPE DRIFT and WAIT 4 sounds the same after reopening it.
+If a change is still waiting for the next leg when you save, the waiting value is the one saved.
+
+**Not saved:** a running journey, PLAY / PAUSE, the WAIT countdown, RETURN points, and the selected slot. A loaded project always starts
+**stopped**, with S1 selected. Projects made before this feature get the defaults: BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward.
+The storage grows by nothing (the values use bytes that earlier firmware requires to be zero), so **0.7.x firmware refuses such a project**
+(`PERF PROJECT INVALID`) instead of misreading it: back up before moving between versions.
+
 ## MIDI (optional)
 
 Start MIDI Learn (GLO + D4), go to HOME with ACTION on and pick a target: in RANDOM's SETUP K1–K4 pick BARS, DEPTH, SCOPE and SHAPE; in
@@ -54,7 +65,7 @@ either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT, hold A4 picks SL
 | PLAY, DIR, NEXT | buttons: rising edge through 64 (a repeated high value or the release does not trigger again) |
 | WAIT | absolute, 6 bands |
 | SLOT | absolute, 4 bands: selects, never saves |
-| BARS / DEPTH / SCOPE / SHAPE | absolute, 7 / 6 / 3 / 3 bands; held back while a leg moves, applied at the next leg |
+| BARS / DEPTH / SCOPE / SHAPE | absolute, 7 / 6 / 3 / 3 bands; held back while a leg moves, applied at the next leg (SCOPE resets the morph, so it must wait) |
 
 ## Limits of the pilot
 

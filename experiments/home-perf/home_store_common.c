@@ -86,14 +86,19 @@ static int hp_restore(const hp_store_t*p)
 #if HP_SNAPSHOT_STORE
  hp_rm_reset();hp_rm_snapshot_clear();action_snap_slot=0;
  if(v2)memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap);
+ hp_ps_apply(v2?hp_rm_snap:0);                  /* stored settings, or the defaults of a project made before them; a journey starts stopped */
 #endif
  perf_irq_restore(irq);hp_dirty=0;ui.force=1;return 1;
 }
 static uint32_t hp_signature(void)
 {
- hp_pair_store_t p;hp_pair_capture(&p);return autosave_sig()
+ hp_pair_store_t p;hp_pair_capture(&p);
 #if HP_SNAPSHOT_STORE
- ^hp_hash(hp_rm_snap,sizeof hp_rm_snap)
+ uint32_t ps=hp_ps_word();            /* BARS DEPTH SCOPE SHAPE WAIT DIR: a change is an autosave (RESTORE LAST) */
+#endif
+ return autosave_sig()
+#if HP_SNAPSHOT_STORE
+ ^hp_hash(hp_rm_snap,sizeof hp_rm_snap)^hp_hash(&ps,sizeof ps)
 #endif
  ^hp_hash(&hp,sizeof hp)^hp_hash(&p,sizeof p)^((uint32_t)trk[0].user|(uint32_t)trk[1].user<<8|(uint32_t)trk[2].user<<16|(uint32_t)trk[3].user<<24);
 }

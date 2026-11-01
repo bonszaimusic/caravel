@@ -238,6 +238,7 @@ static hp_ref_t hp_rm_snapshot_ref(const hp_rm_snap_t *s,uint32_t i)
 }
 #if HP_JVN
 static void hp_j_captured(void);
+static uint8_t hp_j_arrived;     /* set by hp_rm_poll when a recall really reached its snapshot */
 #endif
 static int hp_rm_snapshot_store(uint32_t slot)
 {
@@ -410,6 +411,9 @@ static void hp_rm_poll(uint32_t now)
  if(hp_rm.phase==65536u){
   int returned=hp_rm.state==HP_RM_RETURN, recalled=hp_rm.state==HP_RM_RECALL;
   hp_rm.state=returned||recalled?HP_RM_IDLE:HP_RM_DONE;
+#if HP_JVN
+  if(recalled)hp_j_arrived=1;
+#endif
   if(returned || recalled)hp_rm_drop_context();
   ui_message(recalled?"SNAP REACHED":returned?"RANDOM RETURNED":"RANDOM DESTINATION");
  }
@@ -484,6 +488,7 @@ static int hp_j_moving(void){return hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_R
 static void hp_j_apply_settings(void)              /* latched at the start of a leg, never while one moves */
 {
  if(hp_j_moving())return;
+ if(hp_j.set[0]||hp_j.set[1]||hp_j.set[2]||hp_j.set[3])hp_dirty=1;
  if(hp_j.set[0]){hp_rm.bars=hp_rm_times[hp_j.set[0]-1u];hp_j.set[0]=0;}
  if(hp_j.set[1]){hp_rm.depth=hp_rm_depths[hp_j.set[1]-1u];hp_j.set[1]=0;}
  if(hp_j.set[2]){
@@ -502,6 +507,7 @@ static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live 
 {
  if(hp_rm.state==HP_RM_RECALL||(hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL))hp_rm_reset();
  hp_j_apply_settings();
+ hp_j_arrived=0;
  if(!hp_rm_snapshot_recall(to,now)){hp_j_stop("JOURNEY: SNAP CHANGED");return 0;}
  hp_j.tgt=(uint8_t)to;hp_j.phase=0;
  action_snap_slot=(uint8_t)to;                      /* RANDOM's selected snapshot follows the journey: edit or recapture it there */
@@ -531,7 +537,7 @@ static void hp_j_wait_begin(uint32_t now)
 }
 static void hp_j_set_wait(uint32_t w)              /* 0..5: rest 0/1/2/4/8/16 bars after each arrival */
 {
- hp_j.wait=(uint8_t)(w<6u?w:5u);
+ hp_j.wait=(uint8_t)(w<6u?w:5u);hp_dirty=1;
  hp_j_say("JOURNEY WAIT %u BAR",hp_j_waits[hp_j.wait],0u);
 }
 static void hp_j_select(uint32_t s,uint32_t now)   /* the shared slot; a running journey steers there smoothly; never saves */
@@ -558,7 +564,7 @@ static void hp_j_button(uint32_t i,uint32_t now)
   }
   ui.force=1;
  }else if(i==HJ_DIR){
-  hp_j.rev=!hp_j.rev;                                   /* the running leg finishes; the NEXT one goes the new way (NEXT turns at once) */
+  hp_j.rev=!hp_j.rev;hp_dirty=1;                                   /* the running leg finishes; the NEXT one goes the new way (NEXT turns at once) */
   if(hp_j.on&&hp_j.phase==0)hp_j_say(hp_j.rev?"REVERSE AFTER S%u":"FORWARD AFTER S%u",hp_j.tgt+1u,0u);
   else ui_message(hp_j.rev?"JOURNEY REVERSE":"JOURNEY FORWARD");
   ui.force=1;
@@ -588,7 +594,10 @@ static void hp_journey_poll(uint32_t now)
  if(!hp_j.on||hp_j.paused)return;
  if(hp_j.phase==0){
   if(hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN)return;   /* moving, or held by A2 */
-  if(hp_rm.state==HP_RM_IDLE){hp_j.cur=hp_j.tgt;hp_j_wait_begin(now);return;}
+  if(hp_rm.state==HP_RM_IDLE){
+   if(hp_j_arrived){hp_j_arrived=0;hp_j.cur=hp_j.tgt;hp_j_wait_begin(now);return;}   /* a real arrival */
+   hp_j_stop("JOURNEY STOPPED");return;                                            /* reset by something else: not an arrival */
+  }
   hp_j_stop("JOURNEY STOPPED");
  }else{
   if(hp_j_moving()){hp_j_stop("JOURNEY STOPPED");return;}

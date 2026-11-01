@@ -148,6 +148,8 @@ static int32_t action_setup_value(uint32_t slot)
 #if HP_JVN
   if(slot==0u&&hp_j.set[0])return hp_rm_times[hp_j.set[0]-1u];   /* a change waiting for the running journey's leg to end */
   if(slot==3u&&hp_j.set[3])return hp_j.set[3]-1u;
+  if(slot==2u&&hp_j.set[2])return hp_j.set[2]-1u;
+  if(slot==1u&&hp_j.set[1])return hp_rm_depths[hp_j.set[1]-1u];
 #endif
   return slot==0u?hp_rm.bars:slot==1u?hp_rm.depth:slot==2u?hp_rm.scope:hp_rm.shape;
 #else
@@ -238,9 +240,14 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
   if(ui.ml.on){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_BARS+slot);return;} /* MIDI LEARN: K1..K4 pick BARS DEPTH SCOPE SHAPE */
 #endif
 #if FELUCCA_RANDOM_MORPH
+  hp_dirty=1;                         /* BARS DEPTH SCOPE SHAPE are saved with the project */
 #if HP_JVN
-  if(hp_j.on&&(slot==0u||slot==3u)){   /* the journey's legs use them: wait for the next leg */
-   if(slot==0u){
+  if(hp_j.on&&slot!=1u){   /* the journey's legs use them (SCOPE resets the morph): wait for the next leg */
+   hp_dirty=1;
+   if(slot==2u){
+    int32_t sc=hp_j.set[2]?(int32_t)hp_j.set[2]-1:(int32_t)hp_rm.scope;
+    hp_j.set[2]=(uint8_t)(clamp(sc+steps,0,2)+1);
+   }else if(slot==0u){
     int32_t i=0;
     if(hp_j.set[0])i=(int32_t)hp_j.set[0]-1;else while(i<6&&hp_rm_times[i]!=hp_rm.bars)i++;
     hp_j.set[0]=(uint8_t)(clamp(i+steps,0,6)+1);
