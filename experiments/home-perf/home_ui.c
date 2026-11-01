@@ -91,6 +91,19 @@ static void hp_midi(track_t*t,uint32_t id,uint32_t value)
  hp_ref_t r={0};r.kind=id<HP_VFIRST+4?HP_MACRO:HP_PAIR;r.id=(id-HP_VFIRST)&3;r.track=trk_index(t);r.engine=255;
  const param_desc_t*d=hp_desc(r);if(d)hp_set(r,d->min+(value*(d->max-d->min)+63)/127,1);
 }
+/* A learned or standard-map CC that sets a parameter takes it from a running Random Morph / snapshot recall for the rest
+ * of that morph, as a physical knob does (hp_set capture=1). Called on the MIDI path, so the same context as hp_midi. */
+static void hp_midi_touch(uint32_t kind,uint32_t track,uint32_t id)
+{
+#if FELUCCA_RANDOM_MORPH
+ hp_ref_t r={0};
+ if(kind==HP_TRACK)r=hp_track_ref(track,id,0xFFFFu);
+ else{r.kind=(uint8_t)kind;r.track=(uint8_t)track;r.id=(uint8_t)id;r.engine=255;}
+ hp_rm_disengage(r);
+#else
+ (void)kind;(void)track;(void)id;
+#endif
+}
 static void hp_touch(uint32_t slot)
 {
  const page_t*pg=cur_page();hp_last_valid=0;hp_ref_t r={0};r.track=song.sel;r.engine=255;r.page=ui.page;

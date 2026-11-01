@@ -245,6 +245,9 @@ static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)
     const param_desc_t *d = track_desc(t, id);
     d = drone_automated_desc(eng_idx(t->eng_req), id, t->p[id], d);
     int32_t v = d->min + ((int32_t)value * (d->max - d->min) + 63) / 127;
+#if FELUCCA_HOME_PERF
+    hp_midi_touch(HP_TRACK, (uint32_t)(t - trk), id);   /* the controller owns it until a running morph ends */
+#endif
     if (d->max <= d->min || t->p[id] == v)
         return;
     t->p[id] = (int16_t)v;
@@ -300,11 +303,17 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
             if (lfo2_target(id)) {
                 uint32_t k = (e >> 7) & 3u;
                 const param_desc_t *d = lfo2_desc(id);
+#if FELUCCA_HOME_PERF
+                hp_midi_touch(HP_LFO2, k, id);
+#endif
                 lfo2_set(k, id, d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
             } else if (dx_target(id)) {
                 uint32_t k = (e >> 7) & 3u;
                 if (dx_track(&trk[k])) {
                     const param_desc_t *d = dx_desc(id);
+#if FELUCCA_HOME_PERF
+                    hp_midi_touch(HP_DX, k, id);
+#endif
                     dx_set(k, id, d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
                 }
             } else if (id < P_COUNT) midi_cc_set(&trk[(e >> 7) & 3u], id, value);

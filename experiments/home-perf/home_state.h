@@ -48,6 +48,7 @@ static int hp_auto_undo_ready(const track_t *t);
 static int hp_auto_undo_swap(track_t *t);
 static void hp_motion_stop(void);
 static void hp_midi(track_t *t, uint32_t id, uint32_t value);
+static void hp_midi_touch(uint32_t kind, uint32_t track, uint32_t id);
 static const param_desc_t *hp_vdesc(uint32_t id);
 static int hp_project_save(uint32_t slot, const char *name);
 static int hp_project_load(uint32_t slot);
