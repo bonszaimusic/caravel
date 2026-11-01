@@ -102,6 +102,11 @@ def build(site, source=ASSETS):
                     depth = '../' * len(path.parent.relative_to(stage).parts)
                     path.write_text(path.read_text().replace(depth + 'firmware/caravel-0.6.0-source.tar.gz', source_url))
                 shutil.copytree(stage / name, site / name, dirs_exist_ok=True)
+    # The Random Morph / Journey tutorial comes from this source tree for every site, whichever release built it.
+    stasis_pages.add_morph_tutorial(site, look, make_site.SHIP_PATH, ROOT)
+    if historical:
+        morph = site / 'tutorials/random-morph-journey/index.html'
+        morph.write_text(morph.read_text().replace('../../firmware/caravel-0.6.0-source.tar.gz', source_url))
     target = site / "performance"
     target.mkdir(exist_ok=True)
     for name, raw in data.items():

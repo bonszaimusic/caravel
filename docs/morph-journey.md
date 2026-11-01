@@ -2,8 +2,10 @@
 # MORPH JOURNEY (pilot)
 
 **Pilot, not released, tested on the host only (no FM-1 yet).** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
-It is played from the panel (the JOURNEY ACTION bank) and, if you like, from MIDI controllers. Nothing about it is stored: no project,
-snapshot or sound is changed, and a journey simply ends when you stop it.
+It is played from the panel (the JOURNEY ACTION bank) and, if you like, from MIDI controllers. Playing a journey changes no snapshot and
+no stored sound, and it ends when you stop it. What *is* kept with the project are the snapshots S1–S4 and the performance settings (BARS,
+DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, the countdown, the selected slot) is not saved, see
+[Saved with the project](#saved-with-the-project).
 
 ## Play it from the panel
 

@@ -114,6 +114,26 @@ def morph_page(look,ship,root=ROOT):
     page_html=page_html.replace('href="../','href="../../').replace("</style>",css+"</style>",1)   # the page sits one level below tutorials/
     return page_html.replace("@@BODY@@",body,1)
 
+HUB_START="<!-- CARAVEL-TUTORIALS-START -->";HUB_END="<!-- CARAVEL-TUTORIALS-END -->"
+def tutorial_hub():
+    return HUB_START+('<section class="chapter" id="all-tutorials"><div class="eyebrow">ALL TUTORIALS</div><h2>Pick a lesson</h2><ul>'
+        '<li><a href="'+MORPH_PAGE+'/"><strong>Random Morph and Morph Journey</strong></a>: save sounds, morph between them and chain the morphs hands-free (0.8.0).</li>'
+        '<li><a href="#lesson-1"><strong>STASIS: HOLD, ADD and BLEND</strong></a>: the four lessons below, with a PDF guide and <a href="../sounds/">sound examples</a>.</li>'
+        '<li><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/README.md"><strong>HOME, Pair Morph, macros and saving</strong></a>: the performance workflow, with a <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/Caravel-0.5.0-Quickstart.pdf">six-page PDF quickstart</a>.</li>'
+        '</ul></section>')+HUB_END
+def add_morph_tutorial(site,look,ship,root=ROOT):
+    """Add the Random Morph / Journey page and the all-tutorials block to a site that has tutorials/index.html; safe to repeat."""
+    site=Path(site);tutorials=site/"tutorials"
+    (tutorials/"img").mkdir(parents=True,exist_ok=True);(tutorials/MORPH_PAGE).mkdir(exist_ok=True)
+    for name in sorted(set(re.findall(r"\]\(img/([^)\s]+\.png)\)",(root/MORPH_MD).read_text(encoding="utf-8")))):
+        shutil.copyfile(root/"docs/tutorials/img"/name,tutorials/"img"/name)
+    (tutorials/MORPH_PAGE/"index.html").write_text(morph_page(look,ship,root))
+    index=tutorials/"index.html"
+    text=re.sub(re.escape(HUB_START)+".*?"+re.escape(HUB_END),"",index.read_text(),flags=re.S)
+    marker='<section class="chapter" id="lesson-1"' if 'id="lesson-1"' in text else "<footer>"
+    if marker not in text:raise ValueError("Unexpected tutorials page layout")
+    index.write_text(text.replace(marker,tutorial_hub()+marker,1))
+
 def changelog(root):
     text=(root/"CHANGELOG.md").read_text().split("## [0.6.0]",1)[1].split("\n## [",1)[0]
     blocks=[];paragraph=[];items=[]
@@ -134,18 +154,8 @@ def build(stage,look,ship,root=ROOT):
     for p in [tutorials/"img",sounds,changes]:p.mkdir(parents=True,exist_ok=True)
     shutil.copyfile(root/"docs/tutorials"/guide["pdf"],tutorials/guide["pdf"])
     shutil.copyfile(root/"docs/tutorials/stasis-0.6.0.json",tutorials/"stasis-0.6.0.json")
-    morph_dir=tutorials/MORPH_PAGE;morph_dir.mkdir(exist_ok=True)
-    for name in sorted(set(re.findall(r"\]\(img/([^)\s]+\.png)\)",(root/MORPH_MD).read_text(encoding="utf-8")))):
-        shutil.copyfile(root/"docs/tutorials/img"/name,tutorials/"img"/name)
-    (morph_dir/"index.html").write_text(morph_page(look,ship,root))
-    hub=('<section class="chapter" id="all-tutorials"><div class="eyebrow">ALL TUTORIALS</div><h2>Pick a lesson</h2><ul>'
-         '<li><a href="'+MORPH_PAGE+'/"><strong>Random Morph and Morph Journey</strong></a>: save sounds, morph between them and chain the morphs hands-free (0.8.0).</li>'
-         '<li><a href="#lesson-1"><strong>STASIS: HOLD, ADD and BLEND</strong></a>: the four lessons below, with a PDF guide and <a href="../sounds/">sound examples</a>.</li>'
-         '<li><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/README.md"><strong>HOME, Pair Morph, macros and saving</strong></a>: the performance workflow, with a <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/Caravel-0.5.0-Quickstart.pdf">six-page PDF quickstart</a>.</li>'
-         '</ul></section>')
     intro='<p class="lead">Capture a moment, build on a held texture, or move into a new sound. These four short lessons use the actual firmware display.</p>'
     intro+=f'<div class="actions"><a href="{e(guide["pdf"])}" download>Download the four-page PDF</a><a href="../sounds/">Hear the examples</a><a href="../emulator/">Try the emulator</a></div>'
-    intro+=hub
     content=[]
     for chapter in guide["chapters"]:
         image=chapter["image"];shutil.copyfile(root/"docs/tutorials/img"/image,tutorials/"img"/image)
@@ -153,6 +163,7 @@ def build(stage,look,ship,root=ROOT):
         content.append(f'<section class="chapter" id="lesson-{chapter["number"]}"><div class="eyebrow">{e(chapter["number"])} / {e(chapter["tag"])}</div><h2>{e(chapter["title"])}</h2><div class="chapter-grid"><figure><img src="img/{e(image)}" width="240" height="240" alt="{e(chapter["tag"])} on the actual Caravel firmware display" loading="lazy"><figcaption>Actual firmware display</figcaption></figure><div>{steps}</div></div><p class="tip">{e(chapter["tip"])}</p><p class="note">{e(chapter["note"])}</p></section>')
     intro+="".join(content)+'<p><a href="https://github.com/bonszaimusic/caravel/blob/v0.6.0/docs/tutorials/README.md#performance-workflow">HOME, Pair Morph, macros and performance storage tutorials</a></p>'
     (tutorials/"index.html").write_text(page("Make a sound last. Then take it further.",intro,look,ship))
+    add_morph_tutorial(stage,look,ship,root)
     body='<p class="lead">Three original examples from the actual Caravel firmware DSP. Listen for what stays after the live source is muted, and how the texture changes.</p><p class="note">Native DSP renders, not recordings of an FM-1. Constant peak normalization and a short end fade; no external sound effects. Playback starts only when you press play.</p>'
     for clip in audio["clips"]:
         shutil.copyfile(root/"docs/audio"/clip["file"],sounds/clip["file"])
