@@ -98,8 +98,9 @@ def build(site, source=ASSETS):
             stage = Path(temp)
             stasis_pages.build(stage, look, make_site.SHIP_PATH, ROOT)
             for name in ('tutorials', 'sounds', 'changelog'):
-                path = stage / name / 'index.html'
-                path.write_text(path.read_text().replace('../firmware/caravel-0.6.0-source.tar.gz', source_url))
+                for path in (stage / name).rglob('index.html'):
+                    depth = '../' * len(path.parent.relative_to(stage).parts)
+                    path.write_text(path.read_text().replace(depth + 'firmware/caravel-0.6.0-source.tar.gz', source_url))
                 shutil.copytree(stage / name, site / name, dirs_exist_ok=True)
     target = site / "performance"
     target.mkdir(exist_ok=True)
@@ -116,7 +117,7 @@ def build(site, source=ASSETS):
     text = clean(landing.read_text())
     card = '<section class="box sec" id="performance"><span class="tag">PERFORMANCE DOWNLOAD</span><p><a href="performance/">Load the STASIS HOME setup from the feature Short.</a></p><p>Full project, MIDI notes and a step-by-step play guide.</p><p><a href="performance/' + PACKAGE + '" download>Full download · ZIP</a> · <a href="performance/' + PROJECT + '" download>Project · HPM</a></p></section>'
     if historical:
-        card += '<section class="box sec"><span class="tag">0.6.0 STASIS RESOURCES</span><p><a href="tutorials/">Tutorials and PDF guide</a> · <a href="sounds/">Sound examples</a> · <a href="changelog/">0.6.0 changelog</a></p></section>'
+        card += '<section class="box sec"><span class="tag">0.6.0 STASIS RESOURCES</span><p><a href="tutorials/">Tutorials and PDF guide</a> · <a href="tutorials/random-morph-journey/">Random Morph and Journey tutorial</a> · <a href="sounds/">Sound examples</a> · <a href="changelog/">0.6.0 changelog</a></p></section>'
     if "</section>" not in text or "</nav>" not in text:
         raise ValueError("Unexpected Caravel landing layout")
     text = text.replace("</section>", "</section>" + marked(card), 1)

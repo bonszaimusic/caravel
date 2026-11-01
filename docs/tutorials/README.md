@@ -1,4 +1,9 @@
-# Caravel 0.6.0 - STASIS and performance tutorials
+# Caravel tutorials
+
+**New: [Random Morph and Morph Journey](random-morph-journey.md)** (0.8.0). The sections below cover STASIS (0.6.0) and the performance workflow (0.5.0).
+Back to the [README](../../README.md#tutorials).
+
+## STASIS and performance tutorials (0.6.0)
 
 [STASIS PDF guide](Caravel-0.6.0-STASIS-Guide.pdf) ·
 [Listen to the examples](https://bonszaimusic.github.io/caravel/sounds/) ·

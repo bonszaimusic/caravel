@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """Versioned tutorials, original DSP examples and changelog for the 0.6.0 site."""
-import argparse,hashlib,html,json,re,shutil,struct
+import argparse,hashlib,html,json,posixpath,re,shutil,struct
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote,urlsplit
@@ -21,6 +21,11 @@ def load_sources(root=ROOT):
         raw=image.read_bytes()
         if sha(image)!=chapter["image_sha256"] or raw[:8]!=b"\x89PNG\r\n\x1a\n" or struct.unpack(">II",raw[16:24])!=(240,240):
             raise ValueError("Incorrect tutorial screenshot: "+image.name)
+    shots=sorted(set(re.findall(r"\]\(img/([^)\s]+\.png)\)",(root/MORPH_MD).read_text(encoding="utf-8"))))
+    if len(shots)<7:raise ValueError("Random Morph / Journey tutorial lost its screenshots")
+    for name in shots:
+        raw=(root/"docs/tutorials/img"/name).read_bytes()
+        if raw[:8]!=b"\x89PNG\r\n\x1a\n" or struct.unpack(">II",raw[16:24])!=(240,240):raise ValueError("Incorrect tutorial screenshot: "+name)
     for clip in audio["clips"]:
         p=root/"docs/audio"/clip["file"]
         if sha(p)!=clip["sha256"] or clip["decoded_peak"]>=1 or clip["held_rms"]<=.001 or clip["seconds"] not in (20,24):
@@ -28,10 +33,10 @@ def load_sources(root=ROOT):
     return guide,audio
 
 def e(s):return html.escape(str(s),quote=True)
-def page(title,body,look,ship):
+def page(title,body,look,ship,version="0.6.0",eyebrow="CARAVEL 0.6.0 / STASIS",description="Caravel 0.6.0 STASIS: illustrated tutorials, original DSP sound examples, ADD, BLEND and upgrade notes."):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)} - Caravel 0.6.0</title>
-<meta name="description" content="Caravel 0.6.0 STASIS: illustrated tutorials, original DSP sound examples, ADD, BLEND and upgrade notes.">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)} - Caravel {e(version)}</title>
+<meta name="description" content="{e(description)}">
 <style>{look}
 body{{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
 main{{max-width:1000px;margin:auto;padding:34px 20px 60px}}h1{{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:12px 0 16px;max-width:24ch}}
@@ -46,10 +51,68 @@ audio{{width:100%;max-width:640px;margin:8px 0 12px}}.cues{{display:grid;grid-te
 .changes{{max-width:78ch}}.changes h2{{margin-top:30px}}footer{{border-top:1px solid var(--raise);margin-top:32px;padding-top:18px;color:var(--dim);font-size:12px}}
 @media(max-width:700px){{main{{padding:26px 14px 40px}}.chapter,.sound{{padding:20px 16px}}.chapter-grid{{grid-template-columns:1fr;gap:24px}}figure{{text-align:center}}.cues{{grid-template-columns:1fr}}}}
 </style></head><body><header class="site"><a class="logo" href="../"><svg class="ship" width="42" height="26" viewBox="0 0 28 17" aria-hidden="true"><path d="{ship}"/></svg>CARAVEL</a>
-<span class="pill">v0.6.0</span><nav aria-label="Caravel"><a href="../webapp/installer/">INSTALL</a><a href="../emulator/">EMULATOR</a><a href="../tutorials/">TUTORIALS</a><a href="../sounds/">SOUNDS</a><a href="../changelog/">CHANGELOG</a></nav></header>
-<main><div class="eyebrow">CARAVEL 0.6.0 / STASIS</div><h1>{e(title)}</h1>{body}
+<span class="pill">v{e(version)}</span><nav aria-label="Caravel"><a href="../webapp/installer/">INSTALL</a><a href="../emulator/">EMULATOR</a><a href="../tutorials/">TUTORIALS</a><a href="../sounds/">SOUNDS</a><a href="../changelog/">CHANGELOG</a></nav></header>
+<main><div class="eyebrow">{e(eyebrow)}</div><h1>{e(title)}</h1>{body}
 <footer>Caravel by bonszaimusic, based on Felucca 1.6.1. Independent of M-VAVE and Hugelton Instruments.
 <a href="../firmware/LICENSING.md">Licensing</a> · <a href="../firmware/NOTICE">Notices</a> · <a href="../firmware/caravel-0.6.0-source.tar.gz">Matching source</a></footer></main></body></html>'''
+
+MORPH_MD="docs/tutorials/random-morph-journey.md"
+MORPH_PAGE="random-morph-journey"
+GITHUB="https://github.com/bonszaimusic/caravel/blob/main/"
+def link_target(url,image=False):
+    if urlsplit(url).scheme:return url
+    if image:return "../"+url
+    return GITHUB+posixpath.normpath(posixpath.join("docs/tutorials",url.split("#")[0]))+("#"+url.split("#",1)[1] if "#" in url else "")
+def inline(text):
+    text=e(text)
+    text=re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)",lambda m:f'<img src="{link_target(m[2].replace("&amp;","&"),True)}" width="240" height="240" alt="{m[1]}" loading="lazy">',text)
+    text=re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)",lambda m:f'<a href="{e(link_target(html.unescape(m[2])))}">{m[1]}</a>',text)
+    text=re.sub(r"\*\*([^*]+)\*\*",r"<strong>\1</strong>",text)
+    text=re.sub(r"`([^`]+)`",r"<code>\1</code>",text)
+    return re.sub(r"(?<![\w*])\*([^*]+)\*(?![\w*])",r"<em>\1</em>",text)
+def markdown_sections(text):
+    """The tutorial's Markdown (one # title, ## sections, paragraphs, - lists, | tables, ![images]) as (title, intro html, [(heading, html)])."""
+    title="";intro=[];sections=[];cur=intro;block=[]
+    def flush():
+        if not block:return
+        first=block[0]
+        if first.startswith("|"):
+            rows=[[c.strip() for c in l.strip().strip("|").split("|")] for l in block if not re.fullmatch(r"\|[\s|:-]+\|",l.strip())]
+            head="<tr>"+"".join(f"<th>{inline(c)}</th>" for c in rows[0])+"</tr>"
+            cur.append('<div class="table-wrap"><table><thead>'+head+"</thead><tbody>"+"".join("<tr>"+"".join(f"<td>{inline(c)}</td>" for c in r)+"</tr>" for r in rows[1:])+"</tbody></table></div>")
+        elif first.startswith("- "):
+            items=[]
+            for l in block:
+                if l.startswith("- "):items.append(l[2:])
+                else:items[-1]+=" "+l.strip()
+            cur.append("<ul>"+"".join(f"<li>{inline(i)}</li>" for i in items)+"</ul>")
+        elif re.fullmatch(r"!\[[^\]]*\]\([^)\s]+\)",first) and len(block)==1:
+            alt=re.match(r"!\[([^\]]*)\]",first)[1]
+            cur.append(f"<figure>{inline(first)}<figcaption>{e(alt)} (actual firmware display)</figcaption></figure>")
+        else:
+            para=" ".join(l.strip() for l in block)
+            cur.append(f'<p class="note">{inline(para)}</p>' if para.startswith("*") and para.endswith("*") and not para.startswith("**") else f"<p>{inline(para)}</p>")
+        block.clear()
+    for line in text.splitlines():
+        if line.startswith("<!--"):continue
+        if line.startswith("# "):flush();title=line[2:].strip()
+        elif line.startswith("## "):flush();cur=[];sections.append((line[3:].strip(),cur))
+        elif not line.strip():flush()
+        else:block.append(line)
+    flush()
+    return title,"".join(intro),[(h,"".join(b)) for h,b in sections]
+def morph_page(look,ship,root=ROOT):
+    title,intro,sections=markdown_sections((root/MORPH_MD).read_text(encoding="utf-8"))
+    body=f'<div class="actions"><a href="../">All tutorials</a><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/morph-journey.md">Reference: MORPH JOURNEY</a><a href="../../emulator/">Try the emulator</a></div>'
+    body+=f'<div class="lead">{intro}</div>'
+    for i,(heading,html_body) in enumerate(sections,1):
+        body+=f'<section class="chapter" id="step-{i}"><h2>{inline(heading)}</h2>{html_body}</section>'
+    shown=re.sub(r"\s*-\s*tutorial$","",title)
+    page_html=page(shown,"@@BODY@@",look,ship,version="0.8.0",eyebrow="CARAVEL 0.8.0 / RANDOM MORPH AND JOURNEY",
+        description="Caravel Random Morph and Morph Journey: save sounds into S1-S4, morph between them and chain the morphs hands-free, with real firmware screens.")
+    css=".table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--raise);vertical-align:top}figure{margin:16px 0}.lead p{margin:0 0 12px}"
+    page_html=page_html.replace('href="../','href="../../').replace("</style>",css+"</style>",1)   # the page sits one level below tutorials/
+    return page_html.replace("@@BODY@@",body,1)
 
 def changelog(root):
     text=(root/"CHANGELOG.md").read_text().split("## [0.6.0]",1)[1].split("\n## [",1)[0]
@@ -71,8 +134,18 @@ def build(stage,look,ship,root=ROOT):
     for p in [tutorials/"img",sounds,changes]:p.mkdir(parents=True,exist_ok=True)
     shutil.copyfile(root/"docs/tutorials"/guide["pdf"],tutorials/guide["pdf"])
     shutil.copyfile(root/"docs/tutorials/stasis-0.6.0.json",tutorials/"stasis-0.6.0.json")
+    morph_dir=tutorials/MORPH_PAGE;morph_dir.mkdir(exist_ok=True)
+    for name in sorted(set(re.findall(r"\]\(img/([^)\s]+\.png)\)",(root/MORPH_MD).read_text(encoding="utf-8")))):
+        shutil.copyfile(root/"docs/tutorials/img"/name,tutorials/"img"/name)
+    (morph_dir/"index.html").write_text(morph_page(look,ship,root))
+    hub=('<section class="chapter" id="all-tutorials"><div class="eyebrow">ALL TUTORIALS</div><h2>Pick a lesson</h2><ul>'
+         '<li><a href="'+MORPH_PAGE+'/"><strong>Random Morph and Morph Journey</strong></a>: save sounds, morph between them and chain the morphs hands-free (0.8.0).</li>'
+         '<li><a href="#lesson-1"><strong>STASIS: HOLD, ADD and BLEND</strong></a>: the four lessons below, with a PDF guide and <a href="../sounds/">sound examples</a>.</li>'
+         '<li><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/README.md"><strong>HOME, Pair Morph, macros and saving</strong></a>: the performance workflow, with a <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/Caravel-0.5.0-Quickstart.pdf">six-page PDF quickstart</a>.</li>'
+         '</ul></section>')
     intro='<p class="lead">Capture a moment, build on a held texture, or move into a new sound. These four short lessons use the actual firmware display.</p>'
     intro+=f'<div class="actions"><a href="{e(guide["pdf"])}" download>Download the four-page PDF</a><a href="../sounds/">Hear the examples</a><a href="../emulator/">Try the emulator</a></div>'
+    intro+=hub
     content=[]
     for chapter in guide["chapters"]:
         image=chapter["image"];shutil.copyfile(root/"docs/tutorials/img"/image,tutorials/"img"/image)
@@ -105,7 +178,7 @@ class Links(HTMLParser):
 
 def check_site(stage):
     stage=stage.resolve();broken=[]
-    for name in ("tutorials/index.html","sounds/index.html","changelog/index.html"):
+    for name in ("tutorials/index.html","tutorials/"+MORPH_PAGE+"/index.html","sounds/index.html","changelog/index.html"):
         p=stage/name
         if not p.is_file():raise ValueError("Missing release page: "+name)
     for p in stage.rglob("*.html"):

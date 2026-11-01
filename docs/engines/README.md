@@ -7,7 +7,7 @@ Source-code paths and commands are relative to the repository root unless
 explicitly stated otherwise. Verification statements distinguish host tests
 from physical FM-1 acceptance.
 
-- [All engines at a glance](overview.md): what each of the sixteen engines is and what it is good for.
+- [All engines at a glance](overview.md): what each of the engines is and what it is good for.
 - [Tips and tricks](tips.md) for SEM, HADES and DRONE.
 - [SEM](SEM_ENGINE.md): Oberheim SEM-inspired virtual analogue engine.
 - [HADES](hades-engine.md): Hades-inspired bass engine, controls and limits.

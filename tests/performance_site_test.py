@@ -84,6 +84,10 @@ class PerformanceSiteTest(unittest.TestCase):
         self.assertIn('v0.7.0', landing.read_text())
         self.assertIn('href="performance/"', landing.read_text())
         self.assertIn('href="tutorials/"', landing.read_text())
+        self.assertIn('href="tutorials/random-morph-journey/"', landing.read_text())
+        morph = (self.site / 'tutorials/random-morph-journey/index.html').read_text()
+        self.assertIn('https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz', morph)
+        self.assertIn('href="random-morph-journey/"', (self.site / 'tutorials/index.html').read_text())
         for name in ('performance', 'tutorials', 'sounds', 'changelog'):
             text = (self.site / name / 'index.html').read_text()
             self.assertIn('v0.6.0', text)

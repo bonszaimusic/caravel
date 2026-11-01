@@ -8,6 +8,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.2**.
 
 **[Troubleshooting & FAQ](docs/faq.md)** — USB detection, switching firmware, stock-return error -5, UBOOT and recovery tools.
 
+**Tutorials:** [Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md) · [STASIS: HOLD, ADD, BLEND](https://bonszaimusic.github.io/caravel/tutorials/) · [HOME, Pair Morph, macros and saving](docs/tutorials/README.md) · [all tutorials](#tutorials)
+
 Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
 [Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
 has ended. 0.1.0 is the first version under this name. Caravel is **not affiliated with, endorsed or supported by Hügelton
@@ -24,6 +26,17 @@ comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](
 </table>
 
 More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
+
+## Tutorials
+
+Every screenshot comes from the actual firmware renderer. Start with the one that matches what you want to do:
+
+| Tutorial | What you learn |
+| --- | --- |
+| **[Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md)** | Save sounds into S1–S4, morph between them, and let a journey chain the morphs hands-free (0.8.0, not released yet; [reference](docs/morph-journey.md)) |
+| **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
+| **[HOME, Pair Morph, macros and saving](docs/tutorials/README.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
+| [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
 
 ## Caravel 0.7.2 — candidate fix for the stock return (-5)
 
@@ -51,7 +64,7 @@ STASIS captured audio, active morph motion and RETURN origins remain volatile. A
 - Run hot DRONE, SEM, HADES, STASIS and HALL DSP from checked executable RAM. The owner reports no audible crackle and indicated load at most about 70% with the rc6 test setup; this is not a controlled speedup measurement.
 - Group STASIS GRAIN/LAYER on one view and place CHORUS before REVERB; retain reverse/scan/capture continuity fixes.
 - Keep independent Random Morph RETURN origins for each track/HOME row. Show HOME macro and Pair automation in SEQ > AUTOMATION and make its PLAY switch apply to both event stores. Pair recordings belong to member A.
-- Four S1–S4 Random Morph snapshots remain volatile. Permanent snapshot storage is deferred to a later update; saving a project retains its current sound, not the four snapshot slots or captured STASIS audio.
+- In 0.7.0 the four S1–S4 Random Morph snapshots were still volatile and saving a project kept the current sound, not the snapshot slots. Since 0.7.1 the slots are saved with each project (below); captured STASIS audio is still not stored.
 
 The 0.6.0 STASIS tutorials and sound examples below remain useful for the shared controls.
 
@@ -210,13 +223,15 @@ Use the [web installer](https://bonszaimusic.github.io/caravel/webapp/installer/
 
 ## What it is
 
-Sixteen engines with factory presets, four tracks (8 voices shared), a 64-step sequencer (chords, ties, chance, conditions,
+Fifteen engines with factory presets, four tracks (8 voices shared), a 64-step sequencer (chords, ties, chance, conditions,
 ratchets, nudge, locks, automation, live and step recording), SEQ TOOLS, songs, effects, a MOD matrix, MIDI (USB and TRS,
 per-track channels, MIDI LEARN) and USB audio.
 
 ## Inherited from Felucca
 
-## New in 1.6.1
+What the base brings with it, as of Felucca 1.6.1 and 1.6:
+
+### New in 1.6.1
 
 - **MENU > LARGE keeps one size per knob** (#251): a value no longer jumps between sizes as you turn the knob
 - **Updates check the package's size on the FM-1**: a package made for another device is refused before anything is erased
@@ -227,7 +242,7 @@ per-track channels, MIDI LEARN) and USB audio.
   Caravel uses its TRIO, WHEEL, NOISE and shared DSP, but local GPL-3.0-only, JIANT-derived ANALOG and LOFI variants in
   `firmware/src/`; the unchanged submodule variants remain MIT. Felucca itself stays GPL-3.0-only.
 
-## New in 1.6
+### New in 1.6
 
 - **Your own UI colours:** COLOR has an eleventh value, CUSTOM, set in the web editor with a live preview on the FM-1
 - **The SEQ piano roll follows the play position** when the pattern is longer than one screen

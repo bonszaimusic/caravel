@@ -6,6 +6,7 @@ What Caravel adds to Felucca 1.6.1 and how it works. The list of changes is in [
 [../NOTICE](../NOTICE), [../LICENSING.md](../LICENSING.md) and [../CREDITS.md](../CREDITS.md). Hardware acceptance on a real FM-1 is pending
 for everything here unless a guide says otherwise; host tests are not hardware measurements.
 
+- **[Tutorial: Random Morph and Morph Journey](tutorials/random-morph-journey.md)**: save sounds, morph between them and chain the morphs, step by step with real firmware screens.
 - **[MORPH JOURNEY (pilot)](morph-journey.md)**: chained snapshot morphs from the panel (JOURNEY bank) or MIDI; not released.
 - **[0.7.2 release and the stock-return fix](release-072.md)**: what changed, how to install, what is and is not tested.
 - **[0.7.1 release and snapshot storage](release-071.md)**: saving S1–S4, compatibility, backup and installation.

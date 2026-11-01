@@ -2,7 +2,7 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Engines at a glance
 
-Caravel has sixteen engines, each with factory presets and eight engine controls (EDIT 1 / EDIT 2). Pick one in PRESETS or with
+Caravel has fifteen engines in the released firmware (SLICE, the sixteenth, is omitted from the 0.6.0 and later builds to make room for STASIS), each with factory presets and eight engine controls (EDIT 1 / EDIT 2). Pick one in PRESETS or with
 EDIT held and KNOB 1. The "good for" column is a starting suggestion, not a rule: every engine goes through the same track
 facilities (ADSR, filter envelope, ARP, LFOs, MOD matrix, FX), so most of them can do more than the label says.
 
