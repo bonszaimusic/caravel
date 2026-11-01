@@ -435,10 +435,13 @@ static void hp_draw_home(void)
      ACT_BANKS,action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-");
   else
   #if HP_JVN
-  if(action_bank==ACT_BANK_JOURNEY)
-   perf_format(title,sizeof title,"ACTION %u/%u JOURNEY S%u%s %s",
-     action_bank+1u,ACT_BANKS,action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-",
-     !hp_j.on?"OFF":hp_j.paused?"PAUSE":hp_j.phase?"WAIT":"PLAY");
+  if(action_bank==ACT_BANK_JOURNEY){
+   uint32_t js=hp_j.on?hp_j.tgt:action_snap_slot;
+   if(action_setup)perf_format(title,sizeof title,"SETUP 5/5 JOURNEY TRACKS");
+   else perf_format(title,sizeof title,"JOURNEY 5/5 T%u S%u%s %s",
+     hp_rm_snapshot_count(js)?(uint32_t)hp_rm_snap[js].origin_track+1u:0u,action_snap_slot+1u,hp_rm_snapshot_count(action_snap_slot)?"*":"-",
+     !hp_j.on?"OFF":hp_j.paused?"PAUSE":hp_j.held?"HOLD":hp_j.phase?"WAIT":"PLAY");
+  }
   else
   #endif
   #endif
@@ -473,7 +476,30 @@ static void hp_draw_home(void)
    #endif
    cv_free_text(7+(int)k*59,185,&AF_S,label,T_TEXT,T_SURF,52);
   }
-  const char *action_help=action_bank==0u?"A4 TAP SLOT / HOLD SAVE":action_bank==ACT_BANK_JOURNEY?"A4 TAP WAIT / HOLD SAVE":"BANK TAP NEXT / HOLD SETUP";
+  const char *action_help=action_bank==0u?(action_setup?"A4 HOLD DELETE SLOT":"A4 TAP SLOT / HOLD SAVE"):action_bank==ACT_BANK_JOURNEY?(action_setup?"K1-K4 TRACK ON / SKIP":"A4 TAP WAIT / HOLD SAVE"):"BANK TAP NEXT / HOLD SETUP";
+#if FELUCCA_RANDOM_MORPH
+  char running[32];
+#if HP_JVN
+  int jb=action_bank==ACT_BANK_JOURNEY;       /* its own title already says what the journey does */
+#else
+  int jb=0;
+#endif
+  /* What is moving right now: there is one morph engine for all tracks, so say which track owns it, in every bank. */
+  if(0){}
+#if HP_JVN
+  else if(!jb&&hp_j.on){
+   uint32_t js=hp_j.tgt;
+   perf_format(running,sizeof running,"JOURNEY T%u >S%u %s",(uint32_t)hp_rm_snap[js].origin_track+1u,js+1u,
+     hp_j.paused?"PAUSE":hp_j.held?"HELD BY RANDOM":hp_j.phase?"WAIT":"PLAY");
+   action_help=running;
+  }
+#endif
+  else if(!jb&&(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN)){
+   perf_format(running,sizeof running,"%s T%u %s",hp_rm.state==HP_RM_RETURN?"RETURN":hp_rm.state==HP_RM_RECALL?"GO SNAP":"RANDOM",
+     (uint32_t)hp_rm.origin_track+1u,hp_rm.state==HP_RM_FROZEN?"FROZEN":"RUNNING");
+   action_help=running;
+  }
+#endif
 #if CARAVEL_STASIS_EXPAND
   if(action_bank==1u && action_setup)action_help="SELECT: FX/GRAIN  |  BANK HOLD EXIT";
 #endif

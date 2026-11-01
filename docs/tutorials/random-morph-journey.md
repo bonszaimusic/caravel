@@ -1,8 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Random Morph and Morph Journey - tutorial
 
-**Status:** for Caravel 0.8.0 (not released yet). Everything below is tested on the host with the real firmware; a real FM-1 and
-a controller are still to be checked. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
+**Status:** Caravel 0.8.0. Everything below is tested on the host and in CI with the real firmware; a controller on a real FM-1 has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
 The same tutorials, in one place: [README](../../README.md#tutorials) · [all tutorials](README.md) · [reference: MORPH JOURNEY](../morph-journey.md).
 
 Random Morph moves the controls on your HOME page, by hand or to a stored sound. Morph Journey chains those moves into one long, hands-free
@@ -40,6 +39,11 @@ Hold BANK again to leave SETUP. BARS, DEPTH, SCOPE and SHAPE are saved with each
 
 ![RANDOM SETUP](img/morph-setup.png)
 
+**Delete a slot:** in this SETUP, select the slot with A4 tap and **hold A4**. `SNAP S4 DELETED`. Outside SETUP the same hold saves, so a
+save can never delete by accident. A deleted slot is empty again (and saved so with the project).
+
+![SNAP S4 DELETED](img/morph-delete.png)
+
 ## 4. Start a journey
 
 Tap **BANK** until the title reads **JOURNEY** (the fifth bank, after LIVE). It shows the slot and the state: `OFF`, `PLAY`, `WAIT` or `PAUSE`.
@@ -69,11 +73,30 @@ Tap **A2** to reverse. The message says when it happens: **REVERSE AFTER S1** me
 
 ![DIR REV, after the current leg](img/journey-reverse.png)
 
+## 6. Which tracks a journey takes along
+
+A snapshot stores the controls pinned on one track's HOME page, and they can belong to several tracks. Tap BANK to JOURNEY and **hold BANK**:
+SETUP shows **TRACK 1 to TRACK 4** on K1 to K4. Turn right for `ON`, left for `SKIP`. A skipped track keeps whatever value you give it;
+every later leg leaves it alone. If all pinned tracks are skipped, PLAY says `ALL TRACKS SKIPPED`. The choice is saved with the project.
+
+![JOURNEY SETUP: TRACK 2 skipped](img/journey-tracks.png)
+
+## 7. A RANDOM morph on another track while a journey runs
+
+There is **one morph engine for all tracks**, so only one movement runs at a time. When you start RANDOM on another track (SCOPE TRACK
+moves only that track's controls), the journey is **held**: it stops where it is, and the status line says which track owns what. When that
+morph has arrived, the journey **goes on by itself** with a new leg from where its track stands to the same slot. Press **A1 while it is held**
+and it pauses instead: it then waits for A1.
+
+![The status line while a journey is held](img/journey-held.png)
+
+![Diagram: a RANDOM morph on T2 holds the journey of T1, which goes on by itself](img/journey-hold.png)
+
 ## Good to know
 
 - **The journey keeps running when you change bank.** Use STASIS, PAIR or LIVE meanwhile; come back to JOURNEY to steer.
-- **Saving ends a journey.** A4 hold saves a sound, so PLAY starts again from the selected slot. A RANDOM move started by hand also ends it.
-- **RANDOM's A3 (GO Sx) steers a running journey** to that slot and it goes on from there.
+- **Saving or deleting a snapshot ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on any track only **holds** it (step 7).
+- **RANDOM's A3 (GO Sx) and the JOURNEY bank's A3 (NEXT) steer a running journey** to that slot at once and it goes on from there.
 - **Hands win.** A knob you turn, or a MIDI CC, keeps its value for the rest of the leg; the next leg moves it again.
 - **BARS, SCOPE and SHAPE changed during a journey wait for the next leg**, so a running leg keeps its speed. The display shows the waiting value.
 - **A loaded project starts stopped** with S1 selected. Projects from before 0.8.0 get the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward);

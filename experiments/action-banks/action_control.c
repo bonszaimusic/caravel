@@ -29,7 +29,8 @@ static void action_snapshot_poll(uint32_t mask)
    if(ui.ml.on)ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_SLOT); /* MIDI LEARN: hold A4 picks JOURNEY SLOT, nothing is saved */
    else
 #endif
-   hp_rm_snapshot_store(action_snap_slot);
+   if(action_bank==0u&&action_setup)hp_rm_snapshot_delete(action_snap_slot);   /* RANDOM SETUP: A4 hold deletes the selected slot */
+   else hp_rm_snapshot_store(action_snap_slot);
   }
  }else if(action_snap_down){
   action_snap_down=0;
@@ -77,8 +78,7 @@ static void action_refresh(void)
   if(!action_bank_long && fm1_ms-action_bank_started>=ACTION_LONG_MS){
    action_bank_long=1;
 #if HP_JVN
-   if(action_bank==ACT_BANK_JOURNEY){ui_message("LEG+SHAPE: RANDOM SETUP");ui.force=1;}
-   else{
+   {
 #endif
    action_setup=!action_setup;
 #if CARAVEL_STASIS_EXPAND
@@ -88,6 +88,9 @@ static void action_refresh(void)
    ui_message(action_setup?(
 #if CARAVEL_STASIS_EXPAND
       action_bank==1u?"STASIS GRAIN: K1-K4":
+#endif
+#if HP_JVN
+      action_bank==ACT_BANK_JOURNEY?"JOURNEY TRACKS: K1-K4":
 #endif
       "ACTION SETUP: K1-K4"):"ACTION PERFORM: K1-K4 HOME");
 #if HP_JVN
@@ -142,7 +145,10 @@ static uint32_t action_pair_mod_slot(uint32_t source)
 }
 static int32_t action_setup_value(uint32_t slot)
 {
- if(slot>=4u||action_bank==ACT_BANK_JOURNEY)return -1;
+ if(slot>=4u)return -1;
+#if HP_JVN
+ if(action_bank==ACT_BANK_JOURNEY)return (hp_j.skip>>slot&1u)?0:1;      /* 1: the track is taken along, 0: left alone */
+#endif
  if(action_bank==0u){
 #if FELUCCA_RANDOM_MORPH
 #if HP_JVN
@@ -185,7 +191,7 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   {"STR","MOTN","AMT","TIME"},
   {"MORPH","LFO1>PAIR","LFO2>PAIR","--"},
   {"LVL T1","LVL T2","LVL T3","LVL T4"},
-  {"--","--","--","--"}                   /* JOURNEY has no SETUP of its own */
+  {"TRACK 1","TRACK 2","TRACK 3","TRACK 4"}   /* JOURNEY SETUP: which tracks it takes along */
  };
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
@@ -209,6 +215,7 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   str_cpy(value,v?"ON":"OFF",24);return;
  }
 #endif
+ if(action_bank==ACT_BANK_JOURNEY){str_cpy(value,v?"ON":"SKIP",24);return;}
  if(action_bank==0u && slot==2u){
   str_cpy(value,v==0?"ROW":v==1?"TRACK":"ALL",24);return;
  }
@@ -234,7 +241,16 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
 }
 static void action_setup_turn(uint32_t slot,int32_t steps)
 {
- if(slot>=4u||!steps||action_bank==ACT_BANK_JOURNEY)return;
+ if(slot>=4u||!steps)return;
+#if HP_JVN
+ if(action_bank==ACT_BANK_JOURNEY){                 /* K1..K4: turn right takes the track along, left leaves it alone (from the next leg) */
+  if(ui.ml.on)return;
+  uint8_t bit=(uint8_t)(1u<<slot),was=hp_j.skip;
+  hp_j.skip=steps>0?(uint8_t)(hp_j.skip&~bit):(uint8_t)(hp_j.skip|bit);
+  if(hp_j.skip!=was){hp_dirty=1;ui.force=1;}
+  return;
+ }
+#endif
  if(action_bank==0u){
 #if HP_JVN
   if(ui.ml.on){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_BARS+slot);return;} /* MIDI LEARN: K1..K4 pick BARS DEPTH SCOPE SHAPE */

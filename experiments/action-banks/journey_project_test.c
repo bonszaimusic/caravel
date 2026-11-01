@@ -10,13 +10,13 @@ static void store(uint32_t slot,int32_t r,int32_t p){
  trk[0].p[P_REV]=(int16_t)r;trk[0].p[P_PAN]=(int16_t)p;
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;CHECK(hp_rm_snapshot_store(slot));
 }
-typedef struct{uint32_t bars,depth,scope,shape,wait,rev;}cfg_t;
+typedef struct{uint32_t bars,depth,scope,shape,wait,rev,skip;}cfg_t;   /* skip: the tracks the journey leaves alone */
 static void set(cfg_t c){hp_rm.bars=(uint8_t)c.bars;hp_rm.depth=(uint8_t)c.depth;hp_rm.scope=(uint8_t)c.scope;hp_rm.shape=(uint8_t)c.shape;
- hp_j.wait=(uint8_t)c.wait;hp_j.rev=(uint8_t)c.rev;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;}
-static int is(cfg_t c){return hp_rm.bars==c.bars&&hp_rm.depth==c.depth&&hp_rm.scope==c.scope&&hp_rm.shape==c.shape&&hp_j.wait==c.wait&&hp_j.rev==c.rev;}
-static const cfg_t X={16,75,HP_RM_ALL,HP_RM_DRIFT,3,1};      /* BARS 16, DEPTH 75, ALL, DRIFT, WAIT 4 bars, reverse */
-static const cfg_t Y={2,10,HP_RM_ROW,HP_RM_LINEAR,1,0};
-static const cfg_t Z={64,100,HP_RM_TRACK,HP_RM_SMOOTH,5,1};
+ hp_j.wait=(uint8_t)c.wait;hp_j.rev=(uint8_t)c.rev;hp_j.skip=(uint8_t)c.skip;hp_j.held=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;}
+static int is(cfg_t c){return hp_rm.bars==c.bars&&hp_rm.depth==c.depth&&hp_rm.scope==c.scope&&hp_rm.shape==c.shape&&hp_j.wait==c.wait&&hp_j.rev==c.rev&&hp_j.skip==c.skip;}
+static const cfg_t X={16,75,HP_RM_ALL,HP_RM_DRIFT,3,1,5};      /* BARS 16, DEPTH 75, ALL, DRIFT, WAIT 4 bars, reverse */
+static const cfg_t Y={2,10,HP_RM_ROW,HP_RM_LINEAR,1,0,2};
+static const cfg_t Z={64,100,HP_RM_TRACK,HP_RM_SMOOTH,5,1,15};
 static const cfg_t DEF={8,35,HP_RM_TRACK,HP_RM_SMOOTH,0,0};  /* what a project made before the feature gets */
 /* wait is an index (0..5 = 0/1/2/4/8/16 bars): X.wait 3 = 4 bars */
 static void save(uint32_t slot){int rc=hp_project_save(slot,0);if(rc)fprintf(stderr,"save rc=%d msg=%s flash_ok=%d busy=%d\n",rc,ui.msg,(int)flash_ok,(int)transport_busy());CHECK(!rc);run_ms(200);}
@@ -101,7 +101,7 @@ int main(void){
   hp_rm_snap_t*s=(hp_rm_snap_t*)(void*)(raw+HP_HW_META);
   static const struct{uint8_t a,b,c;}bad[]={          /* slot 0 pad, slot 1 pad, slot 2 pad */
      {0x80u|7u,0,0},{0x80u|(6u<<3),0,0},{0x80u|0x40u,0,0},{0x03u,0,0},                 /* BARS 7, DEPTH 6, reserved bit, no present bit */
-     {0x93u,3u,0},{0x93u,(3u<<2),0},{0x93u,(6u<<5),0},{0x93u,0x05u,1u},{0,1u,0}};      /* SCOPE 3, SHAPE 3, WAIT 6, slot 2, pad 1 without pad 0 */
+     {0x93u,3u,0},{0x93u,(3u<<2),0},{0x93u,(6u<<5),0},{0x93u,0x05u,0x10u},{0,1u,0},{0,0,1u}};      /* SCOPE 3, SHAPE 3, WAIT 6, a reserved skip bit, pad 1 without pad 0, a skip mask without settings */
   for(uint32_t i=0;i<sizeof bad/sizeof bad[0];i++){
    uint8_t r2[HP_RAW_META] __attribute__((aligned(4)));memcpy(r2,raw,sizeof r2);
    hp_rm_snap_t*q=(hp_rm_snap_t*)(void*)(r2+HP_HW_META);q[0].pad=bad[i].a;q[1].pad=bad[i].b;q[2].pad=bad[i].c;(void)s;

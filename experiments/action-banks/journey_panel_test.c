@@ -52,14 +52,20 @@ int main(void){
  tap(0);CHECK(action_bank==0u);action_snap_slot=2;tap(3);run_ms(100);
  CHECK(hp_j.on&&hp_j.tgt==2u&&hp_rm.state==HP_RM_RECALL&&action_snap_slot==2u);
  /* a journey also ends when a RANDOM morph is started by hand in bank 0 */
- CHECK(action_bank==0u&&hp_j.on);tap(1);run_ms(100);CHECK(!hp_j.on);
+ CHECK(action_bank==0u&&hp_j.on);tap(1);run_ms(100);CHECK(hp_j.on&&hp_j.held==1u);   /* held, and it goes on after the morph */
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();run_ms(30);
  /* the JOURNEY bank has no SETUP of its own: LEG is RANDOM's BARS and SHAPE is RANDOM's SHAPE, WAIT is A4, the slot follows the journey */
  hp_rm_reset();CHECK(hp_rm.state==HP_RM_IDLE);action_snap_slot=0;hp_j.wait=0;hp_j.set[0]=hp_j.set[3]=0;hp_rm.bars=1;hp_rm.shape=HP_RM_LINEAR;
  CHECK(action_bank==0u);hold(0,700);CHECK(action_setup==1u);               /* SETUP on in RANDOM ... */
  tap(0);tap(0);tap(0);tap(0);CHECK(action_bank==ACT_BANK_JOURNEY&&action_setup==0u);   /* ... is left when JOURNEY is entered */
- hold(0,700);CHECK(action_setup==0u&&strstr(ui.msg,"RANDOM SETUP")!=NULL);     /* BANK hold points to RANDOM's SETUP */
- CHECK(action_setup_value(0)==-1&&action_setup_value(3)==-1);
- action_setup_turn(0,3);CHECK(hp_rm.bars==1u);                                 /* the knobs of this bank edit nothing */
+ /* BANK hold in the JOURNEY bank opens its SETUP: K1..K4 choose which tracks the journey takes along (LEG and SHAPE stay in RANDOM's SETUP) */
+ hold(0,700);CHECK(action_setup==1u&&strstr(ui.msg,"JOURNEY TRACKS")!=NULL);
+ CHECK(action_setup_value(0)==1&&action_setup_value(3)==1&&hp_j.skip==0u);
+ action_setup_turn(1,-1);action_setup_turn(3,-4);CHECK(hp_j.skip==(2u|8u)&&action_setup_value(1)==0&&action_setup_value(3)==0&&action_setup_value(0)==1);
+ {char n[16],v[24];action_setup_caption(1,n,v);CHECK(!strcmp(n,"TRACK 2")&&!strcmp(v,"SKIP"));action_setup_caption(0,n,v);CHECK(!strcmp(v,"ON"));}
+ CHECK(hp_rm.bars==1u);                                                        /* the knobs of this bank edit no RANDOM value */
+ action_setup_turn(1,1);action_setup_turn(3,1);CHECK(hp_j.skip==0u);
+ hold(0,700);CHECK(action_setup==0u);
  /* in RANDOM's SETUP, K1 BARS and K4 SHAPE are the journey's LEG and SHAPE: at once while nothing runs ... */
  tap(0);CHECK(action_bank==0u);hold(0,700);CHECK(action_setup==1u);
  action_setup_turn(0,2);CHECK(hp_rm.bars==4u&&hp_j.set[0]==0u);

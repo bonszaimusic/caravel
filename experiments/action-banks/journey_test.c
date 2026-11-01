@@ -47,7 +47,11 @@ int main(void){
    CHECK(absd(rev(),R[order[k]])<=1&&absd(trk[0].p[P_PAN],P[order[k]])<=1);
    guard=0;while(hp_j.phase==1u&&guard++<12000u)run_ms(10);
   }}
- random_press();run_ms(100);CHECK(!hp_j.on);
+ /* a RANDOM morph started by hand holds the journey (it does not end it); the journey goes on by itself when that morph is done */
+ random_press();run_ms(100);CHECK(hp_j.on&&hp_j.held==1u);
+ {uint32_t guard=0;while(hp_j.held&&guard++<4000u)run_ms(10);}
+ run_ms(100);CHECK(hp_j.on&&hp_j.held==0u&&hp_rm.state==HP_RM_RECALL);
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();run_ms(30);
  midi(0xB0,C_WAIT,0);run_ms(30);CHECK(hp_j.wait==0u);
  /* PLAY: first leg goes to the selected slot (S1), then the scheduler chains S2, S3, S1 ... */
  trk[0].p[P_REV]=77;action_snap_slot=0;
@@ -94,8 +98,9 @@ int main(void){
  hp_rm.scope=HP_RM_TRACK;
  hp_rm_reset();run_ms(100);CHECK(!hp_j.on&&hp_rm.state==HP_RM_IDLE&&hp_j.phase==0u);
  hp_rm.bars=1;press(C_PLAY);run_ms(100);CHECK(hp_j.on&&hp_rm.state==HP_RM_RECALL);
- /* starting a RANDOM morph by hand ends the journey */
- random_press();run_ms(100);CHECK(!hp_j.on);
+ /* starting a RANDOM morph by hand holds the journey */
+ random_press();run_ms(100);CHECK(hp_j.on&&hp_j.held==1u);
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();run_ms(30);
  /* MIDI LEARN entry points on the ACTION controls */
  ui.ml.on=1;ui.ml.pick=0;
  key(1u<<(ACT_KEY_FIRST+1u));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_PLAY);ui.ml.pick=0;

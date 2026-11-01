@@ -25,7 +25,8 @@ def load_sources(root=ROOT):
     if len(shots)<7:raise ValueError("Random Morph / Journey tutorial lost its screenshots")
     for name in shots:
         raw=(root/"docs/tutorials/img"/name).read_bytes()
-        if raw[:8]!=b"\x89PNG\r\n\x1a\n" or struct.unpack(">II",raw[16:24])!=(240,240):raise ValueError("Incorrect tutorial screenshot: "+name)
+        size=(1280,760) if name=="journey-hold.png" else (240,240)       # the one diagram; every other image is a firmware screen
+        if raw[:8]!=b"\x89PNG\r\n\x1a\n" or struct.unpack(">II",raw[16:24])!=size:raise ValueError("Incorrect tutorial image: "+name)
     for clip in audio["clips"]:
         p=root/"docs/audio"/clip["file"]
         if sha(p)!=clip["sha256"] or clip["decoded_peak"]>=1 or clip["held_rms"]<=.001 or clip["seconds"] not in (20,24):
@@ -65,7 +66,7 @@ def link_target(url,image=False):
     return GITHUB+posixpath.normpath(posixpath.join("docs/tutorials",url.split("#")[0]))+("#"+url.split("#",1)[1] if "#" in url else "")
 def inline(text):
     text=e(text)
-    text=re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)",lambda m:f'<img src="{link_target(m[2].replace("&amp;","&"),True)}" width="240" height="240" alt="{m[1]}" loading="lazy">',text)
+    text=re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)",lambda m:f'<img src="{link_target(m[2].replace("&amp;","&"),True)}" '+('class="diagram" width="1280" height="760"' if m[1].startswith("Diagram") else 'width="240" height="240"')+f' alt="{m[1]}" loading="lazy">',text)
     text=re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)",lambda m:f'<a href="{e(link_target(html.unescape(m[2])))}">{m[1]}</a>',text)
     text=re.sub(r"\*\*([^*]+)\*\*",r"<strong>\1</strong>",text)
     text=re.sub(r"`([^`]+)`",r"<code>\1</code>",text)
@@ -88,7 +89,7 @@ def markdown_sections(text):
             cur.append("<ul>"+"".join(f"<li>{inline(i)}</li>" for i in items)+"</ul>")
         elif re.fullmatch(r"!\[[^\]]*\]\([^)\s]+\)",first) and len(block)==1:
             alt=re.match(r"!\[([^\]]*)\]",first)[1]
-            cur.append(f"<figure>{inline(first)}<figcaption>{e(alt)} (actual firmware display)</figcaption></figure>")
+            cur.append(f"<figure>{inline(first)}<figcaption>{e(alt)}"+("" if alt.startswith("Diagram") else " (actual firmware display)")+"</figcaption></figure>")
         else:
             para=" ".join(l.strip() for l in block)
             cur.append(f'<p class="note">{inline(para)}</p>' if para.startswith("*") and para.endswith("*") and not para.startswith("**") else f"<p>{inline(para)}</p>")
@@ -110,7 +111,7 @@ def morph_page(look,ship,root=ROOT):
     shown=re.sub(r"\s*-\s*tutorial$","",title)
     page_html=page(shown,"@@BODY@@",look,ship,version="0.8.0",eyebrow="CARAVEL 0.8.0 / RANDOM MORPH AND JOURNEY",
         description="Caravel Random Morph and Morph Journey: save sounds into S1-S4, morph between them and chain the morphs hands-free, with real firmware screens.")
-    css=".table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--raise);vertical-align:top}figure{margin:16px 0}.lead p{margin:0 0 12px}"
+    css=".table-wrap{overflow-x:auto}figure img.diagram,img.diagram{width:100%;max-width:960px;height:auto;image-rendering:auto}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--raise);vertical-align:top}figure{margin:16px 0}.lead p{margin:0 0 12px}"
     page_html=page_html.replace('href="../','href="../../').replace("</style>",css+"</style>",1)   # the page sits one level below tutorials/
     return page_html.replace("@@BODY@@",body,1)
 

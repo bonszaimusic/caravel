@@ -49,20 +49,21 @@ static int hp_unzip(uint8_t*out,uint32_t size,const uint8_t*in,uint32_t n)
  * firmware insists are zero (so an older firmware refuses such a project instead of misreading it; nothing is lost):
  *   slot 0 pad: bit 7 present, bits 0..2 BARS index (hp_rm_times), bits 3..5 DEPTH index (hp_rm_depths), bit 6 zero
  *   slot 1 pad: bits 0..1 SCOPE, bits 2..3 SHAPE, bit 4 DIRECTION (1 = reverse), bits 5..7 WAIT index (0/1/2/4/8/16 bars)
- * Both zero = a project made before this: the defaults apply. Slots 2 and 3 stay zero. The size and layout of the block do not
+ *   slot 2 pad: bits 0..3 the tracks the journey leaves alone (bit t = track t), bits 4..7 zero
+ * Both of the first two zero = a project made before this: the defaults apply (no track skipped). Slot 3 stays zero. The size and layout of the block do not
  * change. A journey is never stored as running: a loaded project starts stopped, with the first slot selected. A change that is
  * waiting for the next leg is saved as the intended value. */
 #define HP_PS_PRESENT 0x80u
 static int hp_ps_valid(const hp_rm_snap_t*s)
 {
  uint32_t a=s[0].pad,b=s[1].pad;
- if(s[2].pad||s[3].pad)return 0;
- if(!a)return !b;
+ if(s[3].pad||(s[2].pad&0xF0u))return 0;
+ if(!a)return !b&&!s[2].pad;
  return (a&HP_PS_PRESENT)&&!(a&0x40u)&&(a&7u)<7u&&((a>>3)&7u)<6u&&(b&3u)<3u&&((b>>2)&3u)<3u&&((b>>5)&7u)<6u;
 }
 #define HP_PS_DEFAULT_WORD (HP_PS_PRESENT|3u|(2u<<3)|((1u|(1u<<2))<<8))   /* BARS 8, DEPTH 35, TRACK, SMOOTH; WAIT 0, forward */
 static uint32_t hp_ps_idx(const uint8_t*tab,uint32_t n,uint32_t v,uint32_t fallback){for(uint32_t i=0;i<n;i++)if(tab[i]==v)return i;return fallback;}
-static uint32_t hp_ps_word(void)                      /* low byte: slot 0's pad, next byte: slot 1's pad */
+static uint32_t hp_ps_word(void)                      /* bytes 0..2: the pads of slots 0..2 */
 {
  uint16_t pend;uint8_t val[HP_JVN];
  {uint32_t irq=perf_irq_save();pend=hp_j_pend;for(uint32_t i=0;i<HP_JVN;i++)val[i]=hp_j_val[i];perf_irq_restore(irq);}
@@ -81,17 +82,18 @@ static uint32_t hp_ps_word(void)                      /* low byte: slot 0's pad,
  if(pend&(1u<<HJ_DIR))rev^=1u;
  uint32_t a=HP_PS_PRESENT|bars|depth<<3;
  uint32_t b=(scope&3u)|(shape&3u)<<2|rev<<4|wait<<5;
- return a|b<<8;
+ return a|b<<8|(uint32_t)(hp_j.skip&15u)<<16;
 }
-static void hp_ps_pack(hp_rm_snap_t*s){uint32_t w=hp_ps_word();s[0].pad=(uint8_t)w;s[1].pad=(uint8_t)(w>>8);}
+static void hp_ps_pack(hp_rm_snap_t*s){uint32_t w=hp_ps_word();s[0].pad=(uint8_t)w;s[1].pad=(uint8_t)(w>>8);s[2].pad=(uint8_t)(w>>16);}
 static void hp_ps_apply(hp_rm_snap_t*s)               /* s: the loaded snapshots (the pads are cleared again), 0 = a project without any */
 {
  uint32_t a=s?s[0].pad:0,b=s?s[1].pad:0;
+ hp_j.skip=s?(uint8_t)(s[2].pad&15u):0u;
  if(!a){a=HP_PS_DEFAULT_WORD&255u;b=HP_PS_DEFAULT_WORD>>8;}
  hp_rm.bars=hp_rm_times[a&7u];hp_rm.depth=hp_rm_depths[(a>>3)&7u];hp_rm.scope=(uint8_t)(b&3u);hp_rm.shape=(uint8_t)((b>>2)&3u);
  hp_j.rev=(uint8_t)((b>>4)&1u);hp_j.wait=(uint8_t)((b>>5)&7u);
- hp_j.on=hp_j.paused=0;hp_j.phase=0;hp_j.cur=hp_j.tgt=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;hp_j_arrived=0;
- if(s){s[0].pad=s[1].pad=0;}
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_j.phase=0;hp_j.cur=hp_j.tgt=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;hp_j_arrived=0;
+ if(s){s[0].pad=s[1].pad=s[2].pad=0;}
 }
 static int hp_snapshots_valid(const hp_rm_snap_t*s)
 {
