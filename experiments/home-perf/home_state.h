@@ -32,7 +32,15 @@ _Static_assert(P_COUNT <= 256, "Macro IDs require more than one byte");
 static int16_t hp_macro_live[NTRK][4], hp_macro_keep[NTRK][HP_MACRO_TARGETS];
 static uint8_t hp_macro_ids[NTRK][HP_MACRO_TARGETS], hp_macro_count[NTRK];
 static uint8_t hp_dirty,hp_combo_pending;
-static int hp_virtual(uint32_t id) { return id >= HP_VFIRST && id < HP_VFIRST+8u; }
+/* MORPH JOURNEY (pilot) MIDI Learn targets follow the 4 macros and 4 pair controls: PLAY DIR NEXT WAIT SLOT BARS DEPTH SCOPE SHAPE */
+#if CARAVEL_ACTION_BANKS && FELUCCA_RANDOM_MORPH
+#define HP_JVN 9u
+#else
+#define HP_JVN 0u
+#endif
+static int hp_virtual(uint32_t id) { return id >= HP_VFIRST && id < HP_VFIRST+8u+HP_JVN; }
+static int hp_journey_target(uint32_t id) { return HP_JVN && id >= HP_VFIRST+8u && id < HP_VFIRST+8u+HP_JVN; }
+static void hp_journey_cc(uint32_t id, uint32_t value);
 static void hp_begin(track_t *t);
 static void hp_end(track_t *t);
 static void hp_motion_step(track_t *t, uint32_t step, uint32_t play);

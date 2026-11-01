@@ -25,10 +25,17 @@ static void action_snapshot_poll(uint32_t mask)
   }
   if(!action_snap_long && fm1_ms-action_snap_started>=ACTION_LONG_MS){
    action_snap_long=1;
+#if HP_JVN
+   if(ui.ml.on)ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_SLOT); /* MIDI LEARN: hold A4 picks JOURNEY SLOT, nothing is saved */
+   else
+#endif
    hp_rm_snapshot_store(action_snap_slot);
   }
  }else if(action_snap_down){
   action_snap_down=0;
+#if HP_JVN
+  if(ui.ml.on&&!action_snap_long){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_WAIT);action_snap_long=0;return;} /* tap A4: JOURNEY WAIT */
+#endif
   if(!action_snap_long){
    action_snap_slot=(uint8_t)((action_snap_slot+1u)%HP_RM_SNAP_SLOTS);
    char message[32];
@@ -211,6 +218,9 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
 {
  if(slot>=4u||!steps)return;
  if(action_bank==0u){
+#if HP_JVN
+  if(ui.ml.on){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_BARS+slot);return;} /* MIDI LEARN: K1..K4 pick BARS DEPTH SCOPE SHAPE */
+#endif
 #if FELUCCA_RANDOM_MORPH
   if(slot<=1u){
    const uint8_t *values=slot==0u?hp_rm_times:hp_rm_depths;
@@ -325,7 +335,12 @@ static void action_key(uint32_t key)
  if(key==ACT_KEY_FIRST)return;
  if(key<ACT_KEY_FIRST+1u || key>26u)return;
  uint32_t act=key-ACT_KEY_FIRST-1u;
- if(action_bank==0u){if(act!=3u)action_random(act);}
+ if(action_bank==0u){
+#if HP_JVN
+  if(ui.ml.on){if(act<3u)ml_knob(&trk[song.sel],HP_VFIRST+8u+act);return;} /* MIDI LEARN: A1 PLAY, A2 DIR, A3 NEXT */
+#endif
+  if(act!=3u)action_random(act);
+ }
 
  else if(action_bank==1u)action_stasis(act);
  else if(action_bank==2u)action_pair(act);

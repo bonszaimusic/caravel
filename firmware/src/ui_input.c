@@ -1651,6 +1651,7 @@ static void ui_input(void)
     action_refresh();
 #if FELUCCA_RANDOM_MORPH
     hp_rm_poll(fm1_ms);
+    hp_journey_poll(fm1_ms);
 #endif
 #endif
 #if FELUCCA_HOME_PERF

@@ -409,3 +409,181 @@ static void hp_rm_poll(uint32_t now)
  }
  ui.force=1;
 }
+#if HP_JVN
+/* MORPH JOURNEY (pilot, opt-in, volatile): chains the snapshot recalls S1..S4 into one long movement. Nothing here is
+ * stored in a project; it only calls hp_rm_snapshot_recall, so every leg starts from the ACTUAL live values and a
+ * knob or CC that owns a parameter (hp_rm_disengage) keeps it until the leg ends; the next leg moves it again.
+ *
+ * Controls are MIDI Learn targets (HP_VFIRST+8 ..): PLAY (button: play / pause), DIR (button: forward / reverse),
+ * NEXT (button), WAIT (absolute, 6 bands: 0/1/2/4/8/16 bars of rest after each arrival), SLOT (absolute, 4 bands:
+ * selects S1..S4, never saves), and the RANDOM settings BARS 7 / DEPTH 6 / SCOPE 3 / SHAPE 3 bands (absolute).
+ * Buttons act on the rising edge through 64, so a release or a repeated high value does not trigger twice.
+ * The MIDI side (an interrupt context) only leaves a message in the mailbox; hp_rm and the snapshots are touched by
+ * the UI thread alone (hp_journey_poll). Pilot limits: 2..4 populated snapshots of one TRACK scope, one owner track and
+ * one pinned target set (checked before start, nothing moves otherwise); it loops until stopped. A RANDOM, RETURN or
+ * other morph started by hand ends it; a physical A3 recall during a journey is not followed. */
+enum {HJ_PLAY,HJ_DIR,HJ_NEXT,HJ_WAIT,HJ_SLOT,HJ_BARS,HJ_DEPTH,HJ_SCOPE,HJ_SHAPE};
+static const uint8_t hp_j_waits[]={0,1,2,4,8,16};
+static volatile uint16_t hp_j_pend;      /* ISR -> UI: bit i = target i has news */
+static volatile uint8_t hp_j_val[HP_JVN];
+static uint8_t hp_j_hi[HP_JVN];          /* ISR side only: the button's level, for the rising edge */
+static struct {
+ uint8_t on,paused,rev,wait,phase,cur,tgt;      /* phase 0: a leg is moving, 1: resting at cur */
+ uint8_t set[4];                                /* BARS DEPTH SCOPE SHAPE: band+1 waiting for the morph to end, 0 none */
+ uint32_t t0,left;
+} hp_j;
+static void hp_journey_cc(uint32_t id,uint32_t value)
+{
+ uint32_t i=id-HP_VFIRST-8u;
+ if(i>=HP_JVN)return;
+ if(i>=HJ_WAIT){hp_j_val[i]=(uint8_t)value;hp_j_pend=(uint16_t)(hp_j_pend|(1u<<i));return;}   /* absolute */
+ {uint8_t hi=value>=64u;
+  if(hi&&!hp_j_hi[i])hp_j_pend=(uint16_t)(hp_j_pend|(1u<<i));
+  hp_j_hi[i]=hi;}
+}
+static uint32_t hp_j_band(uint32_t v,uint32_t n){uint32_t b=v*n/128u;return b<n?b:n-1u;}
+static int hp_j_same_refs(const hp_rm_snap_t*a,const hp_rm_snap_t*b)
+{
+ if(a->count!=b->count)return 0;
+ for(uint32_t i=0;i<a->count;i++){
+  int found=0;
+  for(uint32_t k=0;k<b->count&&!found;k++)found=!memcmp(a->refs[i],b->refs[k],3);
+  if(!found)return 0;
+ }
+ return 1;
+}
+static int hp_j_ready(const char**why)
+{
+ uint32_t n=0,first=HP_RM_SNAP_SLOTS;
+ for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[s].count){n++;if(first==HP_RM_SNAP_SLOTS)first=s;}
+ if(n<2u){*why="JOURNEY: NEED 2 SNAPS";return 0;}
+ const hp_rm_snap_t*a=&hp_rm_snap[first];
+ for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[s].count){
+  const hp_rm_snap_t*b=&hp_rm_snap[s];
+  if(b->scope!=HP_RM_TRACK||b->origin_track!=a->origin_track||!hp_j_same_refs(a,b)){
+   *why="JOURNEY: SNAPS DIFFER";return 0;
+  }
+ }
+ return 1;
+}
+static int hp_j_next(uint32_t from,uint32_t rev)   /* the next populated slot in the direction; -1 none */
+{
+ for(uint32_t i=1;i<=HP_RM_SNAP_SLOTS;i++){
+  uint32_t s=(from+(rev?HP_RM_SNAP_SLOTS-i:i))%HP_RM_SNAP_SLOTS;
+  if(hp_rm_snap[s].count)return (int)s;
+ }
+ return -1;
+}
+static int hp_j_moving(void){return hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN;}
+static void hp_j_apply_settings(void)              /* latched at the start of a leg, never while one moves */
+{
+ if(hp_j_moving())return;
+ if(hp_j.set[0]){hp_rm.bars=hp_rm_times[hp_j.set[0]-1u];hp_j.set[0]=0;}
+ if(hp_j.set[1]){hp_rm.depth=hp_rm_depths[hp_j.set[1]-1u];hp_j.set[1]=0;}
+ if(hp_j.set[2]){
+  uint8_t next=(uint8_t)(hp_j.set[2]-1u);hp_j.set[2]=0;
+  if(next!=hp_rm.scope){hp_rm_reset();hp_rm.scope=next;}
+ }
+ if(hp_j.set[3]){hp_rm.shape=(uint8_t)(hp_j.set[3]-1u);hp_j.set[3]=0;}
+}
+static void hp_j_stop(const char*msg){hp_j.on=0;hp_j.paused=0;hp_j.phase=0;ui_message(msg);ui.force=1;}
+static void hp_j_say(const char*what,uint32_t a,uint32_t b)
+{
+ char m[32];perf_format(m,sizeof m,what,a,b);ui_message(m);ui.force=1;
+}
+static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live values to S(to) */
+{
+ if(hp_rm.state==HP_RM_RECALL||(hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL))hp_rm_reset();
+ hp_j_apply_settings();
+ if(!hp_rm_snapshot_recall(to,now)){hp_j_stop("JOURNEY: SNAP CHANGED");return 0;}
+ hp_j.tgt=(uint8_t)to;hp_j.phase=0;
+ return 1;
+}
+static void hp_j_advance(uint32_t now)
+{
+ int n=hp_j_next(hp_j.cur,hp_j.rev);
+ if(n<0){hp_j_stop("JOURNEY: NO SNAPS");return;}
+ if(hp_j_leg((uint32_t)n,now))hp_j_say("JOURNEY S%u>S%u",hp_j.cur+1u,(uint32_t)n+1u);
+}
+static void hp_j_start(uint32_t now)
+{
+ const char*why=0;
+ if(!hp_j_ready(&why)){ui_message(why);ui.force=1;return;}
+ uint32_t first=action_snap_slot%HP_RM_SNAP_SLOTS;
+ if(!hp_rm_snap[first].count){int n=hp_j_next(first,hp_j.rev);if(n<0)return;first=(uint32_t)n;}
+ hp_j.on=1;hp_j.paused=0;hp_j.cur=(uint8_t)first;
+ if(hp_j_leg(first,now))hp_j_say("JOURNEY PLAY >S%u",first+1u,0u);
+}
+static void hp_j_wait_begin(uint32_t now)
+{
+ uint32_t bars=hp_j_waits[hp_j.wait<6u?hp_j.wait:0u];
+ if(!bars){hp_j_advance(now);return;}
+ uint32_t bpm=(uint32_t)clamp(song.g[G_BPM],20,300);
+ hp_j.phase=1;hp_j.t0=now;hp_j.left=bars*(240000u/bpm);
+}
+static void hp_j_button(uint32_t i,uint32_t now)
+{
+ if(i==HJ_PLAY){
+  if(!hp_j.on){hp_j_start(now);return;}
+  if(!hp_j.paused){
+   hp_j.paused=1;
+   if(hp_j.phase==0)hp_rm_freeze();
+   else{uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
+   ui_message("JOURNEY PAUSED");
+  }else{
+   hp_j.paused=0;
+   if(hp_j.phase==0)hp_rm_resume(now);else hp_j.t0=now;
+   ui_message("JOURNEY PLAY");
+  }
+  ui.force=1;
+ }else if(i==HJ_DIR){
+  hp_j.rev=!hp_j.rev;
+  if(hp_j.on&&!hp_j.paused&&hp_j.phase==0){            /* turn back toward where this leg came from */
+   uint32_t back=hp_j.cur;
+   if(back==hp_j.tgt){int n=hp_j_next(hp_j.tgt,hp_j.rev);if(n<0)return;back=(uint32_t)n;}
+   hp_j.cur=hp_j.tgt;
+   if(hp_j_leg(back,now))ui_message(hp_j.rev?"JOURNEY REVERSE":"JOURNEY FORWARD");
+  }else ui_message(hp_j.rev?"JOURNEY REVERSE":"JOURNEY FORWARD");
+  ui.force=1;
+ }else{                                                  /* NEXT */
+  if(!hp_j.on||hp_j.paused){ui_message(hp_j.on?"JOURNEY PAUSED":"JOURNEY OFF");ui.force=1;return;}
+  hp_j.cur=hp_j.tgt;hp_j_advance(now);
+ }
+}
+static void hp_journey_poll(uint32_t now)
+{
+ uint16_t pend;uint8_t val[HP_JVN];
+ {uint32_t irq=perf_irq_save();pend=hp_j_pend;hp_j_pend=0;
+  for(uint32_t i=0;i<HP_JVN;i++)val[i]=hp_j_val[i];
+  perf_irq_restore(irq);}
+ if(pend){
+  for(uint32_t i=0;i<HP_JVN;i++)if(pend&(1u<<i)){
+   if(i<=HJ_NEXT)hp_j_button(i,now);
+   else if(i==HJ_WAIT){
+    hp_j.wait=(uint8_t)hp_j_band(val[i],6u);
+    hp_j_say("JOURNEY WAIT %u BAR",hp_j_waits[hp_j.wait],0u);
+   }else if(i==HJ_SLOT){
+    uint32_t s=hp_j_band(val[i],HP_RM_SNAP_SLOTS);
+    if(s!=action_snap_slot){
+     action_snap_slot=(uint8_t)s;
+     if(hp_rm_snap[s].count&&hp_j.on&&!hp_j.paused){if(hp_j_leg(s,now))hp_j_say("JOURNEY >S%u",s+1u,0u);}
+     else hp_j_say(hp_rm_snap[s].count?"SNAP S%u SAVED":"SNAP S%u EMPTY",s+1u,0u);
+    }
+   }else{
+    static const uint8_t counts[4]={7u,6u,3u,3u};
+    uint32_t k=i-HJ_BARS;hp_j.set[k]=(uint8_t)(hp_j_band(val[i],counts[k])+1u);
+   }
+  }
+ }
+ hp_j_apply_settings();
+ if(!hp_j.on||hp_j.paused)return;
+ if(hp_j.phase==0){
+  if(hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN)return;   /* moving, or held by A2 */
+  if(hp_rm.state==HP_RM_IDLE){hp_j.cur=hp_j.tgt;hp_j_wait_begin(now);return;}
+  hp_j_stop("JOURNEY STOPPED");
+ }else{
+  if(hp_j_moving()){hp_j_stop("JOURNEY STOPPED");return;}
+  if(now-hp_j.t0>=hp_j.left)hp_j_advance(now);
+ }
+}
+#endif

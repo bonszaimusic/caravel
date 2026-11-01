@@ -14,7 +14,17 @@ static const param_desc_t HP_MDESC[4]={
 static const param_desc_t HP_PDESC[4]={
  {"PARTNER",F_INT,1,4,1,0,0},{"PAIR",F_ONOFF,0,1,0,0,0},
  {"MORPH",F_PCT,0,127,64,0,0},{"MOTION",F_ONOFF,0,1,0,0,0}};
-static const param_desc_t *hp_vdesc(uint32_t id){return id<HP_VFIRST+4?&HP_MDESC[(id-HP_VFIRST)&3]:&HP_PDESC[(id-HP_VFIRST-4)&3];}
+#if HP_JVN
+static const param_desc_t HP_JDESC[HP_JVN]={
+ {"JRN PLAY",F_PCT,0,127,0,0,0},{"JRN DIR",F_PCT,0,127,0,0,0},{"JRN NEXT",F_PCT,0,127,0,0,0},
+ {"JRN WAIT",F_PCT,0,127,0,0,0},{"JRN SLOT",F_PCT,0,127,0,0,0},{"RM BARS",F_PCT,0,127,0,0,0},
+ {"RM DEPTH",F_PCT,0,127,0,0,0},{"RM SCOPE",F_PCT,0,127,0,0,0},{"RM SHAPE",F_PCT,0,127,0,0,0}};
+#endif
+static const param_desc_t *hp_vdesc(uint32_t id){
+#if HP_JVN
+ if(id>=HP_VFIRST+8u)return &HP_JDESC[(id-HP_VFIRST-8u)%HP_JVN];
+#endif
+ return id<HP_VFIRST+4?&HP_MDESC[(id-HP_VFIRST)&3]:&HP_PDESC[(id-HP_VFIRST-4)&3];}
 static param_desc_t HP_FMDESC={"OP VAL",F_INT,0,127,0,0,0};
 static const param_desc_t *hp_desc(hp_ref_t r)
 {
@@ -88,6 +98,9 @@ static void hp_set(hp_ref_t r,int32_t value,int capture)
 #endif
 static void hp_midi(track_t*t,uint32_t id,uint32_t value)
 {
+#if HP_JVN
+ if(hp_journey_target(id)){hp_journey_cc(id,value);return;} /* (a mailbox: the UI thread acts on it) */
+#endif
  hp_ref_t r={0};r.kind=id<HP_VFIRST+4?HP_MACRO:HP_PAIR;r.id=(id-HP_VFIRST)&3;r.track=trk_index(t);r.engine=255;
  const param_desc_t*d=hp_desc(r);if(d)hp_set(r,d->min+(value*(d->max-d->min)+63)/127,1);
 }
