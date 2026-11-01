@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.7.2**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.8.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -33,10 +33,19 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 
 | Tutorial | What you learn |
 | --- | --- |
-| **[Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md)** | Save sounds into S1–S4, morph between them, and let a journey chain the morphs hands-free (0.8.0, not released yet; [reference](docs/morph-journey.md)) |
+| **[Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md)** | Save sounds into S1–S4, morph between them, and let a journey chain the morphs hands-free (0.8.0; [reference](docs/morph-journey.md)) |
 | **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
 | **[HOME, Pair Morph, macros and saving](docs/tutorials/README.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
 | [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
+
+## Caravel 0.8.0 — Morph Journey
+
+[Download 0.8.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.8.0) · [What changed and what is tested](docs/release-080.md) · [Tutorial](docs/tutorials/random-morph-journey.md) · [Reference](docs/morph-journey.md)
+
+- **Morph Journey:** a fifth ACTION bank (BANK, after LIVE) chains the Random Morph snapshots S1–S4 into one hands-free movement. A1 PLAY/PAUSE, A2 direction, A3 NEXT, A4 tap WAIT, A4 hold saves; leg length and curve are RANDOM SETUP's BARS and SHAPE. It keeps running when you change bank and can be mapped with MIDI Learn.
+- **A learned MIDI CC wins over a running morph for every target** (LFO2 and DRUM-X controls were being overwritten).
+- BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction are saved with each project. **Back up first: 0.7.x and earlier refuse a project saved by 0.8.0**; older projects load with the defaults.
+- Tested on the host, in CI and in the complete validation; **not verified** with a controller on a real FM-1, with external MIDI clock or in long runs. Flash is tight: 1,116 B left in the app slot.
 
 ## Caravel 0.7.2 — candidate fix for the stock return (-5)
 

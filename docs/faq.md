@@ -22,6 +22,7 @@ USB or switch off during writing. Recovery can change or erase stored data.
 | The computer sees MIDI, but the browser says FM-1 not found | [FM-1 not found](#fm-1-not-found) |
 | Caravel's installer works, but another installer does not find the unit | [Changing firmware](#changing-firmware) |
 | Return to official firmware stops with Update Failed -5 | [Stock return error -5](#stock-return-error--5) |
+| After going back to 0.7.x a project says `PERF PROJECT INVALID` | [Projects saved by 0.8.0](#projects-saved-by-080) |
 | You need to understand OCT-/OCT+, M-Flasher or m-bootloader | [Recovery tools](#recovery-tools) |
 
 ## USB device not recognized
@@ -124,6 +125,16 @@ The upstream M-Flasher guide describes the download-mode device as **WL82 UBOOT1
 Holding both octave buttons **during power-on** opens Caravel's hardware
 calibration instead. The running-firmware shortcut cannot help if Caravel never
 reaches its main loop. A blank screen alone does not confirm UBOOT or a permanent failure.
+
+## Projects saved by 0.8.0
+
+**Symptom:** after going back to 0.7.2 or earlier, loading a project shows `PERF PROJECT INVALID`.
+
+0.8.0 saves the Random Morph settings and the Morph Journey settings (BARS, DEPTH, SCOPE, SHAPE, WAIT, direction) with each
+project, in bytes that earlier firmware requires to be zero. The project is not damaged, but 0.7.x refuses it instead of
+misreading it. **Before updating, make a backup** (`tools/caravel_backup.py save` or the installer's backup) and keep it while
+you try 0.8.0. To go back, install 0.7.2 and restore that backup; projects saved by 0.8.0 stay readable by 0.8.0 and later.
+Projects made before 0.8.0 load in 0.8.0 with default settings.
 
 ## Recovery tools
 

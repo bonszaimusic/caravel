@@ -1,27 +1,31 @@
-# Caravel 0.7.2
+# Caravel 0.8.0
 
-**A candidate fix for the stock return (-5, issue #4).** *Return to official V15*
-used to require the official package's first 16 KiB to match your unit's flash
-head byte for byte, and stopped with *Update Failed -5* when they differed. It now
-checks that the package's boot area is valid (header, boot record, container,
-CRCs, load address, FM-1 board tag) and still refuses a damaged one before
-anything is erased.
+**Morph Journey.** A fifth ACTION bank, after LIVE, chains your Random Morph
+snapshots S1–S4 into one long, hands-free movement: the sound morphs to a slot,
+rests, moves on to the next slot and loops. A1 PLAY/PAUSE, A2 direction, A3 NEXT,
+A4 tap WAIT, A4 hold saves. Leg length and curve are RANDOM SETUP's BARS and
+SHAPE. It keeps running when you change bank, and MIDI Learn can map it to a
+controller. [Step-by-step tutorial](https://github.com/bonszaimusic/caravel/blob/v0.8.0/docs/tutorials/random-morph-journey.md).
 
-**What is tested.** The check ran against M-VAVE's V15 package on the host with
-valid, damaged and differing device heads, and in the public build and
-validation. On one FM-1 whose boot area equals V15's, the 0.7.2 build installed,
-went straight back to the official V15 and ran normally. **It is not yet
-confirmed on a unit that showed -5.** Back up first; the return can erase projects.
+**A MIDI CC now wins over a running morph for every target.** LFO2 and DRUM-X
+controls kept being overwritten by the morph, because the ownership check
+compared a truncated id.
 
-Also: a divide by zero when the BPM is briefly 0 is fixed, and FM6 operators
-with AMS other than 0 no longer go silent or full scale (imported voices only;
-factory voices are unchanged). CI-only changes do not touch the firmware.
+**Performance settings travel with the project.** BARS, DEPTH, SCOPE, SHAPE,
+WAIT and the direction are saved with each project next to S1–S4. **Back up before
+installing: 0.7.x and earlier refuse a project saved by 0.8.0** (`PERF PROJECT
+INVALID`). Older projects load with the defaults.
 
-No project-format, storage, audio-engine or USB changes; 0.7.1 projects load as
-before. Download `Caravel-0.7.2-FM1-Testpaket.zip` for the local installer,
-firmware, verified source and notices, or `Caravel-0.7.2-Emulator.html` for the
-offline emulator. Firmware: `caravel-0.7.2.fwsc`. INFO must show `v0.7.2` after reboot.
-[Details](https://github.com/bonszaimusic/caravel/blob/v0.7.2/docs/release-072.md).
+**What is tested.** Host tests with the real firmware, a stress suite (2.57 million
+checks), and the complete validation of the exact source. Flash is tight: **1,116 B
+are left in the app slot** (0.7.2: 5,600 B). **Not verified:** a controller on a real
+FM-1, external MIDI clock (leg lengths follow the tempo setting), long real-device
+runs and target timing. No hardware-tested claim is made for the journey.
+
+Download `Caravel-0.8.0-FM1-Testpaket.zip` for the local installer, firmware,
+verified source and notices, or `Caravel-0.8.0-Emulator.html` for the offline
+emulator. Firmware: `caravel-0.8.0.fwsc`. INFO must show `v0.8.0` after reboot.
+[Details](https://github.com/bonszaimusic/caravel/blob/v0.8.0/docs/release-080.md).
 
 Publication requires exact-source target/resource, native/USB/storage, audio,
 sanitizer, WASM and complete validation. These do not establish physical FM-1

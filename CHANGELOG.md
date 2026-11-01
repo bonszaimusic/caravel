@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.0] - 2026-11-01
+
+- MORPH JOURNEY: a fifth ACTION bank (after LIVE) chains the Random Morph snapshots S1–S4 into one hands-free movement. A1 PLAY/PAUSE/RESUME, A2 direction (the running leg finishes first), A3 NEXT, A4 tap WAIT (0/1/2/4/8/16 bars), A4 hold saves. Leg length and curve are RANDOM SETUP's BARS and SHAPE; BARS, SCOPE and SHAPE changed during a journey wait for the next leg. It keeps running when you change bank, a hand or CC edit keeps its value for the rest of the leg, saving a snapshot or starting a RANDOM morph ends it, and RANDOM's A3 GO steers it. Nine MIDI Learn targets: PLAY, DIR, NEXT, WAIT, SLOT, BARS, DEPTH, SCOPE, SHAPE.
+- A learned MIDI CC now takes its parameter over from a running Random Morph for every target: the ownership check truncated the id to 8 bits, so LFO2 (ids from 400) and DRUM-X (from 256) controls kept being overwritten.
+- BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction are saved with each performance project (slots A–D, RESTORE LAST, USB backup, `.hpm`), in bytes earlier firmware requires to be zero: no size or layout change, but **0.7.x and earlier refuse a project saved by 0.8.0**. Projects made before load with the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward); a loaded project starts with the journey stopped and S1 selected. Back up before updating or going back.
+- New tutorial for Random Morph and Morph Journey with real firmware screens, a tutorials section at the top of the README and an all-tutorials block on the website; README corrections (0.7.0 snapshot wording, engine count, headings).
+- Target margins: image 580,448 B (+4,484 B over 0.7.2), 1,116 B left in the app slot, RAM 4,212 B left (was 4,260 B), pool unchanged. INFO shows `v0.8.0`.
+- Not verified on hardware: controller use, external MIDI clock (leg lengths follow the tempo setting), long runs and target timing. Known, separate: the FM6 patch selector can be pinned by a morph although the engine rewrites it.
+
 ## [0.7.2] - 2026-10-31
 
 - Stock return (issue #4): the update entry no longer requires the first 16 KiB of M-VAVE's official V15 package to equal the device's raw flash head. It checks that the package's boot area is structurally valid (header and boot record, boot container, CRCs, load address, FM-1 board tag) and still refuses a damaged one before anything is erased. Ported from felucca-bsp afd83ed. Package size check, loader recognition, staging and the host's final confirmation are unchanged. Candidate fix: tested on the host (including M-VAVE's V15 package) and on one FM-1 whose boot area equals V15's; not yet confirmed on a unit that showed -5.
