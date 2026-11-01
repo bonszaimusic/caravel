@@ -505,7 +505,7 @@ static int hp_j_ready(const char**why)           /* any two snapshots will do: e
 {
  uint32_t n=0;
  for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[s].count)n++;
- if(n<2u){*why="JOURNEY: NEED 2 SNAPS";return 0;}
+ if(n<2u){*why="NEED 2 SNAPS";return 0;}
  return 1;
 }
 static int hp_j_next(uint32_t from,uint32_t rev)   /* the next populated slot in the direction; -1 none */
@@ -543,7 +543,7 @@ static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live 
  hp_rm_skip=hp_j.skip;
  int ok=hp_rm_snapshot_recall(to,now);
  hp_rm_skip=0;
- if(!ok){hp_j_captured();if(!ui.msg_t)ui_message("JOURNEY: SNAP CHANGED");ui.force=1;return 0;}
+ if(!ok){hp_j_captured();if(!ui.msg_t)ui_message("SNAP CHANGED");ui.force=1;return 0;}
  hp_j.tgt=(uint8_t)to;hp_j.phase=0;hp_j.held=0;
  action_snap_slot=(uint8_t)to;                      /* RANDOM's selected snapshot follows the journey: edit or recapture it there */
  return 1;
@@ -551,7 +551,7 @@ static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live 
 static void hp_j_advance(uint32_t now)
 {
  int n=hp_j_next(hp_j.cur,hp_j.rev);
- if(n<0){hp_j_stop("JOURNEY: NO SNAPS");return;}
+ if(n<0){hp_j_stop("NO SNAPS");return;}
  if(hp_j_leg((uint32_t)n,now))hp_j_say("JOURNEY S%u>S%u",hp_j.cur+1u,(uint32_t)n+1u);
 }
 static void hp_j_start(uint32_t now)
@@ -587,21 +587,19 @@ static void hp_j_button(uint32_t i,uint32_t now)
 {
  if(i==HJ_PLAY){
   if(!hp_j.on){hp_j_start(now);return;}
-  if(hp_j.held==1u){hp_j.paused=1;hp_j.held=2u;ui_message("JOURNEY PAUSED");}   /* held by another morph: A1 turns the automatic go-on off */
-  else if(!hp_j.paused){
+  if(!hp_j.paused){
    hp_j.paused=1;
-   if(hp_j.phase==0)hp_rm_freeze();
+   if(hp_j.held)hp_j.held=2u;                           /* held by another morph: A1 turns the automatic go-on off */
+   else if(hp_j.phase==0)hp_rm_freeze();
    else{uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
-   ui_message("JOURNEY PAUSED");
-  }else if(hp_j.held==2u){                               /* paused while held: the leg starts again from the live values */
-   hp_j.paused=0;
-   if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
-   else{hp_j.held=0;hp_j.t0=now;ui_message("JOURNEY PLAY");}
   }else{
    hp_j.paused=0;
-   if(hp_j.phase==0)hp_rm_resume(now);else hp_j.t0=now;
-   ui_message("JOURNEY PLAY");
+   if(hp_j.held==2u){                                   /* paused while held: the leg starts again from the live values */
+    if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
+    else{hp_j.held=0;hp_j.t0=now;}
+   }else if(hp_j.phase==0)hp_rm_resume(now);else hp_j.t0=now;
   }
+  if(hp_j.on)ui_message(hp_j.paused?"JOURNEY PAUSED":"JOURNEY PLAY");
   ui.force=1;
  }else if(i==HJ_DIR){
   hp_j.rev=!hp_j.rev;hp_dirty=1;                                   /* the running leg finishes; the NEXT one goes the new way (NEXT turns at once) */
