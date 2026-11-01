@@ -259,7 +259,7 @@ static uint8_t hp_j_arrived;     /* set by hp_rm_poll when a recall really reach
 static int hp_rm_snapshot_store(uint32_t slot)
 {
  if(slot>=HP_RM_SNAP_SLOTS)return 0;
- char was[4];hp_rm_snapshot_owner(slot,was);uint8_t had=hp_rm_snap[slot].count!=0u;
+ char was[4];hp_rm_snapshot_owner(slot,was);uint8_t had=hp_rm_snap[slot].count!=0u;      /* what the slot held before */
  hp_rm_reset(); /* preserve current live sound; discard obsolete morph */
  if(!hp_rm_capture(0)){
   ui_message("SNAP: NO SAFE HOME TARGETS");ui.force=1;return 0;
@@ -283,8 +283,8 @@ static int hp_rm_snapshot_store(uint32_t slot)
 #if HP_JVN
  hp_j_captured(); /* saving cancels the moving leg: a running journey ends here, PLAY continues from the selected slot */
 #endif
- char message[32],now_owner[4];hp_rm_snapshot_owner(slot,now_owner);
- if(had&&strcmp(was,now_owner))perf_format(message,sizeof message,"S%u SAVED, WAS %s",slot+1u,was);   /* it replaced another track's snapshot */
+ char message[32];
+ if(had)perf_format(message,sizeof message,"S%u SAVED, WAS %s",slot+1u,was);      /* a filled slot is replaced: say whose it was */
  else perf_format(message,sizeof message,"SNAP S%u SAVED",slot+1u);
  ui_message(message);ui.force=1;
  return 1;

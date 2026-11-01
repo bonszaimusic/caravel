@@ -475,13 +475,13 @@ static void hp_draw_home(void)
    #endif
    cv_free_text(7+(int)k*59,185,&AF_S,label,T_TEXT,T_SURF,52);
   }
-  const char *action_help=action_bank==0u?(action_setup?"A4 HOLD DELETE SLOT":"A4 TAP SLOT / HOLD SAVE"):action_bank==ACT_BANK_JOURNEY?(action_setup?"K1-K4 TRACK ON / SKIP":"A4 TAP WAIT / HOLD SAVE"):"BANK TAP NEXT / HOLD SETUP";
+  const char *action_help=action_bank==0u?(action_setup?"A4 HOLD DELETE SLOT":""):action_bank==ACT_BANK_JOURNEY?(action_setup?"K1-K4 TRACK ON / SKIP":""):"BANK TAP NEXT / HOLD SETUP";   /* RANDOM and JOURNEY show the slot owners instead */
 #if FELUCCA_RANDOM_MORPH
   char slots[40];
   if((action_bank==0u||action_bank==ACT_BANK_JOURNEY)&&!action_setup){      /* who owns S1..S4: a slot another track filled is visible before it is overwritten */
-   char o[4][4];for(uint32_t q=0;q<4u;q++)hp_rm_snapshot_owner(q,o[q]);
-   perf_format(slots,sizeof slots,"S1:%s S2:%s S3:%s S4:%s",o[0],o[1],o[2],o[3]);
-   action_help=slots;
+   char*w=slots;
+   for(uint32_t q=0;q<4u;q++){*w++='S';*w++=(char)('1'+q);*w++=':';hp_rm_snapshot_owner(q,w);while(*w)w++;*w++=' ';}
+   w[-1]=0;action_help=slots;
   }
 #endif
 #if FELUCCA_RANDOM_MORPH
