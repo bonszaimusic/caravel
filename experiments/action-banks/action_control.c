@@ -16,7 +16,7 @@ static void action_snapshot_poll(uint32_t mask)
 {
 #if FELUCCA_RANDOM_MORPH
  const uint32_t bit=1u<<(ACT_KEY_FIRST+4u);
- if(action_bank!=0u || !action_enabled || !(mask&bit) || (action_preheld&bit)){
+ if((action_bank!=0u&&action_bank!=ACT_BANK_JOURNEY) || !action_enabled || !(mask&bit) || (action_preheld&bit)){
   action_snap_down=0;action_snap_long=0;return;
  }
  if(fm1_in.notes&bit){
@@ -37,6 +37,9 @@ static void action_snapshot_poll(uint32_t mask)
   if(ui.ml.on&&!action_snap_long){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_WAIT);action_snap_long=0;return;} /* tap A4: JOURNEY WAIT */
 #endif
   if(!action_snap_long){
+#if HP_JVN
+   if(action_bank==ACT_BANK_JOURNEY){hp_j_set_wait((hp_j.wait+1u)%6u);action_snap_long=0;return;} /* tap A4: REST 0/1/2/4/8/16 bars */
+#endif
    action_snap_slot=(uint8_t)((action_snap_slot+1u)%HP_RM_SNAP_SLOTS);
    char message[32];
    perf_format(message,sizeof message,"SNAP S%u %s",action_snap_slot+1u,
@@ -152,6 +155,11 @@ static int32_t action_setup_value(uint32_t slot)
   return -1;
 #endif
  }
+#if HP_JVN
+ if(action_bank==ACT_BANK_JOURNEY)
+  return slot==0u?(hp_j.set[0]?hp_rm_times[hp_j.set[0]-1u]:hp_rm.bars):slot==1u?hp_j_waits[hp_j.wait]:
+         slot==2u?action_snap_slot:(hp_j.set[3]?hp_j.set[3]-1u:hp_rm.shape);
+#endif
  if(action_bank==2u){
   if(!ep.on)return -1;
   if(slot==0u)return (ep.base*127+16383)/32767;
@@ -163,11 +171,12 @@ static int32_t action_setup_value(uint32_t slot)
 }
 static void action_setup_caption(uint32_t slot,char *name,char *value)
 {
- static const char*const labels[4][4]={
+ static const char*const labels[5][4]={
   {"BARS","DEPTH","SCOPE","SHAPE"},
   {"STR","MOTN","AMT","TIME"},
   {"MORPH","LFO1>PAIR","LFO2>PAIR","--"},
-  {"LVL T1","LVL T2","LVL T3","LVL T4"}
+  {"LVL T1","LVL T2","LVL T3","LVL T4"},
+  {"LEG","REST","SLOT","SHAPE"}
  };
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
@@ -189,6 +198,15 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
    str_cpy(value,v==0?"HQ 0.74s":v==1?"LONG 1.49s":"DRONE 2.97s",24);return;
   }
   str_cpy(value,v?"ON":"OFF",24);return;
+ }
+#endif
+#if HP_JVN
+ if(action_bank==ACT_BANK_JOURNEY){
+  if(slot==0u)perf_format(value,24,"%u BAR",v);
+  else if(slot==1u){if(v)perf_format(value,24,"%u BAR",v);else str_cpy(value,"NONE",24);}
+  else if(slot==2u)perf_format(value,24,"S%u%s",v+1,hp_rm_snapshot_count((uint32_t)v)?"*":"-");
+  else str_cpy(value,v==0?"LINEAR":v==1?"SMOOTH":"DRIFT",24);
+  return;
  }
 #endif
  if(action_bank==0u && slot==2u){
@@ -240,6 +258,19 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
   }else hp_rm.shape=(uint8_t)clamp((int32_t)hp_rm.shape+steps,0,2);
 #else
   ui_message("RANDOM UNAVAILABLE");
+#endif
+ }else if(action_bank==ACT_BANK_JOURNEY){
+#if HP_JVN
+  if(ui.ml.on){static const uint8_t ids[4]={HJ_BARS,HJ_WAIT,HJ_SLOT,HJ_SHAPE};ml_knob(&trk[song.sel],HP_VFIRST+8u+ids[slot]);return;}
+  if(slot==0u){                                   /* LEG: latched, a running leg keeps its speed */
+   int32_t i=hp_j.set[0]?(int32_t)hp_j.set[0]-1:0;
+   if(!hp_j.set[0])while(i<6&&hp_rm_times[i]!=hp_rm.bars)i++;
+   hp_j.set[0]=(uint8_t)(clamp(i+steps,0,6)+1);hp_j_apply_settings();
+  }else if(slot==1u)hp_j_set_wait((uint32_t)clamp((int32_t)hp_j.wait+steps,0,5));
+  else if(slot==2u)hp_j_select((uint32_t)clamp((int32_t)action_snap_slot+steps,0,(int32_t)HP_RM_SNAP_SLOTS-1),fm1_ms);
+  else{int32_t sh=hp_j.set[3]?(int32_t)hp_j.set[3]-1:(int32_t)hp_rm.shape;hp_j.set[3]=(uint8_t)(clamp(sh+steps,0,2)+1);hp_j_apply_settings();}
+#else
+  ui_message("JOURNEY UNAVAILABLE");
 #endif
  }else if(action_bank==1u){
 #if CARAVEL_REVERB_MINIMAL
@@ -314,6 +345,12 @@ static void action_random(uint32_t action)
   else hp_rm_freeze();
  }
  else if(action==2u){
+#if HP_JVN
+  if(hp_j.on&&hp_rm_snapshot_count(action_snap_slot)){   /* GO during a journey steers it there smoothly and it goes on from that slot */
+   hp_j.paused=0;
+   if(hp_j_leg(action_snap_slot,fm1_ms)){char m[32];perf_format(m,sizeof m,"JOURNEY >S%u",action_snap_slot+1u);ui_message(m);}
+  }else
+#endif
   if(hp_rm_snapshot_count(action_snap_slot))
    hp_rm_snapshot_recall(action_snap_slot,fm1_ms);
   else if(hp_rm.used)
@@ -335,11 +372,16 @@ static void action_key(uint32_t key)
  if(key==ACT_KEY_FIRST)return;
  if(key<ACT_KEY_FIRST+1u || key>26u)return;
  uint32_t act=key-ACT_KEY_FIRST-1u;
- if(action_bank==0u){
+ if(action_bank==0u||action_bank==ACT_BANK_JOURNEY){
 #if HP_JVN
   if(ui.ml.on){if(act<3u)ml_knob(&trk[song.sel],HP_VFIRST+8u+act);return;} /* MIDI LEARN: A1 PLAY, A2 DIR, A3 NEXT */
 #endif
-  if(act!=3u)action_random(act);
+  if(action_bank==0u){if(act!=3u)action_random(act);}
+#if HP_JVN
+  else if(act<3u)hp_j_button(act,fm1_ms);       /* A4 is the tap / hold gesture (REST / save) */
+#else
+  else ui_message("JOURNEY UNAVAILABLE");
+#endif
  }
 
  else if(action_bank==1u)action_stasis(act);

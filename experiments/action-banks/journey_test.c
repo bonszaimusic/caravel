@@ -60,10 +60,14 @@ int main(void){
  press(C_PLAY);run_ms(100);CHECK(!hp_j.paused&&hp_rm.state==HP_RM_RECALL);
  /* arrive at S2, continue to S3 */
  run_ms(2400);CHECK(hp_j.tgt==2u);
- /* DIR turns back toward the slot this leg came from (S2) */
- press(C_DIR);run_ms(100);CHECK(hp_j.rev==1u&&hp_j.tgt==1u);
- /* NEXT skips the rest of the leg: in reverse, the slot after S2 is S1 */
- press(C_NEXT);run_ms(100);CHECK(hp_j.tgt==0u);
+ /* the shared slot follows the journey: RANDOM's selected snapshot is the one being approached */
+ CHECK(action_snap_slot==hp_j.tgt);
+ /* DIR (variant B) only sets the direction: the running leg finishes, the next one goes back */
+ press(C_DIR);run_ms(100);CHECK(hp_j.rev==1u&&hp_j.tgt==2u&&hp_j.phase==0u);
+ CHECK(strstr(ui.msg,"REVERSE AFTER S3")!=NULL);
+ /* NEXT skips the rest of the leg at once: in reverse, the slot before S3 is S2, then S1 */
+ press(C_NEXT);run_ms(100);CHECK(hp_j.tgt==1u&&action_snap_slot==1u);
+ press(C_NEXT);run_ms(100);CHECK(hp_j.tgt==0u&&action_snap_slot==0u);
  /* a CC owns its parameter for the rest of the leg (the MIDI priority rule), the next leg moves it again */
  midi(0xB0,91,0);CHECK(rev()==0);
  run_ms(800);CHECK(rev()==0);

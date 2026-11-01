@@ -45,6 +45,27 @@ int main(void){
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=8;hp_rm.depth=100;
  random_press();CHECK(hp_rm.state==HP_RM_RANDOM);
  rev=cell_of(P_REV);CHECK(rev>=0 && hp_rm.cell[rev].released==0u);
+ /* LFO2 (400..) and DRUM-X (256..) ids are above 255: the morph cell is found by the full 16-bit id (review of the first draft) */
+ hp_rm_reset();
+ {hp_ref_t l2={.kind=HP_LFO2,.track=0,.engine=255,.id=L2_FIRST+L2_RATE};
+  hp_ref_t dx={.kind=HP_DX,.track=0,.engine=255,.id=DX_FIRST};
+  hp_rm.cell[0].ref=l2;hp_rm.cell[1].ref=dx;hp_rm.cell[0].released=hp_rm.cell[1].released=0u;
+  hp_rm.used=hp_rm.count=2;
+  hp_midi_touch(HP_LFO2,0,L2_FIRST+L2_RATE);CHECK(hp_rm.cell[0].released==1u&&hp_rm.cell[1].released==0u);
+  hp_midi_touch(HP_DX,0,DX_FIRST);CHECK(hp_rm.cell[1].released==1u);
+  hp_midi_touch(HP_LFO2,1,L2_FIRST+L2_RATE);CHECK(hp_rm.cell[0].released==1u);   /* another track's: nothing else changes */
+  hp_rm_reset();}
+ /* and through a learned CC on the real firmware path, with a morph that moves the LFO2 rate */
+ {CHECK(web_home_assign(0,1,0,HP_LFO2,0,L2_FIRST+L2_RATE));
+  trk[0].p[P_REV]=20;hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=8;hp_rm.depth=100;
+  random_press();
+  int found=-1;for(uint32_t i=0;i<hp_rm.count;i++)if(hp_rm.cell[i].ref.kind==HP_LFO2&&hp_rm.cell[i].ref.id==L2_FIRST+L2_RATE)found=(int)i;
+  if(found>=0){
+   polls(2);
+   ui.ml.on=1;ml_knob(&trk[0],L2_FIRST+L2_RATE);midi(0xB0,27,100);run_ms(60);ui.ml.on=0;
+   midi(0xB0,27,127);CHECK(hp_rm.cell[found].released==1u);
+   int32_t at=lfo2_get(0,L2_FIRST+L2_RATE);polls(4);CHECK(lfo2_get(0,L2_FIRST+L2_RATE)==at);
+  }else printf("(LFO2 is not a morph target in this profile: unit-level check only)\n");}
  printf("MIDI CC PRIORITY PASS: %u checks.\n",checks);
  return 0;
 }

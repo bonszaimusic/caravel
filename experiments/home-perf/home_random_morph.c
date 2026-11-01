@@ -236,6 +236,9 @@ static hp_ref_t hp_rm_snapshot_ref(const hp_rm_snap_t *s,uint32_t i)
  if(r.engine==31u)r.engine=255u;
  return r;
 }
+#if HP_JVN
+static void hp_j_captured(void);
+#endif
 static int hp_rm_snapshot_store(uint32_t slot)
 {
  if(slot>=HP_RM_SNAP_SLOTS)return 0;
@@ -259,6 +262,9 @@ static int hp_rm_snapshot_store(uint32_t slot)
  snap->origin_row=hp_rm.origin_row;
  snap->count=(uint16_t)hp_rm.count; /* publish count only after all values */
  hp_rm_reset();
+#if HP_JVN
+ hp_j_captured(); /* saving cancels the moving leg: a running journey ends here, PLAY continues from the selected slot */
+#endif
  char message[32];perf_format(message,sizeof message,"SNAP S%u SAVED",slot+1u);
  ui_message(message);ui.force=1;
  return 1;
@@ -487,6 +493,7 @@ static void hp_j_apply_settings(void)              /* latched at the start of a 
  if(hp_j.set[3]){hp_rm.shape=(uint8_t)(hp_j.set[3]-1u);hp_j.set[3]=0;}
 }
 static void hp_j_stop(const char*msg){hp_j.on=0;hp_j.paused=0;hp_j.phase=0;ui_message(msg);ui.force=1;}
+static void hp_j_captured(void){hp_j.on=0;hp_j.paused=0;hp_j.phase=0;}
 static void hp_j_say(const char*what,uint32_t a,uint32_t b)
 {
  char m[32];perf_format(m,sizeof m,what,a,b);ui_message(m);ui.force=1;
@@ -497,6 +504,7 @@ static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live 
  hp_j_apply_settings();
  if(!hp_rm_snapshot_recall(to,now)){hp_j_stop("JOURNEY: SNAP CHANGED");return 0;}
  hp_j.tgt=(uint8_t)to;hp_j.phase=0;
+ action_snap_slot=(uint8_t)to;                      /* RANDOM's selected snapshot follows the journey: edit or recapture it there */
  return 1;
 }
 static void hp_j_advance(uint32_t now)
@@ -521,6 +529,19 @@ static void hp_j_wait_begin(uint32_t now)
  uint32_t bpm=(uint32_t)clamp(song.g[G_BPM],20,300);
  hp_j.phase=1;hp_j.t0=now;hp_j.left=bars*(240000u/bpm);
 }
+static void hp_j_set_wait(uint32_t w)              /* 0..5: rest 0/1/2/4/8/16 bars after each arrival */
+{
+ hp_j.wait=(uint8_t)(w<6u?w:5u);
+ hp_j_say("JOURNEY REST %u BAR",hp_j_waits[hp_j.wait],0u);
+}
+static void hp_j_select(uint32_t s,uint32_t now)   /* the shared slot; a running journey steers there smoothly; never saves */
+{
+ s%=HP_RM_SNAP_SLOTS;
+ if(s==action_snap_slot)return;
+ action_snap_slot=(uint8_t)s;
+ if(hp_rm_snap[s].count&&hp_j.on&&!hp_j.paused){if(hp_j_leg(s,now))hp_j_say("JOURNEY >S%u",s+1u,0u);}
+ else hp_j_say(hp_rm_snap[s].count?"SNAP S%u SAVED":"SNAP S%u EMPTY",s+1u,0u);
+}
 static void hp_j_button(uint32_t i,uint32_t now)
 {
  if(i==HJ_PLAY){
@@ -537,13 +558,9 @@ static void hp_j_button(uint32_t i,uint32_t now)
   }
   ui.force=1;
  }else if(i==HJ_DIR){
-  hp_j.rev=!hp_j.rev;
-  if(hp_j.on&&!hp_j.paused&&hp_j.phase==0){            /* turn back toward where this leg came from */
-   uint32_t back=hp_j.cur;
-   if(back==hp_j.tgt){int n=hp_j_next(hp_j.tgt,hp_j.rev);if(n<0)return;back=(uint32_t)n;}
-   hp_j.cur=hp_j.tgt;
-   if(hp_j_leg(back,now))ui_message(hp_j.rev?"JOURNEY REVERSE":"JOURNEY FORWARD");
-  }else ui_message(hp_j.rev?"JOURNEY REVERSE":"JOURNEY FORWARD");
+  hp_j.rev=!hp_j.rev;                                   /* the running leg finishes; the NEXT one goes the new way (NEXT turns at once) */
+  if(hp_j.on&&hp_j.phase==0)hp_j_say(hp_j.rev?"REVERSE AFTER S%u":"FORWARD AFTER S%u",hp_j.tgt+1u,0u);
+  else ui_message(hp_j.rev?"JOURNEY REVERSE":"JOURNEY FORWARD");
   ui.force=1;
  }else{                                                  /* NEXT */
   if(!hp_j.on||hp_j.paused){ui_message(hp_j.on?"JOURNEY PAUSED":"JOURNEY OFF");ui.force=1;return;}
@@ -559,17 +576,9 @@ static void hp_journey_poll(uint32_t now)
  if(pend){
   for(uint32_t i=0;i<HP_JVN;i++)if(pend&(1u<<i)){
    if(i<=HJ_NEXT)hp_j_button(i,now);
-   else if(i==HJ_WAIT){
-    hp_j.wait=(uint8_t)hp_j_band(val[i],6u);
-    hp_j_say("JOURNEY WAIT %u BAR",hp_j_waits[hp_j.wait],0u);
-   }else if(i==HJ_SLOT){
-    uint32_t s=hp_j_band(val[i],HP_RM_SNAP_SLOTS);
-    if(s!=action_snap_slot){
-     action_snap_slot=(uint8_t)s;
-     if(hp_rm_snap[s].count&&hp_j.on&&!hp_j.paused){if(hp_j_leg(s,now))hp_j_say("JOURNEY >S%u",s+1u,0u);}
-     else hp_j_say(hp_rm_snap[s].count?"SNAP S%u SAVED":"SNAP S%u EMPTY",s+1u,0u);
-    }
-   }else{
+   else if(i==HJ_WAIT)hp_j_set_wait(hp_j_band(val[i],6u));
+   else if(i==HJ_SLOT)hp_j_select(hp_j_band(val[i],HP_RM_SNAP_SLOTS),now);
+   else{
     static const uint8_t counts[4]={7u,6u,3u,3u};
     uint32_t k=i-HJ_BARS;hp_j.set[k]=(uint8_t)(hp_j_band(val[i],counts[k])+1u);
    }

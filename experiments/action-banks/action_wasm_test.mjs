@@ -36,6 +36,7 @@ key(22);assert.equal((state()>>8)&255,3,'LIVE bank');
 const beforeMute=e.web_action_mute(0);
 key(23);assert.notEqual(e.web_action_mute(0),beforeMute,'LIVE action actually toggles T1 mute');
 key(23);assert.equal(e.web_action_mute(0),beforeMute,'LIVE mute toggles back');
+key(22);assert.equal((state()>>8)&255,4,'JOURNEY bank follows LIVE');
 key(22);assert.equal((state()>>8)&255,0,'returns to RANDOM bank');
 assert.equal(e.web_action_random_state(),0);
 key(23);assert.equal(e.web_action_random_state(),1,'RANDOM starts real C morph');

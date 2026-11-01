@@ -9,7 +9,8 @@
 #if CARAVEL_ACTION_BANKS
 #define ACT_KEY_FIRST 22u
 #define ACT_KEY_MASK (31u << ACT_KEY_FIRST)
-#define ACT_BANKS 4u
+#define ACT_BANKS 5u
+#define ACT_BANK_JOURNEY 4u   /* appended: RANDOM STASIS PAIR LIVE keep their positions */
 static volatile uint8_t action_enabled, action_bank, action_setup;
 #if CARAVEL_STASIS_EXPAND
 static uint8_t action_stasis_grain_page; /* 0 existing FX controls, 1 granular controls */
@@ -23,13 +24,14 @@ static uint32_t action_snap_started;
 static volatile uint32_t action_capture_mask, action_preheld;
 static uint32_t action_home_tap_ms;
 static const char *const action_bank_names[ACT_BANKS] = {
- "RANDOM", "STASIS", "PAIR", "LIVE"
+ "RANDOM", "STASIS", "PAIR", "LIVE", "JOURNEY"
 };
 static const char *const action_labels[ACT_BANKS][4] = {
  {"RANDOM","FREEZE","RETURN","SNAP"},
  {"HOLD","ADD","BLEND","RELEASE"},
  {"A 0%","MID 50%","B 100%","MOTION"},
- {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"}
+ {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"},
+ {"PLAY","DIR","NEXT","REST"}
 };
 /* The UI renderer is compiled before action_control.c in the FM-1 amalgamation. */
 static void action_setup_caption(uint32_t slot,char *name,char *value);
