@@ -7,7 +7,7 @@
 - A learned MIDI CC now takes its parameter over from a running Random Morph for every target: the ownership check truncated the id to 8 bits, so LFO2 (ids from 400) and DRUM-X (from 256) controls kept being overwritten.
 - BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction are saved with each performance project (slots A–D, RESTORE LAST, USB backup, `.hpm`), in bytes earlier firmware requires to be zero: no size or layout change, but **0.7.x and earlier refuse a project saved by 0.8.0**. Projects made before load with the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward); a loaded project starts with the journey stopped and S1 selected. Back up before updating or going back.
 - New tutorial for Random Morph and Morph Journey with real firmware screens, a tutorials section at the top of the README and an all-tutorials block on the website; README corrections (0.7.0 snapshot wording, engine count, headings).
-- Target margins: image 581,408 B (+5,444 B over 0.7.2), **156 B left in the app slot** (0.7.2: 5,600 B), RAM 4,196 B left (was 4,260 B), pool unchanged. INFO shows `v0.8.0`.
+- Target margins: image 581,212 B (+5,248 B over 0.7.2), **352 B left in the app slot** (0.7.2: 5,600 B; the one-core layout 168 B), RAM 4,196 B left (was 4,260 B), pool unchanged. INFO shows `v0.8.0`.
 - Tried by the maintainer on an FM-1, which reports it works (a first trial, not a systematic acceptance). Not verified: a controller, external MIDI clock (leg lengths follow the tempo setting), long runs and target timing. Known, separate: the FM6 patch selector can be pinned by a morph although the engine rewrites it.
 
 ## [0.7.2] - 2026-10-31

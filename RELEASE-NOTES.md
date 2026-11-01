@@ -18,7 +18,7 @@ installing: 0.7.x and earlier refuse a project saved by 0.8.0** (`PERF PROJECT
 INVALID`). Older projects load with the defaults.
 
 **What is tested.** Host tests with the real firmware, a stress suite (2.57 million
-checks), and the complete validation of the exact source. Flash is tight: **only 156 B
+checks), and the complete validation of the exact source. Flash is tight: **only 352 B
 are left in the app slot** (0.7.2: 5,600 B). The maintainer installed the final
 build on an FM-1 and reports that it works; that was a first trial, not a systematic acceptance.
 **Not verified:** a controller, external MIDI clock (leg lengths follow the tempo setting), long

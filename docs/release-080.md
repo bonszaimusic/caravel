@@ -51,13 +51,13 @@ Firmware: `caravel-0.8.0.fwsc`. Matching offline emulator: `Caravel-0.8.0-Emulat
 
 ## What is tested, and what is not
 
-- Host tests with the real firmware: MIDI-CC priority (22 checks), journey scheduler (71), panel keys and SETUP rules (69), hold, tracks left out, mixed slots and delete (64),
+- Host tests with the real firmware: MIDI-CC priority (22 checks), journey scheduler (67), panel keys and SETUP rules (69), hold, tracks left out, mixed slots and delete (64),
   project round trip with old projects and invalid pads (98; worst case 2,493 of 3,328 bytes), and a stress suite
   (2.57 million checks: 600 legs with 128 targets per slot verified against their snapshots, a 300k-step chaos run with random
   CCs, tempo changes, hand edits, FREEZE/RESUME, capture/restore, and six simulated hours at 60 and 200 BPM).
 - The complete validation of the exact firmware source passed: target build, resource guards, native, sanitizer, storage/USB,
-  audio, WASM and Android-emulator suites. Target margins of the build: image 581,408 B, **only 156 B left in the app slot**
-  (0.7.2: 5,600 B; the next feature must make room first), RAM 4,196 B left, pool 10,168 B left (unchanged).
+  audio, WASM and Android-emulator suites. Target margins of the build: image 581,212 B, **only 352 B left in the app slot**
+  (0.7.2: 5,600 B; the one-core test layout has 168 B; the next feature must make room first), RAM 4,196 B left, pool 10,168 B left (unchanged).
 - **On hardware:** the maintainer installed the final build on an FM-1 and reports that it works. That was a first trial, not a systematic
   acceptance with a measured scope.
 - **Not verified:** a controller, external MIDI clock (leg lengths follow the tempo setting, not an external clock), sustained real-device
