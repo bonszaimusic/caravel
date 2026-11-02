@@ -92,7 +92,8 @@ static int hp_sound_changed(const track_t *t);
 
 #if FELUCCA_RANDOM_MORPH
 /* Volatile HOME Random Morph state shared by the menu and performance UI. */
-#define HP_RM_MAX 128u
+#define HP_RM_V2_MAX 128u  /* a project format 2 slot: 128 targets */
+#define HP_RM_MAX 32u   /* cells of ONE track's morph: its own HOME controls (32 = the snapshot limit), plus its parked RETURN origins */
 #define HP_RM_IDLE 0u
 #define HP_RM_RANDOM 1u
 #define HP_RM_FROZEN 2u
@@ -119,7 +120,13 @@ typedef struct {
  uint16_t used; /* shared 128-target arena: active prefix plus parked origins */
  uint8_t context;
 } hp_rm_state_t;
-static hp_rm_state_t hp_rm = {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_SMOOTH,.seed=0x8C89D39Bu};
+#define HP_RM_INIT {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_SMOOTH,.seed=0x8C89D39Bu}
+/* One morph engine per track, each with its own cells, phase, state and settings. `hp_rm` is the SELECTED track's engine for everything the
+ * panel and the tests do; the polls and the claim / release scans address the engines by index (hp_eng_ovr). */
+static hp_rm_state_t hp_eng[NTRK]={HP_RM_INIT,HP_RM_INIT,HP_RM_INIT,HP_RM_INIT};
+static uint8_t hp_eng_ovr=255u;                        /* 255: follow the selected track; 0..3: the engine a poll or a fan-out works on */
+#define hp_et() (hp_eng_ovr<NTRK?(uint32_t)hp_eng_ovr:(uint32_t)(song.sel&3u))
+#define hp_rm (hp_eng[hp_et()])
 static const uint8_t hp_rm_times[]={1,2,4,8,16,32,64};
 static const uint8_t hp_rm_depths[]={10,25,35,50,75,100};
 #if CARAVEL_ACTION_BANKS
@@ -141,6 +148,7 @@ static hp_rm_snap_t hp_rm_snap[NTRK][HP_RM_SNAP_SLOTS];
 
 
 static void hp_rm_reset(void);
+static void hp_rm_reset_all(void);
 static void hp_rm_freeze(void);
 
 #endif /* FELUCCA_RANDOM_MORPH */

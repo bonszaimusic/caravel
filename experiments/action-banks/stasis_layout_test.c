@@ -28,7 +28,7 @@ int main(void)
           CHECK(hp_rm_snapshot_packable(r));hp_rm_snapshot_write_ref(&hp_rm_snap[0][0],0,r);
           CHECK(hp_rm_same(r,hp_rm_snapshot_ref(&hp_rm_snap[0][0],0)));
         }
-    CHECK(sizeof hp_rm_snap==2624u && HP_RM_MAX==128u && HP_RM_SNAP_SLOTS==4u && HP_RM_SNAP_MAX==32u);
+    CHECK(sizeof hp_rm_snap==2624u && HP_RM_MAX==32u&&sizeof hp_eng==NTRK*sizeof(hp_rm_state_t) && HP_RM_SNAP_SLOTS==4u && HP_RM_SNAP_MAX==32u);
     web_stasis_test_type(3);run_ms(120);
     ui.fam_last[FAM_FX]=0;go_home();tap(B_FX);expect_page("FX");
     tap(B_FX);expect_page("DLY");tap(B_FX);expect_page("CHORUS");

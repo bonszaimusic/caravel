@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Random Morph and Morph Journey - tutorial
 
-**Status:** development branch for 0.9.0 (not released). It describes per-track snapshot sets, the first step towards per-track RANDOM and JOURNEY; 0.8.0 had four slots for the whole project. Tested on the host with the real firmware; not yet tried on hardware; a controller has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
+**Status:** development branch for 0.9.0 (not released). It describes per-track snapshot sets and one morph engine per track; 0.8.0 had four slots and one engine for the whole project. Tested on the host with the real firmware; not yet tried on hardware; a controller has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
 The same tutorials, in one place: [README](../../README.md#tutorials) · [all tutorials](README.md) · [reference: MORPH JOURNEY](../morph-journey.md).
 
 Random Morph moves the controls on your HOME page, by hand or to a stored sound. Morph Journey chains those moves into one long, hands-free
@@ -77,23 +77,26 @@ Tap **A2** to reverse. The message says when it happens: **REVERSE AFTER S1** me
 
 ## 6. A journey for each track
 
-Select the track (T1 to T4) before you press PLAY: the journey plays **that track's** four slots, and the sea chart shows them. Saving or deleting a slot on that track ends its journey; the slots of the other tracks are not touched.
+Select the track (T1 to T4) before you press PLAY: the journey plays **that track's** four slots, and the sea chart shows them. Saving or deleting a slot on that track ends its journey; the slots of the other tracks are not touched. **Every track has its own engine and its own settings** (BARS, DEPTH, SCOPE, SHAPE, WAIT, direction), so you can start a journey on T2 while T1's keeps sailing, each with its own length, curve and rests. The sea chart and the keys always show the selected track.
 
-## 7. A RANDOM morph on another track while a journey runs
+## 7. A RANDOM morph on the same track while a journey runs
 
-For now there is **one morph engine for all tracks**, so only one movement runs at a time. When you start RANDOM on another track (SCOPE TRACK
-moves only that track's controls), the journey is **held**: it stops where it is, and the caravel stays where it was (at anchor). When that
+Each track has **its own morph engine**, so morphs and journeys of different tracks run side by side: a RANDOM morph on T2 does not touch T1's journey. A RANDOM morph on the **same track** as a running journey does hold it: the journey stops where it is, and the caravel stays where it was (at anchor). When that
 morph has arrived, the journey **goes on by itself** with a new leg from where its track stands to the same slot. Press **A1 while it is held**
 and it pauses instead: it then waits for A1.
 
 ![The sea chart while a journey is held](img/journey-held.png)
 
-![Diagram: a RANDOM morph on T2 holds the journey of T1, which goes on by itself](img/journey-hold.png)
+![Diagram: a RANDOM morph on T1 holds only T1's journey, which goes on by itself](img/journey-hold.png)
+
+If two tracks move the same control (for example a control that is pinned on both HOME pages), the one that **started last** owns it; the other lets go until it starts again.
+
+SCOPE ALL (RANDOM SETUP, K3) makes the RANDOM keys act on **every track at once**, each on its own HOME controls and with its own BARS: A1 starts, A2 freezes, A3 returns or morphs every track to its own slot.
 
 ## Good to know
 
 - **The journey keeps running when you change bank.** Use STASIS, PAIR or LIVE meanwhile; come back to JOURNEY to steer.
-- **Saving or deleting a snapshot of the journey's track ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on any track only **holds** it (step 7).
+- **Saving or deleting a snapshot of the journey's track ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on the same track only **holds** it (step 7).
 - **RANDOM's A3 (GO Sx) and the JOURNEY bank's A3 (NEXT) steer a running journey** to that slot at once and it goes on from there.
 - **Hands win.** A knob you turn, or a MIDI CC, keeps its value for the rest of the leg; the next leg moves it again.
 - **BARS, SCOPE and SHAPE changed during a journey wait for the next leg**, so a running leg keeps its speed. The display shows the waiting value.

@@ -149,7 +149,7 @@ static void hp_init(void)
  uint32_t irq=perf_irq_save();
  memset(&hp,0,sizeof hp);memset(hp_macro_live,0,sizeof hp_macro_live);memset(hp_macro_count,0,sizeof hp_macro_count);
 #if CARAVEL_ACTION_BANKS && FELUCCA_RANDOM_MORPH
- hp_rm_reset();hp_rm_snapshot_clear(); /* volatile snapshots never survive boot */
+ hp_rm_reset_all();hp_rm_snapshot_clear(); /* volatile snapshots never survive boot */
  action_snap_slot=0;
 #endif
  for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);hp_last_valid=0;hp_apply_armed=0;hp_edit_track=hp_backup_track=255;perf_irq_restore(irq);

@@ -88,19 +88,24 @@ static void hp_rm_cut_bounds(const param_desc_t*d,int32_t*lo,int32_t*hi)
 static void hp_rm_disengage(hp_ref_t r)
 {
  /* Also called from the MIDI path, in the audio block, while the UI may rebuild the cells (reset, capture, recall). Safe by
-  * construction: the count is read once and bounded, every index stays inside the cell array, and the only write is a one-byte
+  * construction: every count is read once and bounded, every index stays inside the cell array, and the only write is a one-byte
   * flag, so a race can at worst release a cell that is being replaced anyway (the flag is cleared when a cell is filled) or miss
-  * one for a block. The scan is at most 128 cells per control change (about 5 instructions per cell that does not match), not per audio sample. */
- uint32_t n=hp_rm.used;
- if(!n)return;
- if(n>HP_RM_MAX)n=HP_RM_MAX;
+  * one for a block. The scan is at most 4 x 32 cells per control change (about 5 instructions per cell that does not match), not per audio sample. */
  if(r.track==255u)r.track=(uint8_t)song.sel;
- for(uint32_t i=0;i<n;i++){
-  hp_rm_cell_t*c=&hp_rm.cell[i];
-  /* fields compared in place (hp_rm_same takes its refs by value: two memcpy calls per id match on the target) */
-  if(c->ref.id==r.id&&c->ref.kind==r.kind&&c->ref.track==r.track&&c->ref.aux==r.aux&&c->ref.engine==r.engine)c->released=1u;
+ for(uint32_t u=0;u<NTRK;u++){
+  uint32_t n=hp_eng[u].used;
+  if(n>HP_RM_MAX)n=HP_RM_MAX;
+  for(uint32_t i=0;i<n;i++){
+   hp_rm_cell_t*c=&hp_eng[u].cell[i];
+   /* fields compared in place (hp_rm_same takes its refs by value: two memcpy calls per id match on the target) */
+   if(c->ref.id==r.id&&c->ref.kind==r.kind&&c->ref.track==r.track&&c->ref.aux==r.aux&&c->ref.engine==r.engine)c->released=1u;
+  }
  }
 }
+/* Fan-out: with SCOPE ALL a RANDOM key acts on every track's engine, each on its own HOME controls (TRACK scope) and with its own BARS / DEPTH / SHAPE. */
+static uint8_t hp_rm_all;
+static int hp_rm_fan(void){return hp_eng_ovr==255u&&hp_eng[song.sel&3u].scope==HP_RM_ALL;}
+static uint32_t hp_rm_scope_eff(void){return hp_rm.scope==HP_RM_ALL||hp_rm_all?HP_RM_TRACK:hp_rm.scope;}
 static void hp_rm_reset(void)
 {
  uint8_t bars=hp_rm.bars,depth=hp_rm.depth,scope=hp_rm.scope,shape=hp_rm.shape;
@@ -111,7 +116,8 @@ static void hp_rm_reset(void)
  hp_rm.shape=shape<=HP_RM_DRIFT?shape:HP_RM_SMOOTH;
  hp_rm.seed=seed?seed:0x8C89D39Bu;
 }
-/* Origins share the existing 128 cells. Keep the current context at the
+static void hp_rm_reset_all(void){for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_reset();}hp_eng_ovr=255u;}
+/* Origins share the engine's cells. Keep the current context at the
  * front so the interpolator and its CPU cost stay unchanged. Inactive
  * contexts retain originals; selecting a track alone never moves anything.
  * TRACK: 128..131, ROW: 0..127, ALL: 132, snapshot recall: 255. */
@@ -119,8 +125,8 @@ _Static_assert(NTRK==4u && HP_ROWS==32u && sizeof(hp_rm_cell_t)==18u,
                "RETURN context must fit existing cell padding");
 static uint8_t hp_rm_current_context(void)
 {
- return hp_rm.scope==HP_RM_ALL?132u:hp_rm.scope==HP_RM_TRACK?
-  (uint8_t)(128u+song.sel):(uint8_t)(song.sel*HP_ROWS+hp.track[song.sel].active);
+ return hp_rm_scope_eff()==HP_RM_TRACK?
+  (uint8_t)(128u+hp_et()):(uint8_t)(hp_et()*HP_ROWS+hp.track[hp_et()].active);
 }
 static int hp_rm_context_has(uint8_t context)
 {
@@ -134,7 +140,7 @@ static void hp_rm_group_context(uint8_t context)
   hp_rm_cell_t tmp=hp_rm.cell[n];hp_rm.cell[n]=hp_rm.cell[i];hp_rm.cell[i]=tmp;n++;
  }
  hp_rm.count=n;hp_rm.context=context;
- hp_rm.origin_track=(uint8_t)song.sel;hp_rm.origin_row=hp.track[song.sel].active;
+ hp_rm.origin_track=(uint8_t)hp_et();hp_rm.origin_row=hp.track[hp_et()].active;
 }
 static void hp_rm_select_context(uint8_t context)
 {
@@ -155,7 +161,7 @@ static void hp_rm_drop_context(void)
 static int hp_rm_add(hp_ref_t r,int random_only)
 {
  if(!r.kind)return 1;
- if(r.track==255u)r.track=(uint8_t)song.sel; /* pin owner at capture, never follow later selection */
+ if(r.track==255u)r.track=(uint8_t)hp_et(); /* pin owner at capture, never follow later selection */
  const param_desc_t*d=hp_desc(r);
  if(!hp_rm_safe(r,d) || hp_rm_fm6_patch(r) || (random_only&&!hp_rm_random_allowed(r,d)))return 1;
  for(uint32_t i=0;i<hp_rm.used;i++)
@@ -173,14 +179,12 @@ static int hp_rm_capture(int random_only)
  hp_rm.count=0;
  uint16_t old_used=hp_rm.used;
  hp_rm.context=hp_rm_current_context();
- uint32_t t0=song.sel;
- if(hp_rm.scope==HP_RM_ROW){
+ uint32_t t0=hp_et();
+ if(hp_rm_scope_eff()==HP_RM_ROW){
   hp_track_t*h=&hp.track[t0];uint32_t row=h->active;
   for(uint32_t k=0;k<4;k++)if(!hp_rm_add(h->cell[row][k],random_only))goto full;
  }else{
-  uint32_t lo=hp_rm.scope==HP_RM_TRACK?t0:0;
-  uint32_t hi=hp_rm.scope==HP_RM_TRACK?t0+1:NTRK;
-  for(uint32_t t=lo;t<hi;t++){
+  for(uint32_t t=t0;t<t0+1u;t++){
    hp_track_t*h=&hp.track[t];
    for(uint32_t row=0;row<h->count;row++)
     for(uint32_t k=0;k<4;k++){
@@ -208,6 +212,18 @@ static int hp_rm_valid(void)
  }
  return 1;
 }
+/* LAST STARTED WINS: a morph or a journey leg that starts now takes the controls it moves from every other track's engine. That matters for
+ * controls that belong to no single track (Pair, a control another track's HOME pins); a track's own controls cannot collide. */
+static void hp_rm_claim(void)
+{
+ uint32_t me=hp_et();
+ for(uint32_t u=0;u<NTRK;u++){
+  if(u==me)continue;
+  uint32_t n=hp_eng[u].used;if(n>HP_RM_MAX)n=HP_RM_MAX;
+  for(uint32_t i=0;i<n;i++)for(uint32_t j=0;j<hp_rm.count&&j<HP_RM_MAX;j++)
+   if(hp_rm_same(hp_eng[u].cell[i].ref,hp_rm.cell[j].ref)){hp_eng[u].cell[i].released=1u;break;}
+ }
+}
 #if CARAVEL_ACTION_BANKS
 /* Four explicit, independent snapshots. A slot captures exactly the current
  * morph-safe HOME refs within ROW/TRACK/ALL at capture time. Slots may have
@@ -227,6 +243,7 @@ static uint32_t hp_rm_snapshot_count(uint32_t t,uint32_t slot)
 }
 _Static_assert(P_COUNT<=512u && L2_FIRST+L2_N<=512u && DX_END<=512u && FP_SIZE<=512u && NENGINES<31u && NTRK<=4u,
                "Snapshot target packing must cover every parameter and engine");
+static uint32_t hp_rm_snapshot_any(uint32_t slot){uint32_t n=0;for(uint32_t t=0;t<NTRK;t++)n+=hp_rm_snapshot_count(t,slot)!=0u;return n;}
 static int hp_rm_snapshot_packable(hp_ref_t r)
 {
  return r.id<512u && r.kind<8u && r.track<NTRK &&
@@ -250,7 +267,8 @@ static hp_ref_t hp_rm_snapshot_ref(const hp_rm_snap_t *s,uint32_t i)
 #if HP_JVN
 static void hp_j_captured(void);
 static void hp_j_captured_for(uint32_t t);
-static uint8_t hp_j_arrived;     /* set by hp_rm_poll when a recall really reached its snapshot */
+static uint8_t hp_j_arr[NTRK];
+#define hp_j_arrived hp_j_arr[hp_et()]     /* set by hp_rm_poll when a recall really reached its snapshot */
 #endif
 /* A track's own controls: what a track's set holds besides the global / Pair morph controls (which belong to no track). */
 static int hp_snap_own_kind(hp_ref_t r){return r.kind==HP_TRACK||r.kind==HP_LFO2||r.kind==HP_DX||r.kind==HP_FM6;}
@@ -280,7 +298,6 @@ static int hp_snap_capture(uint32_t t,uint32_t scope,hp_rm_snap_t*out)   /* 1 ca
 static int hp_rm_snapshot_store(uint32_t slot)       /* the selected track's set; RANDOM scope ALL: every track's own slot at once */
 {
  if(slot>=HP_RM_SNAP_SLOTS)return 0;
- hp_rm_reset(); /* preserve current live sound; discard obsolete morph */
  hp_rm_snap_t tmp;uint32_t all=hp_rm.scope==HP_RM_ALL,t0=all?0u:song.sel,t1=all?NTRK:song.sel+1u,saved=0;
  for(uint32_t t=t0;t<t1;t++){                        /* first pass: nothing is written unless every track fits */
   int c=hp_snap_capture(t,all?HP_RM_TRACK:hp_rm.scope,&tmp);
@@ -289,6 +306,7 @@ static int hp_rm_snapshot_store(uint32_t slot)       /* the selected track's set
  }
  if(!saved){ui_message("SNAP: NO OWN CONTROLS");ui.force=1;return 0;}
  for(uint32_t t=t0;t<t1;t++)if(hp_snap_capture(t,all?HP_RM_TRACK:hp_rm.scope,&tmp)==1){
+  hp_eng_ovr=(uint8_t)t;hp_rm_reset();hp_eng_ovr=255u;   /* preserve the live sound of the saved track, discard its obsolete morph */
   hp_rm_snap[t][slot]=tmp;hp_dirty=1;
 #if HP_JVN
   hp_j_captured_for(t); /* saving cancels the moving leg: that track's running journey ends here, PLAY continues from the selected slot */
@@ -311,8 +329,8 @@ static void hp_rm_snapshot_delete(uint32_t slot)      /* RANDOM SETUP, A4 hold: 
  uint32_t all=hp_rm.scope==HP_RM_ALL,t0=all?0u:song.sel,t1=all?NTRK:song.sel+1u,any=0;
  for(uint32_t t=t0;t<t1;t++)any+=hp_rm_snapshot_count(t,slot)!=0u;
  if(!any){hp_rm_snapshot_say(song.sel,slot);return;}
- hp_rm_reset();
  for(uint32_t t=t0;t<t1;t++)if(hp_rm_snapshot_count(t,slot)){
+  hp_eng_ovr=(uint8_t)t;hp_rm_reset();hp_eng_ovr=255u;
   memset(&hp_rm_snap[t][slot],0,sizeof hp_rm_snap[t][slot]);hp_dirty=1;
 #if HP_JVN
   hp_j_captured_for(t);                              /* the set of slots changed: that track's running journey ends here */
@@ -326,7 +344,7 @@ static void hp_rm_snapshot_delete(uint32_t slot)      /* RANDOM SETUP, A4 hold: 
  * entire morph without partially moving any control.
  * Morph starts from the ACTUAL live values, including manual/frozen edits.
  */
-static int hp_rm_snapshot_recall(uint32_t t,uint32_t slot,uint32_t now)
+static int hp_rm_snapshot_recall_one(uint32_t t,uint32_t slot,uint32_t now)   /* on engine t */
 {
  if(t>=NTRK||slot>=HP_RM_SNAP_SLOTS||!hp_rm_snap[t][slot].count)return 0;
  const hp_rm_snap_t*snap=&hp_rm_snap[t][slot];
@@ -350,6 +368,7 @@ static int hp_rm_snapshot_recall(uint32_t t,uint32_t slot,uint32_t now)
  }
  hp_rm.count=snap->count;
  hp_rm.used=snap->count;hp_rm.context=255u;
+ hp_rm_claim();
  hp_rm.phase=0;
  hp_rm.stamp=now;
  hp_rm.state=HP_RM_RECALL;
@@ -357,22 +376,30 @@ static int hp_rm_snapshot_recall(uint32_t t,uint32_t slot,uint32_t now)
  ui_message(message);ui.force=1;
  return 1;
 }
+static int hp_rm_snapshot_recall(uint32_t t,uint32_t slot,uint32_t now)   /* track t's engine plays track t's slot */
+{
+ if(t>=NTRK)return 0;
+ uint8_t o=hp_eng_ovr;hp_eng_ovr=(uint8_t)t;
+ int ok=hp_rm_snapshot_recall_one(t,slot,now);
+ hp_eng_ovr=o;
+ return ok;
+}
 #endif
 
-static void hp_rm_freeze(void)
+static void hp_rm_freeze_one(void)
 {
  if(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL){
   hp_rm.frozen_from=hp_rm.state;hp_rm.state=HP_RM_FROZEN;ui_message("RANDOM MORPH FROZEN");ui.force=1;
  }
 }
-static void hp_rm_resume(uint32_t now)
+static void hp_rm_resume_one(uint32_t now)
 {
  if(hp_rm.state!=HP_RM_FROZEN)return;
  hp_rm.state=hp_rm.frozen_from==HP_RM_RETURN?HP_RM_RETURN:
   hp_rm.frozen_from==HP_RM_RECALL?HP_RM_RECALL:HP_RM_RANDOM;
  hp_rm.stamp=now;ui_message("RANDOM MORPH RESUMED");ui.force=1;
 }
-static void hp_rm_start(uint32_t now)
+static int hp_rm_start_one(uint32_t now)
 {
  if(hp_rm.state==HP_RM_RECALL ||
     (hp_rm.state==HP_RM_FROZEN&&hp_rm.frozen_from==HP_RM_RECALL))
@@ -380,9 +407,9 @@ static void hp_rm_start(uint32_t now)
  hp_rm_select_context(hp_rm_current_context());
  if(hp_rm.state==HP_RM_IDLE){
   hp_rm_drop_context();
-  if(!hp_rm_capture(1))return;
+  if(!hp_rm_capture(1))return 0;
  }
- if(!hp_rm_valid()){hp_rm_drop_context();ui_message("RANDOM: TARGET CHANGED");return;}
+ if(!hp_rm_valid()){hp_rm_drop_context();ui_message("RANDOM: TARGET CHANGED");return 0;}
  for(uint32_t i=0;i<hp_rm.count;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
   const param_desc_t*d=hp_desc(c->ref);
@@ -408,10 +435,12 @@ static void hp_rm_start(uint32_t now)
   int32_t jitter=radius?(int32_t)(hp_rm_rand()%(2u*(uint32_t)radius+1u))-radius:0;
   c->to=(int16_t)clamp(cur+jitter,lower,upper);
  }
+ hp_rm_claim();
  hp_rm.phase=0;hp_rm.stamp=now;hp_rm.state=HP_RM_RANDOM;
  ui_message("RANDOM MORPH START");ui.force=1;
+ return 1;
 }
-static void hp_rm_return(uint32_t now)
+static void hp_rm_return_one(uint32_t now)
 {
  uint8_t context=hp_rm_current_context();
  if(!hp_rm_context_has(context)){
@@ -429,20 +458,50 @@ static void hp_rm_return(uint32_t now)
  hp_rm.phase=0;hp_rm.stamp=now;hp_rm.state=HP_RM_RETURN;
  ui_message("RANDOM MORPH RETURN");ui.force=1;
 }
-static void hp_rm_press(uint32_t oct,uint32_t now)
+static void hp_rm_press_one(uint32_t oct,uint32_t now)
 {
- if(oct&2u){hp_rm_start(now);return;}
  if(oct&1u){
-  if(hp_rm.context!=hp_rm_current_context()){hp_rm_return(now);return;}
-  if(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN)hp_rm_freeze();
-  else if(hp_rm.state==HP_RM_FROZEN||hp_rm.state==HP_RM_DONE)hp_rm_return(now);
+  if(hp_rm.context!=hp_rm_current_context()){hp_rm_return_one(now);return;}
+  if(hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN)hp_rm_freeze_one();
+  else if(hp_rm.state==HP_RM_FROZEN||hp_rm.state==HP_RM_DONE)hp_rm_return_one(now);
   else ui_message("OCT+: RANDOM FIRST");
  }
 }
-static void hp_rm_poll(uint32_t now)
+/* The keys: with SCOPE ALL they act on every track's engine, otherwise on the selected track's. */
+static void hp_rm_freeze(void)
+{
+ if(!hp_rm_fan()){hp_rm_freeze_one();return;}
+ hp_rm_all=1;for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_freeze_one();}hp_eng_ovr=255u;hp_rm_all=0;
+}
+static void hp_rm_resume(uint32_t now)
+{
+ if(!hp_rm_fan()){hp_rm_resume_one(now);return;}
+ hp_rm_all=1;for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_resume_one(now);}hp_eng_ovr=255u;hp_rm_all=0;
+}
+static void hp_rm_start(uint32_t now)
+{
+ if(!hp_rm_fan()){hp_rm_start_one(now);return;}
+ uint32_t n=0;hp_rm_all=1;
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;n+=(uint32_t)hp_rm_start_one(now);}
+ hp_eng_ovr=255u;hp_rm_all=0;
+ if(n){char m[32];perf_format(m,sizeof m,"RANDOM START: %u TRACKS",n);ui_message(m);}else ui_message("RANDOM: NO SAFE CONTROLS");
+ ui.force=1;
+}
+static void hp_rm_return(uint32_t now)
+{
+ if(!hp_rm_fan()){hp_rm_return_one(now);return;}
+ hp_rm_all=1;for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_return_one(now);}hp_eng_ovr=255u;hp_rm_all=0;
+}
+static void hp_rm_press(uint32_t oct,uint32_t now)
+{
+ if(oct&2u){hp_rm_start(now);return;}
+ if(!hp_rm_fan()){hp_rm_press_one(oct,now);return;}
+ hp_rm_all=1;for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_press_one(oct,now);}hp_eng_ovr=255u;hp_rm_all=0;
+}
+static void hp_rm_poll_one(uint32_t now)
 {
  if(hp_rm.state!=HP_RM_RANDOM&&hp_rm.state!=HP_RM_RETURN&&hp_rm.state!=HP_RM_RECALL)return;
- if(!hp_rm_valid()){hp_rm_freeze();ui_message("RANDOM: PARAM UNAVAILABLE");return;}
+ if(!hp_rm_valid()){hp_rm_freeze_one();ui_message("RANDOM: PARAM UNAVAILABLE");return;}
  uint32_t delta=now-hp_rm.stamp;hp_rm.stamp=now;
  if(delta>1000u)delta=1000u; /* sleeping/USB stalls never leap many bars */
  uint32_t bpm=(uint32_t)clamp(song.g[G_BPM],20,300);
@@ -470,6 +529,12 @@ static void hp_rm_poll(uint32_t now)
  }
  ui.force=1;
 }
+static void hp_rm_poll(uint32_t now)               /* every track's engine, each with its own phase */
+{
+ uint8_t o=hp_eng_ovr;
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_poll_one(now);}
+ hp_eng_ovr=o;
+}
 #if HP_JVN
 /* MORPH JOURNEY (pilot, opt-in, volatile): chains the snapshot recalls S1..S4 into one long movement. Nothing here is
  * stored in a project; it only calls hp_rm_snapshot_recall, so every leg starts from the ACTUAL live values and a
@@ -488,13 +553,15 @@ static const uint8_t hp_j_waits[]={0,1,2,4,8,16};
 static volatile uint16_t hp_j_pend;      /* ISR -> UI: bit i = target i has news */
 static volatile uint8_t hp_j_val[HP_JVN];
 static uint8_t hp_j_hi[HP_JVN];          /* ISR side only: the button's level, for the rising edge */
-static struct {
+typedef struct {
  uint8_t on,paused,rev,wait,phase,cur,tgt;      /* phase 0: a leg is moving, 1: resting at cur */
  uint8_t held;                                  /* 1: another morph runs, the journey goes on by itself when it is done; 2: paused by hand while held */
  uint8_t trk;                                   /* the track whose set of slots the journey plays (the selected one at PLAY) */
  uint8_t set[4];                                /* BARS DEPTH SCOPE SHAPE: band+1 waiting for the morph to end, 0 none */
  uint32_t t0,left;
-} hp_j;
+} hp_jn_t;
+static hp_jn_t hp_jn[NTRK];                       /* one journey per track, on that track's engine and set of slots */
+#define hp_j (hp_jn[hp_et()])
 static void hp_journey_cc(uint32_t id,uint32_t value)
 {
  uint32_t i=id-HP_VFIRST-8u;
@@ -535,7 +602,7 @@ static void hp_j_apply_settings(void)              /* latched at the start of a 
 }
 static void hp_j_stop(const char*msg){hp_j.on=0;hp_j.paused=0;hp_j.held=0;hp_j.phase=0;ui_message(msg);ui.force=1;}
 static void hp_j_captured(void){hp_j.on=0;hp_j.paused=0;hp_j.held=0;hp_j.phase=0;}
-static void hp_j_captured_for(uint32_t t){if(hp_j.on&&hp_j.trk==t)hp_j_captured();}
+static void hp_j_captured_for(uint32_t t){if(t<NTRK&&hp_jn[t].on){hp_jn[t].on=0;hp_jn[t].paused=0;hp_jn[t].held=0;hp_jn[t].phase=0;}}
 static void hp_j_say(const char*what,uint32_t a,uint32_t b)
 {
  char m[32];perf_format(m,sizeof m,what,a,b);ui_message(m);ui.force=1;
@@ -560,7 +627,7 @@ static void hp_j_advance(uint32_t now)
 static void hp_j_start(uint32_t now)
 {
  const char*why=0;
- hp_j.trk=(uint8_t)(song.sel&3u);                 /* the selected track's set of slots */
+ hp_j.trk=(uint8_t)hp_et();                       /* the selected track's set of slots */
  if(!hp_j_ready(&why)){ui_message(why);ui.force=1;return;}
  uint32_t first=action_snap_slot%HP_RM_SNAP_SLOTS;
  if(!hp_rm_snap[hp_j.trk][first].count){int n=hp_j_next(first,hp_j.rev);if(n<0)return;first=(uint32_t)n;}
@@ -586,14 +653,14 @@ static void hp_j_button(uint32_t i,uint32_t now)
   if(!hp_j.paused){
    hp_j.paused=1;
    if(hp_j.held)hp_j.held=2u;                           /* held by another morph: A1 turns the automatic go-on off */
-   else if(hp_j.phase==0)hp_rm_freeze();
+   else if(hp_j.phase==0)hp_rm_freeze_one();
    else{uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
   }else{
    hp_j.paused=0;
    if(hp_j.held==2u){                                   /* paused while held: the leg starts again from the live values */
     if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
     else{hp_j.held=0;hp_j.t0=now;}
-   }else if(hp_j.phase==0)hp_rm_resume(now);else hp_j.t0=now;
+   }else if(hp_j.phase==0)hp_rm_resume_one(now);else hp_j.t0=now;
   }
   if(hp_j.on)ui_message(hp_j.paused?"JOURNEY PAUSED":"JOURNEY PLAY");
   ui.force=1;
@@ -612,9 +679,9 @@ static void hp_j_hold(uint32_t now)               /* another morph took the engi
  if(hp_j.phase==1u){uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
  hp_j.held=1u;ui.force=1;
 }
+static void hp_journey_poll_one(uint32_t now);
 static void hp_journey_poll(uint32_t now)
 {
- if(!hp_j.on)hp_j.trk=(uint8_t)(song.sel&3u);          /* idle: the selected track's set is the one NEXT / PLAY refer to */
  uint16_t pend;uint8_t val[HP_JVN];
  {uint32_t irq=perf_irq_save();pend=hp_j_pend;hp_j_pend=0;
   for(uint32_t i=0;i<HP_JVN;i++)val[i]=hp_j_val[i];
@@ -629,6 +696,12 @@ static void hp_journey_poll(uint32_t now)
    }
   }
  }
+ uint8_t o=hp_eng_ovr;
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_j.trk=(uint8_t)t;hp_journey_poll_one(now);}   /* each track's journey on its own engine */
+ hp_eng_ovr=o;
+}
+static void hp_journey_poll_one(uint32_t now)
+{
  hp_j_apply_settings();
  if(!hp_j.on)return;
  if(hp_j.held==1u){                                  /* held: wait until the other morph has ended (arrived, or reset) */

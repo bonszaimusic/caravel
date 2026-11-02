@@ -16,17 +16,17 @@ int main(void){
  /* HOME of track 1 pins T1's REV and PAN, HOME of track 2 pins T2's REV and PAN */
  for(uint32_t t=0;t<2;t++){CHECK(web_home_assign(t,0,0,HP_TRACK,t,P_REV));CHECK(web_home_assign(t,0,1,HP_TRACK,t,P_PAN));}
  song.sel=0;go_home();action_enabled=1;action_bank=0;action_refresh();
- hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=1;hp_rm.depth=100;hp_rm.shape=HP_RM_LINEAR;
+ for(uint32_t t=0;t<NTRK;t++){hp_eng[t].scope=HP_RM_TRACK;hp_eng[t].bars=1;hp_eng[t].depth=100;hp_eng[t].shape=HP_RM_LINEAR;}   /* every track has its own engine and settings */
 
- /* 1. without a journey RANDOM stays per track: T2's morph moves T2 only, T1 stays where it was */
+ /* 1. one engine per track: T2's morph runs next to T1's, and neither moves the other's controls */
  set_all(10,-40,20,-20);
  tap(1);run_ms(600);
  CHECK(trk[0].p[P_REV]!=10&&hp_rm.state==HP_RM_RANDOM&&hp_rm.origin_track==0u);
- sel(1);tap(1);run_ms(100);                                                  /* T1's morph runs until T2's starts */
+ sel(1);tap(1);run_ms(100);                                                  /* T1's morph keeps running while T2's starts */
  {int32_t r1=trk[0].p[P_REV];run_ms(500);
-  CHECK(hp_rm.state==HP_RM_RANDOM&&hp_rm.origin_track==1u&&trk[1].p[P_REV]!=20&&trk[0].p[P_REV]==r1);
-  run_ms(2500);CHECK(trk[0].p[P_REV]==r1);}
- hp_rm_reset();sel(0);
+  CHECK(hp_eng[0].state==HP_RM_RANDOM&&hp_rm.state==HP_RM_RANDOM&&hp_rm.origin_track==1u&&trk[1].p[P_REV]!=20&&trk[0].p[P_REV]!=r1);
+  run_ms(2500);CHECK(hp_eng[0].state==HP_RM_DONE&&hp_eng[1].state==HP_RM_DONE);}
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_reset();}hp_eng_ovr=255u;sel(0);
 
  /* 2. a journey on T1; RANDOM on T2 holds it, T1 stands still, and it goes on by itself afterwards */
  set_all(10,-40,20,-20);action_snap_slot=0;hp_rm.bars=2;
@@ -34,9 +34,14 @@ int main(void){
  set_all(50,0,20,-20);hp_j.wait=1;                                             /* WAIT 1 bar, so an arrival shows as a rest */
  bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(1000);
  CHECK(hp_j.on&&hp_j.phase==0u&&hp_j.held==0u&&hp_rm.state==HP_RM_RECALL);
- sel(1);bank(0u);tap(1);run_ms(300);                                          /* T2 RANDOM */
- CHECK(hp_j.on&&hp_j.held==1u&&hp_rm.state==HP_RM_RANDOM&&hp_rm.origin_track==1u);
- {int32_t r=trk[0].p[P_REV],p=trk[0].p[P_PAN];run_ms(600);CHECK(trk[0].p[P_REV]==r&&trk[0].p[P_PAN]==p);}   /* T1 stands still while held */
+ /* RANDOM on T2 does not hold T1's journey: both move at once */
+ sel(1);bank(0u);tap(1);run_ms(300);
+ CHECK(hp_jn[0].on&&hp_jn[0].held==0u&&hp_eng[0].state==HP_RM_RECALL&&hp_eng[1].state==HP_RM_RANDOM);
+ {int32_t r=trk[0].p[P_REV];run_ms(300);CHECK(trk[0].p[P_REV]!=r);}   /* T1's leg is still moving */
+ hp_eng_ovr=1u;hp_rm_reset();hp_eng_ovr=255u;sel(0);bank(ACT_BANK_JOURNEY);bank(0u);
+ /* RANDOM on T1 itself holds its journey */
+ tap(1);run_ms(300);
+ CHECK(hp_j.on&&hp_j.held==1u&&hp_rm.state==HP_RM_RANDOM&&hp_rm.origin_track==0u);
  {uint32_t g=0;while(hp_j.held&&g++<3000u)run_ms(10);}
  run_ms(100);CHECK(hp_j.on&&hp_j.held==0u&&hp_rm.state==HP_RM_RECALL&&hp_j.tgt==0u);              /* it went on by itself, same target */
  {uint32_t g=0;while(hp_j.phase==0u&&g++<6000u)run_ms(10);}
@@ -46,7 +51,7 @@ int main(void){
  /* 3. A1 while held switches the automatic go-on off; A1 again starts the leg from the live values */
  hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();sel(0);set_all(50,0,20,-20);
  bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(300);CHECK(hp_j.on);
- sel(1);bank(0u);tap(1);run_ms(200);CHECK(hp_j.held==1u);
+ sel(0);bank(0u);tap(1);run_ms(200);CHECK(hp_j.held==1u);
  bank(ACT_BANK_JOURNEY);tap(1);run_ms(50);CHECK(hp_j.paused&&hp_j.held==2u);
  {uint32_t g=0;while(hp_rm.state==HP_RM_RANDOM&&g++<3000u)run_ms(10);}
  run_ms(300);CHECK(hp_j.on&&hp_j.paused&&hp_j.held==2u&&hp_rm.state!=HP_RM_RECALL);               /* the T2 morph is done, the journey stays paused */
@@ -56,7 +61,7 @@ int main(void){
  /* 4. held while resting: the rest goes on afterwards and the journey moves on */
  sel(0);set_all(50,0,20,-20);hp_j.wait=2;hp_j.rev=0;bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);
  {uint32_t g=0;while(hp_j.phase==0u&&g++<6000u)run_ms(10);}CHECK(hp_j.phase==1u);
- {uint32_t left=hp_j.left;sel(1);bank(0u);tap(1);run_ms(200);CHECK(hp_j.held==1u&&hp_j.phase==1u&&hp_j.left<=left);}
+ {uint32_t left=hp_j.left;sel(0);bank(0u);tap(1);run_ms(200);CHECK(hp_j.held==1u&&hp_j.phase==1u&&hp_j.left<=left);}
  {uint32_t g=0;while(hp_j.held&&g++<3000u)run_ms(10);}
  run_ms(50);CHECK(hp_j.on&&hp_j.held==0u&&hp_j.phase==1u);
  {uint32_t g=0;while(hp_j.phase==1u&&g++<6000u)run_ms(10);}CHECK(hp_j.phase==0u&&hp_j.tgt==1u&&hp_rm.state==HP_RM_RECALL);
@@ -87,8 +92,8 @@ int main(void){
  {uint32_t g=0;while(hp_j.phase==0u&&g++<6000u)run_ms(10);}
  CHECK(hp_j.phase==1u&&absd(trk[1].p[P_REV]-70)<=1&&absd(trk[1].p[P_PAN]-30)<=1&&trk[0].p[P_REV]==55&&trk[0].p[P_PAN]==5);   /* T2's S1 arrived, T1 stands */
  /* saving on T1 does not end T2's journey; saving on T2 does */
- sel(0);bank(0u);action_snap_slot=2;CHECK(hp_rm_snapshot_store(2));CHECK(hp_j.on);
- sel(1);action_snap_slot=2;CHECK(hp_rm_snapshot_store(2));CHECK(!hp_j.on);
+ sel(0);bank(0u);action_snap_slot=2;CHECK(hp_rm_snapshot_store(2));CHECK(hp_jn[1].on);
+ sel(1);action_snap_slot=2;CHECK(hp_rm_snapshot_store(2));CHECK(!hp_jn[1].on);
  hp_j.paused=hp_j.held=0;hp_rm_reset();hp_j.wait=0;
 
  /* 7. delete a slot: RANDOM SETUP, A4 hold; outside SETUP the same hold still saves */
@@ -104,7 +109,7 @@ int main(void){
  sel(1);set_all(10,-40,20,-20);action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));set_all(10,-40,80,40);action_snap_slot=1;CHECK(hp_rm_snapshot_store(1));
  sel(0);set_all(50,0,50,0);hp_j.wait=0;bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(300);CHECK(hp_j.on&&hp_j.trk==0u);
  sel(1);bank(0u);hold(0,700);action_snap_slot=1;hold(4,700);
- CHECK(hp_rm_snapshot_count(1,1)==0u&&hp_rm_snapshot_count(0,1)>0u);   /* T1's slot stays (one engine for now: a leg in flight is reset) */
+ CHECK(hp_rm_snapshot_count(1,1)==0u&&hp_rm_snapshot_count(0,1)>0u&&hp_jn[0].on);   /* T1's slot and journey stay */
  hold(0,700);CHECK(action_setup==0u);
  hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();hp_j.wait=0;sel(0);bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(300);CHECK(hp_j.on&&hp_j.trk==0u);
  sel(0);bank(0u);hold(0,700);action_snap_slot=1;hold(4,700);CHECK(!hp_j.on&&hp_rm_snapshot_count(0,1)==0u);

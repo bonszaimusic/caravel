@@ -57,7 +57,7 @@ static int hp_unzip(uint8_t*out,uint32_t size,const uint8_t*in,uint32_t n)
 #define HP_PS_PRESENT 0x80u
 typedef struct {                                   /* the version 2 slot: 648 bytes, four of them in the capsule */
  uint16_t count;uint8_t scope,origin_track,origin_row,pad;
- uint8_t refs[HP_RM_MAX][3];int16_t values[HP_RM_MAX];
+ uint8_t refs[HP_RM_V2_MAX][3];int16_t values[HP_RM_V2_MAX];
 } hp_rm_snap_v2_t;
 #define HP_RAW_META_V2 (HP_HW_META+4u*sizeof(hp_rm_snap_v2_t))   /* a version 2 capsule's decompressed size */
 _Static_assert(HP_RAW_META_V2<=HP_RAW_META,"a version 2 block fits the buffer of a version 3 one");
@@ -69,9 +69,11 @@ static int hp_ps_bits_ok(uint32_t a,uint32_t b)
 }
 static int hp_ps_valid(hp_snaps_t s)
 {
- for(uint32_t t=0;t<NTRK;t++)for(uint32_t k=0;k<HP_RM_SNAP_SLOTS;k++)
-  if((t||k)&&(s[t][k].pad[0]||s[t][k].pad[1]))return 0;                  /* only the first slot of track 1 carries the settings */
- return hp_ps_bits_ok(s[0][0].pad[0],s[0][0].pad[1]);
+ for(uint32_t t=0;t<NTRK;t++){
+  for(uint32_t k=1;k<HP_RM_SNAP_SLOTS;k++)if(s[t][k].pad[0]||s[t][k].pad[1])return 0;      /* only the first slot of each track carries its settings */
+  if(!hp_ps_bits_ok(s[t][0].pad[0],s[t][0].pad[1]))return 0;
+ }
+ return 1;
 }
 #define HP_PS_DEFAULT_WORD (HP_PS_PRESENT|3u|(2u<<3)|((1u|(1u<<2))<<8))   /* BARS 8, DEPTH 35, TRACK, SMOOTH; WAIT 0, forward */
 static uint32_t hp_ps_idx(const uint8_t*tab,uint32_t n,uint32_t v,uint32_t fallback){for(uint32_t i=0;i<n;i++)if(tab[i]==v)return i;return fallback;}
@@ -79,6 +81,7 @@ static uint32_t hp_ps_word(void)                      /* byte 0 and 1: the setti
 {
  uint16_t pend;uint8_t val[HP_JVN];
  {uint32_t irq=perf_irq_save();pend=hp_j_pend;for(uint32_t i=0;i<HP_JVN;i++)val[i]=hp_j_val[i];perf_irq_restore(irq);}
+ if(hp_et()!=(song.sel&3u))pend=0;                 /* the MIDI mailbox belongs to the selected track */
  uint32_t bars=hp_j.set[0]?hp_j.set[0]-1u:hp_ps_idx(hp_rm_times,7u,hp_rm.bars,3u);
  uint32_t depth=hp_j.set[1]?hp_j.set[1]-1u:hp_ps_idx(hp_rm_depths,6u,hp_rm.depth,2u);
  uint32_t scope=hp_j.set[2]?hp_j.set[2]-1u:hp_rm.scope;
@@ -96,15 +99,22 @@ static uint32_t hp_ps_word(void)                      /* byte 0 and 1: the setti
  uint32_t b=(scope&3u)|(shape&3u)<<2|rev<<4|wait<<5;
  return a|b<<8;
 }
-static void hp_ps_pack(hp_rm_snap_t(*s)[HP_RM_SNAP_SLOTS]){uint32_t w=hp_ps_word();s[0][0].pad[0]=(uint8_t)w;s[0][0].pad[1]=(uint8_t)(w>>8);}
+static void hp_ps_pack(hp_rm_snap_t(*s)[HP_RM_SNAP_SLOTS])   /* each track's settings word */
+{
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;uint32_t w=hp_ps_word();hp_eng_ovr=255u;s[t][0].pad[0]=(uint8_t)w;s[t][0].pad[1]=(uint8_t)(w>>8);}
+}
 static void hp_ps_apply(hp_rm_snap_t(*s)[HP_RM_SNAP_SLOTS])   /* s: the loaded sets (the pads are cleared again), 0 = a project without any */
 {
- uint32_t a=s?s[0][0].pad[0]:0,b=s?s[0][0].pad[1]:0;
- if(!a){a=HP_PS_DEFAULT_WORD&255u;b=HP_PS_DEFAULT_WORD>>8;}
- hp_rm.bars=hp_rm_times[a&7u];hp_rm.depth=hp_rm_depths[(a>>3)&7u];hp_rm.scope=(uint8_t)(b&3u);hp_rm.shape=(uint8_t)((b>>2)&3u);
- hp_j.rev=(uint8_t)((b>>4)&1u);hp_j.wait=(uint8_t)((b>>5)&7u);
- hp_j.on=hp_j.paused=hp_j.held=0;hp_j.phase=0;hp_j.cur=hp_j.tgt=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;hp_j_arrived=0;
- if(s){s[0][0].pad[0]=s[0][0].pad[1]=0;}
+ for(uint32_t t=0;t<NTRK;t++){
+  uint32_t a=s?s[t][0].pad[0]:0,b=s?s[t][0].pad[1]:0;
+  if(!a){a=HP_PS_DEFAULT_WORD&255u;b=HP_PS_DEFAULT_WORD>>8;}
+  hp_eng_ovr=(uint8_t)t;
+  hp_rm.bars=hp_rm_times[a&7u];hp_rm.depth=hp_rm_depths[(a>>3)&7u];hp_rm.scope=(uint8_t)(b&3u);hp_rm.shape=(uint8_t)((b>>2)&3u);
+  hp_j.rev=(uint8_t)((b>>4)&1u);hp_j.wait=(uint8_t)((b>>5)&7u);
+  hp_j.on=hp_j.paused=hp_j.held=0;hp_j.phase=0;hp_j.cur=hp_j.tgt=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;hp_j_arrived=0;
+  hp_eng_ovr=255u;
+  if(s){s[t][0].pad[0]=s[t][0].pad[1]=0;}
+ }
 }
 static hp_ref_t hp_rm_snapshot_ref_raw(const uint8_t*b)
 {
@@ -145,7 +155,7 @@ static int hp_snapshots_valid_v2(const hp_rm_snap_v2_t*s)
  if(s[3].pad||(s[2].pad&0xF0u)||!hp_ps_bits_ok(s[0].pad,s[1].pad)||(!s[0].pad&&s[2].pad))return 0;
  for(uint32_t k=0;k<4u;k++){
   const hp_rm_snap_v2_t*q=&s[k];
-  if(q->count>HP_RM_MAX||q->scope>HP_RM_ALL||q->origin_track>=NTRK||q->origin_row>=HP_ROWS||!hp_snap_refs_ok(q->refs,q->values,q->count,255u))return 0;
+  if(q->count>HP_RM_V2_MAX||q->scope>HP_RM_ALL||q->origin_track>=NTRK||q->origin_row>=HP_ROWS||!hp_snap_refs_ok(q->refs,q->values,q->count,255u))return 0;
  }
  return 1;
 }
@@ -161,7 +171,7 @@ static uint32_t hp_snapshots_migrate(const hp_rm_snap_v2_t*old)
   memcpy(q->refs[q->count],old[k].refs[i],3);q->values[q->count]=old[k].values[i];q->count++;
   q->scope=old[k].scope==HP_RM_ROW?HP_RM_ROW:HP_RM_TRACK;
  }
- hp_rm_snap[0][0].pad[0]=old[0].pad;hp_rm_snap[0][0].pad[1]=old[1].pad;    /* the settings, for hp_ps_apply */
+ for(uint32_t t=0;t<NTRK;t++){hp_rm_snap[t][0].pad[0]=old[0].pad;hp_rm_snap[t][0].pad[1]=old[1].pad;}    /* the settings of 0.7.1-0.8.0 were global: every track starts with them */
  return dropped;
 }
 static int hp_meta_valid(const uint8_t*b,uint32_t version)

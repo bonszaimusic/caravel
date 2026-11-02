@@ -356,6 +356,11 @@ static void action_random(uint32_t action)
    if(hp_j_leg(action_snap_slot,fm1_ms)){char m[32];perf_format(m,sizeof m,"JOURNEY >S%u",action_snap_slot+1u);ui_message(m);}
   }else
 #endif
+  if(hp_rm.scope==HP_RM_ALL&&hp_rm_snapshot_any(action_snap_slot)){   /* SCOPE ALL: every track morphs to its own slot */
+   uint32_t n=0;
+   for(uint32_t t=0;t<NTRK;t++)if(hp_rm_snapshot_count(t,action_snap_slot))n+=(uint32_t)hp_rm_snapshot_recall(t,action_snap_slot,fm1_ms);
+   if(n){char m[32];perf_format(m,sizeof m,"MORPH TO S%u: %u TRACKS",action_snap_slot+1u,n);ui_message(m);}
+  }else
   if(hp_rm_snapshot_count(song.sel,action_snap_slot))
    hp_rm_snapshot_recall(song.sel,action_snap_slot,fm1_ms);
   else if(hp_rm.used)

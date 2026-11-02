@@ -53,8 +53,8 @@ int main(void){
  {uint32_t guard=0;while(hp_j.phase==0&&guard++<4000u)run_ms(10);}
  ready("journey-resting");
  tap(3);run_ms(300);ready("journey-next");
- /* a RANDOM morph on track 2 while the journey of track 1 runs */
- song.sel=1;go_home();action_refresh();tap(0);CHECK(action_bank==0u);tap(1);run_ms(400);CHECK(hp_j.held==1u);ready("journey-held");
+ /* a RANDOM morph on the same track while its journey runs */
+ tap(0);CHECK(action_bank==0u);tap(1);run_ms(400);CHECK(hp_j.held==1u);ready("journey-held");
  printf("MORPH TUTORIAL FRAMES: %u checks.\n",checks);
  return 0;
 }

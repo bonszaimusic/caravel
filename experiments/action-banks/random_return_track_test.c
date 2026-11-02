@@ -12,7 +12,7 @@ int main(void){
   trk[t].p[P_FILT]=(int16_t)(10+10*t);
  }
  song.sel=0;go_home();action_enabled=1;action_bank=0;action_refresh();
- hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=1;hp_rm.depth=100;
+ for(uint32_t t=0;t<NTRK;t++){hp_eng[t].scope=HP_RM_TRACK;hp_eng[t].bars=1;hp_eng[t].depth=100;}   /* every track has its own engine and settings */
  random_press();finish();trk[0].p[P_FILT]=44;
  track_select(1);random_press();finish();trk[1].p[P_FILT]=-33;
  track_select(0);return_press();CHECK(hp_rm.state==HP_RM_RETURN);
@@ -22,8 +22,8 @@ int main(void){
  CHECK(trk[1].p[P_FILT]==20);CHECK(trk[0].p[P_FILT]==10);
  /* No origin here must not redirect or stop another track's morph. */
  track_select(0);random_press();uint32_t phase=hp_rm.phase;
- track_select(3);return_press();CHECK(hp_rm.origin_track==0u);
- CHECK(hp_rm.state==HP_RM_RANDOM && hp_rm.phase>=phase);
+ track_select(3);return_press();CHECK(hp_eng[0].origin_track==0u);
+ CHECK(hp_eng[0].state==HP_RM_RANDOM && hp_eng[0].phase>=phase);
  track_select(0);hp_rm_freeze();hp_ref_t manual=hp_rm.cell[0].ref;
  track_select(1);random_press();finish();
  hp_rm_disengage(manual);trk[0].p[P_FILT]=55;
@@ -37,7 +37,7 @@ int main(void){
  hp.track[0].active=0;return_press();finish();
  CHECK(trk[0].p[P_FILT]==12 && trk[0].p[P_REV]==79);
  hp.track[0].active=1;return_press();finish();CHECK(trk[0].p[P_REV]==42);
- /* Capacity exhaustion never evicts a different track's origin. */
+ /* A track whose HOME pins more targets than one engine holds cannot start a morph: nothing moves. */
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;
  uint32_t counts[NTRK]={0};
  for(uint32_t t=0;t<NTRK;t++){
@@ -49,21 +49,17 @@ int main(void){
    CHECK(web_home_assign(t,n/4u,n%4u,HP_TRACK,t,id));
   }
  }
- CHECK(counts[0]*NTRK>HP_RM_MAX);
- uint32_t captured=0;
+ CHECK(counts[0]>HP_RM_MAX);
+ hp_rm_reset_all();
+ {
  for(uint32_t t=0;t<NTRK;t++){
   track_select(t);uint16_t used=hp_rm.used;
   int16_t before[P_COUNT];memcpy(before,trk[t].p,sizeof before);
   action_random(0);
-  if(!hp_rm.count){
-   CHECK(hp_rm.used==used);CHECK(!memcmp(before,trk[t].p,sizeof before));
-   CHECK(strstr(ui.msg,"MEMORY FULL"));break;
-  }
-  captured++;finish();
+  CHECK(!hp_rm.count&&hp_rm.used==used&&!memcmp(before,trk[t].p,sizeof before));
+  CHECK(strstr(ui.msg,"TOO MANY"));
  }
- CHECK(captured>0 && captured<NTRK);
- track_select(0);return_press();CHECK(hp_rm.state==HP_RM_RETURN);finish();
- CHECK(hp_rm.used<HP_RM_MAX);
+ }
  printf("RETURN TRACK PASS: %u checks; independent origins across track changes and physical A3. cell=%u state=%u bytes.\n",checks,(unsigned)sizeof(hp_rm_cell_t),(unsigned)sizeof hp_rm);
  return 0;
 }

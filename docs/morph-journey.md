@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # MORPH JOURNEY
 
-**Planned for 0.9.0, not released: this page describes the development branch (per-track snapshot sets, the first step of per-track RANDOM and JOURNEY). Released in 0.8.0 with four slots shared by the whole project; tested on the host and in CI, tried on an FM-1 by the maintainer, not verified with a controller or external clock.** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
+**Planned for 0.9.0, not released: this page describes the development branch (per-track snapshot sets and one morph engine per track). Released in 0.8.0 with four slots shared by the whole project; tested on the host and in CI, tried on an FM-1 by the maintainer, not verified with a controller or external clock.** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
 It is played from the panel (the JOURNEY ACTION bank) and, if you like, from MIDI controllers. Playing a journey changes no snapshot and
 no stored sound, and it ends when you stop it. What *is* kept with the project are the snapshots (four per track) and the performance settings (BARS,
 DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, the countdown, the selected slot) is not saved, see
@@ -48,15 +48,22 @@ that saves them. A slot holds at most **32 targets**; if the HOME has more, noth
   one filled slot has no journey (`NEED 2 SNAPS`). Saving or deleting a slot on **that** track ends its journey.
 - **Gaps are skipped.** Empty slots do not take part: with S1, S3 and S4 filled a journey goes S1 → S3 → S4 → S1.
 
-**Until the per-track engine (next step), the engine is still one:** there is one morph and one journey at a time (see below), and BARS, DEPTH, SCOPE,
-SHAPE, WAIT and the direction are still shared by all tracks.
+## One engine and one set of settings per track
+
+Every track has **its own morph engine and its own journey**, and its own **BARS, DEPTH, SCOPE, SHAPE, WAIT and direction** (saved per track with the project). A journey on T1 and a journey or RANDOM morph on T2 run at the same time, each
+with its own phase, length and rests; the keys, the A4 label and the sea chart always show the **selected** track. Each engine holds **up to 32 targets** (the controls of its own HOME page, plus parked RETURN origins): a track whose HOME pins more cannot start a RANDOM morph
+(`RANDOM: TOO MANY TARGETS`, nothing moves).
+
+**A control two tracks move belongs to the track that started last** (a control pinned on two HOME pages, or the Pair morph amount): the morph or journey leg that starts takes it over, the other lets go until it starts again.
+
+**SCOPE ALL** (RANDOM SETUP, K3) makes the RANDOM keys act on every track: A1 starts a morph on each track that has controls (`RANDOM START: 4 TRACKS`), A2 freezes or resumes them all, A3 returns them all or morphs each track to its own slot (`MORPH TO S2: 3 TRACKS`). Each track uses its own BARS, DEPTH and SHAPE. SCOPE ALL for the *journey* (start and stop every track's journey at once) is a later step.
 
 ## How RANDOM and JOURNEY work together
 
 - **One selected slot.** The slot shown in RANDOM (`S2*`) is the one the journey is heading for, so you can switch to
   RANDOM, look at it, and save a new sound into it with A4-hold.
-- **Saving or deleting a snapshot of the journey's track ends a running journey** (its set of slots changed): press PLAY to go on from the selected slot. Saving on another track leaves the journey alone, but it resets the one morph engine, which can stop a leg in flight (`JOURNEY STOPPED`) until the engines are per track.
-- **One morph engine for all tracks, so one movement at a time.** A RANDOM morph started on any track, by hand (RANDOM bank, A1) or its RETURN,
+- **Saving or deleting a snapshot of the journey's track ends a running journey** (its set of slots changed): press PLAY to go on from the selected slot. Saving or deleting on another track leaves it alone.
+- **A RANDOM morph on a track holds that track's journey** (other tracks' journeys are not affected). A RANDOM morph started on the journey's track, by hand (RANDOM bank, A1) or its RETURN,
   **holds** the journey: it stops where it is (`HOLD`), and **when that morph is done it goes on by itself**, with a new leg from the live values
   to the same slot (or, if it was resting, with the rest of the pause). The picture below shows it. **A1 while held is PAUSE**: then it stays
   paused until you press A1 again. **A3 NEXT** or **A3 GO Sx** in RANDOM steer the journey to a slot at once. RANDOM's A2 FREEZE on the journey's own
@@ -71,7 +78,7 @@ SHAPE, WAIT and the direction are still shared by all tracks.
   moves it again.
 - **SETUP belongs to RANDOM.** Entering the JOURNEY bank leaves SETUP; holding BANK there shows `LEG+SHAPE: RANDOM SETUP`, because a journey uses RANDOM's BARS and SHAPE.
 
-![Diagram: a RANDOM morph on T2 holds the journey of T1, which goes on by itself](tutorials/img/journey-hold.png)
+![Diagram: a RANDOM morph on T1 holds only T1's journey, which goes on by itself](tutorials/img/journey-hold.png)
 
 ## Delete a snapshot
 

@@ -84,7 +84,7 @@ static int hp_restore(const hp_store_t*p)
   for(uint32_t t=0;t<NTRK;t++)for(uint32_t k=0;k<NMSLOT;k++)if(pair->mod[t][k])trk[t].p[P_M1DST+3*k]=MD_PAIR;
  }
 #if HP_SNAPSHOT_STORE
- hp_rm_reset();hp_rm_snapshot_clear();action_snap_slot=0;
+ hp_rm_reset_all();hp_rm_snapshot_clear();action_snap_slot=0;
  uint32_t dropped=0;
  if(p->version==3)memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap);
  else if(p->version==2)dropped=hp_snapshots_migrate((const void*)(raw+HP_HW_META));   /* the old four slots, sorted into the tracks' own sets */
@@ -100,7 +100,9 @@ static uint32_t hp_signature(void)
 {
  hp_pair_store_t p;hp_pair_capture(&p);
 #if HP_SNAPSHOT_STORE
- uint32_t ps=hp_ps_word();            /* BARS DEPTH SCOPE SHAPE WAIT DIR: a change is an autosave (RESTORE LAST) */
+ uint32_t ps=0;                      /* each track's BARS DEPTH SCOPE SHAPE WAIT DIR: a change is an autosave (RESTORE LAST) */
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;ps=ps*31u+hp_ps_word();}
+ hp_eng_ovr=255u;
 #endif
  return autosave_sig()
 #if HP_SNAPSHOT_STORE
