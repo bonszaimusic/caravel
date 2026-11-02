@@ -8,7 +8,7 @@ Everything below is verified on the host only (real firmware code in the host ha
 
 Select **ENSEMBLE** in PRESETS or with EDIT held and KNOB 1 (it is the last engine in the list). Engine ID 17 identifies it; no existing engine number
 changed. A project that holds engine 17 is not read by older firmware: **0.9.0 shows that slot as empty** (host test with real flash images: the slot reads as unused, a
-load says nothing, nothing crashes; saving over it there replaces it, and 0.10-or-later firmware reads it again). Versions before 0.9.0 were not tested, assume the same.
+load says nothing, nothing crashes; saving over it there replaces it, and a firmware that has ENSEMBLE reads it again). Versions before 0.9.0 were not tested, assume the same.
 
 ## Sound and controls
 
