@@ -48,7 +48,7 @@ save can never delete by accident. A deleted slot is empty again (and saved so w
 
 ## 4. Start a journey
 
-Tap **BANK** until the chip left of the sea chart reads **JOURNEY** (the fifth bank, after LIVE). The caravel on the chart is the journey: it lies at anchor while the journey is off, waiting or paused, and sails from buoy to buoy while a leg moves. A1 reads `PLAY`, `PAUSE` or `RESUME`.
+Tap **BANK** once: the chip left of the sea chart reads **JOURNEY** (the bank right after RANDOM). The caravel on the chart is the journey: it lies at anchor while the journey is off, waiting or paused, and sails from buoy to buoy while a leg moves. A1 reads `PLAY`, `PAUSE` or `RESUME`.
 
 ![The JOURNEY bank, stopped](img/journey-off.png)
 
@@ -75,9 +75,13 @@ Tap **A2** to reverse. The message says when it happens: **REVERSE AFTER S1** me
 
 ![DIR REV, after the current leg](img/journey-reverse.png)
 
-## 6. A journey for each track
+## 6. A journey for each track, and the JOURNEY SETUP
 
 Select the track (T1 to T4) before you press PLAY: the journey plays **that track's** four slots, and the sea chart shows them. Saving or deleting a slot on that track ends its journey; the slots of the other tracks are not touched. **Every track has its own engine and its own settings** (BARS, DEPTH, SCOPE, SHAPE, WAIT, direction), so you can start a journey on T2 while T1's keeps sailing, each with its own length, curve and rests. The sea chart and the keys always show the selected track.
+
+Hold **BANK** in the JOURNEY bank for its own SETUP: **K1 SCOPE** `THIS` or `ALL` (with ALL, PLAY, PAUSE and NEXT act on every track's journey, each on its own slots), **K2 TRANSP** `FREE`, `CONT` or `START`. FREE keeps time in milliseconds as before. CONT counts the sequencer's own bars: a **Stop freezes the leg and its WAIT**, a tempo change speeds it up, and an external MIDI clock is followed. START is CONT and also **begins the journey again at every Start**.
+
+![JOURNEY SETUP: SCOPE ALL, TRANSP CONT](img/journey-setup.png)
 
 ## 7. A RANDOM morph on the same track while a journey runs
 

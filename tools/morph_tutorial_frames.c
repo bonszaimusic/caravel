@@ -41,8 +41,8 @@ int main(void){
  /* 3 A3 morphs to the selected slot */
  action_snap_slot=1;tap(3);run_ms(450);ready("random-morph");
  run_ms(3000);
- /* 4 the JOURNEY bank: fifth bank after LIVE */
- tap(0);tap(0);tap(0);tap(0);CHECK(action_bank==ACT_BANK_JOURNEY);
+ /* 4 the JOURNEY bank: the bank after RANDOM */
+ tap(0);CHECK(action_bank==ACT_BANK_JOURNEY);
  action_snap_slot=0;ready("journey-off");   /* the live sound is S2 (the last morph); PLAY heads for the selected S1 */
  tap(1);run_ms(700);ready("journey-play");
  tap(1);ready("journey-pause");
@@ -53,8 +53,10 @@ int main(void){
  {uint32_t guard=0;while(hp_j.phase==0&&guard++<4000u)run_ms(10);}
  ready("journey-resting");
  tap(3);run_ms(300);ready("journey-next");
+ /* the JOURNEY SETUP: which tracks the keys act on, and the clock the journey follows */
+ hold(0,700);CHECK(action_setup==1u);action_setup_turn(0,1);action_setup_turn(1,1);ready("journey-setup");action_setup_turn(0,-1);action_setup_turn(1,-1);hold(0,700);CHECK(action_setup==0u);
  /* a RANDOM morph on the same track while its journey runs */
- tap(0);CHECK(action_bank==0u);tap(1);run_ms(400);CHECK(hp_j.held==1u);ready("journey-held");
+ {uint32_t g=0;while(action_bank!=0u&&g++<8u)tap(0);}CHECK(action_bank==0u);tap(1);run_ms(400);CHECK(hp_j.held==1u);ready("journey-held");
  printf("MORPH TUTORIAL FRAMES: %u checks.\n",checks);
  return 0;
 }

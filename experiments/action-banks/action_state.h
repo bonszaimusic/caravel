@@ -10,7 +10,7 @@
 #define ACT_KEY_FIRST 22u
 #define ACT_KEY_MASK (31u << ACT_KEY_FIRST)
 #define ACT_BANKS 5u
-#define ACT_BANK_JOURNEY 4u   /* appended: RANDOM STASIS PAIR LIVE keep their positions */
+#define ACT_BANK_JOURNEY 4u   /* numbered after LIVE so the other banks keep their numbers; BANK steps RANDOM, JOURNEY, STASIS, PAIR, LIVE */
 static volatile uint8_t action_enabled, action_bank, action_setup;
 #if CARAVEL_STASIS_EXPAND
 static uint8_t action_stasis_grain_page; /* 0 existing FX controls, 1 granular controls */

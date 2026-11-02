@@ -38,16 +38,16 @@ int main(void){
  for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;hp_rm_reset();}hp_eng_ovr=255u;
 
  /* 2. the settings are per track and survive a project round trip */
- hp_eng[0].bars=4;hp_eng[0].depth=25;hp_eng[0].shape=HP_RM_DRIFT;hp_jn[0].wait=3;hp_jn[0].rev=1;
- hp_eng[1].bars=16;hp_eng[1].depth=75;hp_eng[1].scope=HP_RM_ALL;hp_eng[1].shape=HP_RM_LINEAR;hp_jn[1].wait=0;hp_jn[1].rev=0;
- hp_eng[2].bars=1;hp_eng[2].depth=10;hp_eng[2].scope=HP_RM_ROW;hp_eng[2].shape=HP_RM_SMOOTH;hp_jn[2].wait=5;hp_jn[2].rev=1;
- hp_eng[3].bars=64;hp_eng[3].depth=100;hp_eng[3].shape=HP_RM_SMOOTH;hp_jn[3].wait=1;hp_jn[3].rev=0;
- {uint8_t bars[NTRK],depth[NTRK],scope[NTRK],shape[NTRK],wait[NTRK],rev[NTRK];
-  for(uint32_t t=0;t<NTRK;t++){bars[t]=hp_eng[t].bars;depth[t]=hp_eng[t].depth;scope[t]=hp_eng[t].scope;shape[t]=hp_eng[t].shape;wait[t]=hp_jn[t].wait;rev[t]=hp_jn[t].rev;}
+ hp_eng[0].bars=4;hp_eng[0].depth=25;hp_eng[0].shape=HP_RM_DRIFT;hp_jn[0].wait=3;hp_jn[0].rev=1;hp_jn[0].scope=1;hp_jn[0].tp=2;
+ hp_eng[1].bars=16;hp_eng[1].depth=75;hp_eng[1].scope=HP_RM_ALL;hp_eng[1].shape=HP_RM_LINEAR;hp_jn[1].wait=0;hp_jn[1].rev=0;hp_jn[1].scope=0;hp_jn[1].tp=1;
+ hp_eng[2].bars=1;hp_eng[2].depth=10;hp_eng[2].scope=HP_RM_ROW;hp_eng[2].shape=HP_RM_SMOOTH;hp_jn[2].wait=5;hp_jn[2].rev=1;hp_jn[2].scope=1;hp_jn[2].tp=0;
+ hp_eng[3].bars=64;hp_eng[3].depth=100;hp_eng[3].shape=HP_RM_SMOOTH;hp_jn[3].wait=1;hp_jn[3].rev=0;hp_jn[3].scope=0;hp_jn[3].tp=2;
+ {uint8_t bars[NTRK],depth[NTRK],scope[NTRK],shape[NTRK],wait[NTRK],rev[NTRK],js[NTRK],tp[NTRK];
+  for(uint32_t t=0;t<NTRK;t++){bars[t]=hp_eng[t].bars;depth[t]=hp_eng[t].depth;scope[t]=hp_eng[t].scope;shape[t]=hp_eng[t].shape;wait[t]=hp_jn[t].wait;rev[t]=hp_jn[t].rev;js[t]=hp_jn[t].scope;tp[t]=hp_jn[t].tp;}
   CHECK(hp_capture(&hp_io));seal(&hp_io);
-  for(uint32_t t=0;t<NTRK;t++){hp_eng[t].bars=8;hp_eng[t].depth=35;hp_eng[t].scope=HP_RM_TRACK;hp_eng[t].shape=HP_RM_SMOOTH;hp_jn[t].wait=0;hp_jn[t].rev=0;}
+  for(uint32_t t=0;t<NTRK;t++){hp_eng[t].bars=8;hp_eng[t].depth=35;hp_eng[t].scope=HP_RM_TRACK;hp_eng[t].shape=HP_RM_SMOOTH;hp_jn[t].wait=0;hp_jn[t].rev=0;hp_jn[t].scope=0;hp_jn[t].tp=0;}
   CHECK(hp_restore(&hp_io));
-  for(uint32_t t=0;t<NTRK;t++)CHECK(hp_eng[t].bars==bars[t]&&hp_eng[t].depth==depth[t]&&hp_eng[t].scope==scope[t]&&hp_eng[t].shape==shape[t]&&hp_jn[t].wait==wait[t]&&hp_jn[t].rev==rev[t]);}
+  for(uint32_t t=0;t<NTRK;t++)CHECK(hp_eng[t].bars==bars[t]&&hp_eng[t].depth==depth[t]&&hp_eng[t].scope==scope[t]&&hp_eng[t].shape==shape[t]&&hp_jn[t].wait==wait[t]&&hp_jn[t].rev==rev[t]&&hp_jn[t].scope==js[t]&&hp_jn[t].tp==tp[t]);}
 
  /* 3. SCOPE ALL fans a RANDOM key out to every track, each with its own BARS */
  for(uint32_t t=0;t<NTRK;t++){hp_eng[t].scope=HP_RM_TRACK;hp_eng[t].bars=1;}
@@ -60,6 +60,28 @@ int main(void){
  CHECK(hp_eng[0].state==HP_RM_DONE&&hp_eng[2].state==HP_RM_RANDOM);                                 /* T3's longer BARS are its own */
  tap(3);run_ms(100);                                                                                  /* A3 with no slot: RETURN on every track */
  for(uint32_t t=0;t<NTRK;t++)CHECK(hp_eng[t].state==HP_RM_RETURN);
+
+ /* 4. JOURNEY scope ALL: PLAY / PAUSE / NEXT act on every track's journey, DIR and WAIT are set on every track */
+ for(uint32_t t=0;t<NTRK;t++){hp_jn[t].on=hp_jn[t].paused=hp_jn[t].held=0;hp_jn[t].phase=0;hp_jn[t].scope=0;hp_jn[t].tp=0;hp_jn[t].rev=0;hp_jn[t].wait=1;hp_eng[t].bars=1;hp_eng[t].scope=HP_RM_TRACK;}
+ hp_rm_reset_all();hp_rm_snapshot_clear();
+ for(uint32_t t=0;t<2u;t++){
+  sel(t);trk[0].p[P_REV]=10;trk[1].p[P_PAN]=-30;trk[1].p[P_REV]=20;
+  action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));
+  trk[0].p[P_REV]=80;trk[1].p[P_PAN]=40;trk[1].p[P_REV]=70;action_snap_slot=1;CHECK(hp_rm_snapshot_store(1));
+  trk[0].p[P_REV]=50;trk[1].p[P_PAN]=0;trk[1].p[P_REV]=50;
+ }
+ sel(0);while(action_bank!=ACT_BANK_JOURNEY)tap(0);
+ hp_j.scope=1;action_snap_slot=0;tap(1);run_ms(200);
+ CHECK(hp_jn[0].on&&hp_jn[1].on&&!hp_jn[2].on&&!hp_jn[3].on&&strstr(ui.msg,"PLAY: 2 TRACKS")!=NULL);
+ tap(1);run_ms(60);CHECK(hp_jn[0].paused&&hp_jn[1].paused&&strstr(ui.msg,"PAUSE: 2 TRACKS")!=NULL);
+ tap(1);run_ms(60);CHECK(!hp_jn[0].paused&&!hp_jn[1].paused);
+ tap(2);run_ms(60);CHECK(hp_jn[0].rev==1u&&hp_jn[1].rev==1u&&hp_jn[2].rev==1u);                        /* DIR on every track */
+ tap(4);run_ms(60);CHECK(hp_jn[0].wait==2u&&hp_jn[1].wait==2u&&hp_jn[3].wait==2u);                       /* WAIT on every track */
+ tap(3);run_ms(60);CHECK(strstr(ui.msg,"NEXT: 2 TRACKS")!=NULL);
+ {uint32_t g=0;while(!(hp_jn[0].phase==1u&&hp_jn[1].phase==1u)&&g++<8000u)run_ms(10);CHECK(hp_jn[0].phase==1u&&hp_jn[1].phase==1u);}
+ /* scope THIS: PLAY touches only the selected track */
+ for(uint32_t t=0;t<NTRK;t++){hp_jn[t].on=hp_jn[t].paused=hp_jn[t].held=0;hp_jn[t].phase=0;}hp_rm_reset_all();
+ hp_j.scope=0;action_snap_slot=0;tap(1);run_ms(100);CHECK(hp_jn[0].on&&!hp_jn[1].on);
  printf("JOURNEY TRACKS PASS: %u checks.\n",checks);
  return 0;
 }

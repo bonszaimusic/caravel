@@ -117,6 +117,7 @@ typedef struct {
  hp_rm_cell_t cell[HP_RM_MAX];
  uint32_t count,phase,stamp,seed;
  uint8_t state,bars,depth,scope,shape,origin_track,origin_row,frozen_from;
+ uint8_t beat; /* a journey leg on the transport's musical time (CONTINUE / START): stamp is then the leg's start in bars (Q16), not milliseconds */
  uint16_t used; /* shared 128-target arena: active prefix plus parked origins */
  uint8_t context;
 } hp_rm_state_t;

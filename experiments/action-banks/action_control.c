@@ -73,10 +73,6 @@ static void action_refresh(void)
   }
   if(!action_bank_long && fm1_ms-action_bank_started>=ACTION_LONG_MS){
    action_bank_long=1;
-#if HP_JVN
-   if(action_bank==ACT_BANK_JOURNEY){ui_message("LEG+SHAPE: RANDOM SETUP");ui.force=1;}   /* the journey has no SETUP of its own yet */
-   else{
-#endif
    action_setup=!action_setup;
 #if CARAVEL_STASIS_EXPAND
    if(action_setup && action_bank==1u)action_stasis_grain_page=1u;
@@ -86,15 +82,16 @@ static void action_refresh(void)
 #if CARAVEL_STASIS_EXPAND
       action_bank==1u?"STASIS GRAIN: K1-K4":
 #endif
-      "ACTION SETUP: K1-K4"):"ACTION PERFORM: K1-K4 HOME");
-#if HP_JVN
-   }
-#endif
+      action_bank==ACT_BANK_JOURNEY?"JOURNEY SETUP: K1-K2":"ACTION SETUP: K1-K4"):"ACTION PERFORM: K1-K4 HOME");
   }
  }else if(action_bank_down){
   action_bank_down=0;
   if(!action_bank_long){
-   action_bank=(uint8_t)((action_bank+1u)%ACT_BANKS);
+   {                                                 /* BANK steps RANDOM, JOURNEY, STASIS, PAIR, LIVE (the numbers of the banks did not change) */
+    static const uint8_t order[ACT_BANKS]={0u,ACT_BANK_JOURNEY,1u,2u,3u};
+    uint32_t pos=0;while(pos<ACT_BANKS&&order[pos]!=action_bank)pos++;
+    action_bank=order[(pos+1u)%ACT_BANKS];
+   }
    if(action_bank==ACT_BANK_JOURNEY)action_setup=0;
    ui.force=1;
    ui_message(action_bank_names[action_bank]);
@@ -141,7 +138,7 @@ static int32_t action_setup_value(uint32_t slot)
 {
  if(slot>=4u)return -1;
 #if HP_JVN
- if(action_bank==ACT_BANK_JOURNEY)return -1;
+ if(action_bank==ACT_BANK_JOURNEY)return slot==0u?(int32_t)hp_j.scope:slot==1u?(int32_t)hp_j.tp:-1;
 #endif
  if(action_bank==0u){
 #if FELUCCA_RANDOM_MORPH
@@ -185,7 +182,7 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   {"STR","MOTN","AMT","TIME"},
   {"MORPH","LFO1>PAIR","LFO2>PAIR","--"},
   {"LVL T1","LVL T2","LVL T3","LVL T4"},
-  {"--","--","--","--"}                   /* JOURNEY has no SETUP of its own */
+  {"SCOPE","TRANSP","--","--"}         /* JOURNEY SETUP: which tracks the keys act on, and the clock its time follows */
  };
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
@@ -209,6 +206,12 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   str_cpy(value,v?"ON":"OFF",24);return;
  }
 #endif
+ if(action_bank==ACT_BANK_JOURNEY){
+  if(slot==0u)str_cpy(value,v?"ALL":"THIS",24);
+  else if(slot==1u)str_cpy(value,v==0?"FREE":v==1?"CONT":"START",24);
+  else str_cpy(value,"--",24);
+  return;
+ }
  if(action_bank==0u && slot==2u){
   str_cpy(value,v==0?"ROW":v==1?"TRACK":"ALL",24);return;
  }
@@ -234,7 +237,17 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
 }
 static void action_setup_turn(uint32_t slot,int32_t steps)
 {
- if(slot>=4u||!steps||action_bank==ACT_BANK_JOURNEY)return;
+ if(slot>=4u||!steps)return;
+#if HP_JVN
+ if(action_bank==ACT_BANK_JOURNEY){
+  if(slot>1u)return;
+  if(ui.ml.on)return;
+  hp_dirty=1;
+  if(slot==0u){hp_j.scope=steps>0;hp_j_say(hp_j.scope?"JOURNEY: ALL TRACKS":"JOURNEY: THIS TRACK",0u,0u);}
+  else{hp_j.tp=(uint8_t)clamp((int32_t)hp_j.tp+steps,0,2);hp_j_say(hp_j.tp==0u?"TRANSPORT FREE":hp_j.tp==1u?"TRANSPORT CONTINUE":"TRANSPORT START",0u,0u);}
+  return;
+ }
+#endif
  if(action_bank==0u){
 #if HP_JVN
   if(ui.ml.on){ml_knob(&trk[song.sel],HP_VFIRST+8u+HJ_BARS+slot);return;} /* MIDI LEARN: K1..K4 pick BARS DEPTH SCOPE SHAPE */

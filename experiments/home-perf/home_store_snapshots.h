@@ -70,8 +70,10 @@ static int hp_ps_bits_ok(uint32_t a,uint32_t b)
 static int hp_ps_valid(hp_snaps_t s)
 {
  for(uint32_t t=0;t<NTRK;t++){
-  for(uint32_t k=1;k<HP_RM_SNAP_SLOTS;k++)if(s[t][k].pad[0]||s[t][k].pad[1])return 0;      /* only the first slot of each track carries its settings */
+  for(uint32_t k=2;k<HP_RM_SNAP_SLOTS;k++)if(s[t][k].pad[0]||s[t][k].pad[1])return 0;      /* only the first two slots of each track carry its settings */
   if(!hp_ps_bits_ok(s[t][0].pad[0],s[t][0].pad[1]))return 0;
+  uint32_t c=s[t][1].pad[0];                                                              /* JOURNEY scope (bit 0) and TRANSPORT (bits 1..2: FREE, CONT, START) */
+  if(s[t][1].pad[1]||(c&~7u)||((c>>1)&3u)>2u||(c&&!s[t][0].pad[0]))return 0;
  }
  return 1;
 }
@@ -97,23 +99,25 @@ static uint32_t hp_ps_word(void)                      /* byte 0 and 1: the setti
  if(pend&(1u<<HJ_DIR))rev^=1u;
  uint32_t a=HP_PS_PRESENT|bars|depth<<3;
  uint32_t b=(scope&3u)|(shape&3u)<<2|rev<<4|wait<<5;
- return a|b<<8;
+ uint32_t c=(hp_j.scope&1u)|(hp_j.tp<3u?hp_j.tp:0u)<<1;
+ return a|b<<8|c<<16;
 }
 static void hp_ps_pack(hp_rm_snap_t(*s)[HP_RM_SNAP_SLOTS])   /* each track's settings word */
 {
- for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;uint32_t w=hp_ps_word();hp_eng_ovr=255u;s[t][0].pad[0]=(uint8_t)w;s[t][0].pad[1]=(uint8_t)(w>>8);}
+ for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;uint32_t w=hp_ps_word();hp_eng_ovr=255u;s[t][0].pad[0]=(uint8_t)w;s[t][0].pad[1]=(uint8_t)(w>>8);s[t][1].pad[0]=(uint8_t)(w>>16);}
 }
 static void hp_ps_apply(hp_rm_snap_t(*s)[HP_RM_SNAP_SLOTS])   /* s: the loaded sets (the pads are cleared again), 0 = a project without any */
 {
  for(uint32_t t=0;t<NTRK;t++){
-  uint32_t a=s?s[t][0].pad[0]:0,b=s?s[t][0].pad[1]:0;
+  uint32_t a=s?s[t][0].pad[0]:0,b=s?s[t][0].pad[1]:0,c=s?s[t][1].pad[0]:0;
   if(!a){a=HP_PS_DEFAULT_WORD&255u;b=HP_PS_DEFAULT_WORD>>8;}
   hp_eng_ovr=(uint8_t)t;
   hp_rm.bars=hp_rm_times[a&7u];hp_rm.depth=hp_rm_depths[(a>>3)&7u];hp_rm.scope=(uint8_t)(b&3u);hp_rm.shape=(uint8_t)((b>>2)&3u);
   hp_j.rev=(uint8_t)((b>>4)&1u);hp_j.wait=(uint8_t)((b>>5)&7u);
+  hp_j.scope=(uint8_t)(c&1u);hp_j.tp=(uint8_t)((c>>1)&3u);
   hp_j.on=hp_j.paused=hp_j.held=0;hp_j.phase=0;hp_j.cur=hp_j.tgt=0;hp_j.set[0]=hp_j.set[1]=hp_j.set[2]=hp_j.set[3]=0;hp_j_arrived=0;
   hp_eng_ovr=255u;
-  if(s){s[t][0].pad[0]=s[t][0].pad[1]=0;}
+  if(s){s[t][0].pad[0]=s[t][0].pad[1]=0;s[t][1].pad[0]=0;}
  }
 }
 static hp_ref_t hp_rm_snapshot_ref_raw(const uint8_t*b)

@@ -8,7 +8,7 @@ from PIL import Image
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"build/release-prep";IMG=ROOT/"docs/tutorials/img"
 FRAMES={"random-saved":"morph-save","random-morph":"morph-go","random-setup-set":"morph-setup",
-        "journey-off":"journey-off","random-delete":"morph-delete","journey-held":"journey-held","journey-play":"journey-play","journey-resting":"journey-wait","journey-reverse":"journey-reverse"}
+        "journey-off":"journey-off","random-delete":"morph-delete","journey-held":"journey-held","journey-setup":"journey-setup","journey-play":"journey-play","journey-resting":"journey-wait","journey-reverse":"journey-reverse"}
 def main():
     OUT.mkdir(parents=True,exist_ok=True);exe=ROOT/"build/morph-tutorial-frames"
     subprocess.run(["cc","-O2","-w","-ffp-contract=off","-Ibuild/gen","-Ifirmware/src","-DCARAVEL_ACTION_BANKS=1","-DFELUCCA_RANDOM_MORPH=1",

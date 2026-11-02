@@ -397,7 +397,7 @@ static void hp_rm_resume_one(uint32_t now)
  if(hp_rm.state!=HP_RM_FROZEN)return;
  hp_rm.state=hp_rm.frozen_from==HP_RM_RETURN?HP_RM_RETURN:
   hp_rm.frozen_from==HP_RM_RECALL?HP_RM_RECALL:HP_RM_RANDOM;
- hp_rm.stamp=now;ui_message("RANDOM MORPH RESUMED");ui.force=1;
+ hp_rm.stamp=hp_rm.beat?perf_bars_q16-hp_rm.phase*(hp_rm.bars?hp_rm.bars:8u):now;ui_message("RANDOM MORPH RESUMED");ui.force=1;
 }
 static int hp_rm_start_one(uint32_t now)
 {
@@ -502,13 +502,18 @@ static void hp_rm_poll_one(uint32_t now)
 {
  if(hp_rm.state!=HP_RM_RANDOM&&hp_rm.state!=HP_RM_RETURN&&hp_rm.state!=HP_RM_RECALL)return;
  if(!hp_rm_valid()){hp_rm_freeze_one();ui_message("RANDOM: PARAM UNAVAILABLE");return;}
+ uint32_t bars=hp_rm.bars?hp_rm.bars:8u;
+ if(hp_rm.beat){   /* the transport's own musical time: the phase is how far it has come since the leg began, so no rounding builds up */
+  uint32_t p=(perf_bars_q16-hp_rm.stamp)/bars;
+  hp_rm.phase=p>65536u?65536u:p;
+ }else{
  uint32_t delta=now-hp_rm.stamp;hp_rm.stamp=now;
  if(delta>1000u)delta=1000u; /* sleeping/USB stalls never leap many bars */
  uint32_t bpm=(uint32_t)clamp(song.g[G_BPM],20,300);
- uint32_t bars=hp_rm.bars?hp_rm.bars:8u;
  uint32_t bar_ms=240000u/bpm; /* 32-bit only: no __udivdi3 on pi32v2 */
  uint32_t advance=delta*65536u/(bar_ms*bars); /* delta <=1000, no overflow */
  hp_rm.phase=hp_rm.phase+advance>=65536u?65536u:hp_rm.phase+advance;
+ }
  for(uint32_t i=0;i<hp_rm.count;i++){
   hp_rm_cell_t*c=&hp_rm.cell[i];
   if(c->released)continue;
@@ -557,8 +562,11 @@ typedef struct {
  uint8_t on,paused,rev,wait,phase,cur,tgt;      /* phase 0: a leg is moving, 1: resting at cur */
  uint8_t held;                                  /* 1: another morph runs, the journey goes on by itself when it is done; 2: paused by hand while held */
  uint8_t trk;                                   /* the track whose set of slots the journey plays (the selected one at PLAY) */
+ uint8_t scope;                                 /* JOURNEY scope: 0 THIS track, 1 ALL tracks (the keys act on every track's journey) */
+ uint8_t tp;                                    /* TRANSPORT: 0 FREE (milliseconds), 1 CONTINUE, 2 START (musical time of the transport) */
  uint8_t set[4];                                /* BARS DEPTH SCOPE SHAPE: band+1 waiting for the morph to end, 0 none */
  uint32_t t0,left;
+ uint32_t starts;                                /* the transport's Start count at the last look: START restarts the journey when it moves */
 } hp_jn_t;
 static hp_jn_t hp_jn[NTRK];                       /* one journey per track, on that track's engine and set of slots */
 #define hp_j (hp_jn[hp_et()])
@@ -587,6 +595,8 @@ static int hp_j_next(uint32_t from,uint32_t rev)   /* the next populated slot in
  }
  return -1;
 }
+static uint32_t hp_j_time(uint32_t now){return hp_j.tp?perf_bars_q16:now;}   /* FREE: milliseconds; CONTINUE / START: bars (Q16) of the transport */
+static uint32_t hp_j_bar(void){return hp_j.tp?65536u:240000u/(uint32_t)clamp(song.g[G_BPM],20,300);}
 static int hp_j_moving(void){return hp_rm.state==HP_RM_RANDOM||hp_rm.state==HP_RM_RETURN||hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN;}
 static void hp_j_apply_settings(void)              /* latched at the start of a leg, never while one moves */
 {
@@ -614,6 +624,7 @@ static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live 
  hp_j_arrived=0;
  int ok=hp_rm_snapshot_recall(hp_j.trk,to,now);
  if(!ok){hp_j_captured();if(!ui.msg_t)ui_message("SNAP CHANGED");ui.force=1;return 0;}
+ hp_rm.beat=hp_j.tp!=0u;if(hp_rm.beat)hp_rm.stamp=perf_bars_q16;   /* CONTINUE / START: the leg runs on the transport's time */
  hp_j.tgt=(uint8_t)to;hp_j.phase=0;hp_j.held=0;
  action_snap_slot=(uint8_t)to;                      /* RANDOM's selected snapshot follows the journey: edit or recapture it there */
  return 1;
@@ -624,29 +635,31 @@ static void hp_j_advance(uint32_t now)
  if(n<0){hp_j_stop("NO SNAPS");return;}
  if(hp_j_leg((uint32_t)n,now))hp_j_say("JOURNEY S%u>S%u",hp_j.cur+1u,(uint32_t)n+1u);
 }
-static void hp_j_start(uint32_t now)
+static int hp_j_start(uint32_t now)
 {
  const char*why=0;
  hp_j.trk=(uint8_t)hp_et();                       /* the selected track's set of slots */
- if(!hp_j_ready(&why)){ui_message(why);ui.force=1;return;}
+ if(!hp_j_ready(&why)){ui_message(why);ui.force=1;return 0;}
  uint32_t first=action_snap_slot%HP_RM_SNAP_SLOTS;
- if(!hp_rm_snap[hp_j.trk][first].count){int n=hp_j_next(first,hp_j.rev);if(n<0)return;first=(uint32_t)n;}
- hp_j.on=1;hp_j.paused=0;hp_j.cur=(uint8_t)first;
- if(hp_j_leg(first,now))hp_j_say("JOURNEY PLAY >S%u",first+1u,0u);
+ if(!hp_rm_snap[hp_j.trk][first].count){int n=hp_j_next(first,hp_j.rev);if(n<0)return 0;first=(uint32_t)n;}
+ hp_j.on=1;hp_j.paused=0;hp_j.cur=(uint8_t)first;hp_j.starts=perf_starts;
+ if(hp_j_leg(first,now)){hp_j_say("JOURNEY PLAY >S%u",first+1u,0u);if(hp_j.tp&&!song.playing){ui_message("JOURNEY: WAITS FOR PLAY");ui.force=1;}return 1;}
+ return 0;
 }
 static void hp_j_wait_begin(uint32_t now)
 {
  uint32_t bars=hp_j_waits[hp_j.wait<6u?hp_j.wait:0u];
  if(!bars){hp_j_advance(now);return;}
- uint32_t bpm=(uint32_t)clamp(song.g[G_BPM],20,300);
- hp_j.phase=1;hp_j.t0=now;hp_j.left=bars*(240000u/bpm);
+ hp_j.phase=1;hp_j.t0=hp_j_time(now);hp_j.left=bars*hp_j_bar();
 }
-static void hp_j_set_wait(uint32_t w)              /* 0..5: rest 0/1/2/4/8/16 bars after each arrival */
+static int hp_j_fan(void);
+static void hp_j_set_wait(uint32_t w)              /* 0..5: rest 0/1/2/4/8/16 bars after each arrival (JOURNEY scope ALL: on every track) */
 {
  hp_j.wait=(uint8_t)(w<6u?w:5u);hp_dirty=1;
+ if(hp_j_fan())for(uint32_t t=0;t<NTRK;t++)hp_jn[t].wait=hp_j.wait;
  hp_j_say("JOURNEY WAIT %u BAR",hp_j_waits[hp_j.wait],0u);
 }
-static void hp_j_button(uint32_t i,uint32_t now)
+static void hp_j_button_one(uint32_t i,uint32_t now)
 {
  if(i==HJ_PLAY){
   if(!hp_j.on){hp_j_start(now);return;}                /* PLAY starts the selected track's journey; while one runs (one at a time for now) it pauses and resumes that one */
@@ -654,13 +667,13 @@ static void hp_j_button(uint32_t i,uint32_t now)
    hp_j.paused=1;
    if(hp_j.held)hp_j.held=2u;                           /* held by another morph: A1 turns the automatic go-on off */
    else if(hp_j.phase==0)hp_rm_freeze_one();
-   else{uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
+   else{uint32_t e=hp_j_time(now)-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
   }else{
    hp_j.paused=0;
    if(hp_j.held==2u){                                   /* paused while held: the leg starts again from the live values */
     if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
-    else{hp_j.held=0;hp_j.t0=now;}
-   }else if(hp_j.phase==0)hp_rm_resume_one(now);else hp_j.t0=now;
+    else{hp_j.held=0;hp_j.t0=hp_j_time(now);}
+   }else if(hp_j.phase==0)hp_rm_resume_one(now);else hp_j.t0=hp_j_time(now);
   }
   if(hp_j.on)ui_message(hp_j.paused?"JOURNEY PAUSED":"JOURNEY PLAY");
   ui.force=1;
@@ -674,9 +687,36 @@ static void hp_j_button(uint32_t i,uint32_t now)
   hp_j.cur=hp_j.tgt;hp_j_advance(now);
  }
 }
+/* JOURNEY scope ALL: the keys act on every track's journey, each with its own set of slots, settings and cycle (independent by design).
+ * PLAY follows the selected track: off = start every track that has two slots, running = pause all running, paused = resume all paused.
+ * DIR and WAIT, which are per-track settings, are set to the selected track's new value on every track. */
+static int hp_j_fan(void){return hp_eng_ovr==255u&&hp_jn[song.sel&3u].scope;}
+static void hp_j_button(uint32_t i,uint32_t now)
+{
+ if(!hp_j_fan()){hp_j_button_one(i,now);return;}
+ uint32_t sel=song.sel&3u,n=0;
+ if(i==HJ_PLAY){
+  uint8_t was_on=hp_jn[sel].on,was_paused=hp_jn[sel].paused;
+  for(uint32_t t=0;t<NTRK;t++){
+   hp_eng_ovr=(uint8_t)t;
+   if(!was_on){if(!hp_jn[t].on)n+=(uint32_t)hp_j_start(now);}
+   else if(hp_jn[t].on&&hp_jn[t].paused==was_paused){hp_j_button_one(HJ_PLAY,now);n++;}
+  }
+  hp_eng_ovr=255u;
+  if(!was_on){if(n){char m[32];perf_format(m,sizeof m,"JOURNEY PLAY: %u TRACKS",n);ui_message(m);ui.force=1;}}
+  else if(n){char m[32];perf_format(m,sizeof m,was_paused?"JOURNEY GO: %u TRACKS":"JOURNEY PAUSE: %u TRACKS",n);ui_message(m);ui.force=1;}
+ }else if(i==HJ_DIR){
+  hp_j_button_one(HJ_DIR,now);
+  for(uint32_t t=0;t<NTRK;t++)hp_jn[t].rev=hp_jn[sel].rev;
+ }else{
+  for(uint32_t t=0;t<NTRK;t++){hp_eng_ovr=(uint8_t)t;if(hp_j.on&&!hp_j.paused){hp_j_button_one(HJ_NEXT,now);n++;}}
+  hp_eng_ovr=255u;
+  if(n){char m[32];perf_format(m,sizeof m,"JOURNEY NEXT: %u TRACKS",n);ui_message(m);ui.force=1;}else{ui_message("JOURNEY OFF");ui.force=1;}
+ }
+}
 static void hp_j_hold(uint32_t now)               /* another morph took the engine: the journey waits and goes on by itself when it is done */
 {
- if(hp_j.phase==1u){uint32_t e=now-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
+ if(hp_j.phase==1u){uint32_t e=hp_j_time(now)-hp_j.t0;hp_j.left=e<hp_j.left?hp_j.left-e:0u;}
  hp_j.held=1u;ui.force=1;
 }
 static void hp_journey_poll_one(uint32_t now);
@@ -703,12 +743,23 @@ static void hp_journey_poll(uint32_t now)
 static void hp_journey_poll_one(uint32_t now)
 {
  hp_j_apply_settings();
+ uint32_t st=perf_starts;
+ if(st!=hp_j.starts){                               /* the transport was started (internal PLAY from stop, or an external MIDI Start) */
+  hp_j.starts=st;
+  if(hp_j.on&&hp_j.tp==2u&&!hp_j.paused){          /* START: the journey begins again, from the first populated slot in its direction */
+   hp_j.held=0;hp_rm_reset();
+   int n=hp_j.rev?hp_j_next(0u,1u):hp_j_next(HP_RM_SNAP_SLOTS-1u,0u);
+   if(n>=0){hp_j.cur=(uint8_t)n;if(hp_j_leg((uint32_t)n,now))hp_j_say("JOURNEY START >S%u",(uint32_t)n+1u,0u);}
+   else hp_j_stop("NO SNAPS");
+   return;
+  }
+ }
  if(!hp_j.on)return;
  if(hp_j.held==1u){                                  /* held: wait until the other morph has ended (arrived, or reset) */
   if(hp_j_moving())return;
   hp_j.held=0;
   if(hp_j.phase==0)hp_j_leg(hp_j.tgt,now);
-  else hp_j.t0=now;
+  else hp_j.t0=hp_j_time(now);
   return;
  }
  if(hp_j.paused)return;
@@ -721,7 +772,7 @@ static void hp_journey_poll_one(uint32_t now)
   hp_j_hold(now);                                  /* another morph (RANDOM, RETURN, its freeze or its end): hold and go on afterwards */
  }else{
   if(hp_j_moving()){hp_j_hold(now);return;}
-  if(now-hp_j.t0>=hp_j.left)hp_j_advance(now);
+  if(hp_j_time(now)-hp_j.t0>=hp_j.left)hp_j_advance(now);
  }
 }
 #endif

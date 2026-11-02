@@ -11,7 +11,7 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 
 1. **Save snapshots in RANDOM** (HOME with ACTION on): set the sound, hold **A4** to save it into the selected slot; tap **A4** to move to
    the next slot, change the sound, hold A4 again. You need two to four snapshots **on the selected track** (see *Every track has its own slots* below).
-2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The chip names the bank; on the sea chart the caravel is the journey: it sails from buoy to buoy while a leg moves and lies at anchor when the journey is off, waiting (`WAIT`), paused or held.
+2. **Tap BANK once in RANDOM: JOURNEY is the bank right after it** (the order is RANDOM, JOURNEY, STASIS, PAIR, LIVE). The chip names the bank; on the sea chart the caravel is the journey: it sails from buoy to buoy while a leg moves and lies at anchor when the journey is off, waiting (`WAIT`), paused or held.
 3. **A1 PLAY** starts: the sound morphs to the selected snapshot, rests, moves on to the next populated slot and loops
    (S1 → S2 → S3 → S1 …). Every leg starts from the values the sound has at that moment, so nothing jumps.
 
@@ -48,6 +48,18 @@ that saves them. A slot holds at most **32 targets**; if the HOME has more, noth
   one filled slot has no journey (`NEED 2 SNAPS`). Saving or deleting a slot on **that** track ends its journey.
 - **Gaps are skipped.** Empty slots do not take part: with S1, S3 and S4 filled a journey goes S1 → S3 → S4 → S1.
 
+## JOURNEY SETUP: SCOPE and TRANSPORT
+
+Hold BANK in the JOURNEY bank: **K1 SCOPE** (`THIS` or `ALL`) and **K2 TRANSPORT** (`FREE`, `CONT`, `START`). Both are saved per track with the project.
+
+- **SCOPE ALL:** the keys act on **every track's journey**. PLAY starts every track that has two filled slots (`JOURNEY PLAY: 3 TRACKS`); it follows the selected track after that: if that one runs, PLAY pauses all running journeys, if it is paused, PLAY resumes the paused ones. NEXT skips the leg on every running journey. DIR and WAIT are set to the selected track's new value on every track. The cycles stay **independent**: each track steps through its own filled slots with its own BARS, SHAPE and WAIT, so with unequal gaps (T1: S1, S3, S4; T2: S1, S2, S3) the journeys drift against each other by design. `THIS` (default): the keys act on the selected track only.
+- **TRANSPORT** says what keeps the journey's time, as the sequencer follows its own clock source (internal tempo or external MIDI clock):
+  - **FREE** (default, as in 0.8.0): milliseconds at the tempo setting. The journey keeps moving with the sequencer stopped and ignores an external clock.
+  - **CONT** (continue): the time is the **transport's musical time**: a leg of 8 bars takes 8 bars of the running clock, a tempo change (or an external tempo) speeds it up or slows it down, and **Stop freezes the leg and the WAIT**. Start or Continue let it go on from where it stood. PLAY with the transport stopped says `JOURNEY: WAITS FOR PLAY`.
+  - **START:** like CONT, and every **Start** (PLAY from stop; an external MIDI Start) also **begins the journey again** from its first filled slot in its direction, with a leg from the live values. An external MIDI Continue only resumes.
+
+RANDOM morphs stay free (milliseconds). Held, paused and PLAY-again follow the same time base. **Not hardware-tested:** the transport time is host-tested with the internal clock only; the external clock uses the same counter but is not verified.
+
 ## One engine and one set of settings per track
 
 Every track has **its own morph engine and its own journey**, and its own **BARS, DEPTH, SCOPE, SHAPE, WAIT and direction** (saved per track with the project). A journey on T1 and a journey or RANDOM morph on T2 run at the same time, each
@@ -56,7 +68,7 @@ with its own phase, length and rests; the keys, the A4 label and the sea chart a
 
 **A control two tracks move belongs to the track that started last** (a control pinned on two HOME pages, or the Pair morph amount): the morph or journey leg that starts takes it over, the other lets go until it starts again.
 
-**SCOPE ALL** (RANDOM SETUP, K3) makes the RANDOM keys act on every track: A1 starts a morph on each track that has controls (`RANDOM START: 4 TRACKS`), A2 freezes or resumes them all, A3 returns them all or morphs each track to its own slot (`MORPH TO S2: 3 TRACKS`). Each track uses its own BARS, DEPTH and SHAPE. SCOPE ALL for the *journey* (start and stop every track's journey at once) is a later step.
+**SCOPE ALL** (RANDOM SETUP, K3) makes the RANDOM keys act on every track: A1 starts a morph on each track that has controls (`RANDOM START: 4 TRACKS`), A2 freezes or resumes them all, A3 returns them all or morphs each track to its own slot (`MORPH TO S2: 3 TRACKS`). Each track uses its own BARS, DEPTH and SHAPE. The journey has its own SCOPE (JOURNEY SETUP, above).
 
 ## How RANDOM and JOURNEY work together
 
@@ -76,7 +88,7 @@ with its own phase, length and rests; the keys, the A4 label and the sea chart a
 - **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
-- **SETUP belongs to RANDOM.** Entering the JOURNEY bank leaves SETUP; holding BANK there shows `LEG+SHAPE: RANDOM SETUP`, because a journey uses RANDOM's BARS and SHAPE.
+- **The JOURNEY bank has its own SETUP** (hold BANK there, see below). Entering the bank leaves any open SETUP. Leg length and curve are RANDOM's BARS and SHAPE of the track.
 
 ![Diagram: a RANDOM morph on T1 holds only T1's journey, which goes on by itself](tutorials/img/journey-hold.png)
 
@@ -89,7 +101,7 @@ is saved as empty with the project.
 ## Saved with the project
 
 The performance settings are saved with each project, next to the sixteen snapshots (slots A–D, RESTORE LAST, USB backup, export and import):
-**BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction**. A project saved with BARS 16, SHAPE DRIFT and WAIT 4 sounds the same after reopening it.
+**BARS, DEPTH, SCOPE, SHAPE, WAIT, the direction, the JOURNEY scope and the TRANSPORT option**. A project saved with BARS 16, SHAPE DRIFT and WAIT 4 sounds the same after reopening it.
 If a change is still waiting for the next leg when you save, the waiting value is the one saved.
 
 **Not saved:** a running journey, PLAY / PAUSE, the WAIT countdown, RETURN points, and the selected slot. A loaded project always starts
