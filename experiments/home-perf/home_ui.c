@@ -455,9 +455,13 @@ static void hp_draw_home(void)
   int ya=y+3,ky=ya+38;
   cv_rrect(3,ya,234,72,5,T_SURF,T_BG);cv_bg=T_SURF;
   {                                                    /* the bank, and the chart */
-   const char*bank=action_setup?"SETUP":action_bank_names[action_bank];
-   cv_rrect(7,ya+4,60,22,4,action_setup?T_ACCENT:T_RAISE,T_SURF);
-   cv_text_in(7,ya+6,60,&AF_S,bank,action_setup?T_INK:T_ACCENT,action_setup?T_ACCENT:T_RAISE);
+   const char*bank=action_bank_names[action_bank];
+   if(action_setup){                                   /* SETUP of which bank: both on the chip */
+    cv_rrect(7,ya+3,60,31,4,T_ACCENT,T_SURF);
+    cv_text_in(7,ya+5,60,&AF_S,"SETUP",T_INK,T_ACCENT);cv_text_in(7,ya+18,60,&AF_S,bank,T_INK,T_ACCENT);
+   }else{
+    cv_rrect(7,ya+4,60,22,4,T_RAISE,T_SURF);cv_text_in(7,ya+6,60,&AF_S,bank,T_ACCENT,T_RAISE);
+   }
    hp_sea(ya+2);
   }
   #if FELUCCA_RANDOM_MORPH
@@ -482,6 +486,12 @@ static void hp_draw_home(void)
    cv_text_in(kx,ky+(30-(f==&AF_M?15:12))/2,54,f,label,T_TEXT,T_RAISE);
   }
  }
+  else{                                                /* ACTION off: the chart stays as the status, the hint says how to switch it on */
+   cv_rrect(3,y+3,234,38,5,T_SURF,T_BG);cv_bg=T_SURF;
+   cv_rrect(7,y+7,60,22,4,T_RAISE,T_SURF);cv_text_in(7,y+9,60,&AF_S,"ACTION",T_MID,T_RAISE);
+   hp_sea(y+5);
+   cv_free_text(5,y+44,&AF_S,ui.msg_t?ui.msg:"SEL:ROW ALGO:TRACK HOME x2:ACTION",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+  }
 #endif
  {                                                     /* the common footer: engine, preset (the partner's and the morph for a pair member), page */
   int fy=198;sound_name(TSEL,preset);cv_bg=T_BG;
