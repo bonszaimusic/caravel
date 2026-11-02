@@ -22,8 +22,8 @@ except ModuleNotFoundError:
     from target_loops import Instructions, natural_loops, FlowError
 
 NEW_LFO2 = {'track_lfo2_tick', 'lfo2_sync_inc', 'lfo2_trigger', 'mod_kind'}
-NEW_RENDERERS = NEW_LFO2 | {'drone_render', 'drone_legacy_render', 'drone_cell_render', 'hades_render', 'sem_render', 'drumx_render', 'dx_run', 'dx_layer', 'drumx_mix', 'analog_morph_render', 'lofi_morph_render', 'phase_render_ext'}
-FUNCS = sorted(NEW_LFO2) + ['drone_render', 'drone_legacy_render', 'drone_cell_render', 'hades_render', 'sem_render'] + ['drumx_render', 'dx_run', 'dx_layer', 'drumx_mix'] + ['phase_render_ext', 'analog_morph_render', 'lofi_morph_render'] + ["analog_render", "digital_render", "digital_render_legacy", "digital_render_custom", "phase_render", "phase_render_f", "lofi_render", "lofi_formula_render", "lofi_byte", "lofi_float", "sample_render", "formant_render",
+NEW_RENDERERS = NEW_LFO2 | {'ens_render', 'ens_post', 'drone_render', 'drone_legacy_render', 'drone_cell_render', 'hades_render', 'sem_render', 'drumx_render', 'dx_run', 'dx_layer', 'drumx_mix', 'analog_morph_render', 'lofi_morph_render', 'phase_render_ext'}
+FUNCS = sorted(NEW_LFO2) + ['ens_render', 'ens_post', 'drone_render', 'drone_legacy_render', 'drone_cell_render', 'hades_render', 'sem_render'] + ['drumx_render', 'dx_run', 'dx_layer', 'drumx_mix'] + ['phase_render_ext', 'analog_morph_render', 'lofi_morph_render'] + ["analog_render", "digital_render", "digital_render_legacy", "digital_render_custom", "phase_render", "phase_render_f", "lofi_render", "lofi_formula_render", "lofi_byte", "lofi_float", "sample_render", "formant_render",
          "trio_render", "trio_pass", "wheel_render", "wheel_block",
          "grain_render", "grain_block", "phys_render", "drum_render", "noise_render", "fm6_render", "fm6_op_run", "fm6_op_fb", "px_modal_block", "px_modal_run", "px_memb_block",
          "px_string_excite", "px_string_run", "px_symp_run",

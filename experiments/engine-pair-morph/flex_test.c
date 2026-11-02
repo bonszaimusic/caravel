@@ -37,7 +37,7 @@ int main(void)
         CHECK(web_pair_snapshot_load(n)); CHECK(trk[0].engine==a&&trk[2].engine==b);
         CHECK(!gates(0)&&!gates(2));
     }
-    CHECK(combinations==196); CHECK(!pair_engine_ok(ENGI_DRUM)); CHECK(!pair_engine_ok(13));
+    CHECK(combinations==225); CHECK(!pair_engine_ok(ENGI_DRUM)); CHECK(!pair_engine_ok(13));
     prepare(0); web_pair_morph(0,8192); run_ms(30); web_pair_page(); run_ms(50);
     CHECK(cur_page()->graph==GR_PAIR&&!ui.home); capture("pair-25");
     web_enc(EN_K3,8);run_ms(50);CHECK(ep.base==8192+8*256);

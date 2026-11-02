@@ -16,6 +16,7 @@
  * (eng_mem_claim), and ens_post leaves anything it does not own alone. */
 #define ENS_RING 1024u                     /* ring length in samples: a power of two; 23.2 ms at 44.1 kHz */
 #define ENS_TAIL_BLOCKS 28u                /* blocks (CTL samples) the taps keep running after the last voice: 20 ms > the longest tap */
+#define ENS_WET_Q16 26000u                 /* the three taps' mean (1/3) with 1.19 x make-up: the taps' comb takes about 1.5 dB off a sustained chord on average */
 #define ENS_DELAY_BASE_0 265               /* the taps' resting delays in samples: 6.0, 8.5, 11.0 ms */
 #define ENS_DELAY_BASE_1 375
 #define ENS_DELAY_BASE_2 485
@@ -151,7 +152,7 @@ static __attribute__((noinline)) void ens_post(track_t *t, int32_t *b, uint32_t 
             sum += r0 + (((r1 - r0) * (d & 255)) >> 8);
         }
         s->w = (s->w + 1u) & (ENS_RING - 1u);
-        b[i] = dry + mulq16(mulq16(sum, 21845u) - dry, (uint32_t)mix);   /* dry + (ensemble - dry) * MIX */
+        b[i] = dry + mulq16(mulq16(sum, ENS_WET_Q16) - dry, (uint32_t)mix);   /* dry + (ensemble - dry) * MIX */
     }
     for (j = 0; j < 3u; j++)
         s->delay[j] += step[j] * (int32_t)n;

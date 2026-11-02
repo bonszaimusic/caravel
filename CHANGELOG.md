@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased] - development branch `feature/ensemble-engine` (not part of 0.9.0)
+
+- **New engine ENSEMBLE (engine 17, append-only; no existing number changes):** strings, choir and dark texture. Three oscillator registers (16', 8', 4') into one
+  state-variable filter whose timbre follows MORPH (strings, a resonant choir formant with breath, dark and rough), and a built-in three-tap ensemble (one ring in
+  the part's engine memory, two LFOs, 6.0 / 8.5 / 11 ms taps) applied to the track's mix before DIST / INSERT / FILTER and the sends, so the REV send, HALL and STASIS
+  hear it. Eight controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), four factory presets (VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD), at most
+  six voices per track, SPREAD ignored, MIDI CC 74 = TONE. MIX 0 is the dry voices bit for bit; the ring is cleared when the part was away. Projects, user presets
+  and favourites that use it are not understood by 0.9.0 and earlier (the project check refuses an engine number it does not know). Host-tested only; not tried on
+  an FM-1 and not judged by ear. See `docs/engines/ensemble-engine.md`.
+
 ## [0.9.0] - 2026-11-02
 
 - **The SAX sample set is retired** to free 31,422 B of flash (the app slot had 352 B left after 0.8.0; the per-track Random Morph / Journey work needs room). SAMPLE offers PIANO and FLUTE only. SET 3 (SAX) keeps its place and plays PIANO, like the earlier retired sets TRANH and PERC: **a sound, user preset or project that used SAX now plays PIANO**, the SAMPLE preset SAX is gone from browsing, and the GRAIN factory preset GLITCH now uses PIANO as its source (GRAIN SRC 3 plays PIANO too). Nothing else changes; the SAX recordings stay in `assets/samples-cc0` but the build no longer reads them.

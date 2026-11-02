@@ -156,16 +156,16 @@ int main(void)
             memcpy(out, in, sizeof out);
             for (blk = 0; blk < 64u; blk++) ens_post(&trk[0], out + blk * CTL, CTL);
             if (pass == 0u) CHECK(!memcmp(out, in, sizeof out));                         /* bypass: bit for bit */
-            if (pass == 1u) {                                                           /* ENS 0, MIX 127: (x[n-265] + x[n-375] + x[n-485]) / 3 */
+            if (pass == 1u) {                                                           /* ENS 0, MIX 127: (x[n-265] + x[n-375] + x[n-485]) * 26000 / 65536 */
                 uint32_t bad = 0;
-                for (i = 600; i < CTL * 64u; i++) { int32_t e = (in[i - 265] + in[i - 375] + in[i - 485]) / 3, d = out[i] - e; if (d < -128 || d > 128) bad++; }                /* (MIX 127 is 65532 / 65536, 1 / 3 is 21845 / 65536: a few parts in 10^5) */
+                for (i = 600; i < CTL * 64u; i++) { int32_t e = (int32_t)(((int64_t)(in[i - 265] + in[i - 375] + in[i - 485]) * ENS_WET_Q16) >> 16), d = out[i] - e; if (d < -128 || d > 128) bad++; }                /* (MIX 127 is 65532 / 65536, 1 / 3 is 21845 / 65536: a few parts in 10^5) */
                 CHECK(bad == 0u);
             }
             if (pass == 2u) {                                                           /* moving taps: not the static comb, bounded by the input's range */
                 uint32_t diff = 0; int32_t mx = 0;
-                for (i = 700; i < CTL * 64u; i++) { int32_t e = (in[i - 265] + in[i - 375] + in[i - 485]) / 3; if (out[i] != e) diff++; if (abs(out[i]) > mx) mx = abs(out[i]); }
+                for (i = 700; i < CTL * 64u; i++) { int32_t e = (int32_t)(((int64_t)(in[i - 265] + in[i - 375] + in[i - 485]) * ENS_WET_Q16) >> 16); if (out[i] != e) diff++; if (abs(out[i]) > mx) mx = abs(out[i]); }
                 printf("moving taps: %u samples differ from the static comb, max |out| %d\n", diff, mx);
-                CHECK(diff > 1000u && mx <= 786432 + 8);                      /* (the input spans -262144 .. 786431: the taps never exceed it) */
+                CHECK(diff > 1000u && mx <= 940000);                      /* (the input spans -262144 .. 786431: the taps never exceed it) */
             }
         }
         {   /* the tail: an impulse, then silence: the output is zero once the longest tap (485 + 127 samples) has passed */
