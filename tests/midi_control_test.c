@@ -57,17 +57,17 @@ static int sustain_test(void)
 {
     int bad = 0; midi_test_reset(); track_t *t = &trk[0];
     queued(0x90, 60, 100, 1); queued(0xB0, 64, 127, 1); queued(0x80, 60, 0, 1);
-    bad += check("pedal holds a released synth note and its owner", gate_note(t, 60) && midi_notes[0][60] == (1u | MIDI_PEDAL_NOTE));
+    bad += check("pedal holds a released synth note and its owner", gate_note(t, 60) && midi_note_get(0, 60) == (1u | MIDI_PEDAL_NOTE));
     queued(0xB0, 64, 0, 1);
-    bad += check("pedal release releases its held note", !gate_note(t, 60) && !midi_notes[0][60] && !midi_owners[0]);
+    bad += check("pedal release releases its held note", !gate_note(t, 60) && !midi_note_get(0, 60) && !midi_owners[0]);
     queued(0x90, 62, 100, 1); queued(0xB0, 64, 127, 1); queued(0xB0, 123, 0, 1);
-    bad += check("All Notes Off honours sustain rather than hard-killing", gate_note(t, 62) && (midi_notes[0][62] & MIDI_PEDAL_NOTE));
+    bad += check("All Notes Off honours sustain rather than hard-killing", gate_note(t, 62) && (midi_note_get(0, 62) & MIDI_PEDAL_NOTE));
     queued(0xB0, 121, 0, 1);
-    bad += check("Reset Controllers releases pedal-held notes", !gate_note(t, 62) && !midi_notes[0][62]);
+    bad += check("Reset Controllers releases pedal-held notes", !gate_note(t, 62) && !midi_note_get(0, 62));
     queued(0x93, 36, 100, 1); queued(0xB3, 64, 127, 1); queued(0x83, 36, 0, 1);
-    bad += check("drum note-offs do not accumulate pedal-held owners", !midi_notes[3][36] && !midi_owners[3]);
+    bad += check("drum note-offs do not accumulate pedal-held owners", !midi_note_get(3, 36) && !midi_owners[3]);
     queued(0x90, 67, 100, 1); queued(0xB0, 64, 127, 1); queued(0x80, 67, 0, 1); queued(0xB0, 120, 0, 1);
-    bad += check("All Sound Off ignores pedal and discards all track ownership", !midi_notes[0][67] && !midi_owners[0] && !t->nheld && !gate_note(t, 67));
+    bad += check("All Sound Off ignores pedal and discards all track ownership", !midi_note_get(0, 67) && !midi_owners[0] && !t->nheld && !gate_note(t, 67));
     return bad;
 }
 static int ownership_test(void)
@@ -85,11 +85,11 @@ static int ownership_test(void)
     fm1_in.notes = 0; events_block(CTL);
     bad += check("local release after MIDI release ends the shared note", !gate_note(t, local));
     queued(0x94, 65, 100, 1); song.sel = 1; queued(0x84, 65, 0, 1);
-    bad += check("note-off follows its note-on across selected-track changes", !gate_note(&trk[0], 65) && !midi_notes[4][65]);
+    bad += check("note-off follows its note-on across selected-track changes", !gate_note(&trk[0], 65) && !midi_note_get(4, 65));
     song.sel = 0; queued(0x94, 67, 100, 1); queued(0xB4, 64, 127, 1); queued(0x84, 67, 0, 1);
     panic_req |= 1u; events_block(CTL);
     queued(0x90, 67, 100, 1); queued(0xB4, 64, 0, 1);
-    bad += check("preset panic forgets old pedal owners so later pedal-up preserves new notes", !midi_notes[4][67] && gate_note(&trk[0], 67));
+    bad += check("preset panic forgets old pedal owners so later pedal-up preserves new notes", !midi_note_get(4, 67) && gate_note(&trk[0], 67));
     for (uint32_t i = 0; i <= MQ; i++) midi_enqueue(0x09u | 0x90u << 8 | 70u << 16 | 100u << 24, 1);
     events_block(CTL);
     bad += check("queue overflow recovers ownership and releases stuck notes", !midi_in_overflow && mi_r == mi_w && !midi_owners[0] && !gate_note(&trk[0], 67));
@@ -246,10 +246,10 @@ static int route_test(void)
     bad += check("ROUT defaults to CH1-4", song.g[G_ROUTE] == 0);
     for (src = 1; src <= 2u; src++)
         for (ch = 4; ch < 16u; ch++) queued(0x90 | ch, 60 + ch, 100, src);
-    for (ch = 4; ch < 16u; ch++) owned |= midi_notes[ch][60 + ch];
+    for (ch = 4; ch < 16u; ch++) owned |= midi_note_get(ch, 60 + ch);
     bad += check("CH1-4: note-ons on channels 5..16 (USB and TRS) play nothing", !any_gate() && !owned && !midi_owners[2] && !midi_hint);
     queued(0x91, 62, 100, 1); queued(0x93, 40, 100, 2);
-    bad += check("CH1-4: channels 2 and 4 still play parts 2 and 4", gate_note(&trk[1], 62) && midi_notes[1][62] == 2u && midi_notes[3][40] == 4u);
+    bad += check("CH1-4: channels 2 and 4 still play parts 2 and 4", gate_note(&trk[1], 62) && midi_note_get(1, 62) == 2u && midi_note_get(3, 40) == 4u);
     queued(0xE4, 127, 127, 1); queued(0xEF, 0, 0, 2); queued(0xE9, 127, 127, 1);
     bad += check("CH1-4: pitch bend on channels 5, 10, 16 bends no part", !midi_bend_target[0] && !midi_bend_target[1] && !midi_bend_target[2] && !midi_ch[4].bend && !midi_ch[15].bend);
     queued(0xB4, 1, 99, 1); queued(0xB9, 11, 10, 2); queued(0xDF, 77, 0, 1);
@@ -257,7 +257,7 @@ static int route_test(void)
     queued(0xB4, 101, 0, 1); queued(0xB4, 100, 0, 1); queued(0xB4, 6, 24, 1);
     bad += check("CH1-4: RPN on channel 5 changes nothing", midi_ch[4].semis != 24u);
     queued(0xB4, 64, 127, 1); queued(0x81, 62, 0, 1);
-    bad += check("CH1-4: a channel 5 sustain pedal does not hold channel 2's note", !gate_note(&trk[1], 62) && !midi_notes[1][62]);
+    bad += check("CH1-4: a channel 5 sustain pedal does not hold channel 2's note", !gate_note(&trk[1], 62) && !midi_note_get(1, 62));
     queued(0x91, 62, 100, 1); queued(0xB1, 1, 50, 1);
     queued(0xB4, 120, 0, 1); queued(0xB9, 123, 0, 2); queued(0xBF, 121, 0, 1);
     bad += check("CH1-4: CC120 / CC123 / CC121 on channels 5..16 leave parts 1..4 sounding", gate_note(&trk[1], 62) && gate_note(&trk[3], 40) && midi_owners[1] == 1u && trk[1].mw == 50);
@@ -270,11 +270,11 @@ static int route_test(void)
     queued(0xEF, 127, 127, 1); queued(0xB9, 1, 66, 2); queued(0xD4, 33, 0, 1);
     bad += check("SEL: bend, CC1 and aftertouch from channels 5..16 reach the selected track", midi_bend_target[2] == 512 && trk[2].mw == 66 && trk[2].at == 33);
     queued(0xB4, 64, 127, 1); queued(0x84, 62, 0, 2);
-    bad += check("SEL: channel 5 pedal holds its note", gate_note(&trk[2], 62) && (midi_notes[4][62] & MIDI_PEDAL_NOTE));
+    bad += check("SEL: channel 5 pedal holds its note", gate_note(&trk[2], 62) && (midi_note_get(4, 62) & MIDI_PEDAL_NOTE));
     song.g[G_ROUTE] = 0; events_block(CTL);
     bad += check("SEL -> CH1-4 releases channels 5..16's notes (pedal-held too), keeps channel 1's",
                  !gate_note(&trk[2], 62) && !gate_note(&trk[2], 64) && !gate_note(&trk[2], 65) && gate_note(&trk[2], 60) &&
-                 !midi_notes[4][62] && !midi_notes[9][64] && !midi_notes[15][65] && midi_owners[2] == 1u && !midi_ch[4].pedal);
+                 !midi_note_get(4, 62) && !midi_note_get(9, 64) && !midi_note_get(15, 65) && midi_owners[2] == 1u && !midi_ch[4].pedal);
     bad += check(".. and resets their bend: each part follows its own channel 1..4", !midi_bend_target[2] && !midi_ch[15].bend);
     queued(0x80, 60, 0, 1);
     bad += check("channel 1's note-off still releases its note after the switch", !any_gate() && !midi_owners[2]);
@@ -393,7 +393,7 @@ static int route_track_test(void)
     ok &= midi_slot(9) == 0 && midi_slot(1) == 1 && midi_slot(0) == 2 && midi_slot(4) == 2 && midi_slot(15) == 2;
     queued(0x99, 50, 100, 1); queued(0x91, 51, 100, 2); queued(0x94, 52, 100, 1); queued(0x90, 53, 100, 2);
     ok &= gate_note(&trk[0], 50) && gate_note(&trk[1], 51) && gate_note(&trk[2], 52) && gate_note(&trk[2], 53) &&
-          !gate_note(&trk[3], 50) && !gate_note(&trk[3], 52) && midi_notes[9][50] == 1u && midi_notes[4][52] == 3u;
+          !gate_note(&trk[3], 50) && !gate_note(&trk[3], 52) && midi_note_get(9, 50) == 1u && midi_note_get(4, 52) == 3u;
     bad += check("TRACK: T1 on 10, T2 on 2, T3 OMNI (every other channel), T4 OFF (none; the selected track too)", ok);
     queued(0xE9, 127, 127, 1); queued(0xB9, 1, 77, 1); queued(0xD9, 66, 0, 1); queued(0xB9, 7, 0, 1);
     ok = midi_bend_target[0] == 512 && !midi_bend_target[1] && !midi_bend_target[3] && trk[0].mw == 77 && trk[0].at == 66 &&

@@ -775,15 +775,15 @@ static int test_midi(void)
     midi_hint = 0;
     midi_event(0x90, 0, 60, 100); midi_event(0x90, 9, 61, 100);
     bad += check("ROUT CH1-4 (default): channel 1 -> part 1, channel 10 ignored",
-                 song.g[G_ROUTE] == 0 && midi_sel_on[0][60] == 1u && !midi_sel_on[9][61] && !gated_notes(&trk[2]));
+                 song.g[G_ROUTE] == 0 && midi_note_get(0, 60) == 1u && !midi_note_get(9, 61) && !gated_notes(&trk[2]));
     bad += check("a note into another track tells the UI", midi_hint == 1u);
     frame(); bad += check("MIDI IN -> T1 shown", msg_is("MIDI IN -> T1"));
     song.g[G_ROUTE] = 1;
     midi_event(0x80, 0, 60, 0); midi_event(0x90, 0, 62, 100);
     bad += check("ROUT changes: note-off releases original owner, new note uses selection",
-                 !gated_notes(&trk[0]) && midi_sel_on[0][62] == 3u && midi_track(3) == &trk[2]);
+                 !gated_notes(&trk[0]) && midi_note_get(0, 62) == 3u && midi_track(3) == &trk[2]);
     song.sel = 1; midi_event(0x80, 0, 62, 0);
-    bad += check("note-off after selection follows the note-on's track", !midi_sel_on[0][62]);
+    bad += check("note-off after selection follows the note-on's track", !midi_note_get(0, 62));
     midi_event(0x80, 9, 61, 0);
     ui_power_on();
     song.g[G_ROUTE] = 1;
@@ -791,11 +791,11 @@ static int test_midi(void)
     song.sel = 1;
     midi_event(0x90, 0, 60, 100);
     bad += check("same MIDI channel/pitch on a new selected track releases its old owner",
-                 !gated_notes(&trk[0]) && gated_notes(&trk[1]) && midi_sel_on[0][60] == 2u);
+                 !gated_notes(&trk[0]) && gated_notes(&trk[1]) && midi_note_get(0, 60) == 2u);
     midi_event(0x80, 0, 60, 0);
     midi_event(0x80, 0, 60, 0);
     bad += check("both note-offs after a MIDI ownership change leave neither track held",
-                 !gated_notes(&trk[0]) && !gated_notes(&trk[1]) && !midi_sel_on[0][60]);
+                 !gated_notes(&trk[0]) && !gated_notes(&trk[1]) && !midi_note_get(0, 60));
     ui_power_on();
     song.sel = 2; song.g[G_ROUTE] = 1;
     midi_event(0x90, 0, 61, 100);
@@ -803,7 +803,7 @@ static int test_midi(void)
     midi_event(0x90, 0, 61, 100);
     midi_event(0x80, 0, 61, 0);
     bad += check("same channel/pitch across a ROUT change cannot leave its previous part held",
-                 !gated_notes(&trk[2]) && !gated_notes(&trk[0]) && !midi_sel_on[0][61]);
+                 !gated_notes(&trk[2]) && !gated_notes(&trk[0]) && !midi_note_get(0, 61));
     {
         uint32_t hold;
         for (hold = 0; hold < 2u; hold++) {
@@ -814,7 +814,7 @@ static int test_midi(void)
             song.sel = 1;
             midi_event(0x90, 0, 60, 100);
             bad += check("MIDI ownership transfer releases old ARP keys and respects explicit HOLD",
-                         !trk[0].arp_phys && trk[0].nheld == hold && midi_sel_on[0][60] == 2u);
+                         !trk[0].arp_phys && trk[0].nheld == hold && midi_note_get(0, 60) == 2u);
         }
     }
     ui_power_on();
@@ -829,11 +829,11 @@ static int test_midi(void)
         events_block(CTL);
         for (i = 0; i < NTRK * NVOICE; i++) held += trk[i / NVOICE].v[i % NVOICE].gate;
         bad += check("MIDI overflow releases held notes and latched ARP, keeps transport running",
-                     !held && !trk[1].nheld && !trk[1].arp_phys && !midi_sel_on[0][60] &&
-                     !midi_sel_on[1][64] && !midi_in_overflow && mi_r == mi_w && song.playing);
+                     !held && !trk[1].nheld && !trk[1].arp_phys && !midi_note_get(0, 60) &&
+                     !midi_note_get(1, 64) && !midi_in_overflow && mi_r == mi_w && song.playing);
         midi_in_event(0x643D9009u);
         events_block(CTL);
-        bad += check("MIDI accepts a fresh note after overflow recovery", midi_sel_on[0][61] == 1u && trk[0].v[0].gate);
+        bad += check("MIDI accepts a fresh note after overflow recovery", midi_note_get(0, 61) == 1u && trk[0].v[0].gate);
     }
     {   /* 1.2: MENU > MIDI > MIDI IN (up to 1.1.5 GLO > SYSTEM K3 ROUT): the project's G_ROUTE, its names ROUT's */
         uint32_t k;
@@ -863,14 +863,14 @@ static int test_midi(void)
         ok = (TSEL->eng_req != e3 || TSEL->preset != p3) && trk[0].eng_req == e1 && trk[0].preset == p1;
         song.g[G_ROUTE] = 1;                             /* SEL */
         midi_event(0x90, 0, 60, 100);
-        ok &= gated_notes(&trk[2]) == 1u && !gated_notes(&trk[0]) && midi_sel_on[0][60] == 3u;
+        ok &= gated_notes(&trk[2]) == 1u && !gated_notes(&trk[0]) && midi_note_get(0, 60) == 3u;
         midi_event(0x80, 0, 60, 0);
         song.g[G_ROUTE] = 0;                             /* CH1-4 */
         midi_event(0x90, 0, 60, 100);
-        ok &= gated_notes(&trk[0]) == 1u && !gated_notes(&trk[2]) && midi_sel_on[0][60] == 1u;
+        ok &= gated_notes(&trk[0]) == 1u && !gated_notes(&trk[2]) && midi_note_get(0, 60) == 1u;
         midi_event(0x80, 0, 60, 0);
         midi_event(0x90, 2, 62, 100);                    /* (CH1-4: channel 3 is T3's) */
-        ok &= gated_notes(&trk[2]) == 1u && midi_sel_on[2][62] == 3u;
+        ok &= gated_notes(&trk[2]) == 1u && midi_note_get(2, 62) == 3u;
         midi_event(0x80, 2, 62, 0);
         bad += check("#192 PRESETS on T3: MIDI IN SEL plays the loaded sound, CH1-4 channel 1 stays T1 (channel 3 T3)", ok);
     }
@@ -5344,7 +5344,7 @@ static int test_midi_leds(void)
     memset(&um, 0, sizeof um);
     song.sel = 0;
     usb_note(0, 60, 100);                              /* channel 1 -> T1 (ROUT CH1-4) */
-    bad += check("#81 USB MIDI C4 into the selected track lights key 8 (C4)", midi_sel_on[0][60] == 1u &&
+    bad += check("#81 USB MIDI C4 into the selected track lights key 8 (C4)", midi_note_get(0, 60) == 1u &&
                  key_leds(0) == 1u << 7 && play_leds() == 1u << 7);
     usb_note(1, 67, 100);                              /* channel 2 -> T2: not the selected track */
     ok = key_leds(0) == 1u << 7;
@@ -5362,7 +5362,7 @@ static int test_midi_leds(void)
     song.g[G_ROUTE] = 1;                               /* ROUT SEL: every channel to the selected track */
     song.sel = 2;
     usb_note(9, 62, 100);
-    ok = midi_sel_on[9][62] == 3u && key_leds(0) == 1u << 9;
+    ok = midi_note_get(9, 62) == 3u && key_leds(0) == 1u << 9;
     usb_note(9, 62, 0);
     song.g[G_ROUTE] = 0;
     song.sel = 0;
