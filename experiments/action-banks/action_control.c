@@ -92,7 +92,6 @@ static void action_refresh(void)
     uint32_t pos=0;while(pos<ACT_BANKS&&order[pos]!=action_bank)pos++;
     action_bank=order[(pos+1u)%ACT_BANKS];
    }
-   if(action_bank==ACT_BANK_JOURNEY)action_setup=0;
    ui.force=1;
    ui_message(action_bank_names[action_bank]);
   }

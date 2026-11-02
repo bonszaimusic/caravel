@@ -45,6 +45,8 @@ assert.ok(e.web_action_random_count()>0,'real firmware captures HOME cells');
 key(24);assert.equal(e.web_action_random_state(),2,'FREEZE still works');
 key(24);assert.equal(e.web_action_random_state(),1,'RESUME still works');
 key(25);assert.equal(e.web_action_random_state(),3,'RETURN still works');
+key(22);assert.equal(bank(),4,'short BANK advances to JOURNEY, right after RANDOM');
+assert.equal(setup(),1,'SETUP stays open in JOURNEY: its own K1 SCOPE and K2 TRANSPORT');
 key(22);assert.equal(bank(),1,'short BANK advances to STASIS upon release');
 assert.equal(setup(),1,'SETUP stays enabled across banks');
 const strength=val(0);

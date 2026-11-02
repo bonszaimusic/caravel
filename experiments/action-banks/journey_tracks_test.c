@@ -82,6 +82,16 @@ int main(void){
  /* scope THIS: PLAY touches only the selected track */
  for(uint32_t t=0;t<NTRK;t++){hp_jn[t].on=hp_jn[t].paused=hp_jn[t].held=0;hp_jn[t].phase=0;}hp_rm_reset_all();
  hp_j.scope=0;action_snap_slot=0;tap(1);run_ms(100);CHECK(hp_jn[0].on&&!hp_jn[1].on);
+ /* 5. a dialog open over a running morph or journey is drawn once, not on every poll (it flickered on a project SAVE over a used slot) */
+ for(uint32_t t=0;t<NTRK;t++){hp_jn[t].on=hp_jn[t].paused=hp_jn[t].held=0;hp_jn[t].phase=0;}hp_rm_reset_all();
+ sel(0);{uint32_t g=0;while(action_bank!=0u&&g++<8u)tap(0);}CHECK(action_bank==0u);hp_rm.scope=HP_RM_TRACK;hp_rm.bars=8;hp_rm.depth=100;
+ hp_rm_start(fm1_ms);run_ms(200);CHECK(hp_rm.state==HP_RM_RANDOM);ui.home=0;
+ {uint32_t forced=0,i;confirm_open(CF_OVR_PROJ,0);
+  for(i=0;i<60u;i++){run_ms(20);forced+=ui.force!=0;}
+  CHECK(ui.confirm==CF_OVR_PROJ&&forced<=1u&&hp_rm.state==HP_RM_RANDOM);
+  ui.confirm=0;ui.force=0;run_ms(100);forced=0;                                   /* ... and the page is redrawn again once it is closed */
+  for(i=0;i<20u;i++){run_ms(20);forced+=ui.force!=0;}
+  CHECK(forced>0u);}
  printf("JOURNEY TRACKS PASS: %u checks.\n",checks);
  return 0;
 }

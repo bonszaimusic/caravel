@@ -41,7 +41,7 @@ assert.equal(level(),90,'A4 capture does not alter live sound');
 assert.equal(e.web_action_random_state(),0,'A4 capture itself does not start Random');
 const screenSaved=frame();
 let changed=0;
-for(let y=24+171;y<24+200;y++)
+for(let y=24+112;y<24+148;y++)          // the key row of the performance HOME (design B)
  for(let x=0;x<240;x++)changed+=emptyScreen[y*240+x]!==screenSaved[y*240+x];
 assert.ok(changed>40,'real FM-1 ACTION strip changes for filled S1');
 // A4 short changes slot ONLY; storing S2 does not replace S1.

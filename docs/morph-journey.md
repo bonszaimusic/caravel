@@ -89,7 +89,7 @@ with its own phase, length and rests; the keys, the A4 label and the sea chart a
 - **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
-- **The JOURNEY bank has its own SETUP** (hold BANK there, see below). Entering the bank leaves any open SETUP. Leg length and curve are RANDOM's BARS and SHAPE of the track.
+- **The JOURNEY bank has its own SETUP** (hold BANK there, see below). An open SETUP stays open when you change bank, so JOURNEY shows its own. Leg length and curve are RANDOM's BARS and SHAPE of the track.
 
 ![Diagram: a RANDOM morph on T1 holds only T1's journey, which goes on by itself](tutorials/img/journey-hold.png)
 

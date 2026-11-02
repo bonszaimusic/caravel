@@ -532,7 +532,9 @@ static void hp_rm_poll_one(uint32_t now)
   if(returned || recalled)hp_rm_drop_context();
   ui_message(recalled?"SNAP REACHED":returned?"RANDOM RETURNED":"RANDOM DESTINATION");
  }
- ui.force=1;
+ /* A moving morph redraws the page it moves, but never a dialog, the menu or NAME that is open over it: those draw once, and a redraw on every poll
+  * showed as a flicker (an OVERWRITE? dialog on a project SAVE while a morph or a journey ran). */
+ if(!ui.confirm&&!ui.menu&&!name_on())ui.force=1;
 }
 static void hp_rm_poll(uint32_t now)               /* every track's engine, each with its own phase */
 {

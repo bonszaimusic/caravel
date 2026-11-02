@@ -76,7 +76,7 @@ assert.equal(e.web_stasis_granular_get(0),2,'native FX > GRAIN K1 writes real gr
 e.web_enc(4,11);render(140);
 assert.equal(e.web_stasis_granular_get(1),11,'native FX > GRAIN K2 writes real scan');
 e.web_home_open(0);render(100);
-key(22);hold(22);
+key(22);key(22);hold(22);                                  // RANDOM, JOURNEY, STASIS
 assert.equal((e.web_action_state()>>8)&255,1,'STASIS ACTION bank');
 assert.equal((e.web_action_state()>>1)&1,1,'BANK HOLD opens setup');
 assert.equal(e.web_stasis_granular_get(14),1,'BANK HOLD opens GRAIN directly, no SELECT');

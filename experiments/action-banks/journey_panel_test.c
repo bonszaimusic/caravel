@@ -59,9 +59,9 @@ int main(void){
  /* the JOURNEY bank has no SETUP of its own: LEG is RANDOM's BARS and SHAPE is RANDOM's SHAPE, WAIT is A4, the slot follows the journey */
  hp_rm_reset();CHECK(hp_rm.state==HP_RM_IDLE);action_snap_slot=0;hp_j.wait=0;hp_j.set[0]=hp_j.set[3]=0;hp_rm.bars=1;hp_rm.shape=HP_RM_LINEAR;
  CHECK(action_bank==0u);hold(0,700);CHECK(action_setup==1u);               /* SETUP on in RANDOM ... */
- tap(0);CHECK(action_bank==ACT_BANK_JOURNEY&&action_setup==0u);   /* ... is left when JOURNEY is entered */
+ tap(0);CHECK(action_bank==ACT_BANK_JOURNEY&&action_setup==1u);   /* ... stays open in JOURNEY, which shows its own SETUP */
  /* BANK hold in the JOURNEY bank opens its own SETUP: K1 SCOPE (THIS / ALL), K2 TRANSPORT (FREE / CONT / START); K3 and K4 edit nothing */
- hold(0,700);CHECK(action_setup==1u&&strstr(ui.msg,"JOURNEY SETUP")!=NULL);
+ CHECK(action_setup==1u);
  CHECK(action_setup_value(0)==0&&action_setup_value(1)==0&&action_setup_value(2)==-1&&action_setup_value(3)==-1);
  {char n[24],v[24];action_setup_caption(0,n,v);CHECK(!strcmp(n,"SCOPE")&&!strcmp(v,"THIS"));action_setup_caption(1,n,v);CHECK(!strcmp(n,"TRANSP")&&!strcmp(v,"FREE"));
   action_setup_caption(2,n,v);CHECK(!strcmp(v,"--"));}
@@ -72,6 +72,7 @@ int main(void){
  action_setup_turn(1,-9);CHECK(hp_j.tp==0u);
  action_setup_turn(2,3);action_setup_turn(3,3);CHECK(hp_rm.bars==1u&&hp_j.scope==0u&&hp_j.tp==0u);
  hold(0,700);CHECK(action_setup==0u);
+ hold(0,700);CHECK(action_setup==1u&&strstr(ui.msg,"JOURNEY SETUP")!=NULL);hold(0,700);CHECK(action_setup==0u);   /* BANK hold opens it here too */
  /* in RANDOM's SETUP, K1 BARS and K4 SHAPE are the journey's LEG and SHAPE: at once while nothing runs ... */
  goto_bank(0u);hold(0,700);CHECK(action_setup==1u);
  action_setup_turn(0,2);CHECK(hp_rm.bars==4u&&hp_j.set[0]==0u);
