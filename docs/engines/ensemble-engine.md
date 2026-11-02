@@ -53,7 +53,7 @@ them like any engine control) and stored in projects and user presets.
 - **Engine switches:** the ring lives in the part's engine memory, which every part already has. Another engine that uses that memory zeroes it; when the part
   was away (SEM and the engines without memory leave it as it is) the ring is cleared as soon as ENSEMBLE runs again, so no old sound comes back.
 - **Level:** the three taps are averaged with a 1.19 make-up, so switching the ensemble on changes the level of a sustained chord by a dB or two
-  (measured on the host: between about -4 and +0.5 dB depending on the preset; not a loudness standard).
+  (measured on the host with the renders of `tools/ensemble_audition.c`: between about -3 dB (GLASS CHOIR) and -0.3 dB (VINTAGE STRINGS) of RMS depending on the preset; not a loudness standard).
 
 ## Numbers (what was and was not measured)
 
