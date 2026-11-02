@@ -60,7 +60,7 @@ Hold BANK in the JOURNEY bank: **K1 SCOPE** (`THIS` or `ALL`) and **K2 TRANSPORT
   - **CONT** (continue): the time is the **transport's musical time**: a leg of 8 bars takes 8 bars of the running clock, a tempo change (or an external tempo) speeds it up or slows it down, and **Stop freezes the leg and the WAIT**. Start or Continue let it go on from where it stood. PLAY with the transport stopped says `JOURNEY: WAITS FOR PLAY`.
   - **START:** like CONT, and every **Start** (PLAY from stop; an external MIDI Start) also **begins the journey again** from its first filled slot in its direction, with a leg from the live values. An external MIDI Continue only resumes.
 
-RANDOM morphs stay free (milliseconds). Held, paused and PLAY-again follow the same time base. **Not hardware-tested:** the transport time is host-tested with the internal clock only; the external clock uses the same counter but is not verified.
+RANDOM morphs stay free (milliseconds). Held, paused and PLAY-again follow the same time base. **Not hardware-tested:** the transport time is host-tested with the internal clock and with a simulated external MIDI clock (ideal pulses through the real MIDI queue: tempo from the pulses, Stop, Continue, Start); jitter and a real cable and controller are not covered.
 
 ## One engine and one set of settings per track
 

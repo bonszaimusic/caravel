@@ -29,7 +29,7 @@ assert.equal(dsp(1),0,'Default zero scan');
 assert.equal(dsp(3),0,'Default forward');
 tap(6);tap(6);
 assert.equal(e.web_action_state()&1,1,'HOME double tap');
-key(22);assert.equal((e.web_action_state()>>8)&255,1,'STASIS bank');
+key(22);key(22);assert.equal((e.web_action_state()>>8)&255,1,'STASIS bank (RANDOM, JOURNEY, STASIS)');
 hold(22);assert.equal((e.web_action_state()>>1)&1,1,'SETUP ON');
 assert.equal(dsp(14),1,'BANK HOLD opens STASIS GRAIN immediately');
 assert.equal(setting(0),1,'K1 grain length on direct setup');

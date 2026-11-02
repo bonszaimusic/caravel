@@ -153,6 +153,13 @@ jobs:
             -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
             experiments/action-banks/journey_transport_test.c -o build/journey-transport -lm
           build/journey-transport
+      - name: MORPH JOURNEY TRANSPORT on a simulated external MIDI clock - tempo from the pulses, Stop, Continue, Start
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
+            experiments/action-banks/journey_extclock_test.c -o build/journey-extclock -lm
+          build/journey-extclock
       - name: MORPH JOURNEY stress - four concurrent journeys, 300k-step chaos run, six simulated hours, host timings
         run: |
           cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
