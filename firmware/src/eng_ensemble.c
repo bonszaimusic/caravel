@@ -166,7 +166,7 @@ static const preset_t ENS_PRESETS[] = {
 };
 
 static const engine_t ENG_ENSEMBLE = {
-    .name = "ENSEMBLE", .page_title = {"TIMBRE", "ENSEMBLE"},
+    .name = "ENSEMB", .page_title = {"TIMBRE", "ENSEMBLE"},
     .edit = {
         {"REG", F_PCT, 0, 127, 64, 0, 0},
         {"MORPH", F_PCT, 0, 127, 0, 0, 0},

@@ -96,7 +96,7 @@ static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-",
 #else
                                              "-",
 #endif
-                                             "SEM", "HADES", "DRONE", "ENSEMBLE",
+                                             "SEM", "HADES", "DRONE", "ENSEMB",
 };
 
 /* the track's FILTER (Caravel 0.3.0, fx.c track_filter; P_FILT): -64 .. 63, negative a low-pass, positive a high-pass, 0 OFF. Not an enum: its

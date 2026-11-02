@@ -6,7 +6,7 @@ Everything below is verified on the host only (real firmware code in the host ha
 
 ## Selecting ENSEMBLE
 
-Select **ENSEMBLE** in PRESETS or with EDIT held and KNOB 1 (it is the last engine in the list). Engine ID 17 identifies it; no existing engine number
+Select **ENSEMB** in PRESETS or with EDIT held and KNOB 1 (it is the last engine in the list). ENSEMB is the engine's name on the display (the PRESETS cell is too narrow for the full word: the UI lint cuts `ENSEMBLE` to `ENSEM…`); this guide and the code call it ENSEMBLE. Engine ID 17 identifies it; no existing engine number
 changed. A project that holds engine 17 is not read by older firmware: **0.9.0 shows that slot as empty** (host test with real flash images: the slot reads as unused, a
 load says nothing, nothing crashes; saving over it there replaces it, and a firmware that has ENSEMBLE reads it again). Versions before 0.9.0 were not tested, assume the same.
 

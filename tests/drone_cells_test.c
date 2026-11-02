@@ -98,8 +98,8 @@ static int dc_bounds(const drone_part_t *s)
 static int dc_metadata(void)
 {
     dc_setup(5, V_LEGATO); track_t *t = &trk[0];
-    int bad = check("cells: 352 bytes, legacy104 prefix, engine16, one host voice, TOPO0..5",
-        ENGI_DRONE == 16 && NENGINES == 17 && ENG_DRONE.poly == 1 && trk_nvoice(t) == 1 &&
+    int bad = check("cells: 352 bytes, legacy104 prefix, engine16 (NENGINES 18), one host voice, TOPO0..5",
+        ENGI_DRONE == 16 && NENGINES == 18 && ENG_DRONE.poly == 1 && trk_nvoice(t) == 1 &&
         ENG_DRONE.mem == 352 && ENG_DRONE.mem <= ENG_MEM_PART &&
         ENG_DRONE.npresets == 16 && ENG_DRONE.edit[3].min == 0 && ENG_DRONE.edit[3].max == 5);
     static const char *const names[] = {"PAIRS", "CHAIN", "RING", "CELLPAIR", "CELLCHN", "CELLRING"};

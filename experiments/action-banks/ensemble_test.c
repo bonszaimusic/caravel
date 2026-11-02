@@ -83,6 +83,7 @@ int main(void)
 
     /* 1. the tables: the engine's place and its eight controls */
     CHECK(NENGINES == 18u && ENGI_ENSEMBLE == 17u && ENGINES[ENGI_ENSEMBLE] == &ENG_ENSEMBLE && eng_ok(ENGI_ENSEMBLE));
+    CHECK(!strcmp(ENG_ENSEMBLE.name, "ENSEMB") && !strcmp(N_ENGNAME[ENGI_ENSEMBLE], "ENSEMB"));   /* the display name fits the PRESETS cell (the UI lint) */
     CHECK(ENGINES[ENGI_HADES] == &ENG_HADES && ENGINES[ENGI_DRONE] == &ENG_DRONE && ENGINES[ENGI_SEM] == &ENG_SEM);   /* nothing renumbered */
     CHECK(eng_vis(NENG_SHOWN - 1u) == ENGI_ENSEMBLE && eng_rank(ENGI_ENSEMBLE) == NENG_SHOWN - 1u);
     CHECK(ENG_ENSEMBLE.npresets == 4u && !strcmp(ENG_ENSEMBLE.presets[0].name, "VINTAGE STRINGS") && !strcmp(ENG_ENSEMBLE.presets[1].name, "GLASS CHOIR")

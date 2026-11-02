@@ -2,7 +2,7 @@
 
 ## [Unreleased] - development branch `feature/ensemble-engine` (not part of 0.9.0)
 
-- **New engine ENSEMBLE (engine 17, append-only; no existing number changes):** strings, choir and dark texture. Three oscillator registers (16', 8', 4') into one
+- **New engine ENSEMBLE (shown as `ENSEMB`; engine 17, append-only; no existing number changes):** strings, choir and dark texture. Three oscillator registers (16', 8', 4') into one
   state-variable filter whose timbre follows MORPH (strings, a resonant choir formant with breath, dark and rough), and a built-in three-tap ensemble (one ring in
   the part's engine memory, two LFOs, 6.0 / 8.5 / 11 ms taps) applied to the track's mix before DIST / INSERT / FILTER and the sends, so the REV send, HALL and STASIS
   hear it. Eight controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), four factory presets (VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD), at most

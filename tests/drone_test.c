@@ -45,8 +45,8 @@ static void dr_block(track_t *t, int32_t *out, const vmod_t *m)
 static int dr_controls(void)
 {
     int bad = 0; dr_setup(); track_t *t = &trk[0];
-    bad += check("DRONE appended at ID16, NENGINES17, one voice and claimed pool",
-        ENGI_DRONE == 16 && NENGINES == 17 && ENGINES[16] == &ENG_DRONE &&
+    bad += check("DRONE appended at ID16 (ENSEMBLE after it: NENGINES 18), one voice and claimed pool",
+        ENGI_DRONE == 16 && NENGINES == 18 && ENGINES[16] == &ENG_DRONE &&
         ENG_DRONE.poly == 1 && trk_nvoice(t) == 1 && eng_ok(16) &&
         ENG_DRONE.mem == sizeof(drone_part_t) && ENG_DRONE.mem <= ENG_MEM_PART &&
         eng_mem_owner[0] == 17);
