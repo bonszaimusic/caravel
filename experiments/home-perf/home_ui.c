@@ -380,8 +380,82 @@ static void hp_setup_cell(uint32_t k,int y)
  cv_free_text(x+4,y+25,&AF_M,value,T_TEXT,T_RAISE,48);
 }
 #endif
+/* MOCK-UP ONLY (design/home-layout): hp_layout 1 = the common footer instead of the preset card and a larger ACTION zone, 2 = the same with a sea chart
+ * (the caravel sails between S1..S4). hp_mock_ship = the ship's place 0..1000 along the chart, hp_mock_mode 0 sails, 1 at anchor. */
+static int hp_layout,hp_mock_ship,hp_mock_mode;
+static void hp_sea(int y)                     /* y: top of the chart strip (34 px high) */
+{
+ int x0=84,x1=226;
+ for(int x=8;x<232;x+=6)cv_rect(x,y+19+((x/6)&1),3,1,T_LINE);   /* the waterline */
+ for(int i=0;i<4;i++){                        /* S1..S4: a buoy and its number; filled when the slot holds a sound */
+  int bx=x0+(x1-x0)*i/3;int full=hp_rm_snapshot_count((uint32_t)i)!=0u;
+  char n[3]={(char)('1'+i),0,0};
+  cv_rect(bx,y+11,2,8,full?T_THEME:T_LINE);cv_rect(bx+2,y+11,4,3,full?T_THEME:T_LINE);
+  cv_text(bx-2,y+21,&AF_S,n,full?T_TEXT:T_MID);
+ }
+ int px=x0+(x1-x0)*hp_mock_ship/1000;
+ ship_draw(px-14,y+2-(hp_mock_mode?0:((px/6)&1)),1,T_ACCENT);
+ if(hp_mock_mode)cv_rect(px,y+18,2,5,T_MID);                    /* the anchor line */
+}
+static void hp_draw_home2(void)
+{
+ hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
+ char title[48],preset[16];int changed=hp_sound_changed(TSEL);
+ draw_head();for(uint32_t band=0;band<2;band++){cv_begin(240,108,T_BG);cv_oy=-(int32_t)(108*band);cv_bg=T_BG;
+ int y=2;
+ for(uint32_t half=0;half<2;half++){
+  uint32_t row=first+half;int active=row==h->active;cv_bg=T_BG;
+  if(row>=h->count)continue;
+  uint16_t fill=active?T_ACCENT:T_SURF,ink=active?T_INK:T_MID;
+  cv_rrect(3,y,234,active?14:12,3,fill,T_BG);cv_bg=fill;
+  perf_format(title,sizeof title,"%s %u/%u",hp_row_name(h,row),row+1,h->count);cv_text(7,y,&AF_S,title,ink);
+  if(active&&action_enabled&&action_setup)cv_text_r(232,y,&AF_S,"SETUP",ink,fill);
+  for(uint32_t k=0;k<4;k++){
+   if(active && action_enabled && action_setup)hp_setup_cell(k,y+16);
+   else hp_perf_cell(h->cell[row][k],k,y+(active?16:13),active);
+  }
+  y+=active?(action_enabled?72:92):45;
+ }
+ int ya=y+3;                                    /* the ACTION zone */
+ if(action_enabled){
+  cv_rrect(3,ya,234,hp_layout==2?72:64,5,T_SURF,T_BG);cv_bg=T_SURF;
+  char owner[4];hp_rm_snapshot_owner(action_snap_slot,owner);
+  if(action_bank==0u)perf_format(title,sizeof title,"%s RANDOM  S%u:%s",action_setup?"SETUP":"ACTION",action_snap_slot+1u,owner);
+  else if(action_bank==ACT_BANK_JOURNEY)perf_format(title,sizeof title,"%s JOURNEY  %s",action_setup?"SETUP":"ACTION",!hp_j.on?"OFF":hp_j.paused?"PAUSE":hp_j.held?"HOLD":hp_j.phase?"WAIT":"PLAY");
+  else perf_format(title,sizeof title,"%s %s",action_setup?"SETUP":"ACTION",action_bank_names[action_bank]);
+  int ky;
+  if(hp_layout==2){
+   cv_rrect(7,ya+4,68,22,4,T_RAISE,T_SURF);cv_text_in(7,ya+6,68,&AF_S,action_bank==0u?"RANDOM":action_bank==ACT_BANK_JOURNEY?"JOURNEY":action_bank_names[action_bank],T_ACCENT,T_RAISE);
+   hp_sea(ya+2);ky=ya+38;
+  }else{cv_text(8,ya+3,&AF_M,title,T_ACCENT);ky=ya+24;}
+  for(uint32_t k=0;k<4;k++){
+   const char*label=action_labels[action_bank][k];char custom[24];
+   if(action_bank==0u&&k==2u&&hp_rm_snapshot_count(action_snap_slot)){perf_format(custom,sizeof custom,"GO S%u",action_snap_slot+1u);label=custom;}
+   else if(action_bank==0u&&k==3u){perf_format(custom,sizeof custom,"S%u:%s >",action_snap_slot+1u,owner);label=custom;}
+   else if(action_bank==ACT_BANK_JOURNEY){
+    if(k==0u)label=!hp_j.on?"PLAY":hp_j.paused?"RESUME":"PAUSE";
+    else if(k==1u)label=hp_j.rev?"DIR REV":"DIR FWD";
+    else if(k==2u){int nx=hp_j_next(hp_j.on?hp_j.tgt:action_snap_slot,hp_j.rev);if(nx>=0)perf_format(custom,sizeof custom,"NEXT S%u",(uint32_t)nx+1u);else perf_format(custom,sizeof custom,"NEXT --");label=custom;}
+    else{perf_format(custom,sizeof custom,"WAIT %u",(uint32_t)hp_j_waits[hp_j.wait<6u?hp_j.wait:0u]);label=custom;}
+   }
+   int kh=hp_layout==2?30:34;int kx=7+(int)k*57;cv_rrect(kx,ky,54,kh,4,T_RAISE,T_SURF);
+   const aafont_t*f=text_w(&AF_M,label)<=48?&AF_M:&AF_S;
+   cv_text_in(kx,ky+(kh-(f==&AF_M?15:12))/2,54,f,label,T_TEXT,T_RAISE);
+  }
+ }else cv_free_text(5,ya+4,&AF_S,ui.msg_t?ui.msg:"SELECT: ROW / ALGO: TRACK",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+ {                                               /* the common footer: engine, preset, page */
+  int fy=198;sound_name(TSEL,preset);cv_bg=T_BG;
+  cv_text(8,fy+1,&AF_S,ENGINES[TSEL->eng_req%NENGINES]->name,T_MID);
+  perf_format(title,sizeof title,"%s%s",preset[0]?preset:"CUSTOM",changed?"*":"");
+  cv_text(8+text_w(&AF_S,ENGINES[TSEL->eng_req%NENGINES]->name)+8,fy,&AF_M,title,T_TEXT);
+  cv_rrect(190,fy-1,47,19,4,T_ACCENT,T_BG);cv_text_in(190,fy+1,47,&AF_S,"HOME",T_INK,T_ACCENT);
+ }
+ cv_blit(0,24+108*band);}
+ cv_oy=0;
+}
 static void hp_draw_home(void)
 {
+ if(hp_layout){hp_draw_home2();return;}
  hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
  char title[48],preset[16];int changed=hp_sound_changed(TSEL),member=pair_member(TSEL);
  draw_head();for(uint32_t band=0;band<2;band++){cv_begin(240,108,T_BG);cv_oy=-(int32_t)(108*band);cv_bg=T_BG;
