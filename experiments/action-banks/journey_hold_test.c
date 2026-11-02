@@ -79,6 +79,21 @@ int main(void){
  CHECK(hp_j.on&&!hp_j.paused&&hp_j.held==0u&&hp_j.tgt==0u&&hp_rm.state==HP_RM_RECALL);
  hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();sel(0);
 
+ /* 4c. a slot that holds something a recall refuses (a leftover, or saved under another engine) is skipped, not a dead end: S4 is unplayable, the journey goes S3 > S1 */
+ sel(0);hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();hp_rm_snapshot_clear();hp_rm.bars=1;hp_j.wait=0;hp_j.rev=0;
+ set_all(10,-40,20,-20);action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));set_all(50,0,20,-20);action_snap_slot=1;CHECK(hp_rm_snapshot_store(1));set_all(90,40,20,-20);action_snap_slot=2;CHECK(hp_rm_snapshot_store(2));
+ {hp_rm_snap_t*q=&hp_rm_snap[0][3];memset(q,0,sizeof*q);hp_ref_t r=hp_track_ref(0,P_MUTE,0xFFFF);hp_rm_snapshot_write_ref(q,0,r);q->values[0]=1;q->count=1;q->scope=HP_RM_TRACK;}
+ CHECK(hp_rm_snapshot_count(0,3)==1u&&hp_rm_snapshot_check(0,3)<0&&hp_rm_snapshot_check(0,2)>0&&hp_rm_snapshot_check(0,1)>0);
+ bank(ACT_BANK_JOURNEY);action_snap_slot=2;tap(1);run_ms(100);CHECK(hp_j.on&&hp_j.tgt==2u);
+ {uint8_t seen[4]={0,0,0,0};uint8_t last=hp_j.tgt;for(uint32_t g=0;g<9000u&&hp_j.on;g++){run_ms(10);if(hp_j.tgt!=last){last=hp_j.tgt;seen[last&3u]++;}}
+  CHECK(hp_j.on&&seen[0]>=2u&&seen[1]>=2u&&seen[2]>=2u&&seen[3]==0u);}                           /* it keeps going S1 S2 S3 and never targets S4 */
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();
+ /* only one playable slot left: PLAY says why instead of starting */
+ hp_rm_snapshot_clear();set_all(50,0,20,-20);action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));
+ {hp_rm_snap_t*q=&hp_rm_snap[0][3];memset(q,0,sizeof*q);hp_ref_t r=hp_track_ref(0,P_MUTE,0xFFFF);hp_rm_snapshot_write_ref(q,0,r);q->values[0]=1;q->count=1;q->scope=HP_RM_TRACK;}
+ bank(ACT_BANK_JOURNEY);tap(1);run_ms(100);CHECK(!hp_j.on&&strstr(ui.msg,"TARGET CHANGED")!=NULL);
+ hp_rm_snapshot_clear();hp_rm_reset();sel(0);
+
  /* 5. foreign controls are not in a track's set: T1's HOME also pins T2's REV and PAN */
  CHECK(web_home_assign(0,0,2,HP_TRACK,1,P_REV));CHECK(web_home_assign(0,0,3,HP_TRACK,1,P_PAN));
  hp_rm_snapshot_clear();hp_rm_reset();hp_rm.bars=1;sel(0);

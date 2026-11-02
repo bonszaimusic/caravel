@@ -10,6 +10,9 @@
   0.9.0 (host test with real flash images; nothing crashes; saving over it there replaces it). Host-tested only; not tried on
   an FM-1 and not judged by ear. See `docs/engines/ensemble-engine.md` and `docs/release-0100.md`.
 - **Version text `v0.10.0`:** the installer / release tools (`tools/release_artifacts.py`), the Pages workflow and the website scripts accept a two-digit minor number; the UI lint shows no finding with the longer text.
+- **Fix: a journey no longer dies at a slot a recall refuses.** A slot that holds something unplayable (a leftover or migrated slot, or one saved under another engine) stopped the journey at the previous slot (`SNAP: TARGET CHANGED`, easily missed); now such slots are skipped like empty ones. With fewer than two playable slots PLAY says `SNAP: TARGET CHANGED` (some slot holds a refused target) or `NEED 2 SNAPS`.
+- **Fix: `tools/caravel_backup.py` accepts project format 3** (0.9.0): it stopped with `Invalid HPM1 capsule` on a device holding projects saved by 0.9.0. The web installer's backup was not affected.
+
 
 ## [0.9.0] - 2026-11-02
 

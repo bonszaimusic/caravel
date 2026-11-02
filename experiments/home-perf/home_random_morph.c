@@ -346,18 +346,26 @@ static void hp_rm_snapshot_delete(uint32_t slot)      /* RANDOM SETUP, A4 hold: 
  * entire morph without partially moving any control.
  * Morph starts from the ACTUAL live values, including manual/frozen edits.
  */
+/* A slot a recall can play right now: it holds targets, the size is valid and every target is still a morph-safe control of the track's current engine
+ * with its value in range (a leftover slot, or one saved under another engine, may not be). No side effects. 0 empty, 1 playable, -1 holds something a recall refuses. */
+static int hp_rm_snapshot_check(uint32_t t,uint32_t slot)
+{
+ if(t>=NTRK||slot>=HP_RM_SNAP_SLOTS||!hp_rm_snap[t][slot].count)return 0;
+ const hp_rm_snap_t*snap=&hp_rm_snap[t][slot];
+ if(snap->count>HP_RM_SNAP_MAX)return -1;
+ for(uint32_t i=0;i<snap->count;i++){
+  hp_ref_t r=hp_rm_snapshot_ref(snap,i);
+  const param_desc_t*d=hp_desc(r);
+  if(!hp_rm_safe(r,d) || snap->values[i]<d->min || snap->values[i]>d->max)return -1;
+ }
+ return 1;
+}
 static int hp_rm_snapshot_recall_one(uint32_t t,uint32_t slot,uint32_t now)   /* on engine t */
 {
  if(t>=NTRK||slot>=HP_RM_SNAP_SLOTS||!hp_rm_snap[t][slot].count)return 0;
  const hp_rm_snap_t*snap=&hp_rm_snap[t][slot];
  if(snap->count>HP_RM_SNAP_MAX){ui_message("SNAP: INVALID SIZE");return 0;}
- for(uint32_t i=0;i<snap->count;i++){
-  hp_ref_t r=hp_rm_snapshot_ref(snap,i);
-  const param_desc_t*d=hp_desc(r);
-  if(!hp_rm_safe(r,d) || snap->values[i]<d->min || snap->values[i]>d->max){
-   ui_message("SNAP: TARGET CHANGED");ui.force=1;return 0;
-  }
- }
+ if(hp_rm_snapshot_check(t,slot)<0){ui_message("SNAP: TARGET CHANGED");ui.force=1;return 0;}
  hp_rm_reset();
  for(uint32_t i=0;i<snap->count;i++){
   hp_ref_t r=hp_rm_snapshot_ref(snap,i);
@@ -588,18 +596,18 @@ static void hp_journey_cc(uint32_t id,uint32_t value)
   hp_j_hi[i]=hi;}
 }
 static uint32_t hp_j_band(uint32_t v,uint32_t n){uint32_t b=v*n/128u;return b<n?b:n-1u;}
-static int hp_j_ready(const char**why)           /* any two snapshots will do: each slot is a scene, a leg moves exactly the controls stored in its target */
+static int hp_j_ready(const char**why)           /* any two playable snapshots will do: each slot is a scene, a leg moves exactly the controls stored in its target */
 {
- uint32_t n=0;
- for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++)if(hp_rm_snap[hp_j.trk][s].count)n++;
- if(n<2u){*why="NEED 2 SNAPS";return 0;}
+ uint32_t n=0,bad=0;
+ for(uint32_t s=0;s<HP_RM_SNAP_SLOTS;s++){int c=hp_rm_snapshot_check(hp_j.trk,s);if(c>0)n++;else if(c<0)bad++;}
+ if(n<2u){*why=bad?"SNAP: TARGET CHANGED":"NEED 2 SNAPS";return 0;}
  return 1;
 }
-static int hp_j_next(uint32_t from,uint32_t rev)   /* the next populated slot in the direction; -1 none */
+static int hp_j_next(uint32_t from,uint32_t rev)   /* the next playable slot in the direction (an empty slot, or one a recall refuses, is skipped); -1 none */
 {
  for(uint32_t i=1;i<=HP_RM_SNAP_SLOTS;i++){
   uint32_t s=(from+(rev?HP_RM_SNAP_SLOTS-i:i))%HP_RM_SNAP_SLOTS;
-  if(hp_rm_snap[hp_j.trk][s].count)return (int)s;
+  if(hp_rm_snapshot_check(hp_j.trk,s)>0)return (int)s;
  }
  return -1;
 }
@@ -649,7 +657,7 @@ static int hp_j_start(uint32_t now)
  hp_j.trk=(uint8_t)hp_et();                       /* the selected track's set of slots */
  if(!hp_j_ready(&why)){ui_message(why);ui.force=1;return 0;}
  uint32_t first=action_snap_slot%HP_RM_SNAP_SLOTS;
- if(!hp_rm_snap[hp_j.trk][first].count){int n=hp_j_next(first,hp_j.rev);if(n<0)return 0;first=(uint32_t)n;}
+ if(hp_rm_snapshot_check(hp_j.trk,first)<=0){int n=hp_j_next(first,hp_j.rev);if(n<0)return 0;first=(uint32_t)n;}   /* the selected slot is empty or unplayable: the next playable one */
  hp_j.on=1;hp_j.paused=0;hp_j.cur=(uint8_t)first;hp_j.starts=perf_starts;
  if(hp_j_leg(first,now)){hp_j_say("JOURNEY PLAY >S%u",first+1u,0u);if(hp_j.tp&&!song.playing){ui_message("JOURNEY: WAITS FOR PLAY");ui.force=1;}return 1;}
  return 0;
