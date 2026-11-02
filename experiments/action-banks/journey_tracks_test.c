@@ -92,6 +92,22 @@ int main(void){
   ui.confirm=0;ui.force=0;run_ms(100);forced=0;                                   /* ... and the page is redrawn again once it is closed */
   for(i=0;i<20u;i++){run_ms(20);forced+=ui.force!=0;}
   CHECK(forced>0u);}
+
+ /* 6. the FX filter (FILT, HP / LP) swings only between -70 and +70 in a RANDOM morph, whatever it was set to */
+ hp_rm_reset_all();ui.home=1;
+ CHECK(web_home_assign(3,1,0,HP_TRACK,3,P_FILT));
+ sel(3);hp_rm.scope=HP_RM_ROW;hp_rm.depth=100;hp.track[3].active=1;
+ {int lo=99,hi=-99;
+  for(uint32_t n=0;n<90u;n++){
+   trk[3].p[P_FILT]=(int16_t)(n%3u==0?-64:n%3u==1?0:63);
+   hp_rm_reset();hp_rm_start(fm1_ms+n);
+   int c=cell_of(3,3,P_FILT);CHECK(c>=0);
+   int t=hp_eng[3].cell[c].to;if(t<lo)lo=t;if(t>hi)hi=t;
+   CHECK(t>=-45&&t<=44);
+  }
+  CHECK(lo<-30&&hi>30);                                                               /* it does use most of the allowed swing */
+  char v[24];const char*u;param_format(hp_desc(hp_track_ref(3,P_FILT,0xFFFF)),-45,v,&u);CHECK(!strcmp(v,"70"));
+  param_format(hp_desc(hp_track_ref(3,P_FILT,0xFFFF)),44,v,&u);CHECK(!strcmp(v,"69"));}
  printf("JOURNEY TRACKS PASS: %u checks.\n",checks);
  return 0;
 }

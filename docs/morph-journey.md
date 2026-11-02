@@ -31,6 +31,8 @@ A journey plays the **selected track's** slots. Everything else it needs is alre
 | WAIT | **A4 tap in the JOURNEY bank** (steps 0 / 1 / 2 / 4 / 8 / 16 bars), or a CC | journey only. **In RANDOM, A4 tap selects the next snapshot slot instead** |
 | slot | RANDOM **A4 tap** (next slot), or the journey itself | the selected slot follows the journey; in the JOURNEY bank A4 tap is WAIT, so the slot is not changed there |
 
+A RANDOM morph moves the FX filter (FILT, HP / LP) only between -70 and +70; a journey leg goes exactly to the stored value.
+
 DEPTH and SCOPE exist only in RANDOM: a leg goes to stored values, and the controls it moves are already in the snapshot.
 
 ## Every track has its own slots

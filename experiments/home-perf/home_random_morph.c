@@ -70,6 +70,8 @@ static int hp_rm_random_allowed(hp_ref_t r,const param_desc_t*d)
 /* Hz constraints apply to F_CUTOFF synth and filter parameters ONLY, not
  * bipolar P_FILT or sound-specific non-frequency parameters. Use the same
  * CUTOFF_HZ table as the real FM-1 user interface and DSP. */
+#define HP_RM_FILT_LO (-45)   /* FILT shows -45 as 70 (LP), 44 as 69 (HP): a RANDOM morph never goes past 70 % either way */
+#define HP_RM_FILT_HI 44
 static void hp_rm_cut_bounds(const param_desc_t*d,int32_t*lo,int32_t*hi)
 {
  *lo=d->min;*hi=d->max;
@@ -424,6 +426,10 @@ static int hp_rm_start_one(uint32_t now)
   }
   int32_t lower,upper;
   hp_rm_cut_bounds(d,&lower,&upper);
+  if(c->ref.kind==HP_TRACK&&hp_tid(c->ref)==P_FILT){   /* the FX filter swings only between -70 and +70 (the display's percent: raw -45 .. +44 of -64 .. 63) */
+   if(lower<HP_RM_FILT_LO)lower=HP_RM_FILT_LO;
+   if(upper>HP_RM_FILT_HI)upper=HP_RM_FILT_HI;
+  }
   /* Never force a user's manually chosen out-of-band cutoff to jump:
    * leave it untouched until the user explicitly moves it into 150..6000Hz. */
   if(d->fmt==F_CUTOFF && (cur<lower||cur>upper)){
