@@ -42,7 +42,9 @@ Firmware: `caravel-0.10.0.fwsc`. Matching offline emulator: `Caravel-0.10.0-Emul
   and `ensemble_layers_test` (the five recipes, the voice budget, MIDI on two channels), plus the existing regression (147 golden renders), UI (0 lint findings with the longer version text),
   editor, Pair, HOME, STASIS and project suites. Golden hashes come from the Linux CI.
 - The complete validation of the exact firmware source passed (target build, resource guards, native, sanitizer, storage/USB, audio, WASM and Android-emulator suites).
-  Target margins in the three layouts (default, one core, no RAM DSP): @@SIZES@@
+  Target margins in the three layouts (default, one core, no RAM DSP): image 559,420 / 560,236 / 559,164 B in the 581,564 B app slot, so **22,144 / 21,328 / 22,400 B are left** (0.9.0: 25,372 / 24,176 / 25,644 B; the engine and its ten
+  later presets cost about 3.2 KB); RAM .data+.bss 68,700 B of 73,728 B (5,028 B headroom, 932 B above the 4,096 B guard; 64,632 B in the one-core layout) and the pool 10,168 B spare, both unchanged by the engine
+  (its memory is the per-part engine memory every part already has). The gates (4 KB flash, 300 B RAM above the guard, 2 KB pool) hold in all three layouts.
 - CPU: only static counts. Host instructions per sample for the ENSEMBLE presets are 1,139 to 1,465 against 1,111 to 1,224 for SEM (about a third more per voice); the target's loop costs of
   `ens_render` (342) and `ens_post` (176) are static. **No CPU percentage was measured on a device.**
 - **Not tried on an FM-1, and nobody has listened to the engine or the presets on the device.** WAV renders from the host DSP exist for listening, but a judgement of how any preset or recipe

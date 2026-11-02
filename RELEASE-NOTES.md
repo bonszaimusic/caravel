@@ -18,7 +18,7 @@ scripts accept the two-digit minor number.
 
 **What is tested.** Host tests with the real firmware code (three ENSEMBLE suites, the existing
 regression, UI, editor, Pair, HOME and project suites) and the complete validation of the exact
-source. @@SIZES_SHORT@@ CPU only as static counts. **Not tried on an FM-1 and not listened to on the
+source. About 22 KB of flash stay free (0.9.0: about 25 KB); RAM and pool are unchanged. CPU only as static counts. **Not tried on an FM-1 and not listened to on the
 device**; the recipes and the CPU cost on hardware are not verified.
 
 Download `Caravel-0.10.0-FM1-Testpaket.zip` for the local installer, firmware,
