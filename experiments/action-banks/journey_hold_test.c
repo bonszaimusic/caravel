@@ -115,6 +115,13 @@ int main(void){
  hp_rm.scope=HP_RM_TRACK;
  /* saving over a slot that belongs to another track says so */
  sel(1);set_all(10,-40,20,-20);action_snap_slot=0;hold(4,700);CHECK(strstr(ui.msg,"WAS T1")!=NULL);
+ /* issue #35: FM6's patch selector (P_E7) is never captured, whatever the HOME pins */
+ {hp_ref_t r={0};r.kind=HP_TRACK;r.aux=1;r.engine=ENGI_FM6;r.id=7;r.track=0;r.page=0xFFFFu;
+  CHECK(hp_rm_fm6_patch(r));r.id=6;CHECK(!hp_rm_fm6_patch(r));r.id=7;r.engine=ENGI_SAMPLE;CHECK(!hp_rm_fm6_patch(r));
+  r.engine=ENGI_FM6;r.id=7;
+  hp_rm_reset();hp.track[0].count=1;hp.track[0].cell[0][0]=r;hp.track[0].cell[0][1]=hp.track[0].cell[0][2]=hp.track[0].cell[0][3]=(hp_ref_t){0};
+  hp_rm.scope=HP_RM_TRACK;song.sel=0;trk[0].engine=trk[0].eng_req=ENGI_FM6;
+  CHECK(!hp_rm_capture(0));}
  printf("JOURNEY HOLD PASS: %u checks.\n",checks);
  return 0;
 }

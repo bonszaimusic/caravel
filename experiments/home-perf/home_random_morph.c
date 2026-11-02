@@ -52,6 +52,9 @@ static int hp_rm_safe(hp_ref_t r,const param_desc_t*d)
  if(r.kind==HP_PAIR)return r.id==2; /* morph amount only; never pair on/off */
  return 0; /* macro/switch/special controls require independent priority rules */
 }
+/* FM6's patch selector (P_E7, aux 1): passes hp_rm_safe, but the engine rewrites it, so a morph or a journey leg can never reach
+ * the stored value (issue #35). It is not captured; a snapshot saved earlier that holds it still recalls (the engine wins). */
+static int hp_rm_fm6_patch(hp_ref_t r){return r.kind==HP_TRACK&&r.aux&&r.engine==ENGI_FM6&&r.id==7u;}
 /* Random safety is stricter than manual/snapshot control. Snapshot recall may
  * intentionally restore a saved LEVEL; RANDOM must never randomise gain. */
 static int hp_rm_random_allowed(hp_ref_t r,const param_desc_t*d)
@@ -154,7 +157,7 @@ static int hp_rm_add(hp_ref_t r,int random_only)
  if(!r.kind)return 1;
  if(r.track==255u)r.track=(uint8_t)song.sel; /* pin owner at capture, never follow later selection */
  const param_desc_t*d=hp_desc(r);
- if(!hp_rm_safe(r,d) || (random_only&&!hp_rm_random_allowed(r,d)))return 1;
+ if(!hp_rm_safe(r,d) || hp_rm_fm6_patch(r) || (random_only&&!hp_rm_random_allowed(r,d)))return 1;
  for(uint32_t i=0;i<hp_rm.used;i++)
   if(hp_rm.cell[i].context==hp_rm.context && hp_rm_same(hp_rm.cell[i].ref,r))return 1;
  if(hp_rm.used==HP_RM_MAX)return 0; /* preserve all other RETURN origins */

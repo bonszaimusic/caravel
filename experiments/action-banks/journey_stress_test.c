@@ -43,7 +43,7 @@ int main(void){
   for(unsigned t=0;t<4;t++)for(unsigned id=0;id<P_COUNT&&n<128;id++){
    hp_ref_t r=hp_track_ref(t,id,0xFFFF);const param_desc_t*d=hp_desc(r);
    if(!hp_rm_safe(r,d))continue;
-   if(r.aux&&r.engine==ENGI_FM6&&r.id==7)continue;   /* FM6's patch selector: the engine rewrites it (hp_rm_safe lets it through; a finding, not this test's subject) */
+   if(hp_rm_fm6_patch(r))continue;                   /* FM6's patch selector is never captured (issue #35): the fixture enumerates what a capture would take */
    for(unsigned sl=0;sl<4;sl++){hp_rm_snapshot_write_ref(&hp_rm_snap[sl],n,r);hp_rm_snap[sl].values[n]=d->min+(sl*37+n*11)%((unsigned)(d->max-d->min)+1u);}
    n++;
   }
