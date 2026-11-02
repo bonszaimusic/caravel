@@ -490,7 +490,7 @@ static void hp_draw_home(void)
    cv_rrect(3,y+3,234,38,5,T_SURF,T_BG);cv_bg=T_SURF;
    cv_rrect(7,y+7,60,22,4,T_RAISE,T_SURF);cv_text_in(7,y+9,60,&AF_S,"ACTION",T_MID,T_RAISE);
    hp_sea(y+5);
-   cv_free_text(5,y+44,&AF_S,ui.msg_t?ui.msg:"SEL:ROW ALGO:TRACK HOME x2:ACTION",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+   cv_free_text(5,y+44,&AF_S,ui.msg_t?ui.msg:"HOME x2: ACTION",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
   }
 #endif
  {                                                     /* the common footer: engine, preset (the partner's and the morph for a pair member), page */
