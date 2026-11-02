@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Sizes of the three firmware layouts (default, one core, no RAM DSP) of any branch. Builds only; nothing is published or uploaded.
+name: Layout sizes
+
+on:
+  push:
+    branches: [tmp/layouts]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: layouts-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VER: 0.9.0
+  CC: cc -include stdint.h
+  FELUCCA_SLICE: '0'
+  CARAVEL_REVERB_MINIMAL: '1'
+
+jobs:
+  layouts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install build dependencies
+        run: python -m pip install Pillow fonttools
+      - name: Install JieLi pi32v2 toolchain
+        run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Fetch and hash-verify pinned JieLi AC79 SDK files
+        shell: bash
+        run: |
+          # Only three SDK binaries are used by our package builder. Gitee
+          # full-repository git clones can stall indefinitely: first try raw
+          # downloads; independently verify exact versioned SHA-256 hashes.
+          set -eu
+          root="$RUNNER_TEMP/ac79-sdk/cpu/wl82/tools"
+          base="https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/raw/AC79NN_SDK_V1.2.1_2023-12-13/cpu/wl82/tools"
+          mkdir -p "$root/cfg"
+          ok=1
+          for f in uboot.boot cfg_tool.bin cfg/eq_cfg_hw.bin; do
+            curl -fLsS --connect-timeout 8 --max-time 25 --retry 2 --retry-delay 2 \
+              -o "$root/$f" "$base/$f" || ok=0
+          done
+          if [ "$ok" -eq 1 ] && python3 - <<'PY'
+          import hashlib, pathlib, os
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"ac79-sdk/cpu/wl82/tools"
+          expected={
+              "uboot.boot":"4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
+              "cfg_tool.bin":"276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
+              "cfg/eq_cfg_hw.bin":"41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
+          }
+          assert all((root/name).exists() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+                     for name,sha in expected.items()), "SDK raw downloads did not match locked hashes"
+          print("SDK binaries match pinned SHA-256 fingerprints")
+          PY
+          then
+            echo "Using verified pinned SDK binaries"
+          else
+            echo "Raw SDK unavailable/mismatched; retrying bounded full-repo clone"
+            rm -rf "$RUNNER_TEMP/ac79-sdk"
+            timeout 240 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 clone \
+              --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          fi
+      - name: Verify far-call ABI and bounded startup-copy guards
+        env:
+          AUDIO_RAM_REQUIRE_RUNTIME: '1'
+        run: |
+          if ! command -v clang >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y clang
+          fi
+          python3 tests/audio_ram_ir_test.py -v
+      - name: Build the three layouts and print their sizes
+        env:
+          JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
+          AC79_SDK: ${{ runner.temp }}/ac79-sdk
+        run: |
+          echo "== default layout";python3 tools/build.py --binary-version "$VER" 2>&1 | tail -12
+          cp build/felucca.dis "$RUNNER_TEMP/default.dis" 2>/dev/null || cp build/*/felucca.dis "$RUNNER_TEMP/default.dis" || true
+          echo "== one core";FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -12
+          echo "== no RAM DSP";CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -12
+      - name: Instruction counts of the transport counter in the audio block
+        run: |
+          f=$(find build -name felucca.dis | head -1); echo "dis: $f"
+          for fn in events_block seq_start; do
+            n=$(awk -v fn="$fn" '$0 ~ "<"fn">:" {on=1; c=0; next} on && /^$/ {on=0} on {c++} END {print c+0}' "$f")
+            echo "$fn: $n lines"
+          done
+          awk '/<events_block>:/ {on=1} on && /div/ {print} on && /^$/ {on=0}' "$f" | head -20 || true
