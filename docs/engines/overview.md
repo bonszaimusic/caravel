@@ -19,7 +19,7 @@ facilities (ADSR, filter envelope, ARP, LFOs, MOD matrix, FX), so most of them c
 | **FM6** | Classic six-operator FM (the msfa/Dexed core), 32 algorithms, patches from the web editor or factory slots, macros on the device | Electric pianos, bells, FM basses and pads |
 | **PHYS** | Physical models: MODAL (bells, bars, plates), STRNG (plucked and bowed strings), MEMB (drum heads), SYMP (strings with sympathetic strings) | Mallets, plucks, hand drums, metallic textures |
 | **VOICE** | A formant oscillator (after Klatt, 1980): sung vowels from the keyboard, with breath and whisper | Choirs, vocal leads, talking basses |
-| **SAMPLE** | Built-in CC0 sample sets (PIANO, FLUTE; the SAX set was retired in 0.8.1 and plays PIANO) and three user slots (USR1..3, 80 KiB each, loaded with the web editor or `tools/fm1_sample_upload.py`) | Realistic instrument parts and your own sounds |
+| **SAMPLE** | Built-in CC0 sample sets (PIANO, FLUTE; the SAX set was retired in 0.9.0 and plays PIANO) and three user slots (USR1..3, 80 KiB each, loaded with the web editor or `tools/fm1_sample_upload.py`) | Realistic instrument parts and your own sounds |
 | **GRAIN** | A granular engine over the SAMPLE material and the user slots | Clouds, freezes, shimmer, glitch textures |
 | **SLICE** | A sample slicer played from the keys and the sequencer: 4/8/16/32 equal slices, AUTO onsets or manual slices | Breakbeat chopping, stutters, sliced loops |
 | **DRUM** | A drum kit of eight lanes (KICK, SNARE, CLAP, HAT CL, HAT OP, TOM, RIM, BELL) on the General MIDI map, several kits, and **DRUM-X** with A/B patches and MORPH | Drums and percussion, the grid, GM patterns ([DRUM-X](drum-x.md)) |

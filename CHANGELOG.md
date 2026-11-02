@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased] - planned 0.8.1
+## [Unreleased] - planned 0.9.0
 
-- **The SAX sample set is retired** to free 31,422 B of flash (the app slot had 352 B left after 0.8.0; the per-track Random Morph / Journey work needs room). SAMPLE offers PIANO and FLUTE only. SET 3 (SAX) keeps its place and plays PIANO, like the earlier retired sets TRANH and PERC: **a sound, user preset or project that used SAX now plays PIANO**, the SAMPLE preset SAX is gone from browsing, and the GRAIN factory preset GLITCH now uses PIANO as its source (GRAIN SRC 3 plays PIANO too). Nothing else changes; the SAX recordings stay in `assets/samples-cc0` but the build no longer reads them.
+- **The SAX sample set is retired** to free 31,422 B of flash (the app slot had 352 B left after 0.8.0; the target image is now 549,704 B, 31,860 B below the slot; the per-track Random Morph / Journey work needs room). SAMPLE offers PIANO and FLUTE only. SET 3 (SAX) keeps its place and plays PIANO, like the earlier retired sets TRANH and PERC: **a sound, user preset or project that used SAX now plays PIANO**, the SAMPLE preset SAX is gone from browsing, and the GRAIN factory preset GLITCH now uses PIANO as its source (GRAIN SRC 3 plays PIANO too). Nothing else changes; the SAX recordings stay in `assets/samples-cc0` but the build no longer reads them.
 
 ## [0.8.0] - 2026-11-01
 
