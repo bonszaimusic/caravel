@@ -80,7 +80,7 @@ with its own phase, length and rests; the keys, the A4 label and the sea chart a
 - **A RANDOM morph on a track holds that track's journey** (other tracks' journeys are not affected). A RANDOM morph started on the journey's track, by hand (RANDOM bank, A1) or its RETURN,
   **holds** the journey: it stops where it is (`HOLD`), and **when that morph is done it goes on by itself**, with a new leg from the live values
   to the same slot (or, if it was resting, with the rest of the pause). The picture below shows it. **A1 while held is PAUSE**: then it stays
-  paused until you press A1 again. **A3 NEXT** or **A3 GO Sx** in RANDOM steer the journey to a slot at once. RANDOM's A2 FREEZE on the journey's own
+  paused until you press A1 again. **A3 NEXT** or **A3 GO Sx** in RANDOM steer a running journey to a slot at once; **a paused journey stays paused** (GO is then a plain morph, and PLAY goes on with the journey's own leg). RANDOM's A2 FREEZE on the journey's own
   leg holds it like PAUSE does; a frozen RANDOM morph keeps the journey held.
 - **What every track does is always shown, in every bank:** four small boxes under the bank chip are T1 to T4 (accent fill: its journey sails or rests; outline: paused or held; theme fill: a RANDOM morph or GO moves it; grey: idle; bright frame: the selected track).
 - **What is running is always shown, in every bank.** The sea chart under the HOME rows is the status display: the caravel is the running morph or journey.

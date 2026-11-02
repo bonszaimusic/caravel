@@ -364,7 +364,10 @@ static void action_random(uint32_t action)
  else if(action==2u){
 #if HP_JVN
   if(hp_j.on&&hp_j.trk==song.sel&&hp_rm_snapshot_count(song.sel,action_snap_slot)){   /* GO during a journey steers it there smoothly and it goes on from that slot */
-   hp_j.paused=0;
+   if(hp_j.paused){                                   /* a PAUSED journey stays paused: GO is a plain morph, and PLAY later goes on with the journey's own leg */
+    hp_rm_snapshot_recall(song.sel,action_snap_slot,fm1_ms);
+    hp_j.held=2u;
+   }else
    if(hp_j_leg(action_snap_slot,fm1_ms)){char m[32];perf_format(m,sizeof m,"JOURNEY >S%u",action_snap_slot+1u);ui_message(m);}
   }else
 #endif

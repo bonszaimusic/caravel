@@ -68,6 +68,17 @@ int main(void){
  hp_j.on=hp_j.paused=hp_j.held=0;hp_j.wait=0;hp_rm_reset();sel(0);
 
 
+ /* 4b. GO Sx in RANDOM while the journey is PAUSED: a plain morph; the journey stays paused, and PLAY goes on with its own leg */
+ sel(0);set_all(50,0,20,-20);hp_j.wait=0;hp_j.rev=0;bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(300);CHECK(hp_j.on&&hp_j.tgt==0u);
+ tap(1);run_ms(50);CHECK(hp_j.paused&&hp_rm.state==HP_RM_FROZEN);
+ bank(0u);action_snap_slot=1;tap(3);run_ms(100);                                                  /* GO S2 */
+ CHECK(hp_j.on&&hp_j.paused&&hp_j.held==2u&&hp_rm.state==HP_RM_RECALL&&hp_j.tgt==0u);
+ {uint32_t g=0;while(hp_rm.state==HP_RM_RECALL&&g++<3000u)run_ms(10);}
+ run_ms(300);CHECK(hp_j.on&&hp_j.paused&&hp_rm.state==HP_RM_IDLE&&absd(trk[0].p[P_REV]-90)<=1);   /* it arrived at S2, nothing went on by itself */
+ bank(ACT_BANK_JOURNEY);tap(1);run_ms(100);                                                       /* PLAY: the journey's own leg from the live values */
+ CHECK(hp_j.on&&!hp_j.paused&&hp_j.held==0u&&hp_j.tgt==0u&&hp_rm.state==HP_RM_RECALL);
+ hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();sel(0);
+
  /* 5. foreign controls are not in a track's set: T1's HOME also pins T2's REV and PAN */
  CHECK(web_home_assign(0,0,2,HP_TRACK,1,P_REV));CHECK(web_home_assign(0,0,3,HP_TRACK,1,P_PAN));
  hp_rm_snapshot_clear();hp_rm_reset();hp_rm.bars=1;sel(0);

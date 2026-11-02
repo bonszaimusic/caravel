@@ -105,7 +105,7 @@ SCOPE ALL (RANDOM SETUP, K3) makes the RANDOM keys act on **every track at once*
 
 - **The journey keeps running when you change bank.** Use STASIS, PAIR or LIVE meanwhile; come back to JOURNEY to steer.
 - **Saving or deleting a snapshot of the journey's track ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on the same track only **holds** it (step 7).
-- **RANDOM's A3 (GO Sx) and the JOURNEY bank's A3 (NEXT) steer a running journey** to that slot at once and it goes on from there.
+- **RANDOM's A3 (GO Sx) and the JOURNEY bank's A3 (NEXT) steer a running journey** to that slot at once and it goes on from there. **A paused journey stays paused**: GO is then a plain morph, and PLAY afterwards goes on with the journey's own leg from where the sound stands.
 - **Hands win.** A knob you turn, or a MIDI CC, keeps its value for the rest of the leg; the next leg moves it again.
 - **BARS, SCOPE and SHAPE changed during a journey wait for the next leg**, so a running leg keeps its speed. The display shows the waiting value.
 - **A loaded project starts stopped** with S1 selected. Projects from before 0.8.0 get the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward). Projects from 0.7.1 to 0.8.0 are migrated: each stored target moves into the slot of its own track, at most 32 per slot (more are dropped, and the load says so).
