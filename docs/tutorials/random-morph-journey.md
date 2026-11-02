@@ -79,6 +79,10 @@ Tap **A2** to reverse. The message says when it happens: **REVERSE AFTER S1** me
 
 Select the track (T1 to T4) before you press PLAY: the journey plays **that track's** four slots, and the sea chart shows them. Saving or deleting a slot on that track ends its journey; the slots of the other tracks are not touched. **Every track has its own engine and its own settings** (BARS, DEPTH, SCOPE, SHAPE, WAIT, direction), so you can start a journey on T2 while T1's keeps sailing, each with its own length, curve and rests. The sea chart and the keys always show the selected track.
 
+**Which tracks run is always visible**: the four small boxes under the bank chip are the tracks T1 to T4. Filled in the accent colour: that track's journey sails or rests; outlined: its journey is paused or held; filled in the theme colour: a RANDOM morph or a GO moves it; grey: nothing runs. The selected track has a bright frame (and the chart and keys show it). The screen below shows T2 selected and sailing while T1's journey is held by its own RANDOM morph.
+
+![Two tracks: T2 sails, T1's journey is held](img/journey-status.png)
+
 Hold **BANK** in the JOURNEY bank for its own SETUP: **K1 SCOPE** `THIS` or `ALL` (with ALL, PLAY, PAUSE and NEXT act on every track's journey, each on its own slots), **K2 TRANSP** `FREE`, `CONT` or `START`. FREE keeps time in milliseconds as before. CONT counts the sequencer's own bars: a **Stop freezes the leg and its WAIT**, a tempo change speeds it up, and an external MIDI clock is followed. START is CONT and also **begins the journey again at every Start**.
 
 ![JOURNEY SETUP: SCOPE ALL, TRANSP CONT](img/journey-setup.png)

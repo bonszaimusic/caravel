@@ -423,8 +423,29 @@ static void hp_sea(int y)                              /* y: top of the chart st
  hp_ship(hp_ship_x-14,y+2-(sail?(int)((fm1_ms>>8)&1u):0),hp_ship_left,T_ACCENT);
  if(!sail)cv_rect(hp_ship_x,y+18,2,5,T_MID);          /* the anchor line */
 }
+/* What every track is doing, under the bank chip: one small box per track. Filled in the accent colour: its journey sails or rests; outlined: its journey is
+ * paused or held; filled in the theme colour: a RANDOM morph or a GO moves it; grey: idle. The selected track has a bright frame. */
+static void hp_tracks(int x0,int y)
+{
+ for(uint32_t t=0;t<NTRK;t++){
+  int x=x0+(int)t*15;char n[4];
+  const hp_rm_state_t*e=&hp_eng[t];
+#if HP_JVN
+  const hp_jn_t*j=&hp_jn[t];
+  int jrun=j->on&&!j->paused&&!j->held,jwait=j->on&&!jrun;
+#else
+  int jrun=0,jwait=0;
+#endif
+  int mv=e->state==HP_RM_RANDOM||e->state==HP_RM_RETURN||e->state==HP_RM_RECALL;
+  uint16_t frame=t==(uint32_t)song.sel?T_TEXT:jrun||jwait?T_ACCENT:mv?T_THEME:T_LINE,fill=jrun?T_ACCENT:(!jwait&&mv)?T_THEME:T_RAISE,ink=jrun||(!jwait&&mv)?T_INK:jwait?T_ACCENT:T_MID;
+  perf_format(n,sizeof n,"%u",t+1u);
+  cv_rrect(x,y,13,13,3,frame,T_SURF);cv_rrect(x+1,y+1,11,11,2,fill,frame);
+  cv_text_in(x+1,y+2,11,&AF_S,n,ink,fill);
+ }
+}
 #else
 static void hp_sea(int y){(void)y;}                   /* no snapshots or journey in this profile: no chart */
+static void hp_tracks(int x,int y){(void)x;(void)y;}
 #endif
 static void hp_draw_home(void)
 {
@@ -463,9 +484,10 @@ static void hp_draw_home(void)
     cv_rrect(7,ya+3,60,31,4,T_ACCENT,T_SURF);
     cv_text_in(7,ya+5,60,&AF_S,"SETUP",T_INK,T_ACCENT);cv_text_in(7,ya+18,60,&AF_S,bank,T_INK,T_ACCENT);
    }else{
-    cv_rrect(7,ya+4,60,22,4,T_RAISE,T_SURF);cv_text_in(7,ya+6,60,&AF_S,bank,T_ACCENT,T_RAISE);
+    cv_rrect(7,ya+3,60,17,4,T_RAISE,T_SURF);cv_text_in(7,ya+4,60,&AF_S,bank,T_ACCENT,T_RAISE);
    }
    hp_sea(ya+2);
+   if(!action_setup)hp_tracks(7,ya+22);
   }
   #if FELUCCA_RANDOM_MORPH
   #endif

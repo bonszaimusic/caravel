@@ -57,6 +57,12 @@ int main(void){
  hold(0,700);CHECK(action_setup==1u);action_setup_turn(0,1);action_setup_turn(1,1);ready("journey-setup");action_setup_turn(0,-1);action_setup_turn(1,-1);hold(0,700);CHECK(action_setup==0u);
  /* a RANDOM morph on the same track while its journey runs */
  {uint32_t g=0;while(action_bank!=0u&&g++<8u)tap(0);}CHECK(action_bank==0u);tap(1);run_ms(400);CHECK(hp_j.held==1u);ready("journey-held");
+ /* a second track sails too: the four boxes under the bank chip show what each track does */
+ song.sel=1;go_home();action_refresh();
+ trk[1].p[P_FILT]=-20;trk[1].p[P_REV]=10;action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));
+ trk[1].p[P_FILT]=60;trk[1].p[P_REV]=80;action_snap_slot=1;CHECK(hp_rm_snapshot_store(1));
+ {uint32_t g=0;while(action_bank!=ACT_BANK_JOURNEY&&g++<8u)tap(0);}
+ action_snap_slot=0;hp_eng[1].bars=4;tap(1);run_ms(500);CHECK(hp_jn[1].on);ready("journey-status");
  printf("MORPH TUTORIAL FRAMES: %u checks.\n",checks);
  return 0;
 }
