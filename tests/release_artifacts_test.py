@@ -417,7 +417,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         path.write_bytes(R.json_bytes(record))
 
     def test_version_and_path_validation(self):
-        for version in ("../0.1.0", "0.1.0/escape", "10.1.0", "v0.1.0"):
+        for version in ("../0.1.0", "0.1.0/escape", "10.1.0", "v0.1.0", "0.100.0", "0.1.10"):
             with self.assertRaises(R.ReleaseError):
                 R.identity(version)
         for path in ("/absolute", "../escape", "a/../b", "a//b", "a\\b", "a\nb"):
@@ -425,7 +425,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
                 R.safe_path(path)
         self.assertEqual(R.identity("1.2.3-rc1"), "FM-1_999")
         # Firmware identity is independent of the release version.
-        for version in ("0.3.4", "0.9.9", "1.0.0", "9.9.9-rc2"):
+        for version in ("0.3.4", "0.9.9", "0.10.0", "0.12.3-rc1", "1.0.0", "9.9.9-rc2"):
             self.assertEqual(R.identity(version), "FM-1_999")
 
     def build_context(self, release=True, binary_version=None, extra_args=()):

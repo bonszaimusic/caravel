@@ -24,6 +24,7 @@ USB or switch off during writing. Recovery can change or erase stored data.
 | Return to official firmware stops with Update Failed -5 | [Stock return error -5](#stock-return-error--5) |
 | After going back to 0.7.x a project says `PERF PROJECT INVALID` | [Projects saved by 0.8.0](#projects-saved-by-080) |
 | After going back to 0.8.0 a project slot is empty | [Projects saved by 0.9.0](#projects-saved-by-090) |
+| After going back to 0.9.0 a project slot that uses ENSEMB is empty | [Projects that use ENSEMBLE](#projects-that-use-ensemble) |
 | You need to understand OCT-/OCT+, M-Flasher or m-bootloader | [Recovery tools](#recovery-tools) |
 
 ## USB device not recognized
@@ -126,6 +127,14 @@ The upstream M-Flasher guide describes the download-mode device as **WL82 UBOOT1
 Holding both octave buttons **during power-on** opens Caravel's hardware
 calibration instead. The running-firmware shortcut cannot help if Caravel never
 reaches its main loop. A blank screen alone does not confirm UBOOT or a permanent failure.
+
+## Projects that use ENSEMBLE
+
+**Symptom:** after going back to 0.9.0, a project slot (A to D, or RESTORE LAST) in which a track uses the ENSEMBLE engine (ENSEMB) shows as empty.
+
+0.9.0 does not know engine 17. The slot looks empty there; nothing is deleted and 0.10.0 reads it again, but **saving over that slot in 0.9.0 replaces it**. Make a backup before
+updating (the installer's backup, or `tools/caravel_backup.py save`). Projects without ENSEMB are not affected (the project format did not change). Tested with real flash images on the host; versions
+before 0.9.0 were not tested.
 
 ## Projects saved by 0.9.0
 

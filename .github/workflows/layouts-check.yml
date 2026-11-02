@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VER: 0.9.0
+  VER: 0.10.0
   CC: cc -include stdint.h
   FELUCCA_SLICE: '0'
   CARAVEL_REVERB_MINIMAL: '1'

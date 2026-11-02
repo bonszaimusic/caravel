@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - development branch `feature/ensemble-engine` (not part of 0.9.0)
+## [0.10.0] - prepared 2026-11-02 (branch `release/0.10.0`), not published
 
 - **New engine ENSEMBLE (shown as `ENSEMB`; engine 17, append-only; no existing number changes):** strings, choir and dark texture. Three oscillator registers (16', 8', 4') into one
   state-variable filter whose timbre follows MORPH (strings, a resonant choir formant with breath, dark and rough), and a built-in three-tap ensemble (one ring in
@@ -8,7 +8,8 @@
   hear it. Eight controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), fourteen factory presets (VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD, PROFILE A, STRING MACHINE, BREATH CHOIR, DEEP DRONE, GLASS SHIMMER, SLOW SWELL, ROUGH PULSE, SOLO DRIFT, HUGE ENSEMBLE, RUNNING PAD; PROFILE A is set by measurement to the profile of a reference recording, no audio from it is stored; the others differ by measured signal, see the guide), five Pair Morph layer recipes with piano, bells, electric piano and a DRONE bed (host-tested), at most
   six voices per track, SPREAD ignored, MIDI CC 74 = TONE. MIX 0 is the dry voices bit for bit; the ring is cleared when the part was away. A project that uses it shows as an empty slot on
   0.9.0 (host test with real flash images; nothing crashes; saving over it there replaces it). Host-tested only; not tried on
-  an FM-1 and not judged by ear. See `docs/engines/ensemble-engine.md`.
+  an FM-1 and not judged by ear. See `docs/engines/ensemble-engine.md` and `docs/release-0100.md`.
+- **Version text `v0.10.0`:** the installer / release tools (`tools/release_artifacts.py`), the Pages workflow and the website scripts accept a two-digit minor number; the UI lint shows no finding with the longer text.
 
 ## [0.9.0] - 2026-11-02
 

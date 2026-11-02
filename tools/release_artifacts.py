@@ -64,8 +64,8 @@ def sha(data):
 
 
 def identity(version):
-    m = re.fullmatch(r"([0-9])\.([0-9])(?:\.[0-9]){0,2}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?", version)
-    require(m is not None, "version: use X.Y[.Z[.W]][-suffix], one digit each")
+    m = re.fullmatch(r"([0-9])\.([0-9]{1,2})(?:\.[0-9]){0,2}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?", version)
+    require(m is not None, "version: use X.Y[.Z[.W]][-suffix], one digit for X and Z, W, one or two for Y")
     return "FM-1_999"  # Fixed Caravel identity; previously published tags keep their own source.
 
 
