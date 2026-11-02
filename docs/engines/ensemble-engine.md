@@ -59,9 +59,10 @@ them like any engine control) and stored in projects and user presets.
 
 - **Memory:** 4,136 B of engine memory per part (a 4,096 B int32 ring and 40 B of state; the region is 12,888 B and already exists for each part).
   See the implementation record in the metadata repository for flash, RAM and pool by layout.
-- **CPU:** host instruction counts per sample, one part with six notes held (regress.c): 792 / 814 / 828 / 1,037 for the four presets, against 1,143 to 1,224
-  for SEM with eight notes (these are host numbers). The target's static loop costs of `ens_render` and `ens_post` come from `tests/target_budget.py`. **No
-  CPU percentage was measured on a device.**
+- **CPU:** host instruction counts per sample from `tests/regress.c` (one part, notes held, the idle mix of about 361 included): 1,154 / 1,175 / 1,189 / 1,398 for the
+  four presets (six voices, the cap), against 1,111 to 1,224 for the SEM presets with eight voices on the same count: about a third more per voice than SEM
+  (three oscillators, a filter and the breath noise), plus the ensemble once per track. These are x86/arm host counts, not target cycles; the target's static loop
+  costs of `ens_render` and `ens_post` come from `tests/target_budget.py`. **No CPU percentage was measured on a device.**
 - **Sound:** plausibility checks only (energy shares, level movement of the ensemble, silence after release); WAV files for listening are rendered by
   `tools/ensemble_audition.c` into `build/ensemble-audio/`. A judgement of how it sounds has not been made.
 
