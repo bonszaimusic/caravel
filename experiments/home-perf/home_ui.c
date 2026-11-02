@@ -383,6 +383,7 @@ static void hp_setup_cell(uint32_t k,int y)
 /* The performance HOME (design 2026-11-02): rows of four controls, the ACTION zone with the sea chart, and the common footer (engine, preset, page).
  * The chart: S1..S4 are buoys (filled: the slot holds a sound, with its owner T1..T4 / ALL), the caravel is the running morph or journey: it sails
  * from the slot it left to the slot it heads for, by the leg's progress, and lies at anchor while it waits, is paused or held, or nothing runs. */
+#if CARAVEL_ACTION_BANKS&&FELUCCA_RANDOM_MORPH
 static void hp_ship(int x,int y,int flip,uint16_t col)   /* ship_draw (ui_draw.c), optionally mirrored */
 {
  for(int r=0;r<SHIP_H;r++){
@@ -423,6 +424,9 @@ static void hp_sea(int y)                              /* y: top of the chart st
  hp_ship(hp_ship_x-14,y+2-(sail?(int)((fm1_ms>>8)&1u):0),hp_ship_left,T_ACCENT);
  if(!sail)cv_rect(hp_ship_x,y+18,2,5,T_MID);          /* the anchor line */
 }
+#else
+static void hp_sea(int y){(void)y;}                   /* no snapshots or journey in this profile: no chart */
+#endif
 static void hp_draw_home(void)
 {
  hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
