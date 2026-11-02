@@ -9,12 +9,12 @@ LIVE, and is played from the panel; MIDI Learn can also map it to a controller.
 
 1. Double-tap HOME for ACTION. In the RANDOM bank hold A4 to save a sound into the selected slot, tap A4 to select
    the next slot. Two to four slots are enough; the four slots are shared by all tracks, and the owner of each is shown (`S1:T1 S2:T3 S3:ALL S4:-`).
-2. Tap BANK until the title reads JOURNEY. **A1** PLAY / PAUSE / RESUME, **A2** direction (the running leg finishes,
+2. Tap BANK until the chip next to the sea chart reads JOURNEY. **A1** PLAY / PAUSE / RESUME, **A2** direction (the running leg finishes,
    then the next one goes the new way), **A3** NEXT, **A4** tap WAIT (0, 1, 2, 4, 8, 16 bars of rest), A4 hold saves.
 3. Leg length and curve are RANDOM SETUP's BARS and SHAPE. A journey keeps running when you change bank.
 4. **One morph engine, one morph at a time.** A RANDOM morph on any track holds the journey and it goes on by itself when that morph is
-   done; A1 while held pauses it. Saving or deleting a snapshot ends it. The title and the line under the keys always say which track owns
-   what is running.
+   done; A1 while held pauses it. Saving or deleting a snapshot ends it. The sea chart under the HOME rows always shows what is running: the caravel sails from buoy to
+   buoy and lies at anchor when it waits.
 5. **Four slots for the whole project.** Every slot is a scene: a leg moves exactly the controls stored in its target slot, so slots of
    different tracks (and an ALL slot) form one journey. The owner of each slot is shown (`S1:T1 S2:T3 S3:ALL S4:-`).
 6. **Tracks left out:** hold BANK in the JOURNEY bank, K1 to K4 are TRACK 1 to 4, `ON` or `SKIP` (saved with the project).

@@ -11,7 +11,7 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 
 1. **Save snapshots in RANDOM** (HOME with ACTION on): set the sound, hold **A4** to save it into the selected slot; tap **A4** to move to
    the next slot, change the sound, hold A4 again. You need two to four snapshots (see *Slots belong to tracks* below).
-2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The title shows the track that owns the slot being approached, the slot and the state (`OFF`, `PLAY`, `HOLD`, `WAIT`, `PAUSE`).
+2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The chip names the bank; on the sea chart the caravel is the journey: it sails from buoy to buoy while a leg moves and lies at anchor when the journey is off, waiting (`WAIT`), paused or held.
 3. **A1 PLAY** starts: the sound morphs to the selected snapshot, rests, moves on to the next populated slot and loops
    (S1 → S2 → S3 → S1 …). Every leg starts from the values the sound has at that moment, so nothing jumps.
 
@@ -39,12 +39,12 @@ There are **four snapshot slots for the whole project**, not four per track. A s
 selected track's HOME page (SCOPE TRACK; ROW: the active row only; ALL: the HOME controls of every track, up to 128 targets) with their values at
 that moment, not the other tracks' state. Saving on another track into an occupied slot **replaces** it (`S1 SAVED, WAS T1`).
 
-So that this is never a surprise, the owner is shown: the RANDOM title and the A4 label read `S1:T3`, `S2:ALL` or `S3:-` (empty), tapping A4 says
-`SNAP S2 IS T1`, and in the RANDOM and JOURNEY banks the line under the keys lists all four, for example `S1:T1 S2:T1 S3:ALL S4:-`.
+So that this is never a surprise, the owner is shown: the A4 label reads `S1:T3`, `S2:ALL` or `S3:-` (empty), tapping A4 says
+`SNAP S2 IS T1`, and the buoys of the sea chart label all four slots, for example `1:T1 2:T1 3:ALL 4`.
 
 A journey treats every slot as a **scene**: a leg moves exactly the controls stored in its target slot and leaves everything else where it is.
 S1 and S2 from T1 and S3 from T3 are one journey: at S3 only T3's controls move, T1 stands still. An `ALL` slot moves all tracks, and
-**Which tracks a journey takes along** (below) can leave some out. The title names the owner of the slot being approached.
+**Which tracks a journey takes along** (below) can leave some out. The buoys name the owners.
 
 ## Which tracks a journey takes along
 
@@ -63,9 +63,11 @@ nothing moves. Hold BANK again to leave SETUP. The choice is saved with the proj
   to the same slot (or, if it was resting, with the rest of the pause). The picture below shows it. **A1 while held is PAUSE**: then it stays
   paused until you press A1 again. **A3 NEXT** or **A3 GO Sx** in RANDOM steer the journey to a slot at once. RANDOM's A2 FREEZE on the journey's own
   leg holds it like PAUSE does; a frozen RANDOM morph keeps the journey held.
-- **What is running is always shown.** In the JOURNEY bank the title reads `JOURNEY 5/5 T1 S2 PLAY` (the owner of the slot being approached, the slot, and
-  `PLAY`, `HOLD`, `WAIT`, `PAUSE` or `OFF`). In the other banks the line below the keys says `JOURNEY T1 PLAY`, `JOURNEY T1 HELD` and so on, and
-  for a RANDOM morph `RANDOM T2 RUNNING`, `RETURN T2 RUNNING` or `GO SNAP T1 RUNNING`, so you can tell which track owns the one running morph.
+- **What is running is always shown, in every bank.** The sea chart under the HOME rows is the status display: the caravel is the running morph or journey.
+  It **sails** from the slot it left to the slot it heads for (by the progress of the leg) and bobs while it moves; it lies **at anchor** (a short line
+  below the hull) while the journey is off, waits, is paused or held, or no morph runs. A RANDOM morph or a GO to a slot also sets it sailing. The
+  buoys are S1 to S4: filled when the slot holds a sound, labelled with its owner (`1:T1`, `2:ALL`). The chip on the left names the bank (or `SETUP`).
+  Messages (`SNAP S1 SAVED`, `JOURNEY STOPPED` ...) appear in the top bar as before.
 - **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
