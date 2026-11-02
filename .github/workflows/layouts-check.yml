@@ -80,7 +80,7 @@ jobs:
             sudo apt-get install -y clang
           fi
           python3 tests/audio_ram_ir_test.py -v
-      - name: Build the three layouts and print their sizes, default last
+      - name: Build the three layouts and print their sizes
         env:
           JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
           AC79_SDK: ${{ runner.temp }}/ac79-sdk
@@ -88,5 +88,3 @@ jobs:
           echo "== one core";FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
           echo "== no RAM DSP";CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
           echo "== default layout";python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
-      - name: Function that holds the transport counter (perf_bars_q16)
-        run: python3 tools/layout_counter_probe.py
