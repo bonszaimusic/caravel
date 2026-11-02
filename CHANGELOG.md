@@ -6,8 +6,8 @@
   state-variable filter whose timbre follows MORPH (strings, a resonant choir formant with breath, dark and rough), and a built-in three-tap ensemble (one ring in
   the part's engine memory, two LFOs, 6.0 / 8.5 / 11 ms taps) applied to the track's mix before DIST / INSERT / FILTER and the sends, so the REV send, HALL and STASIS
   hear it. Eight controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), four factory presets (VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD), at most
-  six voices per track, SPREAD ignored, MIDI CC 74 = TONE. MIX 0 is the dry voices bit for bit; the ring is cleared when the part was away. Projects, user presets
-  and favourites that use it are not understood by 0.9.0 and earlier (the project check refuses an engine number it does not know). Host-tested only; not tried on
+  six voices per track, SPREAD ignored, MIDI CC 74 = TONE. MIX 0 is the dry voices bit for bit; the ring is cleared when the part was away. A project that uses it shows as an empty slot on
+  0.9.0 (host test with real flash images; nothing crashes; saving over it there replaces it). Host-tested only; not tried on
   an FM-1 and not judged by ear. See `docs/engines/ensemble-engine.md`.
 
 ## [0.9.0] - 2026-11-02
