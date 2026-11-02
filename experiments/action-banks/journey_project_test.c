@@ -139,7 +139,7 @@ int main(void){
   static const struct{uint8_t t,k,a,b;}bad[]={         /* the pads of set t slot k: [0][0] is the settings slot */
      {0,0,0x80u|7u,0},{0,0,0x80u|(6u<<3),0},{0,0,0x80u|0x40u,0},{0,0,0x03u,0},               /* BARS 7, DEPTH 6, reserved bit, no present bit */
      {0,0,0x93u,3u},{0,0,0x93u,(3u<<2)},{0,0,0x93u,(6u<<5)},{0,0,0,1u},                      /* SCOPE 3, SHAPE 3, WAIT 6, pad 1 without pad 0 */
-     {0,1,1u,0},{1,0,0,1u},{3,3,0x80u,0},{2,2,0,0x7Fu}};                                      /* a pad set in any other slot */
+     {0,1,0x08u,0},{0,1,0x06u,0},{0,1,0,1u},{1,0,0,1u},{3,3,0x80u,0},{2,2,0,0x7Fu}};          /* slot 2 holds JOURNEY scope and TRANSPORT (bits 3.., TRANSPORT 3 and pad 1 refused); a pad set in any other slot */
   for(uint32_t i=0;i<sizeof bad/sizeof bad[0];i++){
    uint8_t r2[HP_RAW_META] __attribute__((aligned(4)));memcpy(r2,raw,sizeof r2);
    hp_rm_snap_t(*q)[HP_RM_SNAP_SLOTS]=(hp_rm_snap_t(*)[HP_RM_SNAP_SLOTS])(void*)(r2+HP_HW_META);
