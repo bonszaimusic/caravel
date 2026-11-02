@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 HOT = frozenset({"drone_legacy_render", "drone_cell_render", "drone_slow_tick",
-                 "sem_render", "hades_render", "stasis_block", "rev_hall"})
+                 "sem_render", "hades_render", "ens_render", "ens_post", "stasis_block", "rev_hall"})
 NAME = r"[-\w.$]+"
 HEADER = re.compile(r"^define\s+(.+?)@(" + NAME + r")\((.*)\)([^\n]*)\{", re.M)
 DECL = re.compile(r"^declare\s+(.+?)@(" + NAME + r")\((.*)\)([^\n]*)$", re.M)

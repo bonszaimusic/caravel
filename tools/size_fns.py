@@ -90,11 +90,11 @@ def main(src, dst):
         # and the explicit performance-audio helpers. No engine is removed.
         audio = {"hp_begin", "hp_end", "pair_mix_begin", "pair_tone_begin",
                  "pair_motion_weights", "pair_power_gain", "pair_apply_gain"}
-        for filename in ("eng_drone.c", "eng_hades.c", "eng_sem.c", "va_blocks.c"):
+        for filename in ("eng_drone.c", "eng_hades.c", "eng_sem.c", "eng_ensemble.c", "va_blocks.c"):
             audio.update(definitions((SRC / filename).read_text()))
         # Include signatures with attributes before their return type, too.
         audio.update(m.group(2) for m in IR_DEF.finditer(ir)
-                     if m.group(2).startswith(("drone_", "hades_", "sem_", "va_")))
+                     if m.group(2).startswith(("drone_", "hades_", "sem_", "ens_", "va_")))
         # V9 candidate: retain normal -Os inlining in the common hot FX path.
         audio.update({"track_filter", "tf_wet_block", "tf_sample", "tf_pole", "pf_mix", "mulq16",
                       "track_dist", "ins_drive", "ins_shape", "softclip",

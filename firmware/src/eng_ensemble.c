@@ -111,7 +111,7 @@ static CARAVEL_AUDIO_HOT void ens_render(track_t *t, voice_t *v, int32_t *out, u
 
 /* the ensemble: b = the track's mono mix of this block (n <= CTL samples), processed in place; called by fx.c mix_part_inner for a part
  * whose engine is ENSEMBLE, also during the tail after its last voice */
-static __attribute__((noinline)) void ens_post(track_t *t, int32_t *b, uint32_t n)
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int32_t *b, uint32_t n)
 {
     uint32_t part = (uint32_t)(t - trk), j, i;
     ens_t *s;
