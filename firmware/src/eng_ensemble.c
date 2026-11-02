@@ -158,11 +158,28 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int
         s->delay[j] += step[j] * (int32_t)n;
 }
 
+/* The factory presets are design intent: eight controls, the ADSR and the sends chosen for a different job each; tests/ensemble_presets_test measures them
+ * (spectrum, level movement, attack, release, line smearing) and keeps every pair a minimum distance apart. Not a verdict on how they sound.
+ * Order is the stored order: favorites and projects address a preset by its index, so new ones go to the end. */
 static const preset_t ENS_PRESETS[] = {
     {"VINTAGE STRINGS", {64, 0, 80, 40, 70, 50, 10, 100}, {60, 90, 112, 80}, 0, 0, FX(0, 12, 10, 50), PAT(5)},
     {"GLASS CHOIR", {40, 64, 60, 50, 60, 40, 15, 90}, {80, 90, 115, 95}, 0, 0, FX(0, 10, 20, 60), PAT(5)},
     {"DUSK ORCHESTRA", {100, 40, 70, 60, 85, 35, 30, 100}, {75, 95, 115, 90}, 0, 0, FX(0, 14, 24, 56), PAT(5)},
     {"ABYSS PAD", {80, 110, 40, 90, 75, 20, 90, 95}, {100, 100, 120, 105}, 0, 0, FX(0, 10, 30, 70), PAT(5)},
+    /* PROFILE A: the controls were set by measurement to the profile of a reference recording (spectral centroid, four band levels, level movement); the ADSR and the
+     * sends are this table's choice. No audio from the recording is stored anywhere. The others, by role: a classic string machine, a breathy choir, a very low
+     * drone, a struck glass / bell tone (MORPH DARK with TEXT: the ring-modulated pulse is inharmonic), a swell that opens with ENV > FILTER, a rough short
+     * pulse, a MONO solo with full DRIFT, the deepest ensemble, a pad with the fastest RATE */
+    {"PROFILE A", {123, 15, 70, 42, 55, 71, 31, 126}, {85, 90, 112, 95}, 0, 0, FX(0, 8, 8, 40), PAT(5)},
+    {"STRING MACHINE", {64, 0, 127, 25, 100, 22, 0, 127}, {85, 90, 115, 95}, 0, 0, FX(0, 12, 12, 45), PAT(5)},
+    {"BREATH CHOIR", {64, 64, 90, 35, 40, 45, 127, 100}, {90, 95, 115, 100}, 0, 0, FX(0, 6, 20, 65), PAT(5)},
+    {"DEEP DRONE", {127, 0, 0, 60, 80, 8, 0, 110}, {105, 100, 120, 115}, 0, 0, FX(0, 8, 24, 75), PAT(5)},
+    {"GLASS SHIMMER", {64, 127, 127, 15, 10, 60, 127, 100}, {55, 70, 60, 100}, 0, 0, FX(0, 4, 30, 70), PAT(5)},
+    {"SLOW SWELL", {90, 10, 70, 40, 80, 10, 0, 100}, {120, 100, 120, 112}, 40, 0, FX(0, 10, 16, 60), PAT(5)},
+    {"ROUGH PULSE", {127, 127, 110, 50, 70, 110, 127, 127}, {50, 70, 70, 60}, 0, 0, FX(10, 6, 10, 30), PAT(5)},
+    {"SOLO DRIFT", {70, 20, 95, 127, 25, 60, 0, 100}, {60, 90, 112, 70}, 0, 1, FX(0, 8, 28, 40), PAT(5)},
+    {"HUGE ENSEMBLE", {64, 0, 110, 50, 127, 6, 0, 127}, {70, 90, 115, 100}, 0, 0, FX(0, 0, 10, 50), PAT(5)},
+    {"RUNNING PAD", {40, 30, 100, 40, 127, 127, 0, 127}, {95, 90, 115, 100}, 0, 0, FX(0, 6, 12, 45), PAT(5)},
 };
 
 static const engine_t ENG_ENSEMBLE = {
@@ -183,4 +200,4 @@ static const engine_t ENG_ENSEMBLE = {
     .note_on = ens_note_on, .render = ens_render, .keep = 0xF3,
     .mem = sizeof(ens_t),
 };
-_Static_assert(NELEM(ENS_PRESETS) <= 8u, "ENSEMBLE favorites occupy one reserved byte");
+_Static_assert(NELEM(ENS_PRESETS) <= 32u, "ENSEMBLE favorites are one 32-bit word (ENGINE_FAV_PRESETS)");

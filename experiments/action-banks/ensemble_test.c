@@ -86,8 +86,9 @@ int main(void)
     CHECK(!strcmp(ENG_ENSEMBLE.name, "ENSEMB") && !strcmp(N_ENGNAME[ENGI_ENSEMBLE], "ENSEMB"));   /* the display name fits the PRESETS cell (the UI lint) */
     CHECK(ENGINES[ENGI_HADES] == &ENG_HADES && ENGINES[ENGI_DRONE] == &ENG_DRONE && ENGINES[ENGI_SEM] == &ENG_SEM);   /* nothing renumbered */
     CHECK(eng_vis(NENG_SHOWN - 1u) == ENGI_ENSEMBLE && eng_rank(ENGI_ENSEMBLE) == NENG_SHOWN - 1u);
-    CHECK(ENG_ENSEMBLE.npresets == 4u && !strcmp(ENG_ENSEMBLE.presets[0].name, "VINTAGE STRINGS") && !strcmp(ENG_ENSEMBLE.presets[1].name, "GLASS CHOIR")
-          && !strcmp(ENG_ENSEMBLE.presets[2].name, "DUSK ORCHESTRA") && !strcmp(ENG_ENSEMBLE.presets[3].name, "ABYSS PAD"));
+    CHECK(ENG_ENSEMBLE.npresets == 14u && !strcmp(ENG_ENSEMBLE.presets[0].name, "VINTAGE STRINGS") && !strcmp(ENG_ENSEMBLE.presets[1].name, "GLASS CHOIR")
+          && !strcmp(ENG_ENSEMBLE.presets[2].name, "DUSK ORCHESTRA") && !strcmp(ENG_ENSEMBLE.presets[3].name, "ABYSS PAD")
+          && !strcmp(ENG_ENSEMBLE.presets[4].name, "PROFILE A") && !strcmp(ENG_ENSEMBLE.presets[13].name, "RUNNING PAD"));   /* the order is the stored order; the rest: ensemble_presets_test */
     {   static const char *const L[8] = {"REG", "MORPH", "TONE", "DRIFT", "ENS", "RATE", "TEXT", "MIX"};
         for (uint32_t k = 0; k < 8u; k++) {
             const param_desc_t *d = &ENG_ENSEMBLE.edit[k];

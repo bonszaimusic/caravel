@@ -111,6 +111,27 @@ jobs:
             -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 \
             experiments/action-banks/random_midi_priority_test.c -o build/random-midi-priority -lm
           build/random-midi-priority
+      - name: ENSEMBLE engine - tables, controls, ensemble, tail, Pair, HOME and project round trip
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 -DFELUCCA_CPU2=0 \
+            experiments/action-banks/ensemble_test.c -o build/ensemble-test -lm
+          build/ensemble-test
+      - name: ENSEMBLE factory presets - names, level, distinctness and the job of each preset
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 -DFELUCCA_CPU2=0 \
+            experiments/action-banks/ensemble_presets_test.c -o build/ensemble-presets -lm
+          PRINT=1 build/ensemble-presets
+      - name: ENSEMBLE layer recipes - Pair Morph with piano, bells and a DRONE bed, voice budget, two MIDI channels
+        run: |
+          cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+            -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
+            -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 -DFELUCCA_CPU2=0 \
+            experiments/action-banks/ensemble_layers_test.c -o build/ensemble-layers -lm
+          PRINT=1 build/ensemble-layers
       - name: MORPH JOURNEY pilot - chained snapshot legs, learned CC controls and manual priority
         run: |
           cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \

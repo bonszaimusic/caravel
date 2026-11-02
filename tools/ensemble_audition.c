@@ -3,6 +3,9 @@
  *   cc -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 \
  *      -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0 -DFELUCCA_PERF_HW=1 -DFELUCCA_CPU2=0 tools/ensemble_audition.c -lm -o build/ensemble-audition
  *   build/ensemble-audition            (writes build/ensemble-audio/*.wav; the folder must exist)
+ *   build/ensemble-audition presets-v2 (writes build/ensemble-audio/presets-v2/*.wav; the folder must exist): the presets from PROFILE A on, each held as a low
+ *                                      chord (E2 B2 E3 G3) and a high chord (E3 G3 B3 E4) 8 s and released, with the preset's own sends; a MONO preset (SOLO DRIFT)
+ *                                      also as a line; and the five layer recipes of ensemble_layers_test (ENSEMBLE + a second engine in a Pair, MORPH as in the recipe)
  * Scenes (an E minor chord of four voices, E3 G3 B3 E4):
  *   NN-<PRESET>-ensemble-on.wav / -off.wav   each factory preset held 7 s and released, with the ensemble (the preset's MIX) and with MIX 0 (the dry voices)
  *   morph-sweep-on.wav / -off.wav            VINTAGE STRINGS, MORPH from 0 (strings) through 64 (choir) to 127 (dark) over 14 s
@@ -16,6 +19,8 @@
 #include "../experiments/engine-pair-morph/pair_test.c"
 #include <math.h>
 static const uint8_t NOTES[4] = {52, 55, 59, 64};
+static const uint8_t LOW[4] = {40, 47, 52, 55};
+static const char *g_dir = "build/ensemble-audio";
 static void chord(uint32_t tr, int on) { for (uint32_t i = 0; i < 4u; i++) { if (on) trk_note_on(&trk[tr], NOTES[i], 100); else trk_note_off(&trk[tr], NOTES[i]); } }
 static void voice(uint32_t tr, uint32_t preset, int mix0, uint32_t rev)
 {
@@ -29,7 +34,7 @@ static void rec_open(rec_t *r, const char *name, uint32_t seconds)
     char path[240];
     memset(r, 0, sizeof *r);
     snprintf(r->name, sizeof r->name, "%s", name);
-    snprintf(path, sizeof path, "build/ensemble-audio/%s.wav", name);
+    snprintf(path, sizeof path, "%s/%s.wav", g_dir, name);
     r->f = fopen(path, "wb"); CHECK(r->f);
     r->frames = seconds * FS;
     wav_hdr(r->f, r->frames);
@@ -117,10 +122,82 @@ static void stasis_scene(void)
     }
     rec_close(&r, 5, 16);
 }
-int main(void)
+static void tagged(char *name, size_t n, uint32_t index, const char *preset, const char *tag)
+{
+    snprintf(name, n, "%02u-%s-%s", index + 1u, preset, tag);
+    for (char *c = name; *c; c++) if (*c == ' ') *c = '_';
+}
+/* a preset as the device loads it (its sends included), a chord held 8 s and released, 4 s of tail */
+static void v2_preset(uint32_t preset, const uint8_t *notes, const char *tag)
+{
+    rec_t r; char name[160];
+    tagged(name, sizeof name, preset, ENG_ENSEMBLE.presets[preset].name, tag);
+    settle(); host_preset(&trk[0], ENGI_ENSEMBLE, preset); trk[0].p[P_LEVEL] = 100;
+    run_ms(100);
+    rec_open(&r, name, 12);
+    for (uint32_t ms = 0, done = 0; done < r.frames; ms++) {
+        if (ms == 200) for (uint32_t i = 0; i < 4u; i++) trk_note_on(&trk[0], notes[i], 100);
+        if (ms == 8200) for (uint32_t i = 0; i < 4u; i++) trk_note_off(&trk[0], notes[i]);
+        done += rec_block(&r, done);
+    }
+    rec_close(&r, 2, 8);
+}
+/* the MONO solo preset as a line: E3 G3 B3 E4 B3 G3 E3 each 0.6 s, legato */
+static void v2_line(uint32_t preset)
+{
+    static const uint8_t LINE[8] = {52, 55, 59, 64, 59, 55, 52, 47};
+    rec_t r; char name[160];
+    tagged(name, sizeof name, preset, ENG_ENSEMBLE.presets[preset].name, "line");
+    settle(); host_preset(&trk[0], ENGI_ENSEMBLE, preset); trk[0].p[P_LEVEL] = 100;
+    run_ms(100);
+    rec_open(&r, name, 8);
+    for (uint32_t ms = 0, done = 0; done < r.frames; ms++) {
+        uint32_t k = ms >= 200u ? (ms - 200u) / 600u : 99u, ph = ms >= 200u ? (ms - 200u) % 600u : 0u;
+        if (k < 8u && ph == 0u) { if (k) trk_note_off(&trk[0], LINE[k - 1u]); trk_note_on(&trk[0], LINE[k], 100); }
+        if (ms == 5200u) trk_note_off(&trk[0], LINE[7]);
+        done += rec_block(&r, done);
+    }
+    rec_close(&r, 1, 5);
+}
+typedef struct { const char *name; uint8_t ens, eng, other; int16_t morph; } recipe_t;
+static const recipe_t RECIPES[] = {   /* the recipes of tests: experiments/action-banks/ensemble_layers_test.c */
+    {"piano-under-strings", 5, ENGI_SAMPLE, 0, 22937}, {"bells-in-glass", 8, 12, 1, 24576},
+    {"ep-in-the-choir", 6, 12, 0, 16384}, {"piano-on-the-deep", 7, ENGI_SAMPLE, 0, 19660}, {"strings-on-a-bed", 2, ENGI_DRONE, 11, 22937},
+};
+static void v2_layer(uint32_t q, const uint8_t *notes, const char *tag)
+{
+    rec_t r; char name[160];
+    const recipe_t *l = &RECIPES[q];
+    snprintf(name, sizeof name, "layer-%u-%s-%s", q + 1u, l->name, tag);
+    web_pair_off(); settle();
+    CHECK(web_pair_prepare(0, 1, ENGI_ENSEMBLE, l->eng));
+    host_preset(&trk[0], ENGI_ENSEMBLE, l->ens); host_preset(&trk[1], l->eng, l->other);
+    for (uint32_t t = 0; t < 2u; t++) { trk[t].p[P_VOICE] = V_POLY; trk[t].p[P_SPRD] = 0; trk[t].p[P_LEVEL] = 100; }
+    web_pair_morph(0, l->morph);
+    run_ms(100);
+    rec_open(&r, name, 12);
+    for (uint32_t ms = 0, done = 0; done < r.frames; ms++) {
+        if (ms == 200) for (uint32_t i = 0; i < 4u; i++) trk_note_on(&trk[0], notes[i], 100);
+        if (ms == 8200) for (uint32_t i = 0; i < 4u; i++) trk_note_off(&trk[0], notes[i]);
+        done += rec_block(&r, done);
+    }
+    rec_close(&r, 1, 8);
+    web_pair_off();
+}
+int main(int argc, char **argv)
 {
     web_nor_erase(); web_boot(); run_ms(1400); web_master(850);
     CHECK(NENGINES == 18u && ENGINES[ENGI_ENSEMBLE] == &ENG_ENSEMBLE);
+    if (argc > 1 && !strcmp(argv[1], "presets-v2")) {
+        g_dir = "build/ensemble-audio/presets-v2";
+        for (uint32_t p = 4; p < ENG_ENSEMBLE.npresets; p++) {
+            v2_preset(p, LOW, "low"); v2_preset(p, NOTES, "high");
+            if (ENG_ENSEMBLE.presets[p].mono) v2_line(p);
+        }
+        for (uint32_t q = 0; q < NELEM(RECIPES); q++) { v2_layer(q, LOW, "low"); v2_layer(q, NOTES, "high"); }
+        printf("ENSEMBLE AUDITION (presets-v2): %u checks; WAV files in build/ensemble-audio/presets-v2/\n", checks);
+        return 0;
+    }
     for (uint32_t p = 0; p < ENG_ENSEMBLE.npresets; p++) { held_scene(p, 0); held_scene(p, 1); }
     morph_scene(0); morph_scene(1);
     stasis_scene();
