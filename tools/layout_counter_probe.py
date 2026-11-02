@@ -13,7 +13,8 @@ for l in lines:
 print('disassembly',files[0],'symbol address',sym)
 if not sym:
     for l in lines:
-        if 'perf_bars' in l or 'perf_starts' in l:print('candidate:',l[:160])
+        if re.search(r'perf_|beat_pos|hp_jn|midi_clock\b',l) and re.match(r'^[0-9a-f]+ ',l):print('candidate:',l[:160])
+    print('lines in file',len(lines))
     sys.exit(0)
 pat=sym.lstrip('0')
 cur=None;funcs={}
