@@ -8,10 +8,13 @@ if not files:sys.exit('no felucca.dis under build/')
 lines=open(files[0]).read().split('\n')
 sym=None
 for l in lines:
-    m=re.match(r'^([0-9a-f]+) .*\bperf_bars_q16\s*$',l)
+    m=re.match(r'^([0-9a-f]+) .*\bperf_bars_q16\S*\s*$',l)
     if m:sym=m.group(1);break
 print('disassembly',files[0],'symbol address',sym)
-if not sym:sys.exit(0)
+if not sym:
+    for l in lines:
+        if 'perf_bars' in l or 'perf_starts' in l:print('candidate:',l[:160])
+    sys.exit(0)
 pat=sym.lstrip('0')
 cur=None;funcs={}
 for l in lines:
