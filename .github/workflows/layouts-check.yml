@@ -80,20 +80,37 @@ jobs:
             sudo apt-get install -y clang
           fi
           python3 tests/audio_ram_ir_test.py -v
-      - name: Build the three layouts and print their sizes
+      - name: Build the three layouts and print their sizes (default last: its disassembly stays in build/)
         env:
           JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
           AC79_SDK: ${{ runner.temp }}/ac79-sdk
         run: |
-          echo "== default layout";python3 tools/build.py --binary-version "$VER" 2>&1 | tail -12
-          cp build/felucca.dis "$RUNNER_TEMP/default.dis" 2>/dev/null || cp build/*/felucca.dis "$RUNNER_TEMP/default.dis" || true
-          echo "== one core";FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -12
-          echo "== no RAM DSP";CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -12
-      - name: Instruction counts of the transport counter in the audio block
+          echo "== one core";FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
+          echo "== no RAM DSP";CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
+          echo "== default layout";python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
+      - name: Function that holds the transport counter (perf_bars_q16): its size and its division
         run: |
-          f=$(find build -name felucca.dis | head -1); echo "dis: $f"
-          for fn in events_block seq_start; do
-            n=$(awk -v fn="$fn" '$0 ~ "<"fn">:" {on=1; c=0; next} on && /^$/ {on=0} on {c++} END {print c+0}' "$f")
-            echo "$fn: $n lines"
-          done
-          awk '/<events_block>:/ {on=1} on && /div/ {print} on && /^$/ {on=0}' "$f" | head -20 || true
+          python3 - <<'PY'
+          import re,glob
+          f=[p for p in glob.glob('build/**/felucca.dis',recursive=True)][0]
+          txt=open(f).read().split('\n')
+          sym=None
+          for l in txt:
+              m=re.match(r'^([0-9a-f]+) .*\bperf_bars_q16\s*$',l)
+              if m: sym=m.group(1);break
+          print('symbol address',sym)
+          if sym:
+              pat=sym.lstrip('0')
+              cur=None;funcs={}
+              for l in txt:
+                  m=re.match(r'^[0-9a-f]+ <(.+)>:',l)
+                  if m: cur=m.group(1);funcs.setdefault(cur,[0,0,0])
+                  elif cur and re.match(r'^\s+[0-9a-f]+:',l):
+                      funcs[cur][0]+=1
+                      if re.search(r'\bdiv|udiv|__udivsi3|__umodsi3',l): funcs[cur][1]+=1
+                      if pat in l: funcs[cur][2]+=1
+              for k,v in funcs.items():
+                  if v[2]: print('function',k,'instructions',v[0],'div/udiv/umod lines',v[1],'refs to the counter',v[2])
+              for k in funcs:
+                  if k in ('__udivsi3','__umodsi3','__udivmodsi4'): print('library',k,funcs[k][0],'instructions')
+          PY
