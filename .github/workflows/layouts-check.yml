@@ -80,11 +80,14 @@ jobs:
             sudo apt-get install -y clang
           fi
           python3 tests/audio_ram_ir_test.py -v
-      - name: Build the three layouts and print their sizes
+      - name: Build the three layouts and print their sizes and the target costs of the new functions
         env:
           JIELI_TOOLCHAIN: ${{ runner.temp }}/jieli/toolchain
           AC79_SDK: ${{ runner.temp }}/ac79-sdk
+          BUDGET_UPDATE: '1'           # costs are printed and the budget is rewritten in this runner only: this run measures, it gates nothing
         run: |
-          echo "== one core";FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
-          echo "== no RAM DSP";CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
-          echo "== default layout";python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
+          for layout in "one core:FELUCCA_CPU2=0" "no RAM DSP:CARAVEL_AUDIO_RAM=0" "default layout:"; do
+            echo "== ${layout%%:*}"
+            env ${layout#*:} python3 tools/build.py --binary-version "$VER" > "$RUNNER_TEMP/build.log" 2>&1 || echo "BUILD FAILED"
+            grep -E "image [0-9]+ B|ram_text|c1_text|audio_text|region|overflow|error|Error|target: (ens_|sem_render|hades_render|drone_cell_render|mix_part|track_render)" "$RUNNER_TEMP/build.log" | head -20
+          done

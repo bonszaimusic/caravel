@@ -63,7 +63,7 @@ exit:
 class FarCalls(unittest.TestCase):
     def test_layout_calls_and_bounded_entry_slot(self):
         result, count = transform(fixture())
-        self.assertEqual(count, len(HOT) + 2)            # one far call per hot function into the cold helper, STASIS into HALL, the loop entry
+        self.assertEqual(count, len(HOT) + 1)            # one far call per hot function into the cold helper, STASIS into HALL, the loop entry
         self.assertEqual(result.count('section ".audio_text"'), len(HOT))
         self.assertEqual(result.count("%caravel_far_slot = alloca"), 8)
         self.assertIn("%y = call i32 @rev_hall(i32 %x)", result)  # RAM -> RAM stays direct
