@@ -16,10 +16,10 @@ static void compat_seal(hp_store_t*p)
 static void compat_set_macro(hp_store_t*p,int value)
 {
 #if HP_SNAPSHOT_STORE
-    if(p->version==2){
+    if(p->version==2||p->version==3){                  /* 2: 0.7.1 .. 0.8.0, 3: a set of snapshots per track */
         uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
         CHECK(hp_v2_decode(p,raw));raw[HP_HW_MAC]=(uint8_t)value;
-        p->reserved[1]=hp_zip((uint8_t*)&p->model,HP_V2_META,raw,sizeof raw);
+        p->reserved[1]=hp_zip((uint8_t*)&p->model,HP_V2_META,raw,p->reserved[2]);
         CHECK(p->reserved[1]);return;
     }
 #endif
