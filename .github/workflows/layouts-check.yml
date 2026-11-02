@@ -88,29 +88,5 @@ jobs:
           echo "== one core";FELUCCA_CPU2=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
           echo "== no RAM DSP";CARAVEL_AUDIO_RAM=0 python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
           echo "== default layout";python3 tools/build.py --binary-version "$VER" 2>&1 | tail -4
-      - name: Function that holds the transport counter (perf_bars_q16): its size and its division
-        run: |
-          python3 - <<'PY'
-          import re,glob
-          f=[p for p in glob.glob('build/**/felucca.dis',recursive=True)][0]
-          txt=open(f).read().split('\n')
-          sym=None
-          for l in txt:
-              m=re.match(r'^([0-9a-f]+) .*\bperf_bars_q16\s*$',l)
-              if m: sym=m.group(1);break
-          print('symbol address',sym)
-          if sym:
-              pat=sym.lstrip('0')
-              cur=None;funcs={}
-              for l in txt:
-                  m=re.match(r'^[0-9a-f]+ <(.+)>:',l)
-                  if m: cur=m.group(1);funcs.setdefault(cur,[0,0,0])
-                  elif cur and re.match(r'^\s+[0-9a-f]+:',l):
-                      funcs[cur][0]+=1
-                      if re.search(r'\bdiv|udiv|__udivsi3|__umodsi3',l): funcs[cur][1]+=1
-                      if pat in l: funcs[cur][2]+=1
-              for k,v in funcs.items():
-                  if v[2]: print('function',k,'instructions',v[0],'div/udiv/umod lines',v[1],'refs to the counter',v[2])
-              for k in funcs:
-                  if k in ('__udivsi3','__umodsi3','__udivmodsi4'): print('library',k,funcs[k][0],'instructions')
-          PY
+      - name: Function that holds the transport counter (perf_bars_q16)
+        run: python3 tools/layout_counter_probe.py
