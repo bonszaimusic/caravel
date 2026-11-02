@@ -110,7 +110,7 @@ If a change is still waiting for the next leg when you save, the waiting value i
 **Not saved:** a running journey, PLAY / PAUSE, the WAIT countdown, RETURN points, and the selected slot. A loaded project always starts
 **stopped**, with S1 selected. Projects made before this feature get the defaults: BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward.
 **Project format (0.9.0): version 3.** The sixteen sets fit the same protected flash copy (worst case measured in the host test: 2,355 of 3,328 compressed bytes), but
-**0.8.0 and earlier refuse a version-3 project** (`PERF PROJECT INVALID`) instead of misreading it: back up before moving between versions.
+**0.8.0 does not read a version-3 project: that slot shows as empty there** (nothing is deleted and 0.9.0 reads it again, but saving over it in 0.8.0 replaces it). Back up before moving between versions.
 **Projects from 0.7.1–0.8.0 load and migrate without loss of what they hold:** each target of an old shared slot goes to the slot of the track it belongs to (global and Pair
 controls to the track that saved it), at most 32 per slot; anything over the limit is dropped and the load says `n TARGETS DROPPED`. The first save writes the new format.
 

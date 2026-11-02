@@ -109,7 +109,7 @@ SCOPE ALL (RANDOM SETUP, K3) makes the RANDOM keys act on **every track at once*
 - **Hands win.** A knob you turn, or a MIDI CC, keeps its value for the rest of the leg; the next leg moves it again.
 - **BARS, SCOPE and SHAPE changed during a journey wait for the next leg**, so a running leg keeps its speed. The display shows the waiting value.
 - **A loaded project starts stopped** with S1 selected. Projects from before 0.8.0 get the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward). Projects from 0.7.1 to 0.8.0 are migrated: each stored target moves into the slot of its own track, at most 32 per slot (more are dropped, and the load says so).
-  0.8.0 and earlier firmware refuses a project saved by 0.9.0, so back up before moving between versions.
+  Going back is one way only: **0.8.0 does not read a project saved by 0.9.0 and shows that slot as empty** (nothing is deleted, 0.9.0 reads it again; saving over it in 0.8.0 replaces it), so back up before moving between versions.
 - **Tempo:** leg lengths follow the tempo setting, not an external MIDI clock.
 - **MIDI:** every control above can be learned (MIDI LEARN: GLO + D4, then press the key or knob). See [MORPH JOURNEY](../morph-journey.md#midi-optional).
 
