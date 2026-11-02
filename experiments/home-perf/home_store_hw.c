@@ -30,10 +30,10 @@ static uint32_t hp_hw_addr(uint32_t slot,uint32_t copy){return HP_HW_BASE+slot*4
 static uint32_t hp_hw_piece(uint32_t logical){return 256u+(logical/3584u)*4096u+logical%3584u;}
 static int hp_hw_read(uint32_t base,uint32_t off,void*dst,uint32_t n){uint8_t*d=dst;while(n){uint32_t k=3584u-off%3584u;if(k>n)k=n;if(st_read(base+hp_hw_piece(off),d,k))return -1;off+=k;d+=k;n-=k;}return 0;}
 static int hp_hw_size_ok(const hp_hw_header_t*h){
- if(h->flags)return h->size==0&&(h->version==1||h->version==2);
+ if(h->flags)return h->size==0&&(h->version==1||h->version==2||h->version==3);
  if(h->version==1)return h->size==HP_HW_DATA;
 #if HP_SNAPSHOT_STORE
- if(h->version==2)return h->size>sizeof(project_store_t)&&h->size<=sizeof(project_store_t)+HP_V2_META&&h->rsv==HP_RAW_META;
+ if(h->version==2||h->version==3)return h->size>sizeof(project_store_t)&&h->size<=sizeof(project_store_t)+HP_V2_META&&h->rsv==(h->version==2?HP_RAW_META_V2:HP_RAW_META);   /* 2: 0.7.1 .. 0.8.0's shared slots, 3: a set per track */
 #endif
  return 0;
 }
@@ -48,9 +48,9 @@ static void hp_hw_seal(void){hp_io.magic=HP_MAGIC;hp_io.crc=hp_hash((uint8_t*)&h
 static int hp_pending_pack(uint8_t*out,const hp_store_t*p){
 #if HP_SNAPSHOT_STORE
  uint8_t temp[HP_V2_META];
- uint32_t n=p->version==2?p->reserved[1]:hp_v2_encode(temp,&p->model,&p->pair,0);
+ uint32_t n=p->version>=2?p->reserved[1]:hp_v2_encode(temp,&p->model,&p->pair,0);
  if(!n||n>HP_V2_META)return 0;
- memcpy(out+2,p->version==2?(const uint8_t*)&p->model:temp,n);hp_put(out,n,2);
+ memcpy(out+2,p->version>=2?(const uint8_t*)&p->model:temp,n);hp_put(out,n|(p->version==2?0x8000u:0u),2);   /* bit 15: an old (version 2) capsule, migrated when it is loaded */
 #else
  hp_meta_pack(out,&p->model,&p->pair);
 #endif
@@ -58,7 +58,7 @@ static int hp_pending_pack(uint8_t*out,const hp_store_t*p){
 }
 static void hp_pending_unpack(const uint8_t*in){
 #if HP_SNAPSHOT_STORE
- uint32_t n=hp_take(in,2);hp_io.version=2;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=HP_RAW_META;
+ uint32_t w=hp_take(in,2),n=w&0x7FFFu,old=(w&0x8000u)!=0u;hp_io.version=old?2:3;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=old?HP_RAW_META_V2:HP_RAW_META;
  if(n<=HP_V2_META)memcpy(&hp_io.model,in+2,n);
 #else
  hp_io.version=1;hp_io.size=sizeof hp_io;hp_meta_unpack(&hp_io.model,&hp_io.pair,in);
@@ -74,7 +74,7 @@ static const hp_store_t*hp_slot_disk(uint32_t slot){
   if(hp_hw_read(hp_hw_addr(slot,copy),0,&hp_io.native,sizeof hp_io.native)||hp_hw_read(hp_hw_addr(slot,copy),sizeof hp_io.native,&hp_io.model,n))continue;
   hp_io.version=1;hp_io.size=sizeof hp_io;
 #if HP_SNAPSHOT_STORE
-  if(h.version==2){hp_io.version=2;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=HP_RAW_META;}
+  if(h.version==2||h.version==3){hp_io.version=h.version;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=h.rsv;}
   else
 #endif
   hp_meta_unpack(&hp_io.model,&hp_io.pair,(const uint8_t*)&hp_io.model);
@@ -89,7 +89,7 @@ static int hp_hw_commit(uint32_t slot,const uint8_t*meta,const project_store_t*n
  for(uint32_t off=0;off<h.size;off++){uint8_t v=off<sizeof*native?((const uint8_t*)native)[off]:meta[off-sizeof*native];h.crc=(h.crc^v)*16777619u;}
 #endif
 #if HP_SNAPSHOT_STORE
- if(!erase){uint32_t n=hp_take(meta,2);if(!n||n>HP_V2_META)return 0;meta+=2;h.version=2;h.size=sizeof*native+n;h.rsv=HP_RAW_META;
+ if(!erase){uint32_t w=hp_take(meta,2),n=w&0x7FFFu,old=(w&0x8000u)!=0u;if(!n||n>HP_V2_META)return 0;meta+=2;h.version=old?2:3;h.size=sizeof*native+n;h.rsv=old?HP_RAW_META_V2:HP_RAW_META;
   h.crc=2166136261u;for(uint32_t off=0;off<h.size;off++){uint8_t v=off<sizeof*native?((const uint8_t*)native)[off]:meta[off-sizeof*native];h.crc=(h.crc^v)*16777619u;}
  }
 #endif
@@ -124,7 +124,7 @@ static int hp_project_import(uint32_t slot,const hp_store_t*p){
  if(slot>=4||transport_busy()||!flash_ok||project_compat_save_blocked(slot))return 0;
  if(!hp_capsule_ok(p)||!proj_import(&proj_scratch,&p->native,sizeof p->native)||!proj_engines_ok(&proj_scratch))return 0;
 #if HP_SNAPSHOT_STORE
- if(p->version==2){
+ if(p->version==2||p->version==3){
   uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));if(!hp_v2_decode(p,raw))return 0;
   const hp_pair_store_t*q=(const void*)(raw+HP_HW_PAIR);
   if(q->on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?q->b:q->a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}

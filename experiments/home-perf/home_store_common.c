@@ -35,7 +35,7 @@ static int hp_capsule_ok(const hp_store_t*p)
 {
  if(p->magic!=HP_MAGIC||p->reserved[0]!=hp_hash(p,20))return 0;
 #if HP_SNAPSHOT_STORE
- if(p->version==2){
+ if(p->version==2||p->version==3){
   uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
   return p->size==HP_V2_SIZE&&p->crc==hp_hash((const uint8_t*)p+32,HP_V2_SIZE-32)&&hp_v2_decode(p,raw);
  }
@@ -53,7 +53,7 @@ static int hp_capture(hp_store_t*p)
 #if HP_SNAPSHOT_STORE
  p->reserved[1]=hp_v2_encode((uint8_t*)&p->model,&hp,0,hp_rm_snap);
  if(!p->reserved[1]){p->magic=0;return 0;}
- p->version=2;p->size=HP_V2_SIZE;p->reserved[2]=HP_RAW_META;
+ p->version=3;p->size=HP_V2_SIZE;p->reserved[2]=HP_RAW_META;
 #else
  uint32_t irq=perf_irq_save();p->model=hp;for(uint32_t t=0;t<NTRK;t++)p->model.track[t].pad[0]=trk[t].user;hp_pair_capture(&p->pair);perf_irq_restore(irq);
 #endif
@@ -64,7 +64,7 @@ static int hp_restore(const hp_store_t*p)
  if(!hp_capsule_ok(p))return 0;
 #if HP_SNAPSHOT_STORE
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
- int v2=p->version==2;if(v2&&!hp_v2_decode(p,raw))return 0;
+ int v2=p->version==2||p->version==3;if(v2&&!hp_v2_decode(p,raw))return 0;
 #endif
  if(p!=&hp_io)memcpy(&hp_io,p,p->size);
 #if HP_SNAPSHOT_STORE
@@ -85,10 +85,16 @@ static int hp_restore(const hp_store_t*p)
  }
 #if HP_SNAPSHOT_STORE
  hp_rm_reset();hp_rm_snapshot_clear();action_snap_slot=0;
- if(v2)memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap);
+ uint32_t dropped=0;
+ if(p->version==3)memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap);
+ else if(p->version==2)dropped=hp_snapshots_migrate((const void*)(raw+HP_HW_META));   /* the old four slots, sorted into the tracks' own sets */
  hp_ps_apply(v2?hp_rm_snap:0);                  /* stored settings, or the defaults of a project made before them; a journey starts stopped */
 #endif
- perf_irq_restore(irq);hp_dirty=0;ui.force=1;return 1;
+ perf_irq_restore(irq);hp_dirty=0;ui.force=1;
+#if HP_SNAPSHOT_STORE
+ if(dropped){char m[32];perf_format(m,sizeof m,"%u TARGETS DROPPED",dropped);ui_message(m);}   /* an old project's slot held more than a track's slot can */
+#endif
+ return 1;
 }
 static uint32_t hp_signature(void)
 {

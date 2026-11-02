@@ -381,7 +381,7 @@ static void hp_setup_cell(uint32_t k,int y)
 }
 #endif
 /* The performance HOME (design 2026-11-02): rows of four controls, the ACTION zone with the sea chart, and the common footer (engine, preset, page).
- * The chart: S1..S4 are buoys (filled: the slot holds a sound, with its owner T1..T4 / ALL), the caravel is the running morph or journey: it sails
+ * The chart: S1..S4 are the selected track's buoys (filled: the slot holds a sound), the caravel is the running morph or journey: it sails
  * from the slot it left to the slot it heads for, by the leg's progress, and lies at anchor while it waits, is paused or held, or nothing runs. */
 #if CARAVEL_ACTION_BANKS&&FELUCCA_RANDOM_MORPH
 static void hp_ship(int x,int y,int flip,uint16_t col)   /* ship_draw (ui_draw.c), optionally mirrored */
@@ -398,16 +398,15 @@ static void hp_sea(int y)                              /* y: top of the chart st
  int sail=0;
  for(int x=82;x<232;x+=6)cv_rect(x,y+19+((x/6)&1),3,1,T_LINE);          /* the waterline */
  for(uint32_t i=0;i<4u;i++){                           /* S1..S4: a buoy, its number and who owns the slot */
-  int bx=hp_slot_x(i),full=hp_rm_snapshot_count(i)!=0u;char n[12],o[4];
-  hp_rm_snapshot_owner(i,o);
-  if(full)perf_format(n,sizeof n,"%u:%s",i+1u,o);else perf_format(n,sizeof n,"%u",i+1u);
+  int bx=hp_slot_x(i),full=hp_rm_snapshot_count(song.sel,i)!=0u;char n[12];
+  perf_format(n,sizeof n,"%u",i+1u);
   cv_rect(bx,y+11,2,8,full?T_THEME:T_LINE);cv_rect(bx+2,y+11,4,3,full?T_THEME:T_LINE);
   cv_text(bx-4,y+21,&AF_S,n,full?T_TEXT:T_MID);
  }
  {
   int target=hp_slot_x(action_snap_slot%4u);
 #if HP_JVN
-  if(hp_j.on){
+  if(hp_j.on&&hp_j.trk==(uint8_t)song.sel){
    int from=hp_slot_x(hp_j.cur%4u),to=hp_slot_x(hp_j.tgt%4u);
    if(!hp_j.paused&&!hp_j.held&&hp_j.phase==0u&&(hp_rm.state==HP_RM_RECALL||hp_rm.state==HP_RM_FROZEN)){
     hp_ship_x=from+(int)((int32_t)(to-from)*(int32_t)(hp_rm.phase>>4)/4096);hp_ship_left=to<from;sail=hp_rm.state==HP_RM_RECALL;
@@ -469,13 +468,12 @@ static void hp_draw_home(void)
    hp_sea(ya+2);
   }
   #if FELUCCA_RANDOM_MORPH
-  char owner[4];hp_rm_snapshot_owner(action_snap_slot,owner);
   #endif
   for(uint32_t k=0;k<4;k++){
    const char*label=action_labels[action_bank][k];char custom[24];
    #if FELUCCA_RANDOM_MORPH
-   if(action_bank==0u&&k==2u&&hp_rm_snapshot_count(action_snap_slot)){perf_format(custom,sizeof custom,"GO S%u",action_snap_slot+1u);label=custom;}
-   else if(action_bank==0u&&k==3u){perf_format(custom,sizeof custom,"S%u:%s >",action_snap_slot+1u,owner);label=custom;}
+   if(action_bank==0u&&k==2u&&hp_rm_snapshot_count(song.sel,action_snap_slot)){perf_format(custom,sizeof custom,"GO S%u",action_snap_slot+1u);label=custom;}
+   else if(action_bank==0u&&k==3u){perf_format(custom,sizeof custom,"S%u%s >",action_snap_slot+1u,hp_rm_snapshot_count(song.sel,action_snap_slot)?"*":"");label=custom;}
    #if HP_JVN
    else if(action_bank==ACT_BANK_JOURNEY){
     if(k==0u)label=!hp_j.on?"PLAY":hp_j.paused?"RESUME":"PAUSE";

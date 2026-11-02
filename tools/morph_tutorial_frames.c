@@ -34,7 +34,7 @@ int main(void){
  /* 2 RANDOM SETUP: BARS, DEPTH, SCOPE, SHAPE */
  hold(0,700);CHECK(action_setup==1u);ready("random-setup");
  action_setup_turn(0,2);action_setup_turn(3,1);ready("random-setup-set");
- action_snap_slot=3;hold(4,700);CHECK(hp_rm_snapshot_count(3)==0u);with_msg("random-delete");      /* SETUP: A4 hold deletes the selected slot */
+ action_snap_slot=3;hold(4,700);CHECK(hp_rm_snapshot_count(0,3)==0u);with_msg("random-delete");      /* SETUP: A4 hold deletes the selected slot */
  action_snap_slot=0;
  hold(0,700);CHECK(action_setup==0u);
  hp_rm.bars=1;hp_rm.shape=HP_RM_LINEAR;
@@ -53,8 +53,7 @@ int main(void){
  {uint32_t guard=0;while(hp_j.phase==0&&guard++<4000u)run_ms(10);}
  ready("journey-resting");
  tap(3);run_ms(300);ready("journey-next");
- /* the JOURNEY SETUP: which tracks it takes along, then a RANDOM morph on track 2 while the journey runs */
- hold(0,700);CHECK(action_setup==1u);action_setup_turn(1,-1);ready("journey-tracks");action_setup_turn(1,1);hold(0,700);CHECK(action_setup==0u);
+ /* a RANDOM morph on track 2 while the journey of track 1 runs */
  song.sel=1;go_home();action_refresh();tap(0);CHECK(action_bank==0u);tap(1);run_ms(400);CHECK(hp_j.held==1u);ready("journey-held");
  printf("MORPH TUTORIAL FRAMES: %u checks.\n",checks);
  return 0;

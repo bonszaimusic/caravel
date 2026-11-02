@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Random Morph and Morph Journey - tutorial
 
-**Status:** Caravel 0.8.0. Everything below is tested on the host and in CI with the real firmware and tried on an FM-1 by the maintainer; a controller has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
+**Status:** development branch for 0.9.0 (not released). It describes per-track snapshot sets, the first step towards per-track RANDOM and JOURNEY; 0.8.0 had four slots for the whole project. Tested on the host with the real firmware; not yet tried on hardware; a controller has not been verified. Every screen is the actual firmware renderer (HOME with ACTION on, SEM track), not a drawing.
 The same tutorials, in one place: [README](../../README.md#tutorials) · [all tutorials](README.md) · [reference: MORPH JOURNEY](../morph-journey.md).
 
 Random Morph moves the controls on your HOME page, by hand or to a stored sound. Morph Journey chains those moves into one long, hands-free
@@ -15,11 +15,9 @@ slot (S1 to S4); change the sound and hold A4 again. A star (`S1*`) marks a slot
 
 ![SNAP S1 SAVED](img/morph-save.png)
 
-A snapshot remembers the controls pinned on the HOME page of the selected **track** (SCOPE TRACK) and their values, not the other tracks. It is saved with the project (slots A to D).
+A snapshot remembers the controls pinned on the HOME page of the selected **track** (SCOPE TRACK) and their values, up to 32 of them, and only that track's own controls. It is saved with the project (slots A to D).
 
-**There are four slots for the whole project**, not four per track. Saving on another track into a filled slot replaces it, and says so
-(`S1 SAVED, WAS T1`). The owner is always visible: the A4 key reads `S1:T3` and the sea chart under the HOME rows labels every buoy `1:T3`, `2:ALL` (SCOPE ALL saves
-the HOME controls of every track), or just `3` when the slot is empty.
+**Every track has its own four slots.** S1 of T1 and S1 of T2 are different sounds; the star (`S1*`) and the buoys of the sea chart show the slots of the selected track. With SCOPE ALL (RANDOM SETUP, K3) a hold of A4 saves every track's own slot at once (`SNAP S1 SAVED: 2 TRACKS`).
 
 ## 2. Morph to a slot
 
@@ -56,7 +54,7 @@ Tap **BANK** until the chip left of the sea chart reads **JOURNEY** (the fifth b
 
 Tap **A1 (PLAY)**. The sound morphs to the selected slot, rests, moves on to the next slot that holds a sound, and loops
 (S1, S2, S3, S1 ...). Each leg starts from the values the sound has at that moment. The leg length is the **BARS** value from RANDOM SETUP,
-the curve is its **SHAPE**. A journey needs two to four filled slots; they may belong to different tracks (below).
+the curve is its **SHAPE**. A journey plays the slots of the **selected track** and needs two to four filled slots on it; empty slots are skipped.
 
 ![PLAY: on the way to the next slot](img/journey-play.png)
 
@@ -65,7 +63,7 @@ the curve is its **SHAPE**. A journey needs two to four filled slots; they may b
 | A1 | **PLAY**, then **PAUSE** (freezes the movement), then **RESUME** |
 | A2 | **DIR FWD / REV**: the running leg finishes, the next one goes the new way |
 | A3 | **NEXT Sx**: skip the rest of the leg and go on at once |
-| A4 | tap: **WAIT** (the rest after each arrival: 0, 1, 2, 4, 8 or 16 bars); hold: **save** the live sound into the selected slot |
+| A4 | tap: **WAIT** (the rest after each arrival: 0, 1, 2, 4, 8 or 16 bars); hold: **save** the live sound into the selected slot of the selected track |
 
 ## 5. Rest between legs, change direction
 
@@ -77,17 +75,13 @@ Tap **A2** to reverse. The message says when it happens: **REVERSE AFTER S1** me
 
 ![DIR REV, after the current leg](img/journey-reverse.png)
 
-## 6. Which tracks a journey takes along
+## 6. A journey for each track
 
-A snapshot stores the controls pinned on one track's HOME page, and they can belong to several tracks. Tap BANK to JOURNEY and **hold BANK**:
-SETUP shows **TRACK 1 to TRACK 4** on K1 to K4. Turn right for `ON`, left for `SKIP`. A skipped track keeps whatever value you give it;
-every later leg leaves it alone. If all pinned tracks are skipped, PLAY says `ALL TRACKS SKIPPED`. The choice is saved with the project.
-
-![JOURNEY SETUP: TRACK 2 skipped](img/journey-tracks.png)
+Select the track (T1 to T4) before you press PLAY: the journey plays **that track's** four slots, and the sea chart shows them. Saving or deleting a slot on that track ends its journey; the slots of the other tracks are not touched.
 
 ## 7. A RANDOM morph on another track while a journey runs
 
-There is **one morph engine for all tracks**, so only one movement runs at a time. When you start RANDOM on another track (SCOPE TRACK
+For now there is **one morph engine for all tracks**, so only one movement runs at a time. When you start RANDOM on another track (SCOPE TRACK
 moves only that track's controls), the journey is **held**: it stops where it is, and the caravel stays where it was (at anchor). When that
 morph has arrived, the journey **goes on by itself** with a new leg from where its track stands to the same slot. Press **A1 while it is held**
 and it pauses instead: it then waits for A1.
@@ -99,18 +93,17 @@ and it pauses instead: it then waits for A1.
 ## Good to know
 
 - **The journey keeps running when you change bank.** Use STASIS, PAIR or LIVE meanwhile; come back to JOURNEY to steer.
-- **Saving or deleting a snapshot ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on any track only **holds** it (step 7).
+- **Saving or deleting a snapshot of the journey's track ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on any track only **holds** it (step 7).
 - **RANDOM's A3 (GO Sx) and the JOURNEY bank's A3 (NEXT) steer a running journey** to that slot at once and it goes on from there.
 - **Hands win.** A knob you turn, or a MIDI CC, keeps its value for the rest of the leg; the next leg moves it again.
 - **BARS, SCOPE and SHAPE changed during a journey wait for the next leg**, so a running leg keeps its speed. The display shows the waiting value.
-- **A loaded project starts stopped** with S1 selected. Projects from before 0.8.0 get the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward);
-  0.7.x firmware refuses a project saved with these settings, so back up before moving between versions.
+- **A loaded project starts stopped** with S1 selected. Projects from before 0.8.0 get the defaults (BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward). Projects from 0.7.1 to 0.8.0 are migrated: each stored target moves into the slot of its own track, at most 32 per slot (more are dropped, and the load says so).
+  0.8.0 and earlier firmware refuses a project saved by 0.9.0, so back up before moving between versions.
 - **Tempo:** leg lengths follow the tempo setting, not an external MIDI clock.
 - **MIDI:** every control above can be learned (MIDI LEARN: GLO + D4, then press the key or knob). See [MORPH JOURNEY](../morph-journey.md#midi-optional).
 
 ## If PLAY does nothing
 
-`NEED 2 SNAPS`: save a second slot. A slot you cannot see on the key label may be empty or taken: the buoys of the sea chart show all four
-slots with their owners (`1:T1 2:T1 3:ALL 4`).
+`NEED 2 SNAPS`: the selected track needs a second filled slot. The buoys of the sea chart show that track's four slots (a filled buoy has a sound); select another track to see its slots.
 
 *Screens are generated by `tools/morph_tutorial_frames.py`.*

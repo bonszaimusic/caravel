@@ -101,8 +101,8 @@ int main(void){
  key(1u<<(ACT_KEY_FIRST+3u));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_NEXT);ui.ml.pick=0;
  web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(120);web_keys(0);run_ms(60);   /* tap A4 */
  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_WAIT);ui.ml.pick=0;
- {uint32_t n=hp_rm_snapshot_count(0);web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(700);web_keys(0);run_ms(60);   /* hold A4 */
-  CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0)==n);ui.ml.pick=0;}      /* nothing is learned and nothing is saved while learning */
+ {uint32_t n=hp_rm_snapshot_count(0,0);web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(700);web_keys(0);run_ms(60);   /* hold A4 */
+  CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0,0)==n);ui.ml.pick=0;}      /* nothing is learned and nothing is saved while learning */
  action_setup_turn(2,1);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_BARS+2u);ui.ml.pick=0;
  ui.ml.on=0;
  printf("MORPH JOURNEY PASS: %u checks.\n",checks);

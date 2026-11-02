@@ -42,8 +42,8 @@ int main(void){
  tap(1);CHECK(hp_j.paused);
  {uint32_t slot=action_snap_slot;trk[0].p[P_REV]=33;hold(4,700);
   CHECK(!hp_j.on);
-  CHECK(hp_rm_snapshot_count(slot)>0u);
-  hp_rm_snap_t*s=&hp_rm_snap[slot];int found=0;
+  CHECK(hp_rm_snapshot_count(0,slot)>0u);
+  hp_rm_snap_t*s=&hp_rm_snap[0][slot];int found=0;
   for(uint32_t i=0;i<s->count;i++){hp_ref_t r=hp_rm_snapshot_ref(s,i);if(r.kind==HP_TRACK&&r.id==P_REV&&!r.aux){found=1;CHECK(s->values[i]==33);}}
   CHECK(found);}
  /* RANDOM's A3 "GO Sx" during a journey steers the journey to the selected slot instead of running a stray recall */
@@ -58,14 +58,10 @@ int main(void){
  hp_rm_reset();CHECK(hp_rm.state==HP_RM_IDLE);action_snap_slot=0;hp_j.wait=0;hp_j.set[0]=hp_j.set[3]=0;hp_rm.bars=1;hp_rm.shape=HP_RM_LINEAR;
  CHECK(action_bank==0u);hold(0,700);CHECK(action_setup==1u);               /* SETUP on in RANDOM ... */
  tap(0);tap(0);tap(0);tap(0);CHECK(action_bank==ACT_BANK_JOURNEY&&action_setup==0u);   /* ... is left when JOURNEY is entered */
- /* BANK hold in the JOURNEY bank opens its SETUP: K1..K4 choose which tracks the journey takes along (LEG and SHAPE stay in RANDOM's SETUP) */
- hold(0,700);CHECK(action_setup==1u&&strstr(ui.msg,"JOURNEY TRACKS")!=NULL);
- CHECK(action_setup_value(0)==1&&action_setup_value(3)==1&&hp_j.skip==0u);
- action_setup_turn(1,-1);action_setup_turn(3,-4);CHECK(hp_j.skip==(2u|8u)&&action_setup_value(1)==0&&action_setup_value(3)==0&&action_setup_value(0)==1);
- {char n[16],v[24];action_setup_caption(1,n,v);CHECK(!strcmp(n,"TRACK 2")&&!strcmp(v,"SKIP"));action_setup_caption(0,n,v);CHECK(!strcmp(v,"ON"));}
- CHECK(hp_rm.bars==1u);                                                        /* the knobs of this bank edit no RANDOM value */
- action_setup_turn(1,1);action_setup_turn(3,1);CHECK(hp_j.skip==0u);
- hold(0,700);CHECK(action_setup==0u);
+ /* BANK hold in the JOURNEY bank only points to RANDOM's SETUP (LEG and SHAPE live there); the knobs of this bank edit nothing */
+ hold(0,700);CHECK(action_setup==0u&&strstr(ui.msg,"RANDOM SETUP")!=NULL);
+ CHECK(action_setup_value(0)==-1&&action_setup_value(3)==-1);
+ action_setup_turn(0,3);CHECK(hp_rm.bars==1u);
  /* in RANDOM's SETUP, K1 BARS and K4 SHAPE are the journey's LEG and SHAPE: at once while nothing runs ... */
  tap(0);CHECK(action_bank==0u);hold(0,700);CHECK(action_setup==1u);
  action_setup_turn(0,2);CHECK(hp_rm.bars==4u&&hp_j.set[0]==0u);
@@ -93,7 +89,7 @@ int main(void){
  tap(3);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_NEXT);ui.ml.pick=0;
  web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(120);web_keys(0);run_ms(60);
  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_WAIT);ui.ml.pick=0;
- {uint32_t n=hp_rm_snapshot_count(0);hold(4,700);CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0)==n);ui.ml.pick=0;}
+ {uint32_t n=hp_rm_snapshot_count(0,0);hold(4,700);CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0,0)==n);ui.ml.pick=0;}
  ui.ml.on=0;
  /* BANK from JOURNEY wraps to RANDOM */
  tap(0);CHECK(action_bank==0u);

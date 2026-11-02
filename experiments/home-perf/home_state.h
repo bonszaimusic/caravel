@@ -123,19 +123,20 @@ static hp_rm_state_t hp_rm = {.bars=8,.depth=35,.scope=HP_RM_TRACK,.shape=HP_RM_
 static const uint8_t hp_rm_times[]={1,2,4,8,16,32,64};
 static const uint8_t hp_rm_depths[]={10,25,35,50,75,100};
 #if CARAVEL_ACTION_BANKS
-/* Volatile four-slot snapshot memory. Store refs/values only: no sound,
- * project, FX audio or duplicate synth parameter stores. No heap use. */
+/* Volatile snapshot memory: four slots per track (a track's own set; nothing is shared between tracks). A slot stores refs and values only:
+ * no sound, project, FX audio or duplicate synth parameter stores. No heap use. A track's set holds that track's own controls (and the
+ * global / Pair morph controls pinned on its HOME), at most 32 targets per slot; the few spare bytes of the first slot carry the track's
+ * RANDOM / JOURNEY settings in a saved project (home_store_snapshots.h). */
 #define HP_RM_SNAP_SLOTS 4u
+#define HP_RM_SNAP_MAX 32u
 typedef struct {
- uint16_t count;
- uint8_t scope,origin_track,origin_row,pad;
+ uint8_t count,scope,pad[2];                   /* count 0 = empty; scope HP_RM_ROW or HP_RM_TRACK: what was captured */
  /* Snapshot recall never uses source-page metadata. Three bytes losslessly
-  * encode every supported pinned target; separate values avoid struct padding.
-  * Keep all four slots and all 128 targets while retaining target RAM reserves. */
- uint8_t refs[HP_RM_MAX][3];
- int16_t values[HP_RM_MAX];
+  * encode every supported pinned target; separate values avoid struct padding. */
+ uint8_t refs[HP_RM_SNAP_MAX][3];
+ int16_t values[HP_RM_SNAP_MAX];
 } hp_rm_snap_t;
-static hp_rm_snap_t hp_rm_snap[HP_RM_SNAP_SLOTS];
+static hp_rm_snap_t hp_rm_snap[NTRK][HP_RM_SNAP_SLOTS];
 #endif
 
 

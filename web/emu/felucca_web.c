@@ -693,10 +693,10 @@ EXPORT uint32_t web_action_engine_base(void){return P_E0;}
  * A4 tap/hold and A3 recall pathways in action_control.c. */
 EXPORT uint32_t web_action_snapshot_slot(void) { return action_snap_slot; }
 EXPORT uint32_t web_action_snapshot_count(uint32_t slot)
-{ return hp_rm_snapshot_count(slot); }
+{ return hp_rm_snapshot_count(song.sel,slot); }
 EXPORT int32_t web_action_snapshot_value(uint32_t slot,uint32_t index)
-{ return slot<HP_RM_SNAP_SLOTS && index<hp_rm_snap[slot].count
-  ? hp_rm_snap[slot].values[index] : -32768; }
+{ return slot<HP_RM_SNAP_SLOTS && index<hp_rm_snap[song.sel][slot].count
+  ? hp_rm_snap[song.sel][slot].values[index] : -32768; }
 #endif
 #endif
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }

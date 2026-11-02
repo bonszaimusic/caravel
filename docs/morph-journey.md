@@ -1,16 +1,16 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # MORPH JOURNEY
 
-**Released in 0.8.0; tested on the host and in CI and tried on an FM-1 by the maintainer; not verified with a controller or external clock.** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
+**Planned for 0.9.0, not released: this page describes the development branch (per-track snapshot sets, the first step of per-track RANDOM and JOURNEY). Released in 0.8.0 with four slots shared by the whole project; tested on the host and in CI, tried on an FM-1 by the maintainer, not verified with a controller or external clock.** It chains the snapshot morphs S1–S4 into one long, hands-free movement.
 It is played from the panel (the JOURNEY ACTION bank) and, if you like, from MIDI controllers. Playing a journey changes no snapshot and
-no stored sound, and it ends when you stop it. What *is* kept with the project are the snapshots S1–S4 and the performance settings (BARS,
+no stored sound, and it ends when you stop it. What *is* kept with the project are the snapshots (four per track) and the performance settings (BARS,
 DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, the countdown, the selected slot) is not saved, see
 [Saved with the project](#saved-with-the-project).
 
 ## Play it from the panel
 
 1. **Save snapshots in RANDOM** (HOME with ACTION on): set the sound, hold **A4** to save it into the selected slot; tap **A4** to move to
-   the next slot, change the sound, hold A4 again. You need two to four snapshots (see *Slots belong to tracks* below).
+   the next slot, change the sound, hold A4 again. You need two to four snapshots **on the selected track** (see *Every track has its own slots* below).
 2. **Tap BANK until JOURNEY** (it is the fifth bank, after LIVE). The chip names the bank; on the sea chart the caravel is the journey: it sails from buoy to buoy while a leg moves and lies at anchor when the journey is off, waiting (`WAIT`), paused or held.
 3. **A1 PLAY** starts: the sound morphs to the selected snapshot, rests, moves on to the next populated slot and loops
    (S1 → S2 → S3 → S1 …). Every leg starts from the values the sound has at that moment, so nothing jumps.
@@ -22,7 +22,7 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 | A3 | **NEXT Sx**: skips the rest of the leg at once and goes to the next slot in the current direction |
 | A4 | tap: **WAIT** steps 0 / 1 / 2 / 4 / 8 / 16 bars (the pause after each arrival); hold: **saves** the live sound into the selected slot |
 
-**The JOURNEY bank's SETUP chooses the tracks** (below). Everything else a journey needs is already somewhere you know:
+A journey plays the **selected track's** slots. Everything else it needs is already somewhere you know:
 
 | Value | Where | Note |
 | --- | --- | --- |
@@ -33,31 +33,29 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 
 DEPTH and SCOPE exist only in RANDOM: a leg goes to stored values, and the controls it moves are already in the snapshot.
 
-## Slots belong to tracks
+## Every track has its own slots
 
-There are **four snapshot slots for the whole project**, not four per track. A slot holds what was saved into it last: the controls pinned on the
-selected track's HOME page (SCOPE TRACK; ROW: the active row only; ALL: the HOME controls of every track, up to 128 targets) with their values at
-that moment, not the other tracks' state. Saving on another track into an occupied slot **replaces** it (`S1 SAVED, WAS T1`).
+Each of the four tracks has **its own four snapshot slots S1–S4** (sixteen in the project). A slot holds the controls pinned on that track's HOME page
+(SCOPE TRACK; ROW: the active row only) with their values at that moment. **Only the track's own controls are stored**: if the HOME of T1 also pins a
+control of T2, it is not part of T1's slot (T2 has its own). Controls that belong to no track (global and Pair controls) are stored with the track
+that saves them. A slot holds at most **32 targets**; if the HOME has more, nothing is saved and the screen says `TRACK 1: MAX 32 TARGETS`.
 
-So that this is never a surprise, the owner is shown: the A4 label reads `S1:T3`, `S2:ALL` or `S3:-` (empty), tapping A4 says
-`SNAP S2 IS T1`, and the buoys of the sea chart label all four slots, for example `1:T1 2:T1 3:ALL 4`.
+- **SCOPE ALL saves every track at once.** Hold A4 with SCOPE ALL and each track's own slot is written from its own HOME (`SNAP S3 SAVED: 2 TRACKS`;
+  a track without controls of its own is left out). Deleting with SCOPE ALL empties the slot on every track.
+- **A4 and the chart belong to the selected track.** `S2*` on the A4 key and the buoys of the sea chart show the selected track's slots (a buoy is filled when
+  that track's slot holds a sound), and tapping A4 says `SNAP S2: 14 CONTROLS` or `SNAP S2 EMPTY`. Select another track and the chart shows that track's slots.
+- **A journey plays the selected track's slots.** It takes the track selected when you press PLAY; the other tracks' slots do not matter. A track with
+  one filled slot has no journey (`NEED 2 SNAPS`). Saving or deleting a slot on **that** track ends its journey.
+- **Gaps are skipped.** Empty slots do not take part: with S1, S3 and S4 filled a journey goes S1 → S3 → S4 → S1.
 
-A journey treats every slot as a **scene**: a leg moves exactly the controls stored in its target slot and leaves everything else where it is.
-S1 and S2 from T1 and S3 from T3 are one journey: at S3 only T3's controls move, T1 stands still. An `ALL` slot moves all tracks, and
-**Which tracks a journey takes along** (below) can leave some out. The buoys name the owners.
-
-## Which tracks a journey takes along
-
-A snapshot stores the controls pinned on the HOME page of one track, and those can belong to several tracks. **Hold BANK in the JOURNEY bank** to open
-its SETUP: **K1 to K4 are TRACK 1 to TRACK 4**, turned right = `ON`, turned left = `SKIP`. A skipped track's controls are left alone by every leg;
-they keep whatever value you give them. The change counts from the next leg. If every pinned track is skipped, PLAY says `ALL TRACKS SKIPPED` and
-nothing moves. Hold BANK again to leave SETUP. The choice is saved with the project. (RANDOM's own morphs are not affected by it.)
+**Until the per-track engine (next step), the engine is still one:** there is one morph and one journey at a time (see below), and BARS, DEPTH, SCOPE,
+SHAPE, WAIT and the direction are still shared by all tracks.
 
 ## How RANDOM and JOURNEY work together
 
-- **One set of snapshots, one selected slot.** The slot shown in RANDOM (`S2*`) is the one the journey is heading for, so you can switch to
+- **One selected slot.** The slot shown in RANDOM (`S2*`) is the one the journey is heading for, so you can switch to
   RANDOM, look at it, and save a new sound into it with A4-hold.
-- **Saving or deleting a snapshot ends a running journey** (its set of slots changed): press PLAY to go on from the selected slot.
+- **Saving or deleting a snapshot of the journey's track ends a running journey** (its set of slots changed): press PLAY to go on from the selected slot. Saving on another track leaves the journey alone, but it resets the one morph engine, which can stop a leg in flight (`JOURNEY STOPPED`) until the engines are per track.
 - **One morph engine for all tracks, so one movement at a time.** A RANDOM morph started on any track, by hand (RANDOM bank, A1) or its RETURN,
   **holds** the journey: it stops where it is (`HOLD`), and **when that morph is done it goes on by itself**, with a new leg from the live values
   to the same slot (or, if it was resting, with the rest of the pause). The picture below shows it. **A1 while held is PAUSE**: then it stays
@@ -66,31 +64,33 @@ nothing moves. Hold BANK again to leave SETUP. The choice is saved with the proj
 - **What is running is always shown, in every bank.** The sea chart under the HOME rows is the status display: the caravel is the running morph or journey.
   It **sails** from the slot it left to the slot it heads for (by the progress of the leg) and bobs while it moves; it lies **at anchor** (a short line
   below the hull) while the journey is off, waits, is paused or held, or no morph runs. A RANDOM morph or a GO to a slot also sets it sailing. The
-  buoys are S1 to S4: filled when the slot holds a sound, labelled with its owner (`1:T1`, `2:ALL`). The chip on the left names the bank (or `SETUP`).
+  buoys are S1 to S4 of the selected track: filled when its slot holds a sound. The chip on the left names the bank (or `SETUP`).
   Messages (`SNAP S1 SAVED`, `JOURNEY STOPPED` ...) appear in the top bar as before.
 - **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
-- **SETUP is one switch for the other banks.** Entering the JOURNEY bank leaves SETUP; hold BANK there to open its own (the tracks).
+- **SETUP belongs to RANDOM.** Entering the JOURNEY bank leaves SETUP; holding BANK there shows `LEG+SHAPE: RANDOM SETUP`, because a journey uses RANDOM's BARS and SHAPE.
 
 ![Diagram: a RANDOM morph on T2 holds the journey of T1, which goes on by itself](tutorials/img/journey-hold.png)
 
 ## Delete a snapshot
 
 In RANDOM, hold BANK to open SETUP, select the slot with A4 tap, and **hold A4**: `SNAP S3 DELETED`. Outside SETUP, A4 hold still saves, so a
-deletion cannot happen by a simple save. A slot that is already empty says `SNAP: ALREADY EMPTY`. Deleting ends a running journey. A deleted slot
+deletion cannot happen by a simple save. A slot that is already empty says `SNAP S3 EMPTY`. The delete acts on the selected track (SCOPE ALL: on every track) and ends that track's running journey. A deleted slot
 is saved as empty with the project.
 
 ## Saved with the project
 
-The performance settings are saved with each project, next to the snapshots S1–S4 (slots A–D, RESTORE LAST, USB backup, export and import):
-**BARS, DEPTH, SCOPE, SHAPE, WAIT, the direction and the tracks a journey leaves out**. A project saved with BARS 16, SHAPE DRIFT and WAIT 4 sounds the same after reopening it.
+The performance settings are saved with each project, next to the sixteen snapshots (slots A–D, RESTORE LAST, USB backup, export and import):
+**BARS, DEPTH, SCOPE, SHAPE, WAIT and the direction**. A project saved with BARS 16, SHAPE DRIFT and WAIT 4 sounds the same after reopening it.
 If a change is still waiting for the next leg when you save, the waiting value is the one saved.
 
 **Not saved:** a running journey, PLAY / PAUSE, the WAIT countdown, RETURN points, and the selected slot. A loaded project always starts
 **stopped**, with S1 selected. Projects made before this feature get the defaults: BARS 8, DEPTH 35, TRACK, SMOOTH, WAIT 0, forward.
-The storage grows by nothing (the values use bytes that earlier firmware requires to be zero), so **0.7.x firmware refuses such a project**
-(`PERF PROJECT INVALID`) instead of misreading it: back up before moving between versions.
+**Project format (0.9.0): version 3.** The sixteen sets fit the same protected flash copy (worst case measured in the host test: 2,355 of 3,328 compressed bytes), but
+**0.8.0 and earlier refuse a version-3 project** (`PERF PROJECT INVALID`) instead of misreading it: back up before moving between versions.
+**Projects from 0.7.1–0.8.0 load and migrate without loss of what they hold:** each target of an old shared slot goes to the slot of the track it belongs to (global and Pair
+controls to the track that saved it), at most 32 per slot; anything over the limit is dropped and the load says `n TARGETS DROPPED`. The first save writes the new format.
 
 ## MIDI (optional)
 
@@ -105,5 +105,5 @@ either bank A1–A3 pick PLAY, DIR and NEXT, tap A4 picks WAIT (while learning, 
 
 ## Limits
 
-At least two populated snapshots, otherwise PLAY says `NEED 2 SNAPS` and nothing moves; slots of different tracks and scopes are fine. Starting replaces pending RANDOM return points, like an A3 recall. Leg lengths follow the tempo setting,
+At least two populated snapshots on the selected track, otherwise PLAY says `NEED 2 SNAPS` and nothing moves. Starting replaces pending RANDOM return points, like an A3 recall. Leg lengths follow the tempo setting,
 not an external MIDI clock. **Not verified:** a controller, external MIDI clock, CPU and memory under real load, long real-device runs, every engine.
