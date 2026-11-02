@@ -1,0 +1,8 @@
+{
+  "what": "Multi-engine synth firmware with DRONE, STASIS texture capture, Pair Morph, and per-track Random Morph and Morph Journey for evolving, ambient and experimental sound design. Sequencer, MIDI Learn, USB audio.",
+  "author": "BonszaiMusic",
+  "kinds": "synth",
+  "play": "https://bonszaimusic.github.io/caravel/emulator/",
+  "editor": "https://bonszaimusic.github.io/caravel/webapp/editor/",
+  "image": "docs/tutorials/img/journey-off.png"
+}
