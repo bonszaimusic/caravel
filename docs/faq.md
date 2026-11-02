@@ -23,6 +23,7 @@ USB or switch off during writing. Recovery can change or erase stored data.
 | Caravel's installer works, but another installer does not find the unit | [Changing firmware](#changing-firmware) |
 | Return to official firmware stops with Update Failed -5 | [Stock return error -5](#stock-return-error--5) |
 | After going back to 0.7.x a project says `PERF PROJECT INVALID` | [Projects saved by 0.8.0](#projects-saved-by-080) |
+| After going back to 0.8.0 a project slot is empty | [Projects saved by 0.9.0](#projects-saved-by-090) |
 | You need to understand OCT-/OCT+, M-Flasher or m-bootloader | [Recovery tools](#recovery-tools) |
 
 ## USB device not recognized
@@ -125,6 +126,15 @@ The upstream M-Flasher guide describes the download-mode device as **WL82 UBOOT1
 Holding both octave buttons **during power-on** opens Caravel's hardware
 calibration instead. The running-firmware shortcut cannot help if Caravel never
 reaches its main loop. A blank screen alone does not confirm UBOOT or a permanent failure.
+
+## Projects saved by 0.9.0
+
+**Symptom:** after going back to 0.8.0, a project slot (A to D, or RESTORE LAST) that you saved with 0.9.0 shows as empty.
+
+0.9.0 saves performance projects in a new format (3: sixteen snapshot sets and the per-track settings). 0.8.0 does not read it, so the slot looks empty
+there. Nothing is deleted and 0.9.0 reads it again, but **saving over that slot in 0.8.0 replaces it**. **Before updating, make a backup** (the installer's backup, or
+`tools/caravel_backup.py save`) and keep it while you try 0.9.0. To go back, install 0.8.0 and restore that backup. Projects from 0.7.1 to 0.8.0 are migrated when
+0.9.0 loads them: each target moves into the slot of its own track, at most 32 per slot; anything over that is dropped and the load says `n TARGETS DROPPED`.
 
 ## Projects saved by 0.8.0
 

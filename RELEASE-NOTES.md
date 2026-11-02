@@ -1,35 +1,42 @@
-# Caravel 0.8.0
+# Caravel 0.9.0
 
-**Morph Journey.** A fifth ACTION bank, after LIVE, chains your Random Morph
-snapshots S1–S4 into one long, hands-free movement: the sound morphs to a slot,
-rests, moves on to the next slot and loops. A1 PLAY/PAUSE, A2 direction, A3 NEXT,
-A4 tap WAIT, A4 hold saves. Leg length and curve are RANDOM SETUP's BARS and
-SHAPE. It keeps running when you change bank, and MIDI Learn can map it to a
-controller. A RANDOM morph on another track only holds it; it goes on by itself afterwards. Hold BANK in the JOURNEY bank to leave tracks out.
-Snapshot slots are shared by the whole project: their owners are shown, and A4 held in RANDOM's SETUP deletes one. [Step-by-step tutorial](https://github.com/bonszaimusic/caravel/blob/v0.8.0/docs/tutorials/random-morph-journey.md).
+**Random Morph and Morph Journey are per track.** Every track now has its own four
+snapshot slots (up to 32 targets each, its own HOME controls), its own morph engine and
+its own journey with its own BARS, DEPTH, SCOPE, SHAPE, WAIT and direction. Morphs and
+journeys of different tracks run side by side; a RANDOM morph holds only its own track's
+journey; a control two tracks move belongs to the track that started last; SCOPE ALL
+makes the RANDOM keys act on every track. A track whose HOME pins more than 32 targets
+cannot start a RANDOM morph. The JOURNEY bank now follows RANDOM, small boxes show what
+each track does, and **JOURNEY SETUP** (hold BANK there) sets SCOPE THIS / ALL and
+TRANSP FREE / CONT / START (CONT and START follow the sequencer's bars: Stop freezes a leg,
+a tempo or external clock change moves it, START begins again at each Start).
+[Tutorial](https://github.com/bonszaimusic/caravel/blob/v0.9.0/docs/tutorials/random-morph-journey.md).
 
-**A MIDI CC now wins over a running morph for every target.** LFO2 and DRUM-X
-controls kept being overwritten by the morph, because the ownership check
-compared a truncated id.
+**The SAX sample set is retired** to free flash. A sound, user preset or project that
+used SAX now plays PIANO; the GRAIN preset GLITCH uses PIANO as its source.
 
-**Performance settings travel with the project.** BARS, DEPTH, SCOPE, SHAPE,
-WAIT and the direction are saved with each project next to S1–S4. **Back up before
-installing: 0.7.x and earlier refuse a project saved by 0.8.0** (`PERF PROJECT
-INVALID`). Older projects load with the defaults.
+**Back up before installing: projects use a new format (3).** Projects from every earlier
+version load; those from 0.7.1 to 0.8.0 are migrated into per-track slots, at most 32
+targets per slot (more are dropped and the load says so). **0.8.0 does not read a project
+saved by 0.9.0: the slot shows as empty there** (nothing is deleted; saving over it in
+0.8.0 replaces it). Going back means restoring a backup.
 
-**What is tested.** Host tests with the real firmware, a stress suite (2.57 million
-checks), and the complete validation of the exact source. Flash is tight: **only 352 B
-are left in the app slot** (0.7.2: 5,600 B). The maintainer installed the final
-build on an FM-1 and reports that it works; that was a first trial, not a systematic acceptance.
-**Not verified:** a controller, external MIDI clock (leg lengths follow the tempo setting), long
-real-device runs and target timing.
+Also: the OVERWRITE? dialog of a project SAVE no longer flickers while a morph or journey
+runs (also in 0.8.0), RANDOM moves the FX filter only between -70 and +70, FM6's patch
+selector is never captured (issue #35).
 
-Download `Caravel-0.8.0-FM1-Testpaket.zip` for the local installer, firmware,
-verified source and notices, or `Caravel-0.8.0-Emulator.html` for the offline
-emulator. Firmware: `caravel-0.8.0.fwsc`. INFO must show `v0.8.0` after reboot.
-[Details](https://github.com/bonszaimusic/caravel/blob/v0.8.0/docs/release-080.md).
+**What is tested.** Host tests with the real firmware, a stress suite (10.65 million
+checks), a simulated external MIDI clock with ideal pulses, and the complete validation of
+the exact source. About 25 KB of flash are free again (0.8.0: 352 B). **Not tried on an
+FM-1 before publication.** Not verified: a controller, a real external MIDI clock, long
+real-device runs and the CPU cost of the new transport counter.
+
+Download `Caravel-0.9.0-FM1-Testpaket.zip` for the local installer, firmware,
+verified source and notices, or `Caravel-0.9.0-Emulator.html` for the offline
+emulator. Firmware: `caravel-0.9.0.fwsc`. INFO must show `v0.9.0` after reboot.
+[Details](https://github.com/bonszaimusic/caravel/blob/v0.9.0/docs/release-090.md).
 
 Publication requires exact-source target/resource, native/USB/storage, audio,
 sanitizer, WASM and complete validation. These do not establish physical FM-1
-acceptance beyond what is stated above. HALL/STASIS still omit ROOM, SPRING and the SLICE
+acceptance. HALL/STASIS still omit ROOM, SPRING and the SLICE
 engine; SLICER remains. Tempo DELAY is suspended while STASIS owns its buffer.

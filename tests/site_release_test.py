@@ -368,6 +368,8 @@ class PagesBehaviorTest(unittest.TestCase):
                                   ('0.7.2', ['CARAVEL_ACTION_BANKS', 'FELUCCA_RANDOM_MORPH',
                                              'CARAVEL_REVERB_MINIMAL', 'CARAVEL_STASIS_EXPAND', 'FELUCCA_SLICE']),
                                   ('0.8.0', ['CARAVEL_ACTION_BANKS', 'FELUCCA_RANDOM_MORPH',
+                                             'CARAVEL_REVERB_MINIMAL', 'CARAVEL_STASIS_EXPAND', 'FELUCCA_SLICE']),
+                                  ('0.9.0', ['CARAVEL_ACTION_BANKS', 'FELUCCA_RANDOM_MORPH',
                                              'CARAVEL_REVERB_MINIMAL', 'CARAVEL_STASIS_EXPAND', 'FELUCCA_SLICE'])]:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as temp:
                 env_file = Path(temp) / 'env'

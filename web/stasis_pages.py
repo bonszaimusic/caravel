@@ -109,7 +109,7 @@ def morph_page(look,ship,root=ROOT):
     for i,(heading,html_body) in enumerate(sections,1):
         body+=f'<section class="chapter" id="step-{i}"><h2>{inline(heading)}</h2>{html_body}</section>'
     shown=re.sub(r"\s*-\s*tutorial$","",title)
-    page_html=page(shown,"@@BODY@@",look,ship,version="0.8.0",eyebrow="CARAVEL 0.8.0 / RANDOM MORPH AND JOURNEY",
+    page_html=page(shown,"@@BODY@@",look,ship,version="0.9.0",eyebrow="CARAVEL 0.9.0 / RANDOM MORPH AND JOURNEY",
         description="Caravel Random Morph and Morph Journey: save sounds into S1-S4, morph between them and chain the morphs hands-free, with real firmware screens.")
     css=".table-wrap{overflow-x:auto}figure img.diagram,img.diagram{width:100%;max-width:960px;height:auto;image-rendering:auto}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--raise);vertical-align:top}figure{margin:16px 0}.lead p{margin:0 0 12px}"
     page_html=page_html.replace('href="../','href="../../').replace("</style>",css+"</style>",1)   # the page sits one level below tutorials/
@@ -118,7 +118,7 @@ def morph_page(look,ship,root=ROOT):
 HUB_START="<!-- CARAVEL-TUTORIALS-START -->";HUB_END="<!-- CARAVEL-TUTORIALS-END -->"
 def tutorial_hub():
     return HUB_START+('<section class="chapter" id="all-tutorials"><div class="eyebrow">ALL TUTORIALS</div><h2>Pick a lesson</h2><ul>'
-        '<li><a href="'+MORPH_PAGE+'/"><strong>Random Morph and Morph Journey</strong></a>: save sounds, morph between them and chain the morphs hands-free (0.8.0).</li>'
+        '<li><a href="'+MORPH_PAGE+'/"><strong>Random Morph and Morph Journey</strong></a>: save sounds, morph between them and chain the morphs hands-free (0.9.0).</li>'
         '<li><a href="#lesson-1"><strong>STASIS: HOLD, ADD and BLEND</strong></a>: the four lessons below, with a PDF guide and <a href="../sounds/">sound examples</a>.</li>'
         '<li><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/README.md"><strong>HOME, Pair Morph, macros and saving</strong></a>: the performance workflow, with a <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/Caravel-0.5.0-Quickstart.pdf">six-page PDF quickstart</a>.</li>'
         '</ul></section>')+HUB_END
