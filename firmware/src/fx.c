@@ -1571,7 +1571,8 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
 static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67, 70, 174, 144, 143, 189, 309, 113, 134,
                                              181,
                                              FELUCCA_SLICE ? 129 : 0,
-                                             190, 400, 1100 /* SEM, HADES, DRONE incl. cells: provisional split estimates */
+                                             190, 400, 1100, /* SEM, HADES, DRONE incl. cells: provisional split estimates */
+                                             300 /* ENSEMBLE: three oscillators and a filter per voice (the ensemble is per part); provisional */
 };
 #endif
 
@@ -1603,16 +1604,21 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
     hp_begin(t);
 #endif
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
-    T_SPREAD(t) = !dx_track(t) && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
+    uint32_t ens = t->engine == ENGI_ENSEMBLE;          /* ENSEMBLE: its multi-tap ensemble runs on the part's mix below (eng_ensemble.c) */
+    T_SPREAD(t) = !dx_track(t) && !ens && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread; ENSEMBLE makes its own width) */
 #if FELUCCA_CPU2
     nr = track_render(t, b, n);
     if (nr)
 #else
     if (track_render(t, b, n))
 #endif
+    {
         t->tail = t->p[P_ITYPE] ? 64 : t->p[P_FILT] ? TF_TAIL : 16;   /* blocks of DIST / INSERT / FILTER state to run out after
                                                          * the last voice (the INSERT's: 46 ms, a flanger's feedback) */
-    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | t->p[P_FILT]) || !--t->tail) && !slicer_busy(t)) {
+        if (ens && t->tail < ENS_TAIL_BLOCKS)
+            t->tail = ENS_TAIL_BLOCKS;                  /* the ensemble's taps (at most 15 ms) run out too */
+    }
+    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | t->p[P_FILT] | ens) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])
             ins_rest(t);                                /* TYPE OFF while silent: no fade-out left for the next note */
@@ -1626,6 +1632,8 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
 #endif
         return;
     }
+    if (ens)
+        ens_post(t, b, n);                              /* before DIST / INSERT / SLICER / FILTER and the sends: the REV send hears it */
     if (T_SPREAD(t))
         mix_spread(t, b, n SM_ARG(sm));
     else {
@@ -1807,6 +1815,7 @@ static uint32_t mix_split(void)
 static void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i;
+    ens_blocks++;                                       /* eng_ensemble.c: a part that missed a block starts its ensemble ring clean */
     int perf;
     int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB LEVEL FIXED: MASTER after) */
     for (i = 0; i < n; i++)

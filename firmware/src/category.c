@@ -38,6 +38,7 @@ static const char *const PRESET_CAT[NENGINES] = {
     "PPPBPLPK",                  /* 14 SEM: brass, pad, strings, bass, notch, lead, air, keys */
     "BBBBBBUL",                  /* 15 HADES */
     "PPPPPPPPPPPPPPPP",          /* 16 DRONE: legacy + opt-in cell presets */
+    "PPPP",                      /* 17 ENSEMBLE: VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD */
 };
 static uint32_t preset_cat(uint32_t e, uint32_t k)    /* factory preset k of engine e */
 {

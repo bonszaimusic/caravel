@@ -24,6 +24,7 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #include "va_blocks.c"  /* reusable VA helpers; no shared mutable state */
 #include "eng_hades.c"
 #include "eng_drone.c"
+#include "eng_ensemble.c"
 #include "eng_sem.c"
 #include "eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL NOISE */
 #include "eng_phase.c"
@@ -72,6 +73,7 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_SEM,                    /* 14 */
     &ENG_HADES,                  /* 15 */
     &ENG_DRONE,                  /* 16 */
+    &ENG_ENSEMBLE,               /* 17 */
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -135,6 +137,7 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     ENGI_SEM,                    /* append: existing engine shortcut order retained */
     ENGI_HADES,
     ENGI_DRONE,
+    ENGI_ENSEMBLE,
 };
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them

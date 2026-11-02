@@ -87,7 +87,8 @@ static struct {
 #define ENGI_SEM 14u             /* append-only; 13 stays reserved when SLICE is disabled */
 #define ENGI_HADES 15u           /* appended; stable across optional builds */
 #define ENGI_DRONE 16u           /* experimental coupled drone; append-only */
-#define NENGINES 17u
+#define ENGI_ENSEMBLE 17u        /* strings / choir / dark texture with a built-in ensemble (eng_ensemble.c); append-only */
+#define NENGINES 18u
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */

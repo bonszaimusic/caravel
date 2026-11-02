@@ -5103,10 +5103,11 @@ static int test_fm4_retired(void)
     }
     bad += check("PRESETS KNOB 2: the engines in order, DIGITAL skipped, back to the first",
                  seen == all && TSEL->eng_req == 0u && eng_step(0, 1) == ENGI_FM6 && eng_step(ENGI_FM6, 1) == 2u &&
-                 eng_step(ENGI_FM6, -1) == 0u && eng_step(0, -1) == ENGI_DRONE && eng_step(ENGI_HADES, 1) == ENGI_DRONE);
+                 eng_step(ENGI_FM6, -1) == 0u && eng_step(0, -1) == ENGI_ENSEMBLE && eng_step(ENGI_HADES, 1) == ENGI_DRONE &&
+                 eng_step(ENGI_DRONE, 1) == ENGI_ENSEMBLE && eng_step(ENGI_ENSEMBLE, 1) == 0u);
     {   /* the display order (engines.c ENGINE_ORDER): every engine one can pick once; the PRESETS list follows it */
         static const char *const ORDER[] = {"ANALOG", "FM6", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
-                                            "PHYS", "NOISE", "SLICE", "DRUM", "SEM", "HADES", "DRONE"};
+                                            "PHYS", "NOISE", "SLICE", "DRUM", "SEM", "HADES", "DRONE", "ENSEMBLE"};
         uint32_t last = 0xFFu, r = 0, n = 0;
         ok = NENG_SHOWN == NELEM(ORDER);
         for (i = 0; ok && i < NENG_SHOWN; i++)
@@ -5121,7 +5122,7 @@ static int test_fm4_retired(void)
             last = e;
             r++;
         }
-        bad += check("existing engine order retained; SEM/HADES/DRONE appended and listed",
+        bad += check("existing engine order retained; SEM/HADES/DRONE/ENSEMBLE appended and listed",
                      ok && r == NENG_SHOWN);
     }
     /* a user preset stored with engine 1: kept as it is, it loads as FM6 with the converted patch */
