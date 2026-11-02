@@ -21,6 +21,14 @@ Full guide: [ENSEMBLE](engines/ensemble-engine.md).
 - The web editor lists ENSEMB with all fourteen presets.
 - **The version is shown as `v0.10.0`** (the minor number has two digits for the first time; the installer, the release tools and the website scripts were changed to accept it).
 
+## Also fixed (found in a first trial on an FM-1 with an earlier 0.10.0 test build)
+
+- **A journey no longer stops at a slot a recall refuses.** A following slot that held something unplayable (a leftover or migrated slot, or one saved under another engine) ended the
+  journey silently at the previous slot ("SNAP REACHED", then nothing, until the slot was saved again). The journey now skips such slots, and PLAY names the reason when fewer than two
+  slots are playable. Covered by a new section of `journey_hold_test`. This was also the case in 0.9.0.
+- **`tools/caravel_backup.py` accepts project format 3** (0.9.0): it stopped with `Invalid HPM1 capsule` on a device holding projects saved by 0.9.0 and made no backup. The web
+  installer's backup was not affected. `backup_cli_test.py` now runs in the ACTION workflow.
+
 ## Projects and going back
 
 **No project-format change** (still format 3). Projects, user presets and favorites from every earlier version load as before. **A project that uses ENSEMBLE on any track is not read by

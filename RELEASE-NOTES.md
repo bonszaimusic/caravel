@@ -11,6 +11,9 @@ measurement to a reference profile, no audio of it is stored), and **five Pair M
 with piano, bells, electric piano and a DRONE bed. The presets differ as measured signals; whether they
 sound good has not been judged.
 
+**Also fixed:** a journey no longer stops at a following slot a recall refuses (it skips it; also in
+0.9.0), and `tools/caravel_backup.py` accepts project format 3 (it stopped with "Invalid HPM1 capsule").
+
 **Projects:** no format change. **A project that uses ENSEMBLE on any track shows as an empty slot
 in 0.9.0** (host test with real flash images; nothing is deleted, saving over it in 0.9.0 replaces
 it). Back up before installing. The version now reads `v0.10.0`; the installer and the release
