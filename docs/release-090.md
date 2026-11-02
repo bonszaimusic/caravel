@@ -61,8 +61,9 @@ Firmware: `caravel-0.9.0.fwsc`. Matching offline emulator: `Caravel-0.9.0-Emulat
 - The complete validation of the exact firmware source passed (target build, resource guards, native, sanitizer, storage/USB, audio, WASM and Android-emulator suites).
   Target margins in the three layouts (default, one core, no RAM DSP): image 556,192 / 557,388 / 555,920 B in the 581,564 B app slot, so **about 25 KB are free again**
   (0.8.0: 352 B); RAM .data+.bss 68,700 B of 73,728 B (5,028 B above the 4,096 B guard).
-- **On hardware: not tried.** No version of this release has been installed on an FM-1 by the maintainer before publication; the OVERWRITE? fix, concurrent journeys on
-  several tracks and the migration were verified on the host only.
+- **On hardware:** the maintainer installed a pre-release build on an FM-1 and reports that, apart from one bug, it looks good. That was a first informal trial, not a
+  systematic acceptance, and no details (which functions, how long, controller or clock) were recorded. The bug it found (GO in RANDOM restarted a paused journey) is fixed in this
+  release and covered by a host test; **the final build differs from the one tried by exactly that fix and was not installed before publication.**
 - **Not verified:** a controller, a real external MIDI clock (the simulation has ideal pulses; jitter and a real cable are not covered), long real-device runs with several
   concurrent journeys, and the CPU cost of the new transport counter in the audio block (a compare, a 32-bit divide and a few additions per block while the sequencer plays).
 - No audio-engine or USB changes apart from the retired SAX set. Everything from 0.8.0 is included.

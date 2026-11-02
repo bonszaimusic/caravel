@@ -27,9 +27,11 @@ selector is never captured (issue #35).
 
 **What is tested.** Host tests with the real firmware, a stress suite (10.65 million
 checks), a simulated external MIDI clock with ideal pulses, and the complete validation of
-the exact source. About 25 KB of flash are free again (0.8.0: 352 B). **Not tried on an
-FM-1 before publication.** Not verified: a controller, a real external MIDI clock, long
-real-device runs and the CPU cost of the new transport counter.
+the exact source. About 25 KB of flash are free again (0.8.0: 352 B). The maintainer
+tried a pre-release build on an FM-1 and reports that, apart from one bug, it looks good (a
+first informal trial, not a systematic acceptance); that bug (GO in RANDOM restarted a paused
+journey) is fixed here, and the final build was not installed. Not verified: a controller, a
+real external MIDI clock, long real-device runs and the CPU cost of the new transport counter.
 
 Download `Caravel-0.9.0-FM1-Testpaket.zip` for the local installer, firmware,
 verified source and notices, or `Caravel-0.9.0-Emulator.html` for the offline

@@ -47,7 +47,7 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 - **The SAX sample set is retired** to free flash: SAX now plays PIANO. About 25 KB of the app slot are free again.
 - **Back up first: projects use a new format (3).** Everything from earlier versions loads (0.7.1 to 0.8.0 are migrated, at most 32 targets per slot, more are dropped with a message). **0.8.0 does not read a project saved by 0.9.0: the slot shows as empty there.**
 - The OVERWRITE? dialog of a project SAVE no longer flickers while a morph or journey runs; RANDOM moves the FX filter only between -70 and +70.
-- Tested on the host, in CI and in the complete validation, with a simulated external MIDI clock; **not tried on an FM-1 before publication**, and not verified with a controller, a real external clock or long runs.
+- Tested on the host, in CI and in the complete validation, with a simulated external MIDI clock; tried by the maintainer on an FM-1 only as a pre-release build before one fix (a first informal trial, not a systematic acceptance), and **not verified** with a controller, a real external clock or long runs.
 
 ## Caravel 0.8.0 — Morph Journey
 
