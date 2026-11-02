@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased] - planned 0.8.1
+
+- **The SAX sample set is retired** to free 31,422 B of flash (the app slot had 352 B left after 0.8.0; the per-track Random Morph / Journey work needs room). SAMPLE offers PIANO and FLUTE only. SET 3 (SAX) keeps its place and plays PIANO, like the earlier retired sets TRANH and PERC: **a sound, user preset or project that used SAX now plays PIANO**, the SAMPLE preset SAX is gone from browsing, and the GRAIN factory preset GLITCH now uses PIANO as its source (GRAIN SRC 3 plays PIANO too). Nothing else changes; the SAX recordings stay in `assets/samples-cc0` but the build no longer reads them.
+
 ## [0.8.0] - 2026-11-01
 
 - MORPH JOURNEY: a fifth ACTION bank (after LIVE) chains the Random Morph snapshots S1–S4 into one hands-free movement. A1 PLAY/PAUSE/RESUME, A2 direction (the running leg finishes first), A3 NEXT, A4 tap WAIT (0/1/2/4/8/16 bars), A4 hold saves. Leg length and curve are RANDOM SETUP's BARS and SHAPE; BARS, SCOPE and SHAPE changed during a journey wait for the next leg. It keeps running when you change bank, a hand or CC edit keeps its value for the rest of the leg, saving or deleting a snapshot ends it, RANDOM's A3 GO steers it, and a RANDOM morph on any track only **holds** it: it goes on by itself when that morph is done (A1 while held pauses it). Every slot is a scene (slots of different tracks and ALL slots form one journey; a leg moves exactly the controls stored in its target). Hold BANK in the JOURNEY bank: K1–K4 take TRACK 1–4 along or SKIP them (saved with the project). Eight MIDI Learn targets: PLAY, DIR, NEXT, WAIT, BARS, DEPTH, SCOPE, SHAPE.

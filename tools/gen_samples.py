@@ -10,7 +10,7 @@ The ADPCM state at the loop start is stored so loops restart exactly.
 
 Libraries:
   cc0        assets/samples-cc0/ (tools/fetch_cc0.py, Versilian Studios, CC0):
-             PIANO, FLUTE, SAX (set 1, once TRANH, and set 4, once PERC, are aliases of PIANO).
+             PIANO, FLUTE (set 1, once TRANH, set 3, once SAX, and set 4, once PERC, are aliases of PIANO).
              PIANO is the 5-zone piano of 1.0 .. 1.1.5 (1.2 .. 1.4.1 built a reduced 2-zone
              one at 11,025 Hz; 1.5 went back to the full one, the same bytes as 1.1.5)
 SAMPLE's factory presets end before set 4 (SMP_PERC_SLOT); every sample set and SET / USR
@@ -68,9 +68,11 @@ TR = 22050                                   # stored sample rate
 # CC0 library: set -> kind ("oneshot" decaying, "sus" looped sustain, "kit" one sample per key)
 # Built-in sets (piano, flute, sax); the other slots of the 8 are for the user (USR1-3, loaded
 # from the web editor). TRANH was removed (66 KB of flash); its index 1 stays, an alias of PIANO
-# ("alias": the set named). PERC (the GM kit) was removed (66 KB); its index 4 stays, an alias of
-# PIANO too (PERC_SLOT; its sounds load as the DRUM engine)
-CC0_SETS = [("PIANO", "oneshot"), ("PIANO", "alias"), ("FLUTE", "sus"), ("SAX", "sus"), ("PIANO", "alias")]
+# ("alias": the set named). SAX (the tenor saxophone, 31 KB) was removed in 0.8.1 for flash; its index 3
+# stays, an alias of PIANO too. PERC (the GM kit) was removed (66 KB); its index 4 stays, an alias of
+# PIANO too (PERC_SLOT; its sounds load as the DRUM engine). The SAX recordings stay in assets/samples-cc0
+# (and its ATTRIBUTION); nothing in the build reads them any more.
+CC0_SETS = [("PIANO", "oneshot"), ("PIANO", "alias"), ("FLUTE", "sus"), ("PIANO", "alias"), ("PIANO", "alias")]
 PERC_SLOT = 4                                # core.h SMP_SET_PERC: SAMPLE's factory presets end before it
 MEASURED_TUNING = ()                         # sets whose recordings are not at A440 (was TRANH, ~+35 ct)
 

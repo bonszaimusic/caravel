@@ -504,9 +504,9 @@ static int test_sound_loads(void)
     project_load(1);
     bad += check("a project load drops the copy and takes none", undo.trk == 0 && undo_depth == 0);
     ui_power_on();
-    bad += check("SAMPLE factory browsing has four melodic presets and no PERC",
+    bad += check("SAMPLE factory browsing has four preset slots (PIANO, FLUTE and the aliases of the retired TRANH and SAX), no PERC",
                  ENGINES[4]->npresets == 4u && str_eq(ENGINES[4]->presets[0].name, "PIANO") &&
-                 str_eq(ENGINES[4]->presets[3].name, "SAX"));
+                 str_eq(ENGINES[4]->presets[2].name, "FLUTE") && str_eq(ENGINES[4]->presets[3].name, "PIANO"));
     {   /* TRANH (SET 1, preset 1) is gone: both are PIANO aliases, kept for old data, never offered */
         const param_desc_t *sd = &ENGINES[4]->edit[0];
         uint32_t all, pos, k, e, pos0, shown = 0;
@@ -4104,25 +4104,25 @@ static int test_quick_layers(void)
         ok = TSEL->preset == 2u && user_of(TSEL) >= UP_SLOTS;
         c1 = eng_list_pos(&tot);
         turn(EN_K2, 1);
-        ok &= TSEL->preset == 3u;
+        ok &= TSEL->preset == 0u;                       /* SAX is retired: its alias (3) is skipped too, the list wraps to PIANO */
         c2 = eng_list_pos(&tot);
-        ok &= c0 == 0u && c1 == 1u && c2 == 2u && tot >= SMP_NPRESETS - SMP_NALIAS;
+        ok &= c0 == 0u && c1 == 1u && c2 == 0u && tot == SMP_NPRESETS - SMP_NALIAS;
         apply_preset(0);
         for (n = 0; n < tot; n++) {                     /* right: every sound once, back to the first */
             turn(EN_K2, 1);
             seen |= 1u << eng_list_pos(&tot);
-            alias |= user_of(TSEL) >= UP_SLOTS && TSEL->preset == 1u;
+            alias |= user_of(TSEL) >= UP_SLOTS && (TSEL->preset == 1u || TSEL->preset == 3u);
         }
         ok &= seen == (1u << tot) - 1u && TSEL->preset == 0u && user_of(TSEL) >= UP_SLOTS;
         seen = 0;
         for (n = 0; n < tot; n++) {                     /* left: the same, backwards */
             turn(EN_K2, -1);
             seen |= 1u << eng_list_pos(&tot);
-            alias |= user_of(TSEL) >= UP_SLOTS && TSEL->preset == 1u;
+            alias |= user_of(TSEL) >= UP_SLOTS && (TSEL->preset == 1u || TSEL->preset == 3u);
         }
         ok &= seen == (1u << tot) - 1u && TSEL->preset == 0u && !alias;
         btn_up(B_EDIT); frame();
-        bad += check("  #124 SAMPLE: KNOB 2 right PIANO, FLUTE, SAX (No. 1 2 3), both ways round the list, never the alias", ok);
+        bad += check("  #124 SAMPLE: KNOB 2 right PIANO, FLUTE (No. 1 2; SAX is retired), both ways round the list, never an alias", ok);
     }
     song.playing = 0;
     lay_combo(B_EDIT, white(LY_INIT));
