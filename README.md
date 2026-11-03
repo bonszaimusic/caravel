@@ -42,6 +42,7 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 
 [Download 0.10.1 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.10.1) · [What changed and what is tested](docs/release-0101.md)
 
+- **ENSEMBLE fix:** the three taps' slow LFOs now run 120 degrees apart, as documented (in 0.10.0 they moved together); all fourteen presets sound slightly different and PROFILE A was set again. Compared in host renders only.
 - **Fix:** in RANDOM the ship on the sea chart no longer sails between the snapshots because a journey runs on another track; the selected slot follows only the selected track's journey. Reproduced and fixed on the host; **not tried on an FM-1 before publication**. No project-format change.
 
 ## Caravel 0.10.0 — the ENSEMBLE engine

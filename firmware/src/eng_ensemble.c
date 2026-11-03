@@ -128,6 +128,10 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int
     s->seen = ens_blocks;
     slow_inc = 19500u + (uint32_t)p[P_E5] * 1075u;      /* 0.2 .. 1.6 Hz */
     fast_inc = 584000u + (uint32_t)p[P_E5] * 2000u;     /* 6 .. 8.6 Hz */
+    if (!s->live) {                                     /* the slow LFOs start 120 degrees apart (they all started at 0 before 0.10.1 and moved the taps together) */
+        for (j = 0; j < 3u; j++)
+            s->slow[j] = j * 0x55555555u;
+    }
     for (j = 0; j < 3u; j++) {
         int32_t lfo = (sine_i(s->slow[j]) * 3 + sine_i(s->fast + j * 0x55555555u)) >> 2;   /* +-32767: mostly the slow one */
         int32_t base = j == 0u ? ENS_DELAY_BASE_0 : j == 1u ? ENS_DELAY_BASE_1 : ENS_DELAY_BASE_2;
@@ -170,7 +174,7 @@ static const preset_t ENS_PRESETS[] = {
      * sends are this table's choice. No audio from the recording is stored anywhere. The others, by role: a classic string machine, a breathy choir, a very low
      * drone, a struck glass / bell tone (MORPH DARK with TEXT: the ring-modulated pulse is inharmonic), a swell that opens with ENV > FILTER, a rough short
      * pulse, a MONO solo with full DRIFT, the deepest ensemble, a pad with the fastest RATE */
-    {"PROFILE A", {123, 15, 70, 42, 55, 71, 31, 126}, {85, 90, 112, 95}, 0, 0, FX(0, 8, 8, 40), PAT(5)},
+    {"PROFILE A", {120, 15, 80, 60, 70, 71, 31, 126}, {85, 90, 112, 95}, 0, 0, FX(0, 8, 8, 40), PAT(5)},
     {"STRING MACHINE", {64, 0, 127, 25, 100, 22, 0, 127}, {85, 90, 115, 95}, 0, 0, FX(0, 12, 12, 45), PAT(5)},
     {"BREATH CHOIR", {64, 64, 90, 35, 40, 45, 127, 100}, {90, 95, 115, 100}, 0, 0, FX(0, 6, 20, 65), PAT(5)},
     {"DEEP DRONE", {127, 0, 0, 60, 80, 8, 0, 110}, {105, 100, 120, 115}, 0, 0, FX(0, 8, 24, 75), PAT(5)},

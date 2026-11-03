@@ -2,6 +2,7 @@
 
 ## [0.10.1] - prepared 2026-11-03 (branch `release/0.10.1`), not published
 
+- **Fix: ENSEMBLE's three slow tap LFOs run 120 degrees apart, as documented** (in 0.10.0 they ran in phase and moved the taps together, like a vibrato). All fourteen ENSEMBLE presets sound slightly different (host: the level movement repeats less regularly, mean centroid 692 to 656 Hz); **PROFILE A is set again** (120/15/80/60/70/71/31/126; 400 Hz against the reference's 380 Hz, was 404 Hz). The maintainer compared host renders and heard the difference; not tried on an FM-1. Two checks of `ensemble_presets_test` were adjusted and explain why (weakest pair 2.65, threshold 3.0 to 2.5; RUNNING PAD no longer smears most). ENSEMBLE stays mono.
 - **Fix: the selected RANDOM slot (and the ship on the sea chart) follows only the selected track's journey.** Every leg of any track's journey set the global selected slot, so with a journey on another track
   (or JOURNEY scope ALL) the selected track's ship sailed between the snapshots, and GO and the `Sx >` key changed their slot, without any parameter changing. Reproduced on the host
   (`journey_hold_test` section 4d, failed before); the same in 0.9.0 and 0.10.0. Not tried on an FM-1 after the change. No project-format change.

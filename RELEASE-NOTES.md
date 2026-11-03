@@ -1,6 +1,11 @@
 # Caravel 0.10.1
 
-A fix release on 0.10.0 (the ENSEMBLE engine); nothing else changed.
+A fix release on 0.10.0 (the ENSEMBLE engine): one fix in ENSEMBLE and one in RANDOM; nothing else changed.
+
+**ENSEMBLE, fixed:** the three taps' slow LFOs now run 120 degrees apart, as documented. In 0.10.0 they ran in phase and moved the taps
+together, like a vibrato. **All fourteen presets sound slightly different** (on the host the level movement repeats less regularly and the tone is a little darker), and
+**PROFILE A was set again** to stay close to its reference. The maintainer compared host renders of the old and new behaviour and heard the difference; the retuned
+PROFILE A was not listened to, and nothing was tried on an FM-1. ENSEMBLE stays mono.
 
 **Fixed:** in RANDOM the ship on the sea chart sailed between the snapshots without any change of a parameter. The selected slot
 (the one the ship heads for, and the one GO and the `Sx >` key name) was set by every leg of any track's journey, so a journey on another track
@@ -10,8 +15,8 @@ without a journey on the selected track has not been shown.
 
 **Projects:** no format change (still format 3); a drop-in update of 0.10.0. Back up before installing, as always.
 
-**What is tested.** The host journey suites with the new section and the complete validation of the exact source; the margins of the three layouts are checked by the release gates.
-**The fix was not tried on an FM-1 before publication** (the symptom was seen on the device by the maintainer; the cause was reproduced on the host). Everything said about
+**What is tested.** The host journey suites with the new section, the three ENSEMBLE suites and the regression (14 ENSEMBLE renders renewed, the other 133 unchanged) and the complete validation of the exact source; the margins of the three layouts are checked by the release gates.
+**Neither fix was tried on an FM-1 before publication** (the RANDOM symptom was seen on the device by the maintainer and its cause reproduced on the host; the ENSEMBLE change was compared in host renders). Everything said about
 0.10.0 on hardware still applies, and no judgement of how ENSEMBLE or the presets sound has been recorded.
 
 Download `Caravel-0.10.1-FM1-Testpaket.zip` for the local installer, firmware,

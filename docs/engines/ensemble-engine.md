@@ -16,7 +16,7 @@ load says nothing, nothing crashes; saving over it there replaces it, and a firm
 - **One filter, three timbres:** a trapezoidal state-variable filter whose cutoff, damping and low-pass / band-pass mix follow **MORPH**:
   STRINGS (open low-pass, TONE sets the brightness) to CHOIR (a resonant formant band, breath noise, TONE moves the vowel) to DARK
   (a darker low-pass with a rough ring-modulated pulse and a harder knee).
-- **Ensemble:** three delay taps (6.0, 8.5 and 11.0 ms at rest) read from one ring and moved by a slow and a fast LFO, 120 degrees apart. One ensemble per
+- **Ensemble:** three delay taps (6.0, 8.5 and 11.0 ms at rest) read from one ring and moved by a slow and a fast LFO, 120 degrees apart (until 0.10.0 only the fast LFOs were; the three slow LFOs ran in phase and moved the taps together, like a vibrato). One ensemble per
   track, applied to the track's mix: its cost grows with the number of tracks on this engine, not with the number of voices.
 
 | Page | Control | What it does |
@@ -63,20 +63,20 @@ level and *release* the time to -30 dB after the keys are released.
 
 | Preset | REG / MORPH / TONE / DRIFT / ENS / RATE / TEXT / MIX | ATK / DEC / SUS / REL | centroid, Hz (low / high) | bands, dB (low chord) | level, dB | attack / release, s |
 | --- | --- | --- | --- | --- | --- | --- |
-| VINTAGE STRINGS | 64 / 0 / 80 / 40 / 70 / 50 / 10 / 100 | 60 / 90 / 112 / 80 | 487 / 634 | -5.2 / -2.2 / -10.4 / -24.9 | -20.8 | 0.05 / 0.26 |
-| GLASS CHOIR | 40 / 64 / 60 / 50 / 60 / 40 / 15 / 90 | 80 / 90 / 115 / 95 | 645 / 740 | -7.1 / -2.0 / -7.4 / -34.4 | -29.2 | 0.29 / 0.76 |
-| DUSK ORCHESTRA | 100 / 40 / 70 / 60 / 85 / 35 / 30 / 100 | 75 / 95 / 115 / 90 | 573 / 778 | -5.9 / -2.4 / -7.7 / -29.1 | -23.8 | 0.19 / 0.54 |
-| ABYSS PAD | 80 / 110 / 40 / 90 / 75 / 20 / 90 / 95 | 100 / 100 / 120 / 105 | 361 / 498 | -5.3 / -1.6 / -18.5 / -49.2 | -21.4 | 1.03 / 1.44 |
-| PROFILE A | 123 / 15 / 70 / 42 / 55 / 71 / 31 / 126 | 85 / 90 / 112 / 95 | 404 / 610 | -5.0 / -2.0 / -12.5 / -29.6 | -20.5 | 0.35 / 0.76 |
-| STRING MACHINE | 64 / 0 / 127 / 25 / 100 / 22 / 0 / 127 | 85 / 90 / 115 / 95 | 664 / 943 | -8.6 / -1.5 / -8.9 / -17.1 | -20.2 | 0.35 / 0.74 |
-| BREATH CHOIR | 64 / 64 / 90 / 35 / 40 / 45 / 127 / 100 | 90 / 95 / 115 / 100 | 796 / 924 | -7.9 / -3.0 / -4.8 / -28.6 | -27.6 | 0.53 / 1.06 |
-| DEEP DRONE | 127 / 0 / 0 / 60 / 80 / 8 / 0 / 110 | 105 / 100 / 120 / 115 | 249 / 404 | -3.0 / -3.1 / -23.6 / -55.1 | -20.5 | 1.27 / 3.24 |
-| GLASS SHIMMER | 64 / 127 / 127 / 15 / 10 / 60 / 127 / 100 | 55 / 70 / 60 / 100 | 587 / 719 | -6.8 / -1.8 / -8.9 / -20.9 | -25.3 | 0.03 / 1.06 |
-| SLOW SWELL | 90 / 10 / 70 / 40 / 80 / 10 / 0 / 100 | 120 / 100 / 120 / 112 (ENV>FILTER 40) | 642 / 766 | -5.2 / -2.6 / -9.1 / -16.5 | -22.2 | 4.45 / 2.48 |
-| ROUGH PULSE | 127 / 127 / 110 / 50 / 70 / 110 / 127 / 127 | 50 / 70 / 70 / 60 | 528 / 767 | -3.7 / -3.3 / -10.4 / -17.4 | -22.9 | 0.03 / 0.22 |
-| SOLO DRIFT | 70 / 20 / 95 / 127 / 25 / 60 / 0 / 100 | 60 / 90 / 112 / 70 (MONO) | 625 / 964 | -9.5 / -1.1 / -9.5 / -22.9 | -26.3 | 0.07 / 0.14 |
-| HUGE ENSEMBLE | 64 / 0 / 110 / 50 / 127 / 6 / 0 / 127 | 70 / 90 / 115 / 100 | 619 / 869 | -8.1 / -1.5 / -9.3 / -18.3 | -20.3 | 0.13 / 1.06 |
-| RUNNING PAD | 40 / 30 / 100 / 40 / 127 / 127 / 0 / 127 | 95 / 90 / 115 / 100 | 650 / 792 | -6.6 / -2.1 / -8.0 / -21.1 | -24.3 | 0.75 / 1.04 |
+| VINTAGE STRINGS | 64 / 0 / 80 / 40 / 70 / 50 / 10 / 100 | 60 / 90 / 112 / 80 | 427 / 599 | -3.5 / -3.3 / -11.1 / -25.7 | -20.5 | 0.07 / 0.26 |
+| GLASS CHOIR | 40 / 64 / 60 / 50 / 60 / 40 / 15 / 90 | 80 / 90 / 115 / 95 | 625 / 696 | -5.2 / -3.1 / -6.8 / -34.5 | -28.9 | 0.29 / 0.76 |
+| DUSK ORCHESTRA | 100 / 40 / 70 / 60 / 85 / 35 / 30 / 100 | 75 / 95 / 115 / 90 | 481 / 733 | -4.3 / -3.0 / -8.9 / -30.7 | -22.7 | 0.17 / 0.52 |
+| ABYSS PAD | 80 / 110 / 40 / 90 / 75 / 20 / 90 / 95 | 100 / 100 / 120 / 105 | 336 / 474 | -4.5 / -2.0 / -18.9 / -49.5 | -20.9 | 0.99 / 1.38 |
+| PROFILE A | 120 / 15 / 80 / 60 / 70 / 71 / 31 / 126 | 85 / 90 / 112 / 95 | 400 / 627 | -3.4 / -3.3 / -11.4 / -27.9 | -20.2 | 0.31 / 0.76 |
+| STRING MACHINE | 64 / 0 / 127 / 25 / 100 / 22 / 0 / 127 | 85 / 90 / 115 / 95 | 589 / 856 | -4.1 / -3.1 / -9.9 / -17.7 | -20.3 | 0.31 / 0.84 |
+| BREATH CHOIR | 64 / 64 / 90 / 35 / 40 / 45 / 127 / 100 | 90 / 95 / 115 / 100 | 764 / 1047 | -6.4 / -3.6 / -4.8 / -29.0 | -27.1 | 0.55 / 1.08 |
+| DEEP DRONE | 127 / 0 / 0 / 60 / 80 / 8 / 0 / 110 | 105 / 100 / 120 / 115 | 283 / 343 | -5.0 / -1.7 / -21.9 / -54.3 | -21.2 | 1.17 / 3.04 |
+| GLASS SHIMMER | 64 / 127 / 127 / 15 / 10 / 60 / 127 / 100 | 55 / 70 / 60 / 100 | 596 / 646 | -4.9 / -2.7 / -9.1 / -19.5 | -26.0 | 0.03 / 1.10 |
+| SLOW SWELL | 90 / 10 / 70 / 40 / 80 / 10 / 0 / 100 | 120 / 100 / 120 / 112 (ENV>FILTER 40) | 502 / 835 | -3.4 / -3.5 / -10.9 / -18.2 | -22.0 | 3.91 / 2.38 |
+| ROUGH PULSE | 127 / 127 / 110 / 50 / 70 / 110 / 127 / 127 | 50 / 70 / 70 / 60 | 531 / 702 | -3.4 / -3.6 / -10.4 / -17.3 | -22.3 | 0.03 / 0.22 |
+| SOLO DRIFT | 70 / 20 / 95 / 127 / 25 / 60 / 0 / 100 | 60 / 90 / 112 / 70 (MONO) | 680 / 938 | -6.1 / -2.4 / -7.8 / -20.7 | -28.4 | 0.07 / 0.14 |
+| HUGE ENSEMBLE | 64 / 0 / 110 / 50 / 127 / 6 / 0 / 127 | 70 / 90 / 115 / 100 | 579 / 729 | -5.2 / -2.5 / -9.0 / -18.6 | -20.5 | 0.13 / 1.10 |
+| RUNNING PAD | 40 / 30 / 100 / 40 / 127 / 127 / 0 / 127 | 95 / 90 / 115 / 100 | 530 / 779 | -4.8 / -2.7 / -9.0 / -21.9 | -23.1 | 0.71 / 1.08 |
 
 **Why these are different:** `experiments/action-banks/ensemble_presets_test.c` measures every preset with two chords (spectral centroid, four band shares, level, the slow and
 the fast movement of the level, how far the ensemble smears a held line, the struck start, attack and release) and fails if any two presets are closer than
@@ -90,10 +90,10 @@ ignored), so "wide" and "huge" mean deep and thick, not spread in the stereo fie
 
 ### PROFILE A
 
-PROFILE A is the controls of the best match, by measurement, to the profile of one reference recording (REG 123, MORPH 15, TONE 70, DRIFT 42, ENS 55, RATE 71, TEXT 31, MIX 126),
+PROFILE A is the controls of the best match, by measurement, to the profile of one reference recording (REG 120, MORPH 15, TONE 80, DRIFT 60, ENS 70, RATE 71, TEXT 31, MIX 126),
 found with a search over the eight controls against a few measured features. Recording: spectral centroid about 380 Hz, energy shares -4.1 / -2.7 / -11.9 / -23.5 dB (below 200 Hz,
-up to 1 kHz, up to 4 kHz, above), a level movement of about 7.8 Hz at a depth of 0.25. The preset, E2 B2 E3 G3 held: 399 to 406 Hz, -4.1 / -2.7 / -11.1 to -11.4 / -28.9 to -29.0 dB,
-7.4 Hz at 0.25. The region above 4 kHz stays about 5 dB lower than the recording: the engine has no more there. This is a match of a few measured numbers, not a claim that it
+up to 1 kHz, up to 4 kHz, above), a level movement of about 7.8 Hz at a depth of 0.25. The preset in 0.10.1, E2 B2 E3 G3 held (host render, engine and the preset's sends as the test plays them): 400 Hz, -3.4 / -3.3 / -11.4 / -27.9 dB.
+The first version (0.10.0, controls 123 / 15 / 70 / 42 / 55 / 71 / 31 / 126) measured 404 Hz, -5.0 / -2.0 / -12.5 / -29.6 dB; **0.10.1 set the controls again** because spreading the slow tap LFOs (below) shifted the tone, and the match is about as close as before, only on the other side of the reference in the lowest two bands (the search was a few trials by hand, not the full search of the first version). The region above 4 kHz stays about 4 dB lower than the recording: the engine has no more there. This is a match of a few measured numbers, not a claim that it
 sounds like the recording; **that judgement is the listener's.** The recording is not part of this repository and no audio from it is used in a preset.
 
 ## Layering with a piano or bells

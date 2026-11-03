@@ -8,7 +8,7 @@
 #include "../engine-pair-morph/pair_test.c"
 #include <math.h>
 #ifndef ENS_PRESET_MIN_DISTANCE
-#define ENS_PRESET_MIN_DISTANCE 3.0              /* the weakest pair of the factory table measures 3.2 (two chords, see dist) */
+#define ENS_PRESET_MIN_DISTANCE 2.5              /* the weakest pair measured 3.2 in 0.10.0; with the slow tap LFOs spread (0.10.1) the common waver, which had kept presets of different RATE / ENS apart, is gone and it measures 2.65 (two chords, see dist) */
 #endif
 #define HOLD 10u                               /* seconds the chord is held */
 #define SECS 15u                               /* the take: 10 s held, 5 s of release */
@@ -231,7 +231,7 @@ int main(void)
         uint32_t SW = idx_of("SLOW SWELL"), RP = idx_of("ROUGH PULSE"), SD = idx_of("SOLO DRIFT"), HE = idx_of("HUGE ENSEMBLE"), RN = idx_of("RUNNING PAD");
         uint32_t i;
         /* PROFILE A: the controls of the best match to the reference profile, and the measured profile of the render (the reference: 380 Hz, -4.1 / -2.7 / -11.9 / -23.5 dB) */
-        static const int8_t VA[8] = {123, 15, 70, 42, 55, 71, 31, 126};
+        static const int8_t VA[8] = {120, 15, 80, 60, 70, 71, 31, 126};
         for (uint32_t k = 0; k < 8u; k++) CHECK(ENG_ENSEMBLE.presets[A].e[k] == VA[k]);
         CHECK(F[A][0].cent > 360 && F[A][0].cent < 440 && F[A][0].lo > -6.0 && F[A][0].lo < -2.0 && F[A][0].mid > -4.5 && F[A][0].mid < -1.5 && F[A][0].hi > -13.5 && F[A][0].hi < -9.5 && F[A][0].air > -31.5 && F[A][0].air < -26.5);
         for (i = 0; i < np; i++) if (i != DD) CHECK(F[DD][0].cent < F[i][0].cent && F[DD][1].cent < F[i][1].cent);       /* the lowest, the darkest, the slowest to open and to close */
@@ -245,8 +245,10 @@ int main(void)
         CHECK(F[RP][0].attack < 0.1 && F[RP][0].release < 0.5 && ENG_ENSEMBLE.presets[RP].e[1] == 127 && ENG_ENSEMBLE.presets[RP].e[6] == 127);   /* rough: MORPH DARK, TEXT full */
         CHECK(ENG_ENSEMBLE.presets[SD].mono == 1 && ENG_ENSEMBLE.presets[SD].e[3] == 127);                               /* solo: MONO, DRIFT full */
         CHECK(ENG_ENSEMBLE.presets[HE].e[4] == 127 && ENG_ENSEMBLE.presets[HE].e[7] == 127);                             /* the deepest ensemble: ENS and MIX full */
-        for (i = 0; i < np; i++) if (i != RN) CHECK(F[RN][1].line < F[i][1].line);                                       /* the fast RATE smears a held line most */
-        CHECK(F[RN][1].line < -6.0);
+        /* the fast RATE smears a held line: most of all but ROUGH PULSE (its ring-modulated pulse smears more). Before 0.10.1 it was the most (below -6 dB): the slow taps' LFOs ran in phase, a common
+         * vibrato that smeared a line at the fastest RATE; with them spread the pad measures -4.7 dB */
+        for (i = 0; i < np; i++) if (i != RN && i != RP) CHECK(F[RN][1].line < F[i][1].line);
+        CHECK(F[RN][1].line < -4.0);
     }
     printf("ENSEMBLE PRESETS PASS: %u checks, %u presets.\n", checks, np);
     return 0;
