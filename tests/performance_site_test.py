@@ -45,6 +45,19 @@ class PerformanceSiteTest(unittest.TestCase):
         paths += [self.site / name for name in ("webapp/installer/index.html", "webapp/editor/index.html", "emulator/index.html")]
         return {p.relative_to(self.site).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
+    def test_landing_pill_of_every_supported_release_is_accepted(self):
+        # a release the pill pattern does not know stops the Pages workflow at the performance step (0.10.1 did, 2026-11-03)
+        look = make_site.look_css((ROOT / "web/index_pkg.html").read_text())
+        for version in ("0.6.0", "0.7.0", "0.7.1", "0.7.2", "0.8.0", "0.9.0", "0.10.0", "0.10.1"):
+            with self.subTest(version=version):
+                for name in ("caravel-%s-source.tar.gz" % version, "caravel-%s.fwsc" % version):
+                    (self.site / "firmware" / name).write_bytes(b"TEST ONLY unchanged release inventory fixture: " + name.encode())
+                (self.site / "index.html").write_text(make_site.landing(look, version, True, "firmware/caravel-%s-source.tar.gz" % version))
+                performance.build(self.site)
+        (self.site / "index.html").write_text(make_site.landing(look, "0.11.0", True, "firmware/caravel-0.6.0-source.tar.gz"))
+        with self.assertRaisesRegex(ValueError, "requires a verified"):
+            performance.build(self.site)
+
     def test_downloads_match_and_all_release_assets_are_preserved(self):
         before = self.protected()
         performance.build(self.site)

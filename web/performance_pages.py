@@ -83,7 +83,7 @@ def build(site, source=ASSETS):
     # Verify the destination profile before writing any website content.
     installer = site / "webapp/installer/index.html"
     landing = site / "index.html"
-    version = re.search(r'<span class="pill">v(0\.6\.0|0\.7\.[012]|0\.8\.0|0\.9\.0|0\.10\.0)</span>', landing.read_text())
+    version = re.search(r'<span class="pill">v(0\.6\.0|0\.7\.[012]|0\.8\.0|0\.9\.0|0\.10\.[01])</span>', landing.read_text())
     if '"release_verified": true' not in installer.read_text() or not version:
         raise ValueError("Performance content requires a verified Caravel 0.6.0/0.7.0/0.7.1/0.7.2/0.8.0/0.9.0/0.10.0/0.10.1 site")
     manifest, data = load_assets(source)
