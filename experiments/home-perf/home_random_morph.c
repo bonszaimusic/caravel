@@ -642,7 +642,7 @@ static int hp_j_leg(uint32_t to,uint32_t now)     /* a smooth leg from the live 
  if(!ok){hp_j_captured();if(!ui.msg_t)ui_message("SNAP CHANGED");ui.force=1;return 0;}
  hp_rm.beat=hp_j.tp!=0u;if(hp_rm.beat)hp_rm.stamp=perf_bars_q16;   /* CONTINUE / START: the leg runs on the transport's time */
  hp_j.tgt=(uint8_t)to;hp_j.phase=0;hp_j.held=0;
- action_snap_slot=(uint8_t)to;                      /* RANDOM's selected snapshot follows the journey: edit or recapture it there */
+ if(hp_j.trk==(uint8_t)song.sel)action_snap_slot=(uint8_t)to;   /* RANDOM's selected snapshot follows the SELECTED track's journey: edit or recapture it there (another track's legs must not move it, nor the ship) */
  return 1;
 }
 static void hp_j_advance(uint32_t now)

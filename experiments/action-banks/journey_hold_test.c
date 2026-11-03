@@ -94,6 +94,16 @@ int main(void){
  bank(ACT_BANK_JOURNEY);tap(1);run_ms(100);CHECK(!hp_j.on&&strstr(ui.msg,"TARGET CHANGED")!=NULL);
  hp_rm_snapshot_clear();hp_rm_reset();sel(0);
 
+ /* 4d. RANDOM's selected slot (and the ship that heads for it) follows only the SELECTED track's journey: T1's legs must not move T2's selection */
+ sel(0);hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();hp_rm_snapshot_clear();hp_rm.bars=1;hp_j.wait=0;hp_j.rev=0;
+ set_all(10,-40,20,-20);action_snap_slot=0;CHECK(hp_rm_snapshot_store(0));set_all(90,40,20,-20);action_snap_slot=1;CHECK(hp_rm_snapshot_store(1));
+ bank(ACT_BANK_JOURNEY);action_snap_slot=0;tap(1);run_ms(100);CHECK(hp_jn[0].on&&hp_jn[0].trk==0u);
+ sel(1);action_snap_slot=3;
+ {uint32_t legs=0,moved=0;uint8_t last=hp_jn[0].tgt;
+  for(uint32_t g=0;g<700u;g++){run_ms(10);if(hp_jn[0].tgt!=last){last=hp_jn[0].tgt;legs++;}if(action_snap_slot!=3u)moved++;}
+  CHECK(hp_jn[0].on&&legs>=2u&&moved==0u);}                                                         /* T1's journey changed its target several times, T2's selected slot stayed S4 */
+ hp_jn[0].on=hp_jn[0].paused=hp_jn[0].held=0;hp_eng_ovr=0u;hp_rm_reset();hp_eng_ovr=255u;hp_rm_snapshot_clear();sel(0);
+
  /* 5. foreign controls are not in a track's set: T1's HOME also pins T2's REV and PAN */
  CHECK(web_home_assign(0,0,2,HP_TRACK,1,P_REV));CHECK(web_home_assign(0,0,3,HP_TRACK,1,P_PAN));
  hp_rm_snapshot_clear();hp_rm_reset();hp_rm.bars=1;sel(0);
