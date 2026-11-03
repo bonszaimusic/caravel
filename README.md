@@ -44,7 +44,7 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 
 - **ENSEMBLE (ENSEMB):** a string / choir / dark-pad engine with a built-in three-tap ensemble, eight controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), fourteen factory presets and five Pair Morph layer recipes with piano, bells, electric piano and a DRONE bed.
 - **Back up first.** No project-format change; **a project that uses ENSEMBLE shows as an empty slot in 0.9.0** (nothing is deleted).
-- Tested on the host and in the complete validation; **not tried on an FM-1 and not listened to on the device**. The presets differ as measured signals; how they sound is not judged.
+- Tested on the host and in the complete validation; a first informal test build was installed on an FM-1 by the maintainer (it led to two fixes; the released build differs by them); **no judgement of how ENSEMBLE or the presets sound has been recorded**. The presets differ as measured signals.
 
 ## Caravel 0.9.0 — Random Morph and Journey per track
 

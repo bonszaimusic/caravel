@@ -21,8 +21,8 @@ scripts accept the two-digit minor number.
 
 **What is tested.** Host tests with the real firmware code (three ENSEMBLE suites, the existing
 regression, UI, editor, Pair, HOME and project suites) and the complete validation of the exact
-source. About 22 KB of flash stay free (0.9.0: about 25 KB); RAM and pool are unchanged. CPU only as static counts. **Not tried on an FM-1 and not listened to on the
-device**; the recipes and the CPU cost on hardware are not verified.
+source. About 22 KB of flash stay free (0.9.0: about 25 KB); RAM and pool are unchanged. CPU only as static counts. The maintainer installed a first test build on an FM-1 (informal), which led to two fixes; the released build differs by those fixes and its
+installation before publication is not recorded. **No judgement of how ENSEMBLE or the presets sound has been recorded**; the recipes and the CPU cost on hardware are not verified.
 
 Download `Caravel-0.10.0-FM1-Testpaket.zip` for the local installer, firmware,
 verified source and notices, or `Caravel-0.10.0-Emulator.html` for the offline

@@ -55,6 +55,8 @@ Firmware: `caravel-0.10.0.fwsc`. Matching offline emulator: `Caravel-0.10.0-Emul
   (its memory is the per-part engine memory every part already has). The gates (4 KB flash, 300 B RAM above the guard, 2 KB pool) hold in all three layouts.
 - CPU: only static counts. Host instructions per sample for the ENSEMBLE presets are 1,139 to 1,465 against 1,111 to 1,224 for SEM (about a third more per voice); the target's loop costs of
   `ens_render` (342) and `ens_post` (176) are static. **No CPU percentage was measured on a device.**
-- **Not tried on an FM-1, and nobody has listened to the engine or the presets on the device.** WAV renders from the host DSP exist for listening, but a judgement of how any preset or recipe
-  sounds, or whether PROFILE A is close to its reference, has not been made. Not verified: the engine on hardware at the voice cap with the other engines, long runs, the layer recipes on the device.
+- **On hardware:** the maintainer installed a first 0.10.0 test build on an FM-1 (an informal trial, not a systematic acceptance); it led to the two fixes above. The released build differs
+  from that test build by exactly those fixes, and whether it was installed on the device before publication is not recorded here. **No judgement of how the engine or any preset or layer recipe
+  sounds, or whether PROFILE A is close to its reference, has been recorded** (WAV renders from the host DSP exist for listening). Not verified: the engine on hardware at the voice cap with the other
+  engines, long runs, the layer recipes on the device, the CPU cost on the device.
 - No change to existing engines, the USB code or the project format. Everything from 0.9.0 is included.
