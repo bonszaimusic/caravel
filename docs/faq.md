@@ -25,6 +25,7 @@ USB or switch off during writing. Recovery can change or erase stored data.
 | After going back to 0.7.x a project says `PERF PROJECT INVALID` | [Projects saved by 0.8.0](#projects-saved-by-080) |
 | After going back to 0.8.0 a project slot is empty | [Projects saved by 0.9.0](#projects-saved-by-090) |
 | After going back to 0.9.0 a project slot that uses ENSEMB is empty | [Projects that use ENSEMBLE](#projects-that-use-ensemble) |
+| On 0.9.0 the journey stops at one slot, or `caravel_backup.py` says `Invalid HPM1 capsule` | [Two known problems in 0.9.0](#two-known-problems-in-090) |
 | You need to understand OCT-/OCT+, M-Flasher or m-bootloader | [Recovery tools](#recovery-tools) |
 
 ## USB device not recognized
@@ -127,6 +128,14 @@ The upstream M-Flasher guide describes the download-mode device as **WL82 UBOOT1
 Holding both octave buttons **during power-on** opens Caravel's hardware
 calibration instead. The running-firmware shortcut cannot help if Caravel never
 reaches its main loop. A blank screen alone does not confirm UBOOT or a permanent failure.
+
+## Two known problems in 0.9.0
+
+Both are fixed in **0.10.0**. Updating to 0.10.0 is the simple way out: it reads every 0.9.0 project (the project format did not change), so no going back is needed. Make a backup first, as before.
+
+**The journey stops at a slot.** *Symptom:* on 0.9.0 a journey reaches one slot (the screen says `SNAP REACHED`), then stops, for example at S3 while S4 looks empty. *Cause:* a following slot holds something a recall refuses (a leftover or migrated slot, or one saved under another engine), and 0.9.0 ended the journey there instead of skipping it. *Workaround on 0.9.0:* save a real snapshot into that slot (or into every slot after the last one you use), then press PLAY again. 0.10.0 skips such slots, and PLAY names the reason (`SNAP: TARGET CHANGED` or `NEED 2 SNAPS`) when fewer than two slots are playable.
+
+**`caravel_backup.py` stops with `Invalid HPM1 capsule`.** *Symptom:* the command-line backup tool of 0.9.0 and earlier stops while reading a device that holds projects saved by 0.9.0 (project format 3) and writes no backup. *Cause:* the tool only knew project formats 1 and 2. *Workaround:* use the backup of the web installer, which does not check the format, or take `tools/caravel_backup.py` from 0.10.0 (or from the current `main`), which accepts format 3.
 
 ## Projects that use ENSEMBLE
 
