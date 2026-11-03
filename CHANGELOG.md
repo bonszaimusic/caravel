@@ -1,6 +1,12 @@
 # Changelog
 
-## [0.10.0] - prepared 2026-11-02 (branch `release/0.10.0`), not published
+## [0.10.1] - prepared 2026-11-03 (branch `release/0.10.1`), not published
+
+- **Fix: the selected RANDOM slot (and the ship on the sea chart) follows only the selected track's journey.** Every leg of any track's journey set the global selected slot, so with a journey on another track
+  (or JOURNEY scope ALL) the selected track's ship sailed between the snapshots, and GO and the `Sx >` key changed their slot, without any parameter changing. Reproduced on the host
+  (`journey_hold_test` section 4d, failed before); the same in 0.9.0 and 0.10.0. Not tried on an FM-1 after the change. No project-format change.
+
+## [0.10.0] - 2026-11-03
 
 - **New engine ENSEMBLE (shown as `ENSEMB`; engine 17, append-only; no existing number changes):** strings, choir and dark texture. Three oscillator registers (16', 8', 4') into one
   state-variable filter whose timbre follows MORPH (strings, a resonant choir formant with breath, dark and rough), and a built-in three-tap ensemble (one ring in

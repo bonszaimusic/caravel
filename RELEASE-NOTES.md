@@ -1,30 +1,20 @@
-# Caravel 0.10.0
+# Caravel 0.10.1
 
-**A new engine: ENSEMBLE** (shown as ENSEMB, the last engine in the list). Strings, choir and dark
-texture: three oscillator registers into one filter that morphs between strings, a resonant
-choir formant and a rough dark timbre, and a built-in three-tap ensemble that sits inside the
-track (before DIST, INSERT, FILTER and the sends, so reverb, HALL and STASIS hear it). Eight
-controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), at most six voices per track, MIDI CC 74
-is TONE. **Fourteen factory presets**, each for a different job (string machine, choir, drone,
-glass, swell, rough pulse, solo, deep ensemble, moving pad; PROFILE A has its controls set by
-measurement to a reference profile, no audio of it is stored), and **five Pair Morph layer recipes**
-with piano, bells, electric piano and a DRONE bed. The presets differ as measured signals; whether they
-sound good has not been judged.
+A fix release on 0.10.0 (the ENSEMBLE engine); nothing else changed.
 
-**Also fixed:** a journey no longer stops at a following slot a recall refuses (it skips it; also in
-0.9.0), and `tools/caravel_backup.py` accepts project format 3 (it stopped with "Invalid HPM1 capsule").
+**Fixed:** in RANDOM the ship on the sea chart sailed between the snapshots without any change of a parameter. The selected slot
+(the one the ship heads for, and the one GO and the `Sx >` key name) was set by every leg of any track's journey, so a journey on another track
+(or JOURNEY scope ALL) moved the selected track's ship and the labels. It now follows only the selected track's journey. Reproduced on the host
+(journey_hold_test, a new section that failed before); the same in 0.9.0 and 0.10.0. The cause found is the one the test reproduces; whether it is the only way the ship can move
+without a journey on the selected track has not been shown.
 
-**Projects:** no format change. **A project that uses ENSEMBLE on any track shows as an empty slot
-in 0.9.0** (host test with real flash images; nothing is deleted, saving over it in 0.9.0 replaces
-it). Back up before installing. The version now reads `v0.10.0`; the installer and the release
-scripts accept the two-digit minor number.
+**Projects:** no format change (still format 3); a drop-in update of 0.10.0. Back up before installing, as always.
 
-**What is tested.** Host tests with the real firmware code (three ENSEMBLE suites, the existing
-regression, UI, editor, Pair, HOME and project suites) and the complete validation of the exact
-source. About 22 KB of flash stay free (0.9.0: about 25 KB); RAM and pool are unchanged. CPU only as static counts. The maintainer installed a first test build on an FM-1 (informal), which led to two fixes; the released build differs by those fixes and its
-installation before publication is not recorded. **No judgement of how ENSEMBLE or the presets sound has been recorded**; the recipes and the CPU cost on hardware are not verified.
+**What is tested.** The host journey suites with the new section and the complete validation of the exact source; the margins of the three layouts are checked by the release gates.
+**The fix was not tried on an FM-1 before publication** (the symptom was seen on the device by the maintainer; the cause was reproduced on the host). Everything said about
+0.10.0 on hardware still applies, and no judgement of how ENSEMBLE or the presets sound has been recorded.
 
-Download `Caravel-0.10.0-FM1-Testpaket.zip` for the local installer, firmware,
-verified source and notices, or `Caravel-0.10.0-Emulator.html` for the offline
-emulator. Firmware: `caravel-0.10.0.fwsc`. INFO must show `v0.10.0` after reboot.
-[Details](https://github.com/bonszaimusic/caravel/blob/v0.10.0/docs/release-0100.md).
+Download `Caravel-0.10.1-FM1-Testpaket.zip` for the local installer, firmware,
+verified source and notices, or `Caravel-0.10.1-Emulator.html` for the offline
+emulator. Firmware: `caravel-0.10.1.fwsc`. INFO must show `v0.10.1` after reboot.
+[Details](https://github.com/bonszaimusic/caravel/blob/v0.10.1/docs/release-0101.md).

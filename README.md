@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.10.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.10.1**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -37,6 +37,12 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 | **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
 | **[HOME, Pair Morph, macros and saving](docs/tutorials/README.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
 | [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
+
+## Caravel 0.10.1 — fix release
+
+[Download 0.10.1 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.10.1) · [What changed and what is tested](docs/release-0101.md)
+
+- **Fix:** in RANDOM the ship on the sea chart no longer sails between the snapshots because a journey runs on another track; the selected slot follows only the selected track's journey. Reproduced and fixed on the host; **not tried on an FM-1 before publication**. No project-format change.
 
 ## Caravel 0.10.0 — the ENSEMBLE engine
 

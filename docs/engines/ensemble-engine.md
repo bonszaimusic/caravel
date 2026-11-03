@@ -1,7 +1,7 @@
 # ENSEMBLE — strings, choir and dark texture with a built-in ensemble
 
 ENSEMBLE is an original string-machine / choir / dark-pad engine by bonszaimusic (Caravel). It takes the idea of sawtooth registers played into a
-slowly moving ensemble; it is not an emulation of any instrument or circuit. **Status: part of the prepared Caravel 0.10.0 release (branch `release/0.10.0`, not published).
+slowly moving ensemble; it is not an emulation of any instrument or circuit. **Status: part of Caravel 0.10.0 (published 2026-11-03) and later.
 Everything below is verified on the host only (real firmware code in the host harness); a first informal test build was installed on an FM-1 by the maintainer, and no judgement of how it sounds has been recorded.**
 
 ## Selecting ENSEMBLE
