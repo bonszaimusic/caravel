@@ -75,6 +75,22 @@ SHA-256-checked SDK files) and about two and a half minutes on an Apple-silicon 
 adds build switches to every layout. Checked 2026-11-04 against `main` (`3f1b5ad`): the default image is 559,620 B, byte-identical to the
 published `caravel-0.10.1-app.bin`. The numbers are flash and RAM of the layout, not CPU measurements.
 
+## The CI's test jobs without CI
+
+`tools/docker_validate.sh` runs the CI's test jobs in a local `linux/amd64` container (image built once from `tools/docker_validate/Dockerfile`: Python, clang,
+Node 22, Emscripten 3.1.64, the JieLi toolchain, the pinned SDK files, DaisySP). It reads the workflow files themselves and runs their `run:` steps in order
+(`tools/docker_validate/run_steps.py`), so it cannot drift from the CI:
+
+```
+tools/docker_validate.sh action                 # job `wasm` of action-banks-android.yml (all ACTION / ENSEMBLE / JOURNEY / STASIS suites, the C/WASM emulator, the Node tests)
+tools/docker_validate.sh host SHARD             # `prepare`, then one shard of `host` in validate-060.yml; SHARD,SHARD,... or `all`
+```
+
+Measured 2026-11-04 on an Apple-silicon Mac (Docker with 9.7 GB): `action` 4 minutes (the CI: 5.5 to 8), the eight host shards one after the other about 20 minutes
+(the CI runs them in parallel: 11 to 16). **Not possible there:** the three ThreadSanitizer tests of the `cpu_dual` shard (ThreadSanitizer cannot map its
+shadow memory under the x86-64 emulation: "unexpected memory mapping"); the script skips them on Apple silicon (`FORCE_TSAN=1` tries anyway) and they stay a CI job. The release
+workflows' gates (they read GitHub runs of the exact commit), publishing and Pages are not part of this.
+
 ## Verified local release artifacts
 
 `./build.sh --release 0.6.0` builds identity `FM-1_999` and version `v0.6.0`, then
