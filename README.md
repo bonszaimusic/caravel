@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.10.1**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.11.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -37,6 +37,14 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 | **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
 | **[HOME, Pair Morph, macros and saving](docs/tutorials/README.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
 | [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
+
+## Caravel 0.11.0 — ENSEMBLE in stereo
+
+[Download 0.11.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.11.0) · [What changed and what is tested](docs/release-0110.md) · [ENSEMBLE guide](docs/engines/ensemble-engine.md)
+
+- **ENSEMBLE is stereo:** SPRD is its width (six taps, three left and three right); the factory pads load with a width, the mono presets stay mono; MONO, LEGATO and SPRD 0 are the 0.10.1 sound bit for bit. The mono sum is about 2 to 3.5 dB lower and a wide pad's reverb return is lower: raise REV or LEVEL.
+- **Pair Morph:** a member may have SPRD above 0 on any engine (no more `SPREAD OFF`).
+- **Back up first.** No project-format change; a stereo pad plays mono on 0.10.1 (the width stays stored). Host-tested and run in a local container; **not tried on an FM-1 as a release check**; the maintainer listened to host renders and judged the stereo ENSEMBLE good.
 
 ## Caravel 0.10.1 — fix release
 

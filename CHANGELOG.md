@@ -1,6 +1,14 @@
 # Changelog
 
-## [0.10.1] - prepared 2026-11-03 (branch `release/0.10.1`), not published
+## [0.11.0] - prepared 2026-11-04 (branch `release/0.11.0`), not published
+
+- **ENSEMBLE is stereo; SPRD is its width.** Six taps in the one ring, three left and three right (the 0.10.1 taps are the left channel, three more with their own LFO rates the right). SPRD 0, MONO and LEGATO are the mono ensemble of 0.10.1 bit for bit; only POLY and UNISON parts with SPRD above 0 are stereo. The mono sum is about 2 to 3.5 dB lower (the channels are only partly alike), the HALL return with a width clearly lower (about 6 dB in the measured case, part of it unexplained: raise REV or LEVEL). About +80 host instructions per ENSEMBLE track with a width; default layout 560,400 B (21,164 B left), RAM and pool unchanged; `ens_post` static cost 186 to 332 (budget raised). See `docs/engines/ensemble-engine.md`.
+- **The factory pads load with a width:** VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD, PROFILE A, SLOW SWELL, RUNNING PAD 127; STRING MACHINE, DEEP DRONE 112; BREATH CHOIR, HUGE ENSEMBLE 96; GLASS SHIMMER, ROUGH PULSE, SOLO DRIFT stay mono. User presets and projects keep the SPRD they store; the preset table is Caravel-side (`eng_ensemble.c`), the engine library is untouched.
+- **Pair Morph: a member may have SPRD above 0, on any engine** (before: `SPREAD OFF`, and a running Pair switched itself off when SPRD was raised). The morph weight scales the member's sum and side signal; the Pair's level and pan apply. Tested on the host (all 225 ordered engine pairs with SPRD 100 on both members, snapshots); not on a device.
+- **Older firmware:** a project with a stereo ENSEMBLE pad loads on 0.10.1 with its SPRD kept and the pad playing mono; nothing is lost. No project-format change.
+- Host-tested and run in a local container; **not tried on an FM-1.** The maintainer listened to host renders of the stereo ENSEMBLE (full and half width, no mean lift, also in Pair recipes) and judged them good.
+
+## [0.10.1] - 2026-11-03
 
 - **Fix: ENSEMBLE's three slow tap LFOs run 120 degrees apart, as documented** (in 0.10.0 they ran in phase and moved the taps together, like a vibrato). All fourteen ENSEMBLE presets sound slightly different (host: the level movement repeats less regularly, mean centroid 692 to 656 Hz); **PROFILE A is set again** (120/15/80/60/70/71/31/126; 400 Hz against the reference's 380 Hz, was 404 Hz). The maintainer compared host renders and heard the difference; not tried on an FM-1. Two checks of `ensemble_presets_test` were adjusted and explain why (weakest pair 2.65, threshold 3.0 to 2.5; RUNNING PAD no longer smears most). ENSEMBLE stays mono.
 - **Fix: the selected RANDOM slot (and the ship on the sea chart) follows only the selected track's journey.** Every leg of any track's journey set the global selected slot, so with a journey on another track
