@@ -6,7 +6,7 @@
 - **The factory pads load with a width:** VINTAGE STRINGS, GLASS CHOIR, DUSK ORCHESTRA, ABYSS PAD, PROFILE A, SLOW SWELL, RUNNING PAD 127; STRING MACHINE, DEEP DRONE 112; BREATH CHOIR, HUGE ENSEMBLE 96; GLASS SHIMMER, ROUGH PULSE, SOLO DRIFT stay mono. User presets and projects keep the SPRD they store; the preset table is Caravel-side (`eng_ensemble.c`), the engine library is untouched.
 - **Pair Morph: a member may have SPRD above 0, on any engine** (before: `SPREAD OFF`, and a running Pair switched itself off when SPRD was raised). The morph weight scales the member's sum and side signal; the Pair's level and pan apply. Tested on the host (all 225 ordered engine pairs with SPRD 100 on both members, snapshots); not on a device.
 - **Older firmware:** a project with a stereo ENSEMBLE pad loads on 0.10.1 with its SPRD kept and the pad playing mono; nothing is lost. No project-format change.
-- Host-tested and run in a local container; **not tried on an FM-1.** The maintainer listened to host renders of the stereo ENSEMBLE (full and half width, no mean lift, also in Pair recipes) and judged them good.
+- Host-tested and run in a local container; the maintainer reports having checked everything on an FM-1 with a release-candidate test build (0.11.0-rc3; no per-item findings are recorded). The maintainer had also listened to host renders of the stereo ENSEMBLE (full and half width, no mean lift, also in Pair recipes) and judged them good.
 
 ## [0.10.1] - 2026-11-03
 

@@ -44,7 +44,7 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 
 - **ENSEMBLE is stereo:** SPRD is its width (six taps, three left and three right); the factory pads load with a width, the mono presets stay mono; MONO, LEGATO and SPRD 0 are the 0.10.1 sound bit for bit. The mono sum is about 2 to 3.5 dB lower and a wide pad's reverb return is lower: raise REV or LEVEL.
 - **Pair Morph:** a member may have SPRD above 0 on any engine (no more `SPREAD OFF`).
-- **Back up first.** No project-format change; a stereo pad plays mono on 0.10.1 (the width stays stored). Host-tested and run in a local container; **not tried on an FM-1 as a release check**; the maintainer listened to host renders and judged the stereo ENSEMBLE good.
+- **Back up first.** No project-format change; a stereo pad plays mono on 0.10.1 (the width stays stored). Host-tested and run in a local container; the maintainer reports having checked everything on an FM-1 with a release-candidate test build (rc3; no per-item findings are recorded).
 
 ## Caravel 0.10.1 — fix release
 

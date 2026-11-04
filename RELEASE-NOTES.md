@@ -12,8 +12,8 @@ sounds drier. About 80 more host instructions per ENSEMBLE track with a width; 2
 **Projects:** no format change. A project with a stereo ENSEMBLE pad loads on 0.10.1 and plays it mono (the width stays stored). Back up before installing.
 
 **What is tested.** Host tests with the real firmware code (the ENSEMBLE suites, all 225 ordered engine pairs with SPRD on both members, the regression with 11 ENSEMBLE renders renewed on purpose, the editor mock), the complete validation, and a local Linux container run of the
-ACTION job and the host shards. **Nothing was tried on an FM-1 as a release check**: test builds were prepared for the maintainer's device, and whether they were installed and how they sounded is not recorded. The maintainer listened to host renders of the stereo ENSEMBLE and judged them good.
-Not verified: the Pair and MORE pages on the device, the real HALL / STASIS balance with a width, the CPU on the device.
+ACTION job and the host shards. **On hardware:** the maintainer reports having checked everything on an FM-1 with a release-candidate test build (0.11.0-rc3, the code of this release apart from the version text); no per-item findings are recorded. The maintainer had also listened to host renders of the
+stereo ENSEMBLE and judged them good. Not measured: the CPU on the device; part of the reverb-return loss is not explained.
 
 Download `Caravel-0.11.0-FM1-Testpaket.zip` for the local installer, firmware,
 verified source and notices, or `Caravel-0.11.0-Emulator.html` for the offline
