@@ -66,6 +66,15 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
+## Layout sizes without CI
+
+`tools/docker_layouts.sh [SRC_DIR [OUT_DIR]]` builds the three layouts (one core, no RAM DSP, default) of a checkout in a throw-away
+`linux/amd64` container with the same commands as `.github/workflows/layouts-check.yml`, and prints `image N B`, RAM `.data+.bss`, the pool
+and the target costs. It needs only Docker (nothing installed on the host: the container downloads the toolchain and the three
+SHA-256-checked SDK files) and about two and a half minutes on an Apple-silicon Mac, about as long as the CI workflow. `EXTRA_ENV="A=1 B=1"`
+adds build switches to every layout. Checked 2026-11-04 against `main` (`3f1b5ad`): the default image is 559,620 B, byte-identical to the
+published `caravel-0.10.1-app.bin`. The numbers are flash and RAM of the layout, not CPU measurements.
+
 ## Verified local release artifacts
 
 `./build.sh --release 0.6.0` builds identity `FM-1_999` and version `v0.6.0`, then
