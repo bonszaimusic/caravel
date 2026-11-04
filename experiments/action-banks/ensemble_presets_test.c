@@ -122,11 +122,13 @@ static feat_t features(const float *l)
     return f;
 }
 /* one take: the preset's controls on track 0 (its sends, DIST, FILTER and PAN neutral), the chord held, released, the tail rendered */
+static int g_width;                                    /* 0: the takes at SPRD 0 (the mono ensemble, as in 0.10.1); 1: at the preset's own width (ens_width: what a factory load gives; the features of the left channel) */
+#define SPRD_FOR(pi) (g_width ? ens_width(pi) : 0)
 static feat_t take(uint32_t preset, const int8_t *e, const uint8_t *env, int fenv, int mono, const uint8_t *notes)
 {
     silence_all();
     host_preset(&trk[0], ENGI_ENSEMBLE, preset);
-    trk[0].p[P_LEVEL] = 100; trk[0].p[P_REV] = 0; trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0; trk[0].p[P_DIST] = trk[0].p[P_ITYPE] = 0; trk[0].p[P_SPRD] = 0;
+    trk[0].p[P_LEVEL] = 100; trk[0].p[P_REV] = 0; trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0; trk[0].p[P_DIST] = trk[0].p[P_ITYPE] = 0; trk[0].p[P_SPRD] = SPRD_FOR(preset);
     trk[0].p[P_FILT] = 0; trk[0].p[P_PAN] = 0;
     for (uint32_t k = 0; k < 8u; k++) trk[0].p[P_E0 + k] = e[k];
     for (uint32_t k = 0; k < 4u; k++) trk[0].p[P_ATK + k] = env[k];
@@ -197,6 +199,9 @@ int main(void)
     }
     CHECK(strlen(PRESET_CAT[ENGI_ENSEMBLE]) == np);
 
+    /* 2 .. 4 twice: at SPRD 0 (the mono engine of 0.10.1) and at each preset's width (0.11.0: the pads are stereo, the checks read the left channel) */
+    for (g_width = 0; g_width < 2; g_width++) {
+    printf("--- takes at %s ---\n", g_width ? "each preset's own width (SPRD from ens_width)" : "SPRD 0 (mono)");
     /* 2. every preset sounds, with both chords */
     for (uint32_t i = 0; i < np; i++) {
         const preset_t *pr_ = &ENG_ENSEMBLE.presets[i];
@@ -249,6 +254,7 @@ int main(void)
          * vibrato that smeared a line at the fastest RATE; with them spread the pad measures -4.7 dB */
         for (i = 0; i < np; i++) if (i != RN && i != RP) CHECK(F[RN][1].line < F[i][1].line);
         CHECK(F[RN][1].line < -4.0);
+    }
     }
     printf("ENSEMBLE PRESETS PASS: %u checks, %u presets.\n", checks, np);
     return 0;

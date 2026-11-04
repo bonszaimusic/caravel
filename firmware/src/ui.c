@@ -1556,6 +1556,7 @@ static __attribute__((noinline)) void preset_sound_values(uint32_t eng,uint32_t 
  static const uint8_t fx[]={0,24,28,36};
  for(uint32_t i=0;i<4;i++)p[P_DIST+i]=v->fx[i]?v->fx[i]-1:fx[i];
  memset(l2,0,sizeof*l2);if(eng==ENGI_DRONE)drone_motion_values(p,l2,pi);
+ if(eng==ENGI_ENSEMBLE)p[P_SPRD]=ens_width(pi);          /* the preset's width (eng_ensemble.c ENS_WIDTH): a factory load has always set SPRD, to 0; a user preset and a project store theirs */
 }
 
 static void apply_preset_to(track_t *t, uint32_t pi)

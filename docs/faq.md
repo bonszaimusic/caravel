@@ -25,6 +25,8 @@ USB or switch off during writing. Recovery can change or erase stored data.
 | After going back to 0.7.x a project says `PERF PROJECT INVALID` | [Projects saved by 0.8.0](#projects-saved-by-080) |
 | After going back to 0.8.0 a project slot is empty | [Projects saved by 0.9.0](#projects-saved-by-090) |
 | After going back to 0.9.0 a project slot that uses ENSEMB is empty | [Projects that use ENSEMBLE](#projects-that-use-ensemble) |
+| A Pair with SPRD above 0 on a member: what happens (0.11.0 and before) | [Pair Morph and SPRD](#pair-morph-and-sprd) |
+| After going back to 0.10.x a project with a stereo ENSEMBLE pad plays mono | [Stereo ENSEMBLE pads in older firmware](#stereo-ensemble-pads-in-older-firmware) |
 | On 0.9.0 the journey stops at one slot, or `caravel_backup.py` says `Invalid HPM1 capsule` | [Two known problems in 0.9.0](#two-known-problems-in-090) |
 | You need to understand OCT-/OCT+, M-Flasher or m-bootloader | [Recovery tools](#recovery-tools) |
 
@@ -136,6 +138,22 @@ Both are fixed in **0.10.0**. Updating to 0.10.0 is the simple way out: it reads
 **The journey stops at a slot.** *Symptom:* on 0.9.0 a journey reaches one slot (the screen says `SNAP REACHED`), then stops, for example at S3 while S4 looks empty. *Cause:* a following slot holds something a recall refuses (a leftover or migrated slot, or one saved under another engine), and 0.9.0 ended the journey there instead of skipping it. *Workaround on 0.9.0:* save a real snapshot into that slot (or into every slot after the last one you use), then press PLAY again. 0.10.0 skips such slots, and PLAY names the reason (`SNAP: TARGET CHANGED` or `NEED 2 SNAPS`) when fewer than two slots are playable.
 
 **`caravel_backup.py` stops with `Invalid HPM1 capsule`.** *Symptom:* the command-line backup tool of 0.9.0 and earlier stops while reading a device that holds projects saved by 0.9.0 (project format 3) and writes no backup. *Cause:* the tool only knew project formats 1 and 2. *Workaround:* use the backup of the web installer, which does not check the format, or take `tools/caravel_backup.py` from 0.10.0 (or from the current `main`), which accepts format 3.
+
+## Pair Morph and SPRD
+
+**Symptom:** in 0.10.x and earlier, switching a Pair on (K2 right on the Pair page) shows `SPREAD OFF`, or a running Pair switches itself off when you raise SPRD (EDIT, MORE page).
+
+Until 0.10.1 a Pair member had to have **SPRD 0**: the voice SPREAD (SPRD above 0 on a POLY or UNISON part) had no path through a Pair. **Since 0.11.0 any member may have SPRD above 0** and a Pair never says `SPREAD OFF` for it: the morph
+weight scales the member's sum and its side signal, and the Pair's level and pan apply. An ENSEMBLE member's width (its own stereo image) and another engine's voice SPREAD (its voices alternating left and right) both work this way; a member
+in MONO or LEGATO has no side, as outside a Pair. Most factory ENSEMBLE pads load with a width (SPRD 96 to 127). Tested on the host with the Pair, all 225 ordered engine pairs with SPRD 100 on both members, and the Pair's snapshots;
+not on a device. On 0.10.x, set SPRD to 0 on both members to switch a Pair on.
+
+## Stereo ENSEMBLE pads in older firmware
+
+**Symptom:** after going back to 0.10.x, an ENSEMBLE pad from a project (or a user preset) that was stereo in 0.11.0 plays mono.
+
+0.10.x reads the project and the pad's SPRD (it is shown on the MORE page) but ignores it for the ENSEMBLE engine; the sound is the mono ensemble. Nothing is lost: 0.11.0 plays the stored width again. Tested with real flash
+images on the host (0.10.1 code reading a project saved with a stereo pad). On any other engine a SPRD above 0 is the voice SPREAD in every version.
 
 ## Projects that use ENSEMBLE
 

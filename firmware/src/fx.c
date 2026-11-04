@@ -1523,12 +1523,21 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * perf_mute_sd) and passes DIST by (the spread of a distorted chord is its voices' clean difference); the FILTER (0.3.0)
  * takes b and d alike, the last stage before the mute key. The sends
  * take b, mono, as before. SPRD 0, MONO or LEGATO: mix_part's own loop, bit for bit as before. The cost: a block's
- * clear and sum of spread_buf, the side and a wider mix loop, per part; per voice none (it picks its buffer) */
+ * clear and sum of spread_buf, the side and a wider mix loop, per part; per voice none (it picks its buffer).
+ * ENSEMBLE stereo (0.11.0, T_SPREAD 2; eng_ensemble.c): the engine itself makes the image. ens_post leaves b = the mean of its two channels (the mono sum, as ever the source of the sends)
+ * and writes d = left - right into spread_buf (every voice goes to out as without SPREAD). Nothing is converted here, and PAN's law stays as without SPREAD, so the mono sum is b at every
+ * SPRD: L = gl (b + d SPRD / 256), R = gr (b - d SPRD / 256), SPRD 127 the full image. d takes the SLICER, the FILTER and the mute as the voice SPREAD's d does and passes DIST and the INSERT by.
+ * A Pair's ENSEMBLE member (pair_mix_member) takes the Pair's level and pan and the morph weights on b and d alike, as mix_part_inner does for a member without a side. */
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
     int32_t *d = SPREAD_BUF(t);
     uint32_t i;
+#if FELUCCA_PAIR_MORPH
+    uint32_t pm = pair_mix_member(t);                   /* (a Pair member: only an ENSEMBLE one can have SPRD, pair_voice.c pair_track_reason) */
+    int32_t lvl = LEVEL_Q12[(pm ? ep.level : t->p[P_LEVEL]) & 127], pan = pm ? ep.pan : t->p[P_PAN], s = (t->p[P_SPRD] + 1) >> 1;
+#else
     int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN], s = (t->p[P_SPRD] + 1) >> 1;
+#endif
     int32_t pa = clamp(pan - s, -64, 63), pb = clamp(pan + s, -64, 63);
     int32_t gla = 4096 - (pa > 0 ? pa * 64 : 0), gra = 4096 + (pa < 0 ? pa * 64 : 0);
     int32_t glb = 4096 - (pb > 0 ? pb * 64 : 0), grb = 4096 + (pb < 0 ? pb * 64 : 0);
@@ -1536,8 +1545,12 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t c = t->p[P_CHOR] * 258, dl = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
     int32_t xmax = c > dl ? c : dl;
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
-    for (i = 0; i < n; i++)
-        d[i] = (d[i] << 1) - b[i];                      /* left - right */
+    if (T_SPREAD(t) == 2u) {                            /* ENSEMBLE stereo: d is left - right already; PAN's law as without SPREAD, d scaled by SPRD / 256 */
+        int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0), sp = t->p[P_SPRD];
+        glm = gl; grm = gr; gld = (gl * sp) >> 8; grd = -((gr * sp) >> 8);
+    } else
+        for (i = 0; i < n; i++)
+            d[i] = (d[i] << 1) - b[i];                  /* left - right */
     track_dist(t, b, n);
     if (t->p[P_ITYPE] | t->ins_run)
         track_insert(t, b, n);                          /* (the mono sum, as DIST) */
@@ -1546,6 +1559,12 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
         track_filter(t, b, d, n);                       /* the FILTER (0.3.0): the sum and the side */
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
+#if FELUCCA_PAIR_MORPH
+    if (pm) {
+        pair_apply_gain(t, b, n);                       /* the morph weight (and an endpoint's silence) on the sum and on the side alike */
+        pair_apply_gain(t, d, n);
+    }
+#endif
     for (i = 0; i < n; i++) {
         int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x, y = ((d[i] >> 2) * lvl) >> 10;
         int32_t xs = clamp(x, -xmax, xmax);
@@ -1604,8 +1623,9 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
     hp_begin(t);
 #endif
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
-    uint32_t ens = t->engine == ENGI_ENSEMBLE;          /* ENSEMBLE: its multi-tap ensemble runs on the part's mix below (eng_ensemble.c) */
-    T_SPREAD(t) = !dx_track(t) && !ens && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread; ENSEMBLE makes its own width) */
+    uint32_t ens = t->engine == ENGI_ENSEMBLE;          /* ENSEMBLE: its multi-tap ensemble runs on the part's mix below (eng_ensemble.c); with SPRD above 0 it is stereo */
+    T_SPREAD(t) = !dx_track(t) && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON)
+                  ? (ens ? 2u : 1u) : 0u;               /* (SPREAD, mix_spread: 1 the voices' alternation; 2 the ENSEMBLE's own stereo, eng_ensemble.c) */
 #if FELUCCA_CPU2
     nr = track_render(t, b, n);
     if (nr)
@@ -1633,7 +1653,7 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
         return;
     }
     if (ens)
-        ens_post(t, b, n);                              /* before DIST / INSERT / SLICER / FILTER and the sends: the REV send hears it */
+        ens_post(t, b, n, spread_side(t));              /* before DIST / INSERT / SLICER / FILTER and the sends: the REV send hears it (the side: only while the part is stereo) */
     if (T_SPREAD(t))
         mix_spread(t, b, n SM_ARG(sm));
     else {

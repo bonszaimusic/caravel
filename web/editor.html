@@ -1375,6 +1375,8 @@ async function capturePatch(rq, info, name) {
 const TRACK_OWN = new Set([0, 39, 40, ...Array.from({ length: 16 }, (_, i) => 17 + i), 45, 46, 47, 48]);
 const P_CHORD = [81, 82, 8];                       /* core.h P_CHRD, P_VOIC (since P_COUNT 91, P_E0 83), P_LATCH (the retired FX slot, Caravel) */
 const P_LANES = [83, 84, 85, 86, 87, 88, 89, 90];   /* core.h P_LN0..P_LN7: the DRUM lane levels (since P_COUNT 99, P_E0 91) */
+const P_SPRD = 95;                                  /* core.h P_SPRD: SPREAD (since P_COUNT 104); the ENSEMBLE's width from 0.11.0 */
+const ENS_WIDTH = [127, 127, 127, 127, 127, 112, 96, 112, 0, 127, 0, 0, 96, 127];   /* eng_ensemble.c ENS_WIDTH: the SPRD a factory ENSEMBLE preset loads with (the pads; 0 = mono) */
 const P_QNTZ = 94;                                  /* core.h P_SQNT: QUANTIZE, the track's (since P_COUNT 103, P_E0 95) */
 const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(i)) || (pe0 >= 95 && i === P_QNTZ);
 /* play a patch without writing flash, as UP_LOAD would load it: the sound only. SET the engine (G_ENGSEL:
@@ -2105,6 +2107,7 @@ function makeMockDevice(opt = {}) {
     for (let i = P_SLCR + 4; i < P_E0; i++) if (!trackOwn(i, P_E0)) st.p[i] = TP[i].def;   /* a factory preset turns the
                                                      matrix off; the SLICER, the chord keys, the steps and the other track
                                                      settings stay (ui.c apply_preset_to) */
+    if (e.name === "ENSEMB") st.p[P_SPRD] = ENS_WIDTH[pi] || 0;   /* 0.11.0: a factory ENSEMBLE preset loads with its width (eng_ensemble.c ENS_WIDTH) */
     if (st.engine === FM6_E) {                    /* eng_fm6.c fm6_track_loaded */
       const t = st.tracks[st.sel];
       t.own = null;

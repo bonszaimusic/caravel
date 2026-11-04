@@ -7,6 +7,7 @@
 #define PAIR_TEST_MAIN ensemble_baseline_main
 #include "../engine-pair-morph/pair_test.c"
 #include <math.h>
+#define ENS_POST(t, b, n) ens_post(t, b, n, 0)       /* (no side buffer: the three-tap mono path, as in 0.10.1) */
 #define SEG 44100u
 static float buf[SEG * 8u];
 /* render ms of audio into buf (left channel); the float of each sample must be finite and inside the 16-bit range the firmware keeps */
@@ -96,7 +97,7 @@ int main(void)
             for (uint32_t pr = 0; pr < 4u; pr++) CHECK(ENG_ENSEMBLE.presets[pr].e[k] >= 0);
         }
         CHECK(ENG_ENSEMBLE.knob[0] == P_E1 && ENG_ENSEMBLE.knob[1] == P_E4 && ENG_ENSEMBLE.knob[2] == P_E2 && ENG_ENSEMBLE.knob[3] == P_E7);
-        CHECK(ENG_ENSEMBLE.mem == sizeof(ens_t) && ENG_ENSEMBLE.mem <= ENG_MEM_PART && sizeof(ens_t) == 4096u + 40u);
+        CHECK(ENG_ENSEMBLE.mem == sizeof(ens_t) && ENG_ENSEMBLE.mem <= ENG_MEM_PART && sizeof(ens_t) == 4096u + 68u);
     }
 
     /* 2. every preset sounds: level, no DC, nothing near full scale, silence after the release */
@@ -156,7 +157,7 @@ int main(void)
             trk[0].p[P_E4] = pass == 2u ? 127 : 0; trk[0].p[P_E5] = pass == 2u ? 127 : 0; trk[0].p[P_E7] = pass ? 127 : 0;
             if (!pass) { trk[0].p[P_E4] = 127; trk[0].p[P_E5] = 127; }                  /* MIX 0 with ENS and RATE up */
             memcpy(out, in, sizeof out);
-            for (blk = 0; blk < 64u; blk++) ens_post(&trk[0], out + blk * CTL, CTL);
+            for (blk = 0; blk < 64u; blk++) ENS_POST(&trk[0], out + blk * CTL, CTL);
             if (pass == 0u) CHECK(!memcmp(out, in, sizeof out));                         /* bypass: bit for bit */
             if (pass == 1u) {                                                           /* ENS 0, MIX 127: (x[n-265] + x[n-375] + x[n-485]) * 26000 / 65536 */
                 uint32_t bad = 0;
@@ -176,7 +177,7 @@ int main(void)
             trk[0].p[P_E4] = 127; trk[0].p[P_E5] = 127; trk[0].p[P_E7] = 127;
             memset(out, 0, sizeof out); out[0] = 400000;
             uint32_t last = 0;
-            for (blk = 0; blk < 64u; blk++) { ens_post(&trk[0], out + blk * CTL, CTL); for (i = 0; i < CTL; i++) if (out[blk * CTL + i]) last = blk * CTL + i; }
+            for (blk = 0; blk < 64u; blk++) { ENS_POST(&trk[0], out + blk * CTL, CTL); for (i = 0; i < CTL; i++) if (out[blk * CTL + i]) last = blk * CTL + i; }
             printf("ensemble tail: the last non-zero sample after the impulse is %u (%.1f ms), the engine keeps running %u blocks\n", last, last * 1000.0 / 44100.0, ENS_TAIL_BLOCKS);
             CHECK(last > 400u && last < ENS_TAIL_BLOCKS * CTL);
         }
@@ -250,7 +251,7 @@ int main(void)
         trk_all_off(&trk[0]); run_ms(2000); CHECK(voices_on(&trk[0]) == 0u);
     }
 
-    /* 10. SPREAD is ignored (the ensemble makes its own width, mono here): left and right are identical at PAN 0; SEM with the same SPRD spreads */
+    /* 10. SPRD is the ensemble's width (0.11.0; before, SPREAD was ignored): at SPRD 100 left and right differ at PAN 0 (the voice SPREAD is not applied to it); SEM with the same SPRD spreads (its voices alternate) */
     {
         double d1 = 0, d2 = 0;
         setup(0); trk[0].p[P_VOICE] = V_POLY; trk[0].p[P_SPRD] = 100; chord(0, 1); run_ms(800);
@@ -261,7 +262,7 @@ int main(void)
         for (uint32_t i = 0; i < 400u; i++) { web_render(44); for (uint32_t k = 0; k < 44u; k++) d2 += fabs(out_l[k] - out_r[k]); }
         chord(0, 0); run_ms(3000);
         printf("SPREAD: |L-R| ENSEMBLE %.6f, SEM %.3f\n", d1, d2);
-        CHECK(d1 < 1e-6 && d2 > 1.0);
+        CHECK(d1 > 1.0 && d2 > 1.0);            /* the ensemble's own width at SPRD > 0 (and the mono ensemble at SPRD 0: tests 1..9) */
     }
 
     /* 11. Pair Morph accepts the engine (pitched notes, no key map, no own envelope) and sounds */
@@ -276,6 +277,113 @@ int main(void)
         CHECK(m.rms > 0.005 && m.peak < 0.98);
         printf("pair ENSEMBLE+SEM: rms %.4f\n", m.rms);
         trk_all_off(&trk[0]); run_ms(1500); web_pair_panic(); run_ms(800);
+    }
+
+    /* 11b. a Pair with an ENSEMBLE member that has a width (0.11.0): stereo at the ENSEMBLE's end, half as wide in the middle, mono at the partner's end (a partner with SPRD 0); a snapshot with the
+     * member's width restores; in LEGATO the ensemble makes no side; a partner with SPRD above 0 is allowed too (11d) */
+    {
+        double lr[3], rl[3], rr[3];
+        static const uint8_t CH4[4] = {52, 55, 59, 64};
+        web_pair_off(); web_pair_panic(); run_ms(500);
+        CHECK(web_pair_prepare(0, 2, ENGI_ENSEMBLE, ENGI_SAMPLE)); run_ms(30); web_pair_off(); run_ms(10);
+        host_preset(&trk[0], ENGI_ENSEMBLE, 5); host_preset(&trk[2], ENGI_SAMPLE, 0);          /* STRING MACHINE (width 112) and the piano set */
+        for (uint32_t t = 0; t < 3u; t += 2u) { trk[t].p[P_VOICE] = V_POLY; trk[t].p[P_DIST] = trk[t].p[P_CHOR] = trk[t].p[P_DLY] = trk[t].p[P_REV] = 0; trk[t].p[P_LEVEL] = 100; trk[t].p[P_PAN] = 0; }
+        CHECK(trk[0].p[P_SPRD] == 112);
+        CHECK(web_pair_enable(0, 2) && ep.on);                                                  /* the member's width does not stop the Pair */
+        for (int k = 0; k < 3; k++) {
+            for (int i = 0; i < 4; i++) trk_note_off(&trk[0], CH4[i]);
+            run_ms(600);
+            web_pair_morph(0, k == 0 ? 0 : k == 1 ? 16384 : 32767); run_ms(700);
+            for (int i = 0; i < 4; i++) trk_note_on(&trk[0], CH4[i], 100);
+            run_ms(300);
+            lr[k] = rl[k] = rr[k] = 0;
+            for (uint32_t ms = 0; ms < 600u; ms++) { web_render(44); for (uint32_t j = 0; j < 44u; j++) { lr[k] += fabs(out_l[j] - out_r[j]); rl[k] += (double)out_l[j] * out_l[j]; rr[k] += (double)out_r[j] * out_r[j]; } }
+        }
+        printf("Pair ENSEMBLE (SPRD 112) + piano: |L-R| %.0f at the ENSEMBLE, %.0f at MORPH 50 %%, %.3f at the piano; rms L / R at the ENSEMBLE %.4f / %.4f\n", lr[0], lr[1], lr[2], sqrt(rl[0] / (600.0 * 44)), sqrt(rr[0] / (600.0 * 44)));
+        CHECK(lr[0] > 200.0 && lr[1] > 100.0 && lr[1] < lr[0] && lr[2] == 0.0 && rl[2] > 0.0);
+        CHECK(fabs(10 * log10((rl[0] + 1e-9) / (rr[0] + 1e-9))) < 1.5);                         /* balanced channels */
+        {                                                                                        /* a snapshot of the Pair keeps the member's width */
+            uint32_t n = web_pair_snapshot_save(); CHECK(n);
+            static uint8_t saved[1u << 13]; CHECK(n <= sizeof saved); memcpy(saved, pair_snapshot, n);
+            web_pair_off(); run_ms(50); trk[0].p[P_SPRD] = 0;
+            memcpy(pair_snapshot, saved, n); CHECK(web_pair_snapshot_load(n));
+            CHECK(ep.on && trk[0].p[P_SPRD] == 112 && trk[2].p[P_SPRD] == 0 && trk[0].engine == ENGI_ENSEMBLE);
+            run_ms(100);
+        }
+        CHECK(ep.on);
+        trk[0].p[P_SPRD] = 127; run_ms(100); CHECK(ep.on);                                       /* the width may change in a running Pair (the Pair no longer says "SPREAD OFF" for any SPRD) */
+        trk[0].p[P_VOICE] = trk[2].p[P_VOICE] = V_LEGATO; run_ms(50);                            /* LEGATO: the ensemble makes no side, the Pair is mono */
+        trk_all_off(&trk[0]); run_ms(600); trk_note_on(&trk[0], 52, 100); run_ms(500);
+        double dl = 0; for (uint32_t ms = 0; ms < 500u; ms++) { web_render(44); for (uint32_t j = 0; j < 44u; j++) dl += fabs(out_l[j] - out_r[j]); }
+        CHECK(dl == 0.0);
+        trk_all_off(&trk[0]); run_ms(1500); web_pair_off(); web_pair_panic(); run_ms(800);
+    }
+
+    /* 11d. the voice SPREAD in a Pair (0.11.0: no member needs SPRD 0 any more): ENSEMBLE (SPRD 112) + SEM (SPRD 100, its voices alternate left and right): stereo at both ends, the Pair switches on,
+     * a snapshot with both widths restores, raising a member's SPRD in a running Pair leaves it on, and the sum of the two ends is as loud as a Pair of mono members within a few dB */
+    {
+        static const uint8_t CH4[4] = {52, 55, 59, 64};
+        double lr[2], rl[2];
+        web_pair_off(); web_pair_panic(); run_ms(500);
+        CHECK(web_pair_prepare(0, 2, ENGI_ENSEMBLE, ENGI_SEM)); run_ms(30); web_pair_off(); run_ms(10);
+        host_preset(&trk[0], ENGI_ENSEMBLE, 5); host_preset(&trk[2], ENGI_SEM, 1);              /* STRING MACHINE (112), WARM PAD */
+        for (uint32_t t = 0; t < 3u; t += 2u) { trk[t].p[P_VOICE] = V_POLY; trk[t].p[P_DIST] = trk[t].p[P_CHOR] = trk[t].p[P_DLY] = trk[t].p[P_REV] = 0; trk[t].p[P_LEVEL] = 100; trk[t].p[P_PAN] = 0; }
+        trk[2].p[P_SPRD] = 100;
+        CHECK(web_pair_enable(0, 2) && ep.on);                                                   /* before: "SPREAD OFF" */
+        for (int k = 0; k < 2; k++) {
+            for (int i = 0; i < 4; i++) trk_note_off(&trk[0], CH4[i]);
+            run_ms(600);
+            web_pair_morph(0, k ? 32767 : 0); run_ms(700);
+            for (int i = 0; i < 4; i++) trk_note_on(&trk[0], CH4[i], 100);
+            run_ms(300);
+            lr[k] = rl[k] = 0;
+            for (uint32_t ms = 0; ms < 600u; ms++) { web_render(44); for (uint32_t j = 0; j < 44u; j++) { lr[k] += fabs(out_l[j] - out_r[j]); rl[k] += (double)out_l[j] * out_l[j]; } }
+        }
+        printf("Pair ENSEMBLE (SPRD 112) + SEM (SPRD 100): |L-R| %.0f at the ENSEMBLE, %.0f at the SEM (its voices alternate); rms L %.4f / %.4f\n", lr[0], lr[1], sqrt(rl[0] / (600.0 * 44)), sqrt(rl[1] / (600.0 * 44)));
+        CHECK(lr[0] > 200.0 && lr[1] > 200.0 && rl[0] > 0.0 && rl[1] > 0.0);
+        {
+            uint32_t n = web_pair_snapshot_save(); CHECK(n);
+            static uint8_t saved2[1u << 13]; CHECK(n <= sizeof saved2); memcpy(saved2, pair_snapshot, n);
+            web_pair_off(); run_ms(50); trk[0].p[P_SPRD] = 0; trk[2].p[P_SPRD] = 0;
+            memcpy(pair_snapshot, saved2, n); CHECK(web_pair_snapshot_load(n));
+            CHECK(ep.on && trk[0].p[P_SPRD] == 112 && trk[2].p[P_SPRD] == 100);
+        }
+        trk[2].p[P_SPRD] = 40; trk[0].p[P_SPRD] = 0; run_ms(100); CHECK(ep.on && !strcmp(web_pair_reason(), "PAIR OFF"));   /* raised or lowered in a running Pair: it stays on */
+        trk[0].p[P_VOICE] = trk[2].p[P_VOICE] = V_LEGATO; run_ms(50);                            /* LEGATO: the SEM's one voice sits on one side, the ensemble has no side: it still renders */
+        trk_all_off(&trk[0]); run_ms(600); trk_note_on(&trk[0], 52, 100); run_ms(500);
+        double fin = 0; for (uint32_t ms = 0; ms < 500u; ms++) { web_render(44); for (uint32_t j = 0; j < 44u; j++) fin += fabs(out_l[j]) + fabs(out_r[j]); }
+        CHECK(fin > 0.0);
+        trk_all_off(&trk[0]); run_ms(1500); web_pair_off(); web_pair_panic(); run_ms(800);
+    }
+
+    /* 11c. the HALL and STASIS sends hear the stereo ensemble through its mono sum (the sends take b): with the width the REV send is about as much lower as the mono sum is (the mean of two channels
+     * that are partly correlated: -2 .. -3.5 dB, whatever SPRD), the return stays finite, and a STASIS hold of the chord keeps ringing after the keys are released */
+    {
+        int16_t gsave[sizeof song.g / sizeof song.g[0]]; memcpy(gsave, song.g, sizeof gsave);   /* the globals of the whole block, put back at its end */
+        static const uint8_t PADS3[1] = {0};                                           /* VINTAGE STRINGS (the pads with a short release have no tail left when their voices are free) */
+        for (uint32_t q = 0; q < 1u; q++) {
+            double w[2];
+            for (int pass = 0; pass < 2; pass++) {
+                setup(PADS3[q]);
+                trk[0].p[P_SPRD] = pass ? ens_width(PADS3[q]) : 0; trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0; trk[0].p[P_REV] = 127; trk[0].p[P_LEVEL] = 40; song.g[G_RSIZE] = 112;
+                chord(0, 1); run_ms(2500); chord(0, 0);
+                for (uint32_t g = 0; g < 200u && voices_on(&trk[0]); g++) run_ms(50);            /* the voices are free: what rings now is the reverb return alone */
+                CHECK(!voices_on(&trk[0]));
+                uint32_t n = grab(800); meas_t m = measure(0, n);
+                w[pass] = m.rms; CHECK(m.peak < 0.98 && m.rms > 0.0001);
+                run_ms(3000);
+            }
+            printf("HALL return alone (%s, REV 127, the 0.8 s after the voices are free): rms %.5f at SPRD 0, %.5f at SPRD %d: %.2f dB\n", ENG_ENSEMBLE.presets[PADS3[q]].name, w[0], w[1], ens_width(PADS3[q]), 20 * log10(w[1] / w[0]));
+            CHECK(20 * log10(w[1] / w[0]) < -1.0 && 20 * log10(w[1] / w[0]) > -9.0);               /* lower by about the mono sum's loss, not more than a few dB beyond it (measured about -4 .. -6 dB at REV 127: more than the dry mono sum) */
+        }
+        setup(0);
+        trk[0].p[P_SPRD] = 127; trk[0].p[P_REV] = 116;
+        song.g[G_RTYPE] = 3; song.g[G_RSIZE] = 112; song.g[G_DRREV] = 45; song.g[G_STAMT] = 42; song.g[G_STTIME] = 6;
+        chord(0, 1); run_ms(2500); song.g[G_DRLVL] = 1; run_ms(500); chord(0, 0); run_ms(2500);   /* STASIS HOLD while the chord rings, the keys released */
+        uint32_t n = grab(1000); meas_t m = measure(0, n);
+        printf("STASIS hold of the stereo pad, 3 s after the release: rms %.5f peak %.3f\n", m.rms, m.peak);
+        CHECK(m.rms > 0.002 && m.peak < 0.98);
+        stasis_transport_stop(); memcpy(song.g, gsave, sizeof gsave); trk_all_off(&trk[0]); run_ms(6000); web_pair_panic(); run_ms(500);
     }
 
     /* 12. HOME, Random Morph and Journey: all eight controls are morph-safe, and a journey leg moves them (and the sound) exactly */
