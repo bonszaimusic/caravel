@@ -11,7 +11,7 @@ EXPORT uint32_t web_pair_prepare(uint32_t a, uint32_t b, uint32_t ea, uint32_t e
         for (uint32_t id = 0; id < P_COUNT; id++) t->p[id] = TP[id].def;
         memset(t->step, 0, sizeof t->step);
         host_preset(t, m ? eb : ea, 0);
-        t->p[P_VOICE] = V_POLY; t->p[P_SPRD] = 0;
+        t->p[P_VOICE] = V_POLY;                       /* (SPRD stays as host_preset leaves it: the ENSEMBLE's width, else 0) */
         if (t->engine == ENGI_DRONE) t->p[P_E3] = 0;
         t->p[P_DIST] = t->p[P_CHOR] = t->p[P_DLY] = t->p[P_REV] = 0;
     }
@@ -145,7 +145,7 @@ EXPORT uint32_t web_pair_snapshot_load(uint32_t size)
     for (uint32_t m = 0; m < 2; m++) {
         const proj_trk_t *t = &proj_scratch.t[m ? b : a];
         if (!pair_engine_ok(t->engine) ||
-            (uint32_t)t->p[P_VOICE] > V_UNISON || t->p[P_SPRD]) return 0;
+            (uint32_t)t->p[P_VOICE] > V_UNISON) return 0;
     }
     if (project_restore_runtime(&proj_scratch)) return 0;
     /* A snapshot restores configuration, never sounding/latched notes. */

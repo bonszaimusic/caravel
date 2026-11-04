@@ -770,6 +770,8 @@ static __attribute__((noinline)) void spread_sum(int32_t *out)
 #endif
 
 /* render one block of a part into out (cleared here); returns the voices rendered */
+/* the part's side buffer while it is ENSEMBLE stereo (T_SPREAD 2: fx.c mix_part_inner), else 0: ens_post writes d = left - right there */
+static int32_t *spread_side(const track_t *t) { return T_SPREAD(t) == 2u ? SPREAD_BUF(t) : 0; }
 /* Channel bend is live performance state, outside projects/presets. Q8 semitones. */
 static int32_t midi_bend_q8[NTRK], midi_bend_target[NTRK];
 #if FELUCCA_CPU2
@@ -887,13 +889,13 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 #if FELUCCA_PERF_HW
         pd_stamp_t pd_start;if(pd_active)pd_start=pd_stamp();
 #endif
-        e->render(t, v, T_SPREAD(t) > v->side ? SPREAD_BUF(t) : out, n, &m);   /* (SPREAD: the left ones) */
+        e->render(t, v, (T_SPREAD(t) & 1u) > v->side ? SPREAD_BUF(t) : out, n, &m);   /* (SPREAD, 1: the left ones; ENSEMBLE stereo, 2: every voice to out) */
 #if FELUCCA_PERF_HW
         if(pd_active)pd_engine_done((uint32_t)(t-trk),t->engine,pd_start);
 #endif
         nr++;
     }
-    if (T_SPREAD(t))
+    if (T_SPREAD(t) & 1u)
         SPREAD_SUM(out, t);                /* out: every voice; spread_buf: the left ones */
     if (fade) {
         for (i = 0; i < 8u; i++)

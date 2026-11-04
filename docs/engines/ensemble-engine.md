@@ -16,7 +16,7 @@ load says nothing, nothing crashes; saving over it there replaces it, and a firm
 - **One filter, three timbres:** a trapezoidal state-variable filter whose cutoff, damping and low-pass / band-pass mix follow **MORPH**:
   STRINGS (open low-pass, TONE sets the brightness) to CHOIR (a resonant formant band, breath noise, TONE moves the vowel) to DARK
   (a darker low-pass with a rough ring-modulated pulse and a harder knee).
-- **Ensemble:** three delay taps (6.0, 8.5 and 11.0 ms at rest) read from one ring and moved by a slow and a fast LFO, 120 degrees apart (until 0.10.0 only the fast LFOs were; the three slow LFOs ran in phase and moved the taps together, like a vibrato). One ensemble per
+- **Ensemble:** (stereo since 0.11.0: see the next section; below the mono ensemble, which is what SPRD 0 and the MONO and LEGATO modes give) three delay taps (6.0, 8.5 and 11.0 ms at rest) read from one ring and moved by a slow and a fast LFO, 120 degrees apart (until 0.10.0 only the fast LFOs were; the three slow LFOs ran in phase and moved the taps together, like a vibrato). One ensemble per
   track, applied to the track's mix: its cost grows with the number of tracks on this engine, not with the number of voices.
 
 | Page | Control | What it does |
@@ -32,6 +32,27 @@ load says nothing, nothing crashes; saving over it there replaces it, and a firm
 
 HOME shows **MORPH, ENS, TONE, MIX**. All eight controls are editable, MIDI-learnable, automatable, morph-safe (Random Morph, snapshots and journeys move
 them like any engine control) and stored in projects and user presets.
+
+## Stereo (0.11.0)
+
+**SPRD is the ensemble's width.** With SPRD above 0 on a POLY or UNISON part the ensemble is stereo: six taps read the same ring, three for the left channel (the taps above) and three for the right (6.8, 10.1 and 12.7 ms at rest, with
+their own LFO rates), so each channel is a three-tap ensemble of its own and the two move differently. SPRD 127 is the full image, 64 half of it. The mono sum of the two channels is the track's sum (the sends take it), and PAN works as
+without SPREAD. **SPRD 0, MONO and LEGATO are mono**, as in 0.10.1 (bit for bit: the render of the same notes does not change); MIX 0 is the dry voices in either case. SEM and the other engines are unchanged: on them SPRD is still the voice
+SPREAD (voices alternating left and right).
+
+- **Factory pads load with a width:** a factory preset load sets SPRD (it always did, to 0; the track's other settings stay). The widths: VINTAGE STRINGS 127, GLASS CHOIR 127, DUSK ORCHESTRA 127, ABYSS PAD 127, PROFILE A 127, STRING MACHINE 112, BREATH CHOIR 96,
+  DEEP DRONE 112, SLOW SWELL 127, HUGE ENSEMBLE 96, RUNNING PAD 127; **GLASS SHIMMER, ROUGH PULSE and SOLO DRIFT stay mono** (a struck bell and an FX preset do not need a pad's image, SOLO DRIFT is a MONO preset). Each pad has the widest of 127, 112 and 96
+  at which no octave band between 125 Hz and 8 kHz is anti-correlated between the channels (host measure, below), so the stereo does not fold out of the mono sum. A user preset and a project store their own SPRD, and what they store wins; the width is
+  the MORE page's SPRD, editable and automatable like any parameter.
+- **The price in the mono sum:** each channel has the level of the mono ensemble, so the mono sum of two channels that are only partly alike is about **2 to 3.5 dB lower** than the mono preset (about 3 dB over the pads), whatever SPRD says. The REV send, HALL and STASIS hear the mono sum
+  and are lower by about that much and more (host measure: the HALL return of VINTAGE STRINGS at REV 127 about 6 dB lower with the width); raise REV, or LEVEL, if the preset should keep its wet/dry balance. Mono playback (a single speaker, a mono mix) hears this mono sum.
+- **Pair Morph:** an ENSEMBLE member of a Pair may have SPRD above 0; the Pair is then stereo at the ENSEMBLE's end (half as wide at half the morph, mono at a partner with SPRD 0). Since 0.11.0 the partner may have SPRD above 0 as well (its voice SPREAD
+  goes through the Pair the same way); 0.10.x refused any member with SPRD above 0 (`SPREAD OFF`). The five recipes below keep the ENSEMBLE preset's width (GLASS SHIMMER's is 0).
+- **Older firmware:** 0.10.x reads a project with a stereo pad and plays the ensemble mono (see the FAQ).
+
+Measured on the host (real firmware code, dry, the chords E2 B2 E3 G3 and E3 G3 B3 E4, host measures only, nothing was heard on an FM-1): at each pad's width the correlation between the channels is 0.02 to 0.32 (a real image, not a hard-panned one), the lowest octave band -0.03 to 0.23,
+the mono sum -2.0 to -3.5 dB, each channel -1.3 to +0.0 dB against the mono preset; PROFILE A keeps its profile (centroid 402 Hz against 400 Hz, band shares within 0.1 dB, the left channel's level 0.4 dB lower). The cost is **about +80 host instructions per sample per ENSEMBLE track** with a width
+(six taps instead of three; nothing per voice) and 28 B of the part's engine memory. No judgement of how the stereo sounds is recorded here.
 
 ## Factory presets
 
@@ -85,8 +106,7 @@ a 1.6 x change of attack or release, or 3 dB of level). It also checks each pres
 the longest attack, GLASS SHIMMER a struck start, RUNNING PAD the strongest smear, SOLO DRIFT is MONO with DRIFT full) and that every name is unique, fits the list cells and has a
 category. This proves that the signals differ, not that they sound good.
 
-**REG is not "brightness":** 0 is the 8' alone, 64 adds the 4' (the brightest setting), above 64 the 16' joins and the sound gets darker. The ensemble is mono (SPREAD is
-ignored), so "wide" and "huge" mean deep and thick, not spread in the stereo field.
+**REG is not "brightness":** 0 is the 8' alone, 64 adds the 4' (the brightest setting), above 64 the 16' joins and the sound gets darker. "Wide" and "huge" mean deep and thick; the stereo image is SPRD's (the section above).
 
 ### PROFILE A
 
@@ -128,7 +148,7 @@ are the parameter lists above.
 
 - **Voices:** POLY holds at most **6 voices** per track on this engine (the global budget of eight voices across the tracks is unchanged). Pair Morph accepts
   the engine (two voices per note while both members play).
-- **SPREAD is ignored:** the ensemble makes its own width (mono here); a SPRD above 0 does nothing on this engine.
+- **SPRD is the width:** the ensemble makes its own stereo image (the voice SPREAD does not apply to it); SPRD 0, MONO and LEGATO give the mono ensemble. See *Stereo* above.
 - **Signal path:** voices, then the ensemble, then DIST, INSERT, SLICER, FILTER and the sends. The REV send, HALL and STASIS hear the ensembled sound, so a STASIS
   HOLD freezes the ensemble. The global CHORUS is untouched and can be added on top.
 - **Tail:** after the last voice the part keeps running 28 blocks (about 20 ms) so the taps run out; there is no cut.
@@ -139,7 +159,7 @@ are the parameter lists above.
 
 ## Numbers (what was and was not measured)
 
-- **Memory:** 4,136 B of engine memory per part (a 4,096 B int32 ring and 40 B of state; the region is 12,888 B and already exists for each part).
+- **Memory:** 4,164 B of engine memory per part (a 4,096 B int32 ring and 68 B of state since the six taps of 0.11.0; 4,136 B before; the region is 12,888 B and already exists for each part).
   See the implementation record in the metadata repository for flash, RAM and pool by layout.
 - **CPU:** host instruction counts per sample from `tests/regress.c` (one part, notes held, the idle mix of about 361 included): 1,154 / 1,175 / 1,189 / 1,398 for the
   first four presets (six voices, the cap; the ten later presets 1,139 to 1,465), against 1,111 to 1,224 for the SEM presets with eight voices on the same count: about a third more per voice than SEM
@@ -152,6 +172,6 @@ are the parameter lists above.
 ## Tests
 
 `experiments/action-banks/ensemble_test.c` (tables, all eight controls at both ends, the timbre morph, the ensemble on a synthetic signal including its bypass
-and its tail, engine switches, voice cap, SPREAD, Pair, HOME / Random Morph / Journey, CC 74, project round trip, a four-track stress), plus the existing
-regression, UI, editor, Pair and project suites, which pass with the engine added. `ensemble_presets_test.c` (the preset table: names, level, distinctness, jobs) and `ensemble_layers_test.c`
+and its tail, engine switches, voice cap, SPRD (the width), Pair (also with a stereo member, a snapshot with it, the partner's SPRD, LEGATO), the HALL return and a STASIS hold of a stereo pad, HOME / Random Morph / Journey, CC 74, project round trip, a four-track stress), plus the existing
+regression, UI, editor, Pair and project suites, which pass with the engine added. `ensemble_presets_test.c` (the preset table: names, level, distinctness, jobs; each check twice: at SPRD 0, the mono engine, and at each preset's own width, the left channel) and `ensemble_layers_test.c`
 (the five recipes, the voice budget, a pair with DRONE, MIDI on two channels) are the checks behind the two sections above; `PRINT=1` prints their tables.

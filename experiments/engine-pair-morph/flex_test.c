@@ -23,21 +23,25 @@ int main(void)
 {
     pair_original_main();
     unsigned combinations=0;
+    for(int pass=0;pass<2;pass++)   /* 0.11.0: every ordered engine pair, at SPRD 0 and with SPRD 100 on both members (the voice SPREAD / the ENSEMBLE's width go through a Pair) */
     for(uint32_t a=0;a<NENGINES;a++) for(uint32_t b=0;b<NENGINES;b++) {
         if(!pair_engine_ok(a)||!pair_engine_ok(b)) continue;
         CHECK(web_pair_prepare(0,2,a,b)); run_ms(60); combinations++;
+        if(pass){ trk[0].p[P_SPRD]=trk[2].p[P_SPRD]=100; run_ms(30); CHECK(ep.on&&trk[0].p[P_SPRD]==100&&trk[2].p[P_SPRD]==100); }
         CHECK(ep.budget <= trk_nvoice(&trk[0]) && ep.budget <= trk_nvoice(&trk[2]));
         for(uint32_t note=60;note<66;note++) {
             trk_note_on(&trk[note&1?0:2],note,100); run_ms(4);
             CHECK(voices_busy()<=NVOICE);
         }
+        for(uint32_t k=0;k<20;k++){ web_render(44); for(uint32_t j=0;j<44;j++) CHECK(isfinite(out_l[j])&&isfinite(out_r[j])&&fabsf(out_l[j])<=1.0f&&fabsf(out_r[j])<=1.0f); }
         trk_all_off(&trk[2]); CHECK(!gates(0)&&!gates(2));
         run_ms(80);
         uint32_t n=web_pair_snapshot_save(); CHECK(n==4032);
         CHECK(web_pair_snapshot_load(n)); CHECK(trk[0].engine==a&&trk[2].engine==b);
         CHECK(!gates(0)&&!gates(2));
+        if(pass) CHECK(ep.on&&trk[0].p[P_SPRD]==100&&trk[2].p[P_SPRD]==100);
     }
-    CHECK(combinations==225); CHECK(!pair_engine_ok(ENGI_DRUM)); CHECK(!pair_engine_ok(13));
+    CHECK(combinations==450); CHECK(!pair_engine_ok(ENGI_DRUM)); CHECK(!pair_engine_ok(13));
     prepare(0); web_pair_morph(0,8192); run_ms(30); web_pair_page(); run_ms(50);
     CHECK(cur_page()->graph==GR_PAIR&&!ui.home); capture("pair-25");
     web_enc(EN_K3,8);run_ms(50);CHECK(ep.base==8192+8*256);
@@ -67,6 +71,6 @@ int main(void)
     go_home();home_tap();CHECK(str_eq(cur_page()->title,"MIXER"));
     home_tap();CHECK(str_eq(cur_page()->title,"CLOCK"));home_tap();CHECK(cur_page()->graph==GR_PAIR);
     home_tap();CHECK(ui.home);
-    printf("flex pair: %u total checks; %u ordered engine combinations; device menu, follower edits, gains, snapshots passed\n",checks,combinations);
+    printf("flex pair: %u total checks; %u ordered engine combinations (225 at SPRD 0, 225 with SPRD 100); device menu, follower edits, gains, snapshots passed\n",checks,combinations);
     return 0;
 }

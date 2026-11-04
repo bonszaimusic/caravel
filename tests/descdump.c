@@ -98,7 +98,12 @@ int main(void)
                 v[i] = p->env[i];
             printf(",\"env\":");
             js_ints(v, 4);
-            printf(",\"mono\":%d,\"pat\":%d}", p->mono, p->pat);
+            {                                                      /* the SPRD a factory load gives (ui.c preset_sound_values; 0.11.0: the ENSEMBLE's width) */
+                track_t tmp;
+                memset(&tmp, 0, sizeof tmp);
+                host_preset_values(&tmp, (uint32_t)(en == ENGINES[ENGI_ENSEMBLE] ? ENGI_ENSEMBLE : 0), k, p);
+                printf(",\"mono\":%d,\"pat\":%d,\"sprd\":%d}", p->mono, p->pat, en == ENGINES[ENGI_ENSEMBLE] ? tmp.p[P_SPRD] : 0);
+            }
         }
         printf("]}");
     }

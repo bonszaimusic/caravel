@@ -46,7 +46,9 @@ static take_t take(const recipe_t *r, int32_t morph, const uint8_t *notes, uint3
     host_preset(&trk[0], ENGI_ENSEMBLE, r->ens);
     host_preset(&trk[1], r->eng, r->other);
     for (uint32_t t = 0; t < 2u; t++) {
-        trk[t].p[P_VOICE] = V_POLY; trk[t].p[P_SPRD] = 0;
+        trk[t].p[P_VOICE] = V_POLY;
+        if (t != 0u)                                   /* the ENSEMBLE member (track 0) keeps the width its preset loads with (0.11.0: a Pair may have it); the partner needs SPRD 0 */
+            trk[t].p[P_SPRD] = 0;
         trk[t].p[P_DIST] = trk[t].p[P_CHOR] = trk[t].p[P_DLY] = trk[t].p[P_REV] = 0; trk[t].p[P_LEVEL] = 100;
     }
     web_pair_morph(0, morph);

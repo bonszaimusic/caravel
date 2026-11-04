@@ -11,7 +11,7 @@ function pairMessage(m) {
     pairUI("morph").setAttribute("aria-valuetext",`Basis ${Math.round(m.base/32767*100)} Prozent, live ${Math.round(m.effective/32767*100)} Prozent`);
     pairUI("state").textContent = m.on
       ? `T${m.a+1} + T${m.b+1} · editing T${m.sel+1} · base ${(m.base/32767*100).toFixed(1)}% · effective ${(m.effective/32767*100).toFixed(1)}% · voices ${m.gates[m.a]} / ${m.gates[m.b]} · ${m.budget} logical note${m.budget===1?"":"s"}`
-      : `Pair disabled: ${m.reason ?? "PAIR OFF"}. Voice-Modus wird übernommen. AUTO / SPREAD OFF; DRUM und SLICE brauchen eine eigene Notenregelung.`;
+      : `Pair disabled: ${m.reason ?? "PAIR OFF"}. Voice-Modus wird übernommen. AUTO; DRUM und SLICE brauchen eine eigene Notenregelung.`;
     if (document.activeElement !== pairUI("morph")) pairUI("morph").value = m.base;
     pairUI("motion").checked = !!m.motion;
     if (m.controls) {

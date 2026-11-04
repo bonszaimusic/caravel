@@ -15,7 +15,6 @@ static const char *pair_track_reason(const track_t *t)
 {
     if (!pair_engine_ok(t->engine)) return "ENGINE NOTE MAP";
     if ((uint32_t)t->p[P_VOICE] > V_UNISON) return "VOICE MODE";
-    if (t->p[P_SPRD]) return "SPREAD OFF";
     if (t->xf_on || t->eng_req != t->engine) return "ENGINE CHANGING";
     return 0;
 }

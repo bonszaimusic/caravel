@@ -91,7 +91,7 @@ project_pattern_engines_ok 7
 # SEM renderer, measured pi32v2; both oscillators inlined into the counted loop.
 sem_render 409
 ens_render 342
-ens_post 176
+ens_post 332
 hades_render 633
 
 

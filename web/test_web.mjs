@@ -41,7 +41,7 @@ const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
    L2_IDS, lfo2Values, lfo2Valid, DX_IDS, dxValues, dxLearnMap, UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, readLiveLoad, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
-   FM4, fromDigital, fromPerc, DRUM_KIT_E,
+   FM4, fromDigital, fromPerc, DRUM_KIT_E, ENS_WIDTH,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
    readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu,
    parseMotionAll: typeof parseMotionAll === "undefined" ? null : parseMotionAll,
@@ -183,6 +183,20 @@ async function droneCellsEditor() {
     ok(set.value === expected && get.value === expected && (await dump()).p[info.pe0+3] === expected,
        `DRONE: TOPO ${value} -> ${expected}, SET/GET/DUMP bounds`);
   }
+  done();
+}
+
+/* 0.11.0: a factory ENSEMBLE preset loads with its width (SPRD, parameter 95), the others and every other engine with 0 (ui.c preset_sound_values: SPRD is no kept parameter) */
+async function ensembleWidthEditor() {
+  const {rq,done}=attachMock({});
+  const info=E.parse[E.CMD.INFO](await rq(E.req.info()));
+  const dump=async()=>E.parse[E.CMD.DUMP](await rq(E.req.dump()),info);
+  const want=[127,127,127,127,127,112,96,112,0,127,0,0,96,127];
+  let good=true;
+  for (let k=0;k<want.length;k++) { await rq(E.req.preset(17,k)); const d=await dump(); good&&=d.engine===17&&d.preset===k&&d.p[95]===want[k]; }
+  ok(good,"ENSEMBLE: each factory preset loads with its width (pads 127 / 112 / 96, GLASS SHIMMER, ROUGH PULSE and SOLO DRIFT 0)");
+  await rq(E.req.preset(17,0)); await rq(E.req.preset(14,1));
+  ok((await dump()).p[95]===0,"SEM: a factory load sets SPRD to its default 0 after an ENSEMBLE pad");
   done();
 }
 
@@ -625,6 +639,7 @@ function mockTables() {
       const mp = me.presets[k];
       if (mp) cmp(`${fe.name} ${p.name}`, { e: mp.e, env: mp.env, mono: mp.mono, pat: mp.pat }, { e: p.e, env: p.env, mono: p.mono, pat: p.pat });
     });
+    if (fe.name === "ENSEMB") fe.presets.forEach((p, k) => cmp(`${fe.name} ${p.name} width (SPRD of a factory load)`, E.ENS_WIDTH[k], p.sprd));   /* 0.11.0 */
   });
   cmp("PATTERNS", T.PATTERNS, fw.PATTERNS);
   const m2 = E.makeMockDevice({ auto: false });   /* the mock's power-on sounds: its parts 1..4, track 4's beat */
@@ -1973,6 +1988,7 @@ await editorMock();
 await lfo2Editor();
 await droneCellsEditor();
 await drumxEditor();
+await ensembleWidthEditor();
 await editorSamplePresets();
 mockTables();
 await editorLibrarian();

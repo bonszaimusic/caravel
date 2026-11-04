@@ -13,20 +13,30 @@
  * each moved by a slow LFO (taps 120 degrees apart) plus a fast one, with linear interpolation; MIX crosses dry and ensemble.
  * The cost grows with the number of tracks on this engine, not with their voices; the REV send, STASIS and HALL hear the
  * ensembled sound; the global CHORUS stays free. The ring is the part's engine memory: an engine switch zeroes it
- * (eng_mem_claim), and ens_post leaves anything it does not own alone. */
+ * (eng_mem_claim), and ens_post leaves anything it does not own alone.
+ *
+ * Stereo (0.11.0): SPRD is the ensemble's width. Six taps read the same ring: taps 0..2 (the three above) are the left channel, taps 3..5 (6.8 / 10.1 / 12.7 ms, their own slow and fast
+ * LFO rates, 60 degrees on) the right. While the part is POLY or UNISON with SPRD above 0 (fx.c mix_part_inner, T_SPREAD 2), ens_post writes d = left - right to the part's side buffer
+ * and b becomes the mean of the two channels, the track's mono sum (the sends take it): L = gl (b + d SPRD / 256), R = gr (b - d SPRD / 256) in fx.c mix_spread, so every channel is
+ * an ensemble of the three-tap level and the mono sum is about 3 dB below the mono ensemble's (the two channels are only partly correlated; this does not depend on SPRD). With SPRD 0, MONO
+ * or LEGATO ens_post reads the three left taps only and is the engine of 0.10.1 bit for bit (the right group's LFOs run on, so raising SPRD does not jump); MIX 0 is the dry voices
+ * in either case. The ring is the same; ens_t grows by 28 B inside the part's engine memory. */
+#define ENS_NT 6u                          /* the taps: 0..2 left, 3..5 right */
 #define ENS_RING 1024u                     /* ring length in samples: a power of two; 23.2 ms at 44.1 kHz */
 #define ENS_TAIL_BLOCKS 28u                /* blocks (CTL samples) the taps keep running after the last voice: 20 ms > the longest tap */
 #define ENS_WET_Q16 26000u                 /* the three taps' mean (1/3) with 1.19 x make-up: the taps' comb takes about 1.5 dB off a sustained chord on average */
 #define ENS_DELAY_BASE_0 265               /* the taps' resting delays in samples: 6.0, 8.5, 11.0 ms */
 #define ENS_DELAY_BASE_1 375
 #define ENS_DELAY_BASE_2 485
+#define ENS_MID_Q16 (ENS_WET_Q16 >> 1)     /* stereo: the mean of both channels' three taps (each channel at the level of the mono ensemble) */
+static const int32_t ENS_BASE[ENS_NT] = {ENS_DELAY_BASE_0, ENS_DELAY_BASE_1, ENS_DELAY_BASE_2, 300, 445, 560};   /* the right channel's taps: 6.8 10.1 12.7 ms, irregular against the left's */
 
 typedef struct {
     int32_t ring[ENS_RING];                /* the input (the track's voices, mono), 4096 B */
     uint32_t w;                            /* write position */
-    uint32_t slow[3];                      /* the slow LFO of each tap (phase) */
-    uint32_t fast;                         /* the fast LFO (phase) */
-    int32_t delay[3];                      /* each tap's delay in 1/256 sample, as of the last block */
+    uint32_t slow[ENS_NT];                 /* the slow LFO of each tap (phase) */
+    uint32_t fast[2];                      /* the fast LFO of each channel (phase) */
+    int32_t delay[ENS_NT];                 /* each tap's delay in 1/256 sample, as of the last block */
     uint32_t live;                         /* 1 after the first block (the delays start at their targets) */
     uint32_t seen;                         /* ens_blocks at the last block this part ran: a gap (another engine had the part) clears the ring */
 } ens_t;
@@ -110,14 +120,14 @@ static CARAVEL_AUDIO_HOT void ens_render(track_t *t, voice_t *v, int32_t *out, u
 }
 
 /* the ensemble: b = the track's mono mix of this block (n <= CTL samples), processed in place; called by fx.c mix_part_inner for a part
- * whose engine is ENSEMBLE, also during the tail after its last voice */
-static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int32_t *b, uint32_t n)
+ * whose engine is ENSEMBLE, also during the tail after its last voice. sd: the part's side buffer when it is stereo (SPRD above 0, POLY / UNISON), else 0 (the mono ensemble) */
+static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int32_t *b, uint32_t n, int32_t *sd)
 {
     uint32_t part = (uint32_t)(t - trk), j, i;
     ens_t *s;
     const int16_t *p = t->p;
-    int32_t depth = p[P_E4], mix = p[P_E7] * 516, tgt[3], step[3];
-    uint32_t slow_inc, fast_inc;
+    int32_t depth = p[P_E4], mix = p[P_E7] * 516, tgt[ENS_NT], step[ENS_NT];
+    uint32_t slow_inc, fast_inc, slow_inc_b, fast_inc_b;
     if (part >= NPART || eng_mem_owner[part] != ENGI_ENSEMBLE + 1u)
         return;
     s = (ens_t *)ENG_MEM(part);
@@ -128,23 +138,26 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int
     s->seen = ens_blocks;
     slow_inc = 19500u + (uint32_t)p[P_E5] * 1075u;      /* 0.2 .. 1.6 Hz */
     fast_inc = 584000u + (uint32_t)p[P_E5] * 2000u;     /* 6 .. 8.6 Hz */
+    slow_inc_b = (slow_inc * 165u) >> 7;                /* the right channel's taps: 1.29 x the slow and 1.17 x the fast rate of the left's */
+    fast_inc_b = (fast_inc * 150u) >> 7;
     if (!s->live) {                                     /* the slow LFOs start 120 degrees apart (they all started at 0 before 0.10.1 and moved the taps together) */
-        for (j = 0; j < 3u; j++)
-            s->slow[j] = j * 0x55555555u;
+        for (j = 0; j < ENS_NT; j++)
+            s->slow[j] = (j % 3u) * 0x55555555u + (j / 3u) * 0x2AAAAAAAu;   /* (the right channel's group 60 degrees on) */
+        s->fast[1] = 0x2AAAAAAAu;
     }
-    for (j = 0; j < 3u; j++) {
-        int32_t lfo = (sine_i(s->slow[j]) * 3 + sine_i(s->fast + j * 0x55555555u)) >> 2;   /* +-32767: mostly the slow one */
-        int32_t base = j == 0u ? ENS_DELAY_BASE_0 : j == 1u ? ENS_DELAY_BASE_1 : ENS_DELAY_BASE_2;
-        tgt[j] = (base << 8) + ((lfo * depth) >> 7);    /* 1/256 sample: depth 127 moves a tap +-127 samples (+-2.9 ms) */
-        s->slow[j] += slow_inc * n;
+    for (j = 0; j < ENS_NT; j++) {
+        int32_t lfo = (sine_i(s->slow[j]) * 3 + sine_i(s->fast[j / 3u] + (j % 3u) * 0x55555555u)) >> 2;   /* +-32767: mostly the slow one */
+        s->slow[j] += (j < 3u ? slow_inc : slow_inc_b) * n;
+        tgt[j] = (ENS_BASE[j] << 8) + ((lfo * depth) >> 7);    /* 1/256 sample: depth 127 moves a tap +-127 samples (+-2.9 ms) */
     }
-    s->fast += fast_inc * n;
+    s->fast[0] += fast_inc * n;
+    s->fast[1] += fast_inc_b * n;
     if (!s->live) {
-        for (j = 0; j < 3u; j++)
+        for (j = 0; j < ENS_NT; j++)
             s->delay[j] = tgt[j];
         s->live = 1;
     }
-    for (j = 0; j < 3u; j++)
+    for (j = 0; j < ENS_NT; j++)
         step[j] = (tgt[j] - s->delay[j]) / (int32_t)(n ? n : 1u);
     for (i = 0; i < n; i++) {
         int32_t dry = b[i], sum = 0;
@@ -155,16 +168,36 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void ens_post(track_t *t, int
             int32_t r0 = s->ring[idx0], r1 = s->ring[idx1];
             sum += r0 + (((r1 - r0) * (d & 255)) >> 8);
         }
+        if (sd) {                                       /* the right channel: three more taps; b = the mean of both, sd = left - right */
+            int32_t sumr = 0;
+            for (j = 3; j < ENS_NT; j++) {
+                int32_t d = s->delay[j] + step[j] * (int32_t)(i + 1u);
+                uint32_t di = (uint32_t)d >> 8, idx0 = (s->w - di) & (ENS_RING - 1u), idx1 = (idx0 - 1u) & (ENS_RING - 1u);
+                int32_t r0 = s->ring[idx0], r1 = s->ring[idx1];
+                sumr += r0 + (((r1 - r0) * (d & 255)) >> 8);
+            }
+            s->w = (s->w + 1u) & (ENS_RING - 1u);
+            b[i] = dry + mulq16(mulq16(sum + sumr, ENS_MID_Q16) - dry, (uint32_t)mix);
+            sd[i] = mulq16(mulq16(sum - sumr, ENS_WET_Q16), (uint32_t)mix);
+            continue;
+        }
         s->w = (s->w + 1u) & (ENS_RING - 1u);
         b[i] = dry + mulq16(mulq16(sum, ENS_WET_Q16) - dry, (uint32_t)mix);   /* dry + (ensemble - dry) * MIX */
     }
-    for (j = 0; j < 3u; j++)
+    for (j = 0; j < ENS_NT; j++)
         s->delay[j] += step[j] * (int32_t)n;
 }
 
 /* The factory presets are design intent: eight controls, the ADSR and the sends chosen for a different job each; tests/ensemble_presets_test measures them
  * (spectrum, level movement, attack, release, line smearing) and keeps every pair a minimum distance apart. Not a verdict on how they sound.
  * Order is the stored order: favorites and projects address a preset by its index, so new ones go to the end. */
+/* the width (SPRD) a factory preset loads with (ui.c preset_sound_values; preset_t has no field for it), in the order of ENS_PRESETS below; 0 = mono. The pads (PRESET_CAT 'P') get the widest of 127 /
+ * 112 / 96 at which no octave band between 125 Hz and 8 kHz of the chords E2 B2 E3 G3 / E3 G3 B3 E4 is anti-correlated (the lowest band correlation of the two chords above -0.05, measured on the host
+ * with the mono sum of the mean of both channels): 127 for seven of the eleven, 112 for STRING MACHINE and DEEP DRONE, 96 for BREATH CHOIR and HUGE ENSEMBLE. Not the FX (ROUGH PULSE), the struck
+ * GLASS SHIMMER (anti-correlated at every width above 80: a bell does not need a pad's image) or SOLO DRIFT (a MONO preset: ensemble stereo needs POLY or UNISON). A user preset and a project store
+ * their own SPRD, and what they store wins; only a factory load sets this */
+static const uint8_t ENS_WIDTH[14] = {127, 127, 127, 127, 127, 112, 96, 112, 0, 127, 0, 0, 96, 127};
+static inline int16_t ens_width(uint32_t pi) { return pi < 14u ? ENS_WIDTH[pi] : 0; }
 static const preset_t ENS_PRESETS[] = {
     {"VINTAGE STRINGS", {64, 0, 80, 40, 70, 50, 10, 100}, {60, 90, 112, 80}, 0, 0, FX(0, 12, 10, 50), PAT(5)},
     {"GLASS CHOIR", {40, 64, 60, 50, 60, 40, 15, 90}, {80, 90, 115, 95}, 0, 0, FX(0, 10, 20, 60), PAT(5)},
