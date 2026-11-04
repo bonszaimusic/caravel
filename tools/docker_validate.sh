@@ -19,7 +19,7 @@
 # (they read GitHub runs of the exact commit), publishing and Pages.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
-cmd=${1:-}; [ -n "$cmd" ] || { sed -n '5,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+cmd=${1:-}; [ -n "$cmd" ] || { awk 'NR >= 5 && /^#/ { print; next } NR >= 5 { exit }' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 shard=""
 case "$cmd" in
     action|image) shift;;
