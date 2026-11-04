@@ -425,7 +425,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
                 R.safe_path(path)
         self.assertEqual(R.identity("1.2.3-rc1"), "FM-1_999")
         # Firmware identity is independent of the release version.
-        for version in ("0.3.4", "0.9.9", "0.10.0", "0.10.1", "0.12.3-rc1", "1.0.0", "9.9.9-rc2"):
+        for version in ("0.3.4", "0.9.9", "0.10.0", "0.10.1", "0.11.0", "0.12.3-rc1", "1.0.0", "9.9.9-rc2"):
             self.assertEqual(R.identity(version), "FM-1_999")
 
     def build_context(self, release=True, binary_version=None, extra_args=()):
