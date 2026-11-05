@@ -464,10 +464,10 @@ static void graph_harmony(void)
     cv_text_on(12, 2, &AF_M, "HARMONY", T_TEXT, T_SURF);
     cv_text_r(228, 2, &AF_M, harmony_on ? "ON" : "OFF", harmony_on ? T_ACCENT : T_DIM, T_SURF);
     for (i = 0; i < 4u; i++)
-        total += (uint32_t)hdur_get(i) + 1u;
+        total += 1u << hdur_get(i);
     pos = harmony_bar % (total ? total : 4u);
     for (i = 0; i < 4u; i++) {
-        uint32_t d = (uint32_t)hdur_get(i) + 1u, w = 216u * d / (total ? total : 4u);
+        uint32_t d = 1u << hdur_get(i), w = 216u * d / (total ? total : 4u);
         cv_rrect((int32_t)x, 24, (int32_t)(w > 3u ? w - 2u : 2u), 10, 3,
                  i == idx ? (harmony_on ? T_ACCENT : T_DIM) : T_RAISE, T_SURF);
         if (pos >= d) pos -= d; else at = i;

@@ -58,7 +58,7 @@ static void link_retrigger(uint32_t i);
  * RETRIG live in the project's FUN11 block (project.c). The chord is a diatonic triad in T1's scale; the note sources
  * that use the bus (sequencer strong steps, ARP strong steps, the G5 generator, CHRD BUS) take chord tones there. */
 static uint8_t harmony_on;
-static volatile uint8_t harmony_bar;
+static volatile uint32_t harmony_bar;
 static uint32_t harmony_base_bar;                 /* perf_bars_q16 >> 16 at Start / bar reset */
 static uint8_t harmony_root[4], harmony_dur[4];
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
@@ -73,10 +73,10 @@ static uint32_t harmony_chord_at(uint32_t bar)
 {
     uint32_t total = 0, i;
     for (i = 0; i < 4u; i++)
-        total += (uint32_t)hdur_get(i) + 1u;
+        total += 1u << hdur_get(i);
     bar %= total ? total : 4u;
     for (i = 0; i < 4u; i++) {
-        uint32_t d = (uint32_t)hdur_get(i) + 1u;
+        uint32_t d = 1u << hdur_get(i);
         if (bar < d)
             return i;
         bar -= d;
@@ -1948,13 +1948,13 @@ static void events_block(uint32_t n)
     }
     if (song.playing && seq_n) {
         uint32_t bar = 4u * (clock_mode ? MIDI_CLOCK_GRID : beat_samples()), num = (seq_n << 16) + perf_bars_rem;
-        uint8_t hb = harmony_bar;
+        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb);
         perf_bars_q16 += num / bar;
         perf_bars_rem = num % bar;
-        harmony_bar = (uint8_t)((perf_bars_q16 >> 16) - harmony_base_bar);
-        if (harmony_bar != hb)
+        harmony_bar = (perf_bars_q16 >> 16) - harmony_base_bar;
+        if (harmony_bar != hb && harmony_on && old_chord != harmony_chord_at(harmony_bar))
             for (i = 0; i < NTRK; i++)
-                if (link_retrig[i] & 1u)
+                if ((link_retrig[i] & 1u) && harmony_follow[i])
                     link_retrigger(i);
     }
     if (aud_req)

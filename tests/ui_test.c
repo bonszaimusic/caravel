@@ -6635,6 +6635,9 @@ static int test_harmony_page(void)
     for (uint32_t i = 0; i < 4u; i++) { hdur_set(i, 0); hroot_set(i, (uint8_t)i); }
     hdur_set(0, 1);                                /* BAR 1 lasts two bars */
     ok &= harmony_chord_at(0) == 0u && harmony_chord_at(1) == 0u && harmony_chord_at(2) == 1u;
+    for (uint32_t i = 0; i < 4u; i++) hdur_set(i, 3);   /* all 8 bars */
+    ok &= harmony_chord_at(0) == 0u && harmony_chord_at(7) == 0u && harmony_chord_at(8) == 1u &&
+          harmony_chord_at(16) == 2u && harmony_chord_at(24) == 3u && harmony_chord_at(32) == 0u;
     ok &= harmony_snap(&trk[0], 1) == 0u || harmony_snap(&trk[0], 1) == 3u;
     {
         step_t s = {.note = {1}, .n = 1, .time = ST_NOTE, .vel = 100};
@@ -6655,6 +6658,40 @@ static int test_harmony_page(void)
     bad += check("HARMONY page: BAR roots, OCT- DUR row, OCT+ on, CHRD BUS and strong-step seq snap", ok);
     press(B_OCTUP);
     bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
+    ui_power_on();
+    return bad;
+}
+
+/* A read-only project probe must not move the live Harmony/Link state into the slot it decodes. */
+static int test_fun11_readonly_probe(void)
+{
+    int bad, ok = 1;
+    project_t p;
+    project_store_t st;
+    ui_power_on();
+    /* slot 0: roots 1..4, bus on, T2 follows T1, T2 harmony off */
+    harmony_on = 1;
+    for (uint32_t i = 0; i < 4u; i++) hroot_set(i, (uint8_t)(i + 1u));
+    link_src[1] = 1; link_retrig[1] = 2; harmony_follow[1] = 0;
+    project_capture(&p); ok &= proj_pack(&st, &p); proj_slot[0] = st;
+    /* slot 1: different state */
+    harmony_on = 0;
+    for (uint32_t i = 0; i < 4u; i++) hroot_set(i, 0);
+    link_src[1] = 0; link_retrig[1] = 0; harmony_follow[1] = 1;
+    project_capture(&p); ok &= proj_pack(&st, &p); proj_slot[1] = st;
+    /* live state C: a probe of either slot must leave every field alone */
+    harmony_on = 1;
+    for (uint32_t i = 0; i < 4u; i++) hroot_set(i, (uint8_t)(9u - i));
+    link_src[2] = 1; link_retrig[2] = 3; harmony_follow[2] = 0;
+    {
+        char name[PROJ_NAME_LEN + 1];
+        ok &= project_info(0, name, 0, 0, 0) != 0;
+        ok &= project_used(1) != 0;
+    }
+    for (uint32_t i = 0; i < 4u; i++)
+        ok &= hroot_get(i) == 9u - i;
+    ok &= harmony_on == 1 && link_src[2] == 1 && link_retrig[2] == 3 && harmony_follow[2] == 0;
+    bad = check("FUN11 read-only project probes keep the live Harmony/Link state", ok);
     ui_power_on();
     return bad;
 }
@@ -10389,6 +10426,7 @@ int main(void)
     bad += test_harmony_page();
     bad += test_fun11_project();
     bad += test_harmony_clock();
+    bad += test_fun11_readonly_probe();
     bad += test_screen_off();
     bad += test_screen_wake();
     bad += test_idle_leds();

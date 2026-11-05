@@ -1021,12 +1021,44 @@ static void proj_bound(project_t *q)
     q->sum = proj_sum(q);
 }
 
+/* Read-only project inspection and in-place rename must not make the live Harmony/Link state follow the slot
+ * they decode. A decode writes the runtime arrays; these save/restore them around such a probe. A rename packs
+ * while the decoded state is live, so the slot keeps its own values, then restores the music's state. */
+typedef struct {
+    uint8_t root[4], dur[4], on, link_src[NTRK], link_retrig[NTRK], follow[NTRK];
+    uint32_t bar, base;
+} harmony_saved_t;
+static void harmony_save(harmony_saved_t *s)
+{
+    memcpy(s->root, harmony_root, sizeof s->root);
+    memcpy(s->dur, harmony_dur, sizeof s->dur);
+    memcpy(s->link_src, link_src, sizeof s->link_src);
+    memcpy(s->link_retrig, link_retrig, sizeof s->link_retrig);
+    memcpy(s->follow, harmony_follow, sizeof s->follow);
+    s->on = harmony_on;
+    s->bar = harmony_bar;
+    s->base = harmony_base_bar;
+}
+static void harmony_restore(const harmony_saved_t *s)
+{
+    memcpy(harmony_root, s->root, sizeof s->root);
+    memcpy(harmony_dur, s->dur, sizeof s->dur);
+    memcpy(link_src, s->link_src, sizeof s->link_src);
+    memcpy(link_retrig, s->link_retrig, sizeof s->link_retrig);
+    memcpy(harmony_follow, s->follow, sizeof s->follow);
+    harmony_on = s->on;
+    harmony_bar = s->bar;
+    harmony_base_bar = s->base;
+}
+
 #if FELUCCA_FLASH
 /* slot from flash into RAM (format 7, or format 6 / 5 / 4 / 3 / 2 / 1 converted) */
 static void proj_fetch(uint32_t slot)
 {
     project_store_t *q = &proj_slot[slot & 3u];
+    harmony_saved_t hs;
     int n;
+    harmony_save(&hs);
     proj_wire_gen++;
     n = st_load(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire);
     if (!proj_import(&proj_scratch, &proj_wire, n))
@@ -1036,6 +1068,7 @@ static void proj_fetch(uint32_t slot)
         if (!proj_pack(q, &proj_scratch))
             memset(q->raw, 0, 4);
     }
+    harmony_restore(&hs);
 }
 #endif
 
@@ -1205,6 +1238,8 @@ static uint32_t proj_density(const proj_trk_t *t, uint8_t *n)
 static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, uint8_t *n)
 {
     uint32_t k;
+    harmony_saved_t hs;
+    harmony_save(&hs);
     b[0] = 0;
     if (len48)
         memset(len48, 0, NTRK * sizeof *len48);
@@ -1212,13 +1247,16 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
         memset(den, 0, NTRK * sizeof *den);
         memset(n, 0, NTRK);
     }
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)))
+    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) {
+        harmony_restore(&hs);
         return 0;
+    }
     proj_name_get(b, (const uint8_t *)proj_scratch.name);
     for (k = 0; len48 && k < NTRK; k++)
         len48[k] = (uint16_t)len48_of(proj_scratch.t[k].p[P_SLEN], proj_scratch.t[k].p[P_SDIV]);
     for (k = 0; den && k < NTRK; k++)
         den[k] = proj_density(&proj_scratch.t[k], &n[k]);
+    harmony_restore(&hs);
     return 1;
 }
 
@@ -1227,37 +1265,41 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
  * an empty slot), 2 failed (the slot as it was) */
 static int project_rename(uint32_t slot, const char *name)
 {
+    harmony_saved_t hs;
+    harmony_save(&hs);
 #if FELUCCA_PERF_HW
     int hp_rc=hp_project_rename(slot&3u,name);
-    if(hp_rc>=0)return hp_rc; /* Legacy native slots use the original rename below. */
+    if(hp_rc>=0){harmony_restore(&hs);return hp_rc;} /* Legacy native slots use the original rename below. */
 #endif
     project_t *p = &proj_scratch;
     if (transport_busy()) {
         ui_message("STOP TO SAVE");
+        harmony_restore(&hs);
         return 1;
     }
     if (!proj_import(p, &proj_slot[slot & 3u], sizeof(project_store_t))) {
         ui_message("EMPTY SLOT");
+        harmony_restore(&hs);
         return 1;
     }
     memset(p->name, 0, sizeof p->name);
     memcpy(p->name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
     proj_wire_gen++;
-    if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
+    if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); harmony_restore(&hs); return 2; }
 #if FELUCCA_FLASH
     if (flash_ok && st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire)) {
         ui_message("SAVE ERROR");
-        return 2;
+        harmony_restore(&hs); return 2;
     }
 #endif
     memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
     if (proj_cur == (slot & 3u))
         proj_name_get(proj_name, (const uint8_t *)p->name);
 #if FELUCCA_FLASH
-    if (flash_ok) { ui_message("RENAMED"); return 0; }
+    if (flash_ok) { ui_message("RENAMED"); harmony_restore(&hs); return 0; }
 #endif
     ui_message("RENAMED (RAM)");
-    return 0;
+    harmony_restore(&hs); return 0;
 }
 
 /* Initialize the working project; persistent slots, pending saves and device
@@ -1498,17 +1540,28 @@ static int project_restore_runtime(const project_t *input)
 }
 static void project_load(uint32_t slot)
 {
+    harmony_saved_t hs;
+    harmony_save(&hs);
 #if FELUCCA_HOME_PERF
     if(hp_project_load(slot)) return;
+    harmony_restore(&hs);                              /* a failed performance load must not leave its state */
 #endif
 
 #if FELUCCA_FLASH
     if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
 #endif
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
-    if (project_compat_request(&proj_scratch, slot & 3u)) return;
+    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) {
+        harmony_restore(&hs);
+        ui_message("EMPTY SLOT");
+        return;
+    }
+    if (project_compat_request(&proj_scratch, slot & 3u)) {
+        harmony_restore(&hs);
+        return;
+    }
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
     if (!project_restore_runtime(&proj_scratch)) {
+        harmony_restore(&hs);
 #if FELUCCA_HOME_PERF
         hp_init();
         for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);
@@ -1566,7 +1619,15 @@ static void persist_boot(void)                    /* before settings_init / pane
 #endif
 }
 
-static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)); }
+static int project_used(uint32_t slot)
+{
+    harmony_saved_t hs;
+    int used;
+    harmony_save(&hs);
+    used = proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t));
+    harmony_restore(&hs);
+    return used;
+}
 
 /* Main loop only: no flash access or copies when the ISR changes rows. */
 /* PATTERN retains instruments/globals and refuses mismatched engines. FULL
