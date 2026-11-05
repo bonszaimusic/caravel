@@ -12,7 +12,8 @@
  *              while held (1.5.5, #209: the steps' FILL / !FILL conditions, seq.c seq_fill; HOLD), F4 TAP
  *              tempo (external clock: F4 SYNC at the next pulse); KNOB 1..4 T1..T4 LEVEL;
  *              GLO + PLAY: INT restart; external clock: next counted 4/4 bar, again cancels; GLO + OCT+ (let go):
- *              BAR RESET, every track to step 0 at the next bar (stopped: at once)
+ *              BAR RESET, every track to step 0 at the next bar (stopped: at once); GLO + G4 HARMONIC CLOCK on/off;
+ *              GLO + G5 KEY LINK on/off (all follow the selected source track)
  *   SCL  SET   any key: its note name is ROOT; KNOB 1..4 ROOT SCL CHRD VOIC (LY_SCL: the SCL page's first two,
  *              the CHORD page's two; QNT TRN stay on SCL); the LEDs show the root lit and the scale's notes breathing;
  *              SCL + OCT+ (let go): ROOT SCL QNT of this track onto all four (TRN CHRD VOIC stay their own)
@@ -23,10 +24,11 @@
  *              the selected track's engine's quick actions (EQA below: DRUM 1..8 its lanes' MUTE; other engines
  *              none yet, the keys dark)
  *   SEQ  SET   (1.2, on every page; up to 1.1.5 SEQ held opened SONG) TOOLS: the white keys from F3 the sequence tools
- *              (ui_tools.c: CLEAR, REVERSE, SHIFT < >, RANDOM, COOK, 1.5.5 EUCLID (F4) DOUBLE HALF (D5 E5); on a DRUM track BEAT and the
- *              lane's CLEAR REVERSE FILL RANDOM), black keys 1..8 the lane (DRUM); KNOB 1..4 LEN DIV SWING GATE (the
- *              PATTERN page's up to 1.1.5: the page is gone, they are here; EUCLID open: HITS STEPS ROT, OCT+ applies,
- *              OCT- cancels). Each action one undo (SAVE held), OCT- the track as the layer opened (tl_open)
+ *              (ui_tools.c: CLEAR, REVERSE, SHIFT < >, RANDOM, COOK, 1.5.5 EUCLID (F4) DOUBLE HALF (D5 E5), G5
+ *              GENERATE; on a DRUM track BEAT and the lane's CLEAR REVERSE FILL RANDOM), black keys 1..8 the lane
+ *              (DRUM); KNOB 1..4 LEN DIV SWING GATE (the PATTERN page's up to 1.1.5: the page is gone, they are here;
+ *              EUCLID open: HITS STEPS ROT, OCT+ applies, OCT- cancels). Each action one undo (SAVE held), OCT- the
+ *              track as the layer opened (tl_open)
  *   REC  SET   (1.1.5, on every page; REC's tap still arms / disarms) the white keys from F3: CLEAR (the selected
  *              track's steps and automation, no dialog: one undo, SAVE held), CLICK (OFF REC ON), COUNT-IN (OFF 1 BAR
  *              2 BARS), CLICK LEVEL (LOW MID HIGH), each press the next value; KNOB 1..3 the same three. The settings
@@ -61,7 +63,7 @@ typedef struct {
 static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
-    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTUP, "RESET"}, {KC_OCTDN, "UNDO"}}},
+    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTUP, "RESET"}, {KC_KEYS, "LINK"}}},
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTUP, "ALL"}, {KC_OCTDN, "UNDO"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
@@ -85,7 +87,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
-static const khint_t GLO_EXT_FOOT[3] = {{KC_PLAY, "BAR SYNC"}, {KC_OCTUP, "RESET"}, {KC_OCTDN, "UNDO"}};
+static const khint_t GLO_EXT_FOOT[3] = {{KC_PLAY, "BAR SYNC"}, {KC_OCTUP, "RESET"}, {KC_KEYS, "LINK"}};
 static const khint_t EU_FOOT[3] = {{KC_OCTUP, "APPLY"}, {KC_OCTDN, "CANCEL"}, {0, 0}};   /* (SEQ TOOLS' EUCLID open) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -641,6 +643,17 @@ static uint32_t eqa_sig(void)
     return h;
 }
 
+/* GLO + G4: the HARMONIC CLOCK on / off. Its four-chord loop is in seq.c; the generated patterns (SEQ TOOLS' G5)
+ * put chord tones on their strong steps while it is on. */
+static void harmony_toggle(void)
+{
+    harmony_on = (uint8_t)!harmony_on;
+    if (harmony_on)
+        harmony_bar = 0;
+    ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
+    ui.force = 1;
+}
+
 /* a key pressed in layer l (k: 0 = F3 .. 26 = G5) */
 static void layer_key(uint32_t l, uint32_t k)
 {
@@ -664,6 +677,10 @@ static void layer_key(uint32_t l, uint32_t k)
             ml_toggle();                                /* D4: MIDI LEARN on / off (midi_learn.c) */
         } else if (p == 6u) {
             lys.fill |= 1u << k;                        /* E4: FILL while held (layer_keys) */
+        } else if (p == 8u) {
+            harmony_toggle();                           /* G4: HARMONIC CLOCK on / off */
+        } else if (p == 15u) {
+            key_link_toggle();                          /* G5: KEY LINK on / off */
         }
     } else if (l == LAYER_SCL) {
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */
@@ -1126,9 +1143,10 @@ static void layer_edit(void)                            /* the engines from F3, 
  * track the lanes of black keys 1..8 under them (the selected one: the selection's fill). A melodic track: the two
  * rows of the sequence's tools only */
 static const uint8_t TL_ICON[TL_N] = {ICON_CLEAR, ICON_X_REVERSE, ICON_X_LEFT, ICON_X_RIGHT, ICON_PROB, ICON_W_SH,
-    ICON_DRUM, ICON_PULSE, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB, ICON_LENGTH, ICON_DIVISION, ICON_CLEAR};
+    ICON_DRUM, ICON_PULSE, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB, ICON_LENGTH, ICON_DIVISION, ICON_CLEAR,
+    ICON_PROB};
 static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", "EUCLID",
-    "CLR", "REV", "FILL", "RND", "DOUBLE", "HALF", "STEP"};
+    "CLR", "REV", "FILL", "RND", "DOUBLE", "HALF", "STEP", "GEN"};
 /* EUCLID open (1.5.5): its cycle as cells, 16 a row (up to 4 rows), the hits filled; past it, inside LEN, the cells
  * of its repeats faint (DRUM: the lanes' row under them as always) */
 static void layer_euclid(void)
@@ -1168,8 +1186,11 @@ static void layer_seq(void)
     for (p = TL_DOUBLE; !eu.on && p < TL_N; p++) {     /* D5 DOUBLE (x2), E5 HALF (/2), DRUM: F5 CLR (the step) at the row's end: */
         if (p == TL_STEPCLR && !drum)
             continue;
-        int32_t x = 160 + 26 * (int32_t)(p - TL_DOUBLE);   /* 24 px each, the name alone (the lanes' row: no room for letters) */
-        uint16_t ink, fill = lc_box(x, 100, 24, 18, lc_fill(st, &ink));
+        int32_t x = p == TL_GENERATE ? 212 : 160 + 26 * (int32_t)(p - TL_DOUBLE);   /* 24 px each, the name alone */
+        uint16_t ink, fill;
+        if (p == TL_GENERATE && drum)
+            continue;                                   /* (the drum track has "CLR" at that place; GEN is melodic) */
+        fill = lc_box(x, 100, 24, 18, lc_fill(st, &ink));
         GFX_HOOK_ALIGN(x, 100, x + 24, 118, AL_HV, "tools resize cell name centred");
         cv_text_in(x, 100 + CAP_IN(S, 18), 24, &AF_S, p == TL_DOUBLE ? "x2" : p == TL_HALF ? "/2" : "CLR", ink, fill);
     }

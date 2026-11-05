@@ -6556,6 +6556,122 @@ static int test_coupling(void)
     return bad;
 }
 
+/* KEY LINK (SCL + PLAY): the selected track at the moment the link goes on is the master; every frame copies its
+ * ROOT / SCL / QNT to the other three. Selecting another track does not move the master. Off: no more copying. */
+static int test_key_link(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    int16_t trn1, chrd1;
+    ui_power_on();
+    song.sel = 0;
+    for (i = 0; i < NTRK; i++) {
+        trk[i].p[P_ROOT] = (int16_t)(i + 1);
+        trk[i].p[P_SCALE] = (int16_t)(i % 3);
+        trk[i].p[P_QUANT] = (int16_t)(i % 5);
+        trk[i].p[P_TRANS] = (int16_t)(i * 2 - 3);
+    }
+    trk[0].p[P_ROOT] = 7; trk[0].p[P_SCALE] = 2; trk[0].p[P_QUANT] = 3;
+    trn1 = trk[1].p[P_TRANS]; chrd1 = trk[1].p[P_CHRD];
+    btn_down(B_GLO);
+    frames(400);
+    key_down(key_at(0, 15)); frame(); key_up(key_at(0, 15)); frame();
+    ok = key_link_on() && msg_is("KEY LINK ON");
+    ok &= trk[1].p[P_ROOT] == 7 && trk[2].p[P_ROOT] == 7 && trk[3].p[P_ROOT] == 7 &&
+          trk[1].p[P_SCALE] == 2 && trk[2].p[P_SCALE] == 2 && trk[3].p[P_SCALE] == 2 &&
+          trk[1].p[P_QUANT] == 3 && trk[2].p[P_QUANT] == 3 && trk[3].p[P_QUANT] == 3 &&
+          trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1;
+    btn_up(B_GLO);
+    frame();
+    trk[0].p[P_ROOT] = 2;
+    trk[0].p[P_SCALE] = 1;
+    trk[0].p[P_QUANT] = 4;
+    frame();
+    ok &= trk[1].p[P_ROOT] == 2 && trk[2].p[P_ROOT] == 2 && trk[3].p[P_ROOT] == 2 &&
+          trk[1].p[P_SCALE] == 1 && trk[2].p[P_SCALE] == 1 && trk[3].p[P_SCALE] == 1 &&
+          trk[1].p[P_QUANT] == 4 && trk[2].p[P_QUANT] == 4 && trk[3].p[P_QUANT] == 4;
+    song.sel = 2;                                      /* another track selected: the master does not move */
+    frame();
+    ok &= trk[1].p[P_ROOT] == 2 && trk[2].p[P_ROOT] == 2;
+    btn_down(B_GLO);
+    frames(400);
+    key_down(key_at(0, 15)); frame(); key_up(key_at(0, 15)); frame();
+    ok &= !key_link_on() && msg_is("KEY LINK OFF");
+    btn_up(B_GLO);
+    frame();
+    trk[0].p[P_ROOT] = 9;
+    frame();
+    ok &= trk[1].p[P_ROOT] == 2 && trk[2].p[P_ROOT] == 2;
+    bad += check("GLO + G5: KEY LINK follows the selected master, copies ROOT SCL QNT, keeps TRN / CHRD, and turns off", ok);
+    ui_power_on();
+    return bad;
+}
+
+/* SEQ TOOLS' G5 GENERATE: a scale-aware phrase (notes in the track's scale, at least some of the steps), and with
+ * the HARMONIC CLOCK (GLO + G4) its strong steps take chord tones. */
+static int test_generate(void)
+{
+    int bad = 0, ok;
+    uint32_t i, notes = 0, mask;
+    track_t *t;
+    ui_power_on();
+    song.sel = 0;
+    t = TSEL;
+    t->p[P_SLEN] = 16;
+    t->p[P_SCALE] = 2;                                 /* C minor */
+    t->p[P_ROOT] = 0;
+    for (i = 0; i < NSTEP; i++)
+        step_clear(&t->step[i]);
+    harmony_on = 0;
+    {
+        const char *m = tl_do(t, TL_GENERATE, 0);
+        ok = m && str_eq(m, "GENERATED");
+    }
+    for (i = 0; i < 16u; i++)
+        if (tl_gate(&t->step[i])) {
+            notes++;
+            ok &= tl_in_scale(t, t->step[i].note[0]);
+        }
+    ok &= notes >= 4u;
+    bad += check("G5 GENERATE: a scale-aware phrase, notes in C minor, the rest of the pattern empty", ok);
+
+    btn_down(B_GLO);
+    frames(400);
+    key_down(key_at(0, 8)); frame(); key_up(key_at(0, 8)); frame();
+    ok = harmony_on != 0u && msg_is("HARMONY ON");
+    btn_up(B_GLO);
+    frame();
+    mask = harmony_mask(t);
+    ok &= mask != 0u;
+    tl_do(t, TL_GENERATE, 0);
+    ok &= tl_gate(&t->step[0]) && ((mask >> (t->step[0].note[0] % 12u)) & 1u) != 0u;
+    bad += check("GLO + G4: HARMONIC CLOCK on; the generated strong step takes a chord tone", ok);
+    harmony_on = 0;
+    ui_power_on();
+    return bad;
+}
+
+/* ARP TURING: the 16-bit register picks a list index each step, within the held notes; it moves (not one fixed
+ * note) and stays inside the list. */
+static int test_arp_turing(void)
+{
+    uint32_t list[8] = {48, 52, 55, 59, 60, 64, 67, 72}, i, j, seen = 0;
+    int bad = 0, ok = 1;
+    ui_power_on();
+    memset(arp_turing, 0, sizeof arp_turing);
+    trk[0].p[P_AMODE] = AM_TURING;
+    trk[0].arp_idx = 0;
+    for (i = 0; i < 200u; i++) {
+        j = arp_pick(&trk[0], list, 8);
+        ok &= j < 8u;
+        seen |= 1u << j;
+    }
+    ok &= __builtin_popcount(seen) >= 3;
+    bad += check("ARP TURING: the 16-bit register walks the held-note list, inside it and not stuck on one index", ok);
+    ui_power_on();
+    return bad;
+}
+
 /* #37: QNT SEQ on the SCL page: the keys as SNAP, the sequence snapped as it plays, saved with the project */
 static int test_seq_quant(void)
 {
@@ -10161,6 +10277,9 @@ int main(void)
     bad += test_step_leds();
     bad += test_scale_leds();
     bad += test_coupling();
+    bad += test_key_link();
+    bad += test_arp_turing();
+    bad += test_generate();
     bad += test_screen_off();
     bad += test_screen_wake();
     bad += test_idle_leds();

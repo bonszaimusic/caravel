@@ -51,6 +51,32 @@ static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen
 static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 INT restart, 4 bar resync, 5 pulse resync, 6 cancel */
 static volatile uint8_t bar_reset_req;    /* GLO + OCT+: every track to its step 0 at the next bar (seq_resync) */
+/* HARMONIC CLOCK (GLO + G4): a four-chord loop, one chord per bar, derived from the selected track's ROOT / SCALE.
+ * The new pattern generator (SEQ TOOLS' G5) uses chord tones on the strong steps; the older ARP / sequencer sources
+ * stay scale-based (they are not rewritten here). Volatile: a performance helper, not a saved project value. */
+static uint8_t harmony_on;
+static volatile uint8_t harmony_bar;
+static uint16_t harmony_mask(const track_t *t)
+{
+    static const uint8_t MAJ[4] = {0, 7, 9, 5};       /* I V vi IV (root, in semitones) */
+    static const uint8_t MIN[4] = {0, 8, 3, 10};      /* i VI III VII */
+    static const uint16_t MAJ3[4] = {0x091u, 0x091u, 0x089u, 0x091u};   /* 0 4 7; 0 3 7 (minor) */
+    uint32_t scale, bar;
+    uint8_t root;
+    if (!harmony_on)
+        return 0;
+    scale = (uint32_t)t->p[P_SCALE];
+    root = (uint8_t)((t->p[P_ROOT] + (scale == 1u || scale == 4u || scale == 5u || scale == 9u || scale == 13u ||
+                                     scale == 0u ? MAJ[harmony_bar & 3u] : MIN[harmony_bar & 3u])) % 12);
+    bar = harmony_bar & 3u;
+    if (scale == 1u || scale == 4u || scale == 5u || scale == 9u || scale == 13u || scale == 0u)
+        return (uint16_t)(MAJ3[bar] << root) | (uint16_t)(MAJ3[bar] >> (12u - root));
+    /* minor: i, VI, III and VII; the VI / III / VII triads are major, the tonic minor */
+    {
+        static const uint16_t TRI[4] = {0x089u, 0x091u, 0x091u, 0x091u};
+        return (uint16_t)(TRI[bar] << root) | (uint16_t)(TRI[bar] >> (12u - root));
+    }
+}
 static void midi_resync_cancel(void);
 static volatile uint8_t step_record_mask; /* transient per-track STEP REC; never live-write at the playhead */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
@@ -356,7 +382,7 @@ static int rec_on(const track_t *t) {
  * C E C G (the bottom one); WALK a random step up or down the list (bouncing off its ends); CHORD all the held
  * notes together (the first 4), an octave higher each step through OCT */
 enum { AM_OFF, AM_UP, AM_DN, AM_UPDN, AM_RND, AM_ORD, AM_REPEAT, AM_DNUP, AM_UP8, AM_CONV, AM_DIVG, AM_PINKY,
-       AM_THUMB, AM_WALK, AM_CHORD };
+       AM_THUMB, AM_WALK, AM_CHORD, AM_TURING };
 
 /* External clock advances exact quarter notes; sequencer/ARP periods are whole
  * samples. Carry the fractional difference instead of accumulating floor()
@@ -443,6 +469,11 @@ static void arp_off(track_t *t)                  /* the sounding arp note(s) end
     t->arp_note = 0;
 }
 
+/* TURING: a 16-bit feedback register per track picks the note list's index. The taps 0,2,3,5 are the usual
+ * maximal-length polynomial; one random bit flips now and then so the loop does not lock. No new parameter: the
+ * register is the mode's own state, and a mode change leaves it where it is. */
+static uint16_t arp_turing[NTRK];
+
 /* the place in the note list (len notes) the step arp_idx plays (not inlined, as arp_chord); UP+8 adds its note */
 static __attribute__((noinline)) uint32_t arp_pick(track_t *t, uint32_t *list, uint32_t len)
 {
@@ -470,6 +501,19 @@ static __attribute__((noinline)) uint32_t arp_pick(track_t *t, uint32_t *list, u
         return len < 2u ? 0u : (k & 1u) ? len - 1u : k / 2u;
     case AM_THUMB:
         return len < 2u ? 0u : (k & 1u) ? 1u + k / 2u : 0u;
+    case AM_TURING: {
+        uint32_t k = trk_index(t);
+        uint16_t r = arp_turing[k];
+        uint16_t fb;
+        if (!r)
+            r = (uint16_t)(0xACE1u ^ (k * 0x9E37u));
+        fb = (uint16_t)(((r >> 0) ^ (r >> 2) ^ (r >> 3) ^ (r >> 5)) & 1u);
+        r = (uint16_t)((r >> 1) | (fb << 15));
+        if ((rng() & 7u) == 0u)
+            r ^= (uint16_t)(1u << (rng() & 15u));
+        arp_turing[k] = r;
+        return r % len;
+    }
     case AM_WALK:
         w = t->arp_walk;
         if (!i)
@@ -1868,9 +1912,12 @@ static void events_block(uint32_t n)
     beat_pos += beat_n_samples;                        /* ARP LED beat */
     slicer_follow(seq_n, n, clock_mode && song.playing);
     if (beat_pos >= beat_samples()) {
+        uint8_t was_beat = beat_n;
         beat_pos -= beat_samples();
         beat_pos = beat_pos < beat_samples() ? beat_pos : 0u;
         beat_n = (beat_n + 1u) & 3u;
+        if (was_beat == 3u && beat_n == 0u)
+            harmony_bar++;                            /* HARMONIC CLOCK: the next bar's chord */
     }
     if (song.playing)
         song.tick++;

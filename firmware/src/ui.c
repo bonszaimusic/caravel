@@ -94,6 +94,8 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define PREF_START_BAR (0x02u << 24)
 #define PREF_FX_HOLD (0x04u << 24)               /* MENU > VOICES > FX HOLD ON: a factory preset load keeps the track's sends
                                                   * (ui.c load_kept); clear in every older setting = OFF, the preset's sends */
+#define PREF_KEY_LINK (0x08u << 24)              /* SCL + PLAY: all tracks follow KEY LINK's source track */
+#define PREF_KEY_SRC (0x30u << 24)               /* .. its source track, 0..3, in bits 4..5 */
 #define PREF_FULL_LOAD (0x80u << 16)             /* LIVE LOAD: PATTERN (default) / FULL; settings, not a project value */
 /* MENU > CONTROL > SELECT: 0 BPM, 1 PAGE (1.5.5, #188), 2 MODW, 3 VEL (1.5.6, #84: ui_input.c sel_play), bit 4 and bit 6 of
  * ui_prefs2 (0 in every older setting = BPM; 1.5.5's PAGE keeps its bit; firmware before 1.5.6 reads MODW as BPM and
@@ -109,6 +111,8 @@ static uint32_t sel_mode(void) {
 /* Settings that were never saved start on SELECT PAGE (Custom); saved settings keep their bits, so an older 0 stays BPM
  * and a BPM chosen in the menu survives a reboot (no format change). */
 static void ui_prefs_fresh(void) { ui_prefs2 = (uint8_t)(ui_prefs2 | (PREF_SEL_PAGE >> 16)); }
+static void ui_message(const char *s);
+
 /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
  * oscilloscope, as before), 1 TRACKS (the four tracks as rows: ui_graph.c draw_home_tracks), 2 LEVELS (1.5, #134: the
  * rows of TRACKS, and KNOB 1..4 the LEVEL of T1..T4 in place of the engine's four: home_param). A byte of its own no
@@ -248,6 +252,46 @@ static struct {
     volatile uint8_t mpc[NTRK];  /* MIDI Program Change per track, 0x80 | program, 0 none (midi_control.c mpc_io: here
                                   * for the same reason as ml.io; midi_pc_poll) */
 } ui;
+
+/* KEY LINK (SCL + PLAY): all four tracks follow the source track's ROOT / SCL / QNT; TRN, CHRD and VOIC stay each
+ * track's own. The source is the selected track when the link is turned on; selecting another track does not move it
+ * (turn the link off and on again to take the new track as the master). The poll runs in the main loop; a change of
+ * the master is copied before the next frame is drawn. */
+static int key_link_on(void) { return (ui_prefs3 & (PREF_KEY_LINK >> 24)) != 0u; }
+static void key_link_sync(void)
+{
+    uint32_t i, src;
+    const track_t *s;
+    if (!key_link_on())
+        return;
+    src = (ui_prefs3 >> 4) & 3u;
+    s = &trk[src];
+    for (i = 0; i < NTRK; i++) {
+        track_t *t = &trk[i];
+        if (i == src)
+            continue;
+        if (t->p[P_ROOT] != s->p[P_ROOT] || t->p[P_SCALE] != s->p[P_SCALE] || t->p[P_QUANT] != s->p[P_QUANT]) {
+            t->p[P_ROOT] = s->p[P_ROOT];
+            t->p[P_SCALE] = s->p[P_SCALE];
+            t->p[P_QUANT] = s->p[P_QUANT];
+            ui.force = 1;
+        }
+    }
+}
+/* SCL + PLAY, on the press: on (the selected track becomes the master) / off. Saved with the settings. */
+static void key_link_toggle(void)
+{
+    if (key_link_on()) {
+        ui_prefs3 = (uint8_t)(ui_prefs3 & ~(PREF_KEY_LINK >> 24));
+        ui_message("KEY LINK OFF");
+    } else {
+        ui_prefs3 = (uint8_t)((ui_prefs3 & ~(PREF_KEY_SRC >> 24)) | (PREF_KEY_LINK >> 24) | ((song.sel & 3u) << 4));
+        key_link_sync();
+        ui_message("KEY LINK ON");
+    }
+    settings_save();
+    ui.force = 1;
+}
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
        CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND, CF_INIT_PROJECT, CF_COMPAT_PROJECT };

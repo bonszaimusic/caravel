@@ -15,7 +15,7 @@
  * steps' automation and locks with them. RANDOM and COOK draw from libc.c rng(): no seed is kept, each press
  * differs. A sequence of ties reversed keeps its note first: N T T -> N T T at the mirrored place */
 enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_EUCLID, TL_LCLR, TL_LREV, TL_LFILL, TL_LRND,
-       TL_DOUBLE, TL_HALF, TL_STEPCLR, TL_N };
+       TL_DOUBLE, TL_HALF, TL_STEPCLR, TL_GENERATE, TL_N };
 #define TL_DUP TL_DOUBLE /* Bonszai tests and internal name: now the upstream D5 DOUBLE key. */
 
 /* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
@@ -618,6 +618,58 @@ static uint32_t tl_half(track_t *t, uint32_t len)
     return h;
 }
 
+/* ------------------------------------------------------- generate --- */
+/* G5 GENERATE: a scale-aware phrase with a short motif, strong steps on the root / chord tones, rests in between. The
+ * HARMONIC CLOCK (seq.c harmony_mask, GLO + G4) supplies the chord on the strong steps when it is on; otherwise the
+ * root and the scale do. Every press draws afresh; the undo copy is the one tl_do takes, so SAVE held puts it back. */
+static uint32_t tl_degree_note(const track_t *t, uint32_t deg)
+{
+    uint32_t mask = scale_mask(t), root = (uint32_t)t->p[P_ROOT] % 12u, count = (uint32_t)__builtin_popcount(mask), i, d;
+    if (!count)
+        count = 12u;
+    d = deg % count;
+    for (i = 0; i < 12u; i++)
+        if ((mask >> i) & 1u) {
+            if (!d)
+                return (uint32_t)clamp((int32_t)(60u + root + i + 12u * (deg / count)), 0, 127);
+            d--;
+        }
+    return 60u + root;
+}
+static uint32_t tl_chord_tone(const track_t *t)
+{
+    uint32_t mask = harmony_mask(t), root = (uint32_t)t->p[P_ROOT] % 12u, tones[12], n = 0, i;
+    for (i = 0; i < 12u; i++)
+        if ((mask >> i) & 1u)
+            tones[n++] = 60u + root + i;
+    return n ? tones[(uint32_t)(rng() % n)] : tl_degree_note(t, 0);
+}
+static void tl_generate_notes(track_t *t, uint32_t len)
+{
+    static const uint8_t MOTIF[8] = {0, 2, 4, 2, 0, 4, 2, 6};
+    uint32_t i, deg = 0;
+    for (i = 0; i < len; i++) {
+        step_t *s = &t->step[i];
+        step_clear(s);
+        if ((i & 3u) && (rng() % 100u) >= 55u)
+            continue;                                  /* weak steps rest now and then */
+        if ((i & 3u) == 0u && harmony_mask(t))
+            s->note[0] = (uint8_t)clamp((int32_t)tl_chord_tone(t), 0, 127);
+        else {
+            deg = MOTIF[(i + (rng() % 3u)) % 8u] % (uint32_t)__builtin_popcount(scale_mask(t) ? scale_mask(t) : 1u);
+            if ((i & 7u) == 6u)
+                deg += 7u;                             /* a lift before the turn */
+            s->note[0] = (uint8_t)tl_degree_note(t, deg);
+        }
+        s->n = 1;
+        s->time = ST_NOTE;
+        s->vel = (i & 3u) == 0u ? 110 : 96;
+        if ((i & 7u) == 0u)
+            s->flags |= SF_ACCENT;
+    }
+    t->seq_active = 1;
+}
+
 /* ------------------------------------------------------------ actions --- */
 /* the action of place p on track t (lane l): its message; 0 = nothing done (said why) */
 static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
@@ -683,6 +735,20 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
         fmt_int(b + str_len(b), (int32_t)(p == TL_DOUBLE ? tl_double(t, len) : tl_half(t, len)));
         str_cpy(b + str_len(b), " STEPS", sizeof b - str_len(b));
         return b;                                       /* (nothing emptied inside the new LEN: no unlock) */
+    case TL_GENERATE:
+        if (drum) {
+            for (i = 0; i < len; i++) {
+                step_clear(&t->step[i]);
+                if (i % 4u == 0u) grid_hit(t, i, DV_KICK, 1);
+                if (i % 8u == 4u) grid_hit(t, i, DV_SNARE, 1);
+                if (i % 2u == 0u) grid_hit(t, i, DV_HATC, 1);
+            }
+            msg = "GENERATED BEAT";
+        } else {
+            tl_generate_notes(t, len);
+            msg = "GENERATED";
+        }
+        break;
     case TL_BEAT:                                       /* four on the floor, the backbeat, 8th hats */
         for (i = 0; i < len; i++) {
             step_clear(&t->step[i]);
