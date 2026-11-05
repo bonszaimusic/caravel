@@ -1034,6 +1034,16 @@ static void edit_param(uint32_t slot, int32_t steps)
         ev_knob(slot, steps);
         return;
     }
+    if (pg->graph == GR_HARMONY) {                    /* K1..K4: the four chord roots (note names, 0..11) */
+        if (slot < 4u) {
+            int32_t r = (int32_t)hroot_get(slot) + steps;
+            if (r < 0) r += 12;
+            if (r > 11) r -= 12;
+            hroot_set(slot, (uint8_t)r);
+            ui.force = 1;
+        }
+        return;
+    }
     if (pg->graph == GR_SONG) {                       /* KNOB 1 SECTION, 2 TRACK, 3 PAT (A..D, -), 4 REPS */
         chain_row_t *r;
         if (slot == 0u) {
@@ -1727,7 +1737,8 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on
+    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on ||
+                          cur_page()->graph == GR_HARMONY
 #if FELUCCA_HOME_PERF
         || hp_oct_button(B_OCTDN) || hp_oct_button(B_OCTUP)
 #endif
@@ -1741,6 +1752,23 @@ static void ui_input(void)
         else if(g==GR_MACROMAP&&(oct&1u)){hp_open_graph(GR_MACRO);oct=0;}
     }
 #endif
+    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && oct && cur_page()->graph == GR_HARMONY) {
+        /* OCT+: the bus on/off; OCT-: the four chords back to C (the page is outside the HOME_PERF block too) */
+        if (oct & 2u) {
+            harmony_on = (uint8_t)!harmony_on;
+            chain_config.rsv[2] = (uint8_t)((chain_config.rsv[2] & ~1u) | harmony_on);
+            if (harmony_on)
+                harmony_bar = 0;
+            ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
+        } else if (oct & 1u) {
+            uint32_t i;
+            for (i = 0; i < 4u; i++)
+                hroot_set(i, 0);
+            ui_message("HARMONY RESET");
+        }
+        oct = 0;
+        ui.force = 1;
+    }
                       /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();

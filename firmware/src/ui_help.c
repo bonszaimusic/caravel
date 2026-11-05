@@ -37,6 +37,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"CHORUS", "[K1-4]ALL TRACKS[FX]INSERT"},
     {"SCL", "[K2]SCALE[K3]QUANTIZE[SCL]CHORDS"},
     {"CHORD", "[K1]CHORD[K3]LATCH[SCL]SCL"},
+    {"HARMONY", "[K1-4]CHORD[OCT+]ON / OFF"},
     {"EDIT 1", H_EDIT},
     {"EDIT 2", H_EDIT},
     {"FILTER", "[K1]LP BP HP[K2]CUTOFF[EDIT]VOICE"},
@@ -75,8 +76,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 #define H_GRID "[KEYS]STEPS[K2]LANE[SEQ]RATCH"
 /* a layer's (LAYER_*): what its footer row (LAYERS[].foot) does not say */
 static const char *const HELP_LAYER[LAYER_N] = {
-    "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[KEYS]SOLO MUTE FILL TAP[K1-4]LEVELS", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",
-    "[K1]ENGINE[K2]SOUND[K3]FAV", "[K1]LENGTH[K3]SWING[K4]GATE", "[K1]CLICK[K2]COUNT-IN[K3]LEVEL",
+    "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[G4]HARM[G5]LINK[PLAY]RESTART", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",
+    "[K1]ENGINE[K2]SOUND[K3]FAV", "[G5]GEN[KEYS]TOOLS[OCT-]UNDO", "[K1]CLICK[K2]COUNT-IN[K3]LEVEL",
 };
 
 static const char H_EUCLID[] = "[K1]HITS[K2]STEPS[K3]ROTATE";   /* SEQ TOOLS' EUCLID open (1.5.5) */

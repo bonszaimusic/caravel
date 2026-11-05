@@ -29,12 +29,18 @@ yet tried on an FM-1.
 
 ### Generative layer (development build)
 
-- **GLO + G4** — **HARMONIC CLOCK** on/off. A four-chord loop, one chord per bar, from the selected track's
-  `ROOT`/`SCL` (major: I–V–vi–IV; minor: i–VI–III–VII). It is volatile (not saved) and feeds the new generated
-  patterns, not the older ARP/sequencer sources.
+- **SCL > HARMONY** — the four-bar **HARMONIC BUS**. `K1`..`K4` set the four bar roots (note names); `OCT+` turns
+  the bus on/off, `OCT-` puts all four roots back to C. The roots and the on/off are saved with the project (the
+  spare chain bytes, no format change). The chord is a diatonic triad in **T1's** `ROOT`/`SCL`; use `SCL + OCT+`
+  or Key-Link to bring the tracks into that key.
+- **Where it acts:** strong steps (every fourth step) of the sequencer, the ARP, and `SEQ TOOLS > G5` GENERATE take a
+  chord tone. Live keys and the DRUM lanes stay the player's / the kit's. The bus is a four-bar loop; it is not a
+  per-song-section progression.
+- **GLO + G4** — **HARMONIC BUS** on/off from the GLO map (the same switch as the page's `OCT+`).
 - **GLO + G5** — **KEY LINK** on/off. All four tracks follow the source track's `ROOT`, `SCL` and `QNT`; the source is
   the selected track when the link goes on. `TRN`, `CHRD` and `VOIC` stay each track's own. Selecting another track does
   not move the source; turn the link off and on again to make the new track the master. Saved with the settings.
+  The GLO footer names `G4 HARM` and `G5 LINK`, so the map itself shows where they are.
 - **SEQ TOOLS: G5** — **GENERATE**: a scale-aware phrase from a short motif, rests between the strong steps, and chord
   tones on the strong steps while the HARMONIC CLOCK is on. One undo; `SAVE` held puts the pattern back.
 - **ARP MODE TURING** — a 16-bit feedback register walks the held-note list, with an occasional random bit flip, so

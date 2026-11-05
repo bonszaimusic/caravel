@@ -1176,6 +1176,8 @@ static void project_init_runtime(void)
     motion_fx_recording = 0;
     motion_base_valid = 0;
     chain_defaults(&chain_config);
+    harmony_on = 0;
+    harmony_bar = 0;
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);
@@ -1292,6 +1294,8 @@ static int project_restore_runtime(const project_t *input)
     seq_stop();
     transport_req = 0;
     chain_config = p->chain;
+    harmony_on = (uint8_t)(chain_config.rsv[2] & 1u);   /* the HARMONIC BUS on/off travels with the project */
+    harmony_bar = 0;
     motion = p->motion;
     motion_fx_compact_off(&motion, (1u << NTRK) - 1u);
     memset(motion_active, 0, sizeof motion_active);

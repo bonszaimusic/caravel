@@ -1096,6 +1096,20 @@ static void draw_columns(void)
         }
         return;
     }
+    if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: the four bar chords (roots; the quality is T1's scale) */
+        for (c = 0; c < 4u; c++) {
+            uint32_t r = hroot_get(c), mask = harmony_mask_bar(c);
+            const char *suf = "";
+            if ((mask >> ((r + 3u) % 12u)) & 1u) suf = "m";
+            else if ((mask >> ((r + 4u) % 12u)) & 1u) suf = "";
+            else if ((mask >> ((r + 6u) % 12u)) & 1u) suf = "dim";
+            str_cpy(val, N_NOTE[r % 12u], sizeof val);
+            str_cpy(val + str_len(val), suf, sizeof val - str_len(val));
+            draw_column(c, c == 0u ? "CH1" : c == 1u ? "CH2" : c == 2u ? "CH3" : "CH4", val, "",
+                        harmony_on ? VAL(c) : T_DIM, -1, ICON_X_SONG);
+        }
+        return;
+    }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
         int used = row < chain_config.count;

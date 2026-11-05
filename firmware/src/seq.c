@@ -51,31 +51,66 @@ static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen
 static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 INT restart, 4 bar resync, 5 pulse resync, 6 cancel */
 static volatile uint8_t bar_reset_req;    /* GLO + OCT+: every track to its step 0 at the next bar (seq_resync) */
-/* HARMONIC CLOCK (GLO + G4): a four-chord loop, one chord per bar, derived from the selected track's ROOT / SCALE.
- * The new pattern generator (SEQ TOOLS' G5) uses chord tones on the strong steps; the older ARP / sequencer sources
- * stay scale-based (they are not rewritten here). Volatile: a performance helper, not a saved project value. */
+static uint32_t scale_mask(const track_t *t);
+/* HARMONIC BUS: four chord roots, one per bar, stored in chain_config's spare bytes (the project's; no format change).
+ * The on/off (rsv[2] bit 0) travels with the project too. The chord is a diatonic triad in T1's scale; all note sources
+ * that use the bus (sequencer strong steps, ARP strong steps, the G5 generator) take chord tones there. */
 static uint8_t harmony_on;
 static volatile uint8_t harmony_bar;
+static uint8_t hroot_get(uint32_t bar)
+{
+    uint32_t bit = (bar & 3u) * 4u;
+    return (uint8_t)((chain_config.rsv[bit >> 3] >> (bit & 7u)) & 0x0Fu);
+}
+static void hroot_set(uint32_t bar, uint8_t root)
+{
+    uint32_t bit = (bar & 3u) * 4u, byte = bit >> 3, sh = bit & 7u;
+    chain_config.rsv[byte] = (uint8_t)((chain_config.rsv[byte] & ~(0x0Fu << sh)) | ((root & 0x0Fu) << sh));
+}
+static uint16_t harmony_mask_bar(uint32_t bar)
+{
+    const track_t *k = &trk[0];
+    uint32_t mask = scale_mask(k), notes[12], n = 0, i, at = 0, root;
+    uint16_t out = 0;
+    for (i = 0; i < 12u; i++)
+        if ((mask >> i) & 1u)
+            notes[n++] = i;
+    if (n < 3u)
+        return 0;
+    root = hroot_get(bar);
+    for (i = 0; i < n; i++)
+        if (notes[i] == root) {
+            at = i;
+            break;
+        }
+    if (i == n) {                                  /* outside T1's scale: the scale note below it */
+        at = n - 1u;
+        for (i = 0; i < n; i++)
+            if (notes[i] < root)
+                at = i;
+    }
+    for (i = 0; i < 3u; i++)
+        out |= (uint16_t)(1u << notes[(at + 2u * i) % n]);
+    return out;
+}
 static uint16_t harmony_mask(const track_t *t)
 {
-    static const uint8_t MAJ[4] = {0, 7, 9, 5};       /* I V vi IV (root, in semitones) */
-    static const uint8_t MIN[4] = {0, 8, 3, 10};      /* i VI III VII */
-    static const uint16_t MAJ3[4] = {0x091u, 0x091u, 0x089u, 0x091u};   /* 0 4 7; 0 3 7 (minor) */
-    uint32_t scale, bar;
-    uint8_t root;
-    if (!harmony_on)
-        return 0;
-    scale = (uint32_t)t->p[P_SCALE];
-    root = (uint8_t)((t->p[P_ROOT] + (scale == 1u || scale == 4u || scale == 5u || scale == 9u || scale == 13u ||
-                                     scale == 0u ? MAJ[harmony_bar & 3u] : MIN[harmony_bar & 3u])) % 12);
-    bar = harmony_bar & 3u;
-    if (scale == 1u || scale == 4u || scale == 5u || scale == 9u || scale == 13u || scale == 0u)
-        return (uint16_t)(MAJ3[bar] << root) | (uint16_t)(MAJ3[bar] >> (12u - root));
-    /* minor: i, VI, III and VII; the VI / III / VII triads are major, the tonic minor */
-    {
-        static const uint16_t TRI[4] = {0x089u, 0x091u, 0x091u, 0x091u};
-        return (uint16_t)(TRI[bar] << root) | (uint16_t)(TRI[bar] >> (12u - root));
+    (void)t;
+    return harmony_on ? harmony_mask_bar(harmony_bar) : 0;
+}
+static uint32_t harmony_snap(const track_t *t, uint32_t n)
+{
+    uint16_t mask = harmony_mask(t);
+    uint32_t d;
+    if (!mask)
+        return n;
+    for (d = 0; d <= 6u; d++) {
+        if ((mask >> ((n + d) % 12u)) & 1u)
+            return (uint32_t)clamp((int32_t)(n + d), 0, 127);
+        if (d && ((mask >> ((n - d + 12u) % 12u)) & 1u))
+            return (uint32_t)clamp((int32_t)n - (int32_t)d, 0, 127);
     }
+    return n;
 }
 static void midi_resync_cancel(void);
 static volatile uint8_t step_record_mask; /* transient per-track STEP REC; never live-write at the playhead */
@@ -624,7 +659,7 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
             arp_chord(t, list, cnt);
             return;
         }
-        t->arp_note = (uint8_t)list[j];
+        t->arp_note = (uint8_t)(harmony_on && (t->arp_idx & 3u) == 0u ? harmony_snap(t, list[j]) : list[j]);
         if (rec_on(t))
             rec_note(t, t->arp_note, 100);           /* recording: what the arp plays */
         trk_note_on(t, t->arp_note, 100);
@@ -1262,6 +1297,8 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
             if (j < m)
                 continue;
         }
+        if (harmony_on && (idx & 3u) == 0u)
+            x = harmony_snap(t, x);              /* HARMONIC BUS: a strong step takes a chord tone */
         nn[m] = (uint8_t)x;
         vv[m] = (uint8_t)vel;
         sk |= ((skip >> i) & 1u) << m;

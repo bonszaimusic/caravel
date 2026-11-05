@@ -6607,6 +6607,43 @@ static int test_key_link(void)
     return bad;
 }
 
+/* HARMONY page (SCL family): K1..K4 set the four bar roots; OCT+ switches the bus. The chord is a diatonic triad
+ * of T1's scale, and the bus snaps a note on a strong step to it. */
+static int test_harmony_page(void)
+{
+    int bad = 0, ok;
+    uint16_t mask;
+    ui_power_on();
+    song.sel = 0;
+    trk[0].p[P_ROOT] = 0;
+    trk[0].p[P_SCALE] = 2;                             /* C minor */
+    for (uint32_t i = 0; i < 4u; i++) hroot_set(i, 0);
+    go_page(GR_HARMONY);
+    frame();
+    turn(EN_K1, 1);
+    turn(EN_K2, 2);
+    ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
+    press(B_OCTUP);
+    ok &= harmony_on != 0u && msg_is("HARMONY ON");
+    hroot_set(0, 0);
+    harmony_bar = 0;
+    mask = harmony_mask_bar(0);
+    ok &= mask != 0u && ((mask >> 0) & 1u) && ((mask >> 3) & 1u) && ((mask >> 7) & 1u);
+    ok &= harmony_snap(&trk[0], 1) == 0u || harmony_snap(&trk[0], 1) == 3u;
+    {
+        step_t s = {.note = {1}, .n = 1, .time = ST_NOTE, .vel = 100};
+        trk[0].seq_n = 0;
+        trk[0].seq_hold = 0;
+        seq_step(&trk[0], &s, 0, div_samples(2), SEQ_ROLLED);
+        ok &= trk[0].seq_n != 0u && ((mask >> (trk[0].seq_notes[0] % 12u)) & 1u) != 0u;
+    }
+    bad += check("HARMONY page: four chord roots, OCT+ on, C minor triad and a snapped strong-step note", ok);
+    press(B_OCTUP);
+    bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
+    ui_power_on();
+    return bad;
+}
+
 /* SEQ TOOLS' G5 GENERATE: a scale-aware phrase (notes in the track's scale, at least some of the steps), and with
  * the HARMONIC CLOCK (GLO + G4) its strong steps take chord tones. */
 static int test_generate(void)
@@ -10280,6 +10317,7 @@ int main(void)
     bad += test_key_link();
     bad += test_arp_turing();
     bad += test_generate();
+    bad += test_harmony_page();
     bad += test_screen_off();
     bad += test_screen_wake();
     bad += test_idle_leds();
