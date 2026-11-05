@@ -97,6 +97,8 @@ a { color: inherit; }
 .start button { font-size: 16px; padding: 12px 28px; background: var(--amb); color: var(--onamb); border: 1px solid var(--amb); }
 .start button:disabled { cursor: progress; background: var(--surf); color: var(--dim); border-color: var(--ctl); }
 .start p { margin: 0; max-width: 32em; text-align: center; color: #fff; }
+#action { font: inherit; font-size: 12px; padding: 3px 8px; color: var(--label); background: var(--part); border: 1px solid var(--edge); border-radius: 6px; cursor: pointer; }
+#action:hover { border-color: var(--accent); }
 .keys { margin: 0; color: var(--dim); display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .keys span { white-space: nowrap; }
 .keys select { font: inherit; font-size: 12px; max-width: 100%; color: var(--text); background: var(--surf); border: 1px solid var(--ctl); border-radius: 3px; }
@@ -139,6 +141,7 @@ footer small { display: block; font-size: 11px; }
   <span><kbd>↑</kbd> <kbd>↓</kbd> SELECT</span>
   <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
   <span><kbd>Shift</kbd>-click holds a button</span>
+  <span><button id="action" type="button" title="Two HOME taps: ACTION banks on/off">ACTION (HOME ×2)</button></span>
   <span id="midiknobs" hidden><label><input type="checkbox" id="knobson"> MIDI CC 20–27 turn the panel's knobs</label>
   <select id="knobmode" aria-label="How the controller sends CC 20–26" hidden>
     <option value="abs">absolute</option>
@@ -216,6 +219,14 @@ angle.MASTER = -135 + 270 * masterValue / 1023;
 const knobs = [], buttons = [], keys = [];
 const btnBy = new Map(), keyBy = new Map();                   // pointer / key code -> label bit or key
 const send = (m) => { if (node) node.port.postMessage(m); };
+/* The panel's HOME twice, as a single control: the two taps are spaced so the firmware's 330 ms window sees them
+ * even when a browser double-click is too slow. */
+function actionTwice() {
+  if (!node) return;
+  const bit = 1 << B.HOME;
+  [0, 90, 180, 270].forEach((ms, i) => setTimeout(() => send({ type: "buttons", mask: i % 2 ? 0 : bit }), ms));
+}
+document.getElementById("action").addEventListener("click", actionTwice);
 
 function build(name) {
   const L = LAYOUTS[name];
