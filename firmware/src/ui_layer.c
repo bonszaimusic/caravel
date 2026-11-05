@@ -320,7 +320,7 @@ static void layer_show(void)
  * opened NAME: EDIT on USER / PROJECT renames; never over a dialog or the menu) */
 static void layer_tap(uint32_t l)
 {
-    uint8_t m = ui.msg_t;
+    uint8_t m = ui.msg_t, page_before = ui.page;
     int acted;
     lys.nv.home = ui.home;                              /* (#83: the page this tap leaves, for a double tap) */
     lys.nv.page = ui.page;
@@ -343,9 +343,15 @@ static void layer_tap(uint32_t l)
         ui.msg_t = 90;                                  /* ~1.5 s */
         lys.dt_hint = 1;
     }
-    if (!acted && !name_on() && !ui.confirm && !ui.menu) {   /* a page opened: a second tap soon locks the layer */
+    if (!acted && !name_on() && !ui.confirm && !ui.menu &&
+        !(l == LAYER_SCL && page_before < NPAGES && PAGES[page_before].fam == FAM_SCL &&
+          page_before != ui.page)) {
+        /* A page-changing SCL tap must stay a page step, or two quick SCL taps jump back and lock (the
+         * "SCL hangs"). Other families keep #83's second-tap lock. */
         lys.dt_l = (uint8_t)l;
         lys.dt_ms = fm1_ms;
+    } else {
+        lys.dt_l = 0;
     }
 }
 

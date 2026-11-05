@@ -1845,6 +1845,10 @@ static void ui_input(void)
             if (panel_enc(EN_K1 + k) != 0)
                 combo = 1;                              /* (with the button let go this frame: no tap) */
     }
+    /* A page button pressed alone is a page tap. A stale/leftover knob or key edge must not turn that short
+     * press into a layer combo; holding the button and then turning a knob or pressing a key still opens it. */
+    if (ui.ly && (pressed & ly_bit(ui.ly)) && !fm1_in.notes && !lkeys && !(pressed & ~ly_bit(ui.ly)))
+        combo = 0;
     lytap = layer_gesture(now, combo);
     layer_show();
     layer_keys(lkeys);

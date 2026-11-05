@@ -6696,6 +6696,34 @@ static int test_fun11_readonly_probe(void)
     return bad;
 }
 
+/* SCL's pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL. A short tap after a knob turn must advance the page,
+ * and the page that lands must still edit its own values. */
+static int test_scl_page_tap(void)
+{
+    static const uint8_t order[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
+    int bad, ok = 1;
+    ui_power_on();
+    go_page(GR_SCALE);
+    for (uint32_t i = 0; i < 4u; i++) {
+        uint32_t g = cur_page()->graph;
+        ok &= g == order[i];
+        if (g == GR_SCALE) {
+            int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
+        } else if (g == GR_CHORD) {
+            int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
+        } else if (g == GR_LINK) {
+            uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
+        } else if (g == GR_HARMONY) {
+            uint8_t b = hroot_get(0); turn(EN_K1, 1); ok &= hroot_get(0) != b;
+        }
+        press(B_SCL);
+    }
+    ok &= cur_page()->graph == GR_SCALE;
+    bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
+    ui_power_on();
+    return bad;
+}
+
 /* HARMONY's bar counter is the transport's musical bar clock (perf_bars_q16), not the audio beat: it moves while
  * the transport plays and holds when it stops. (External MIDI clock feeds the same perf_bars_q16 in seq.c.) */
 static int test_harmony_clock(void)
@@ -7023,7 +7051,9 @@ static int test_layer_knob_race(void)
     uint32_t l, mode, k, pg, fails = 0, runs = 0;
     int bad = 0, ok;
     for (l = 0; l < 4u; l++)
-        for (mode = 0; mode < 3u; mode++)
+        for (mode = 0; mode < 3u; mode++) {
+            if (LL[l] == LAYER_SCL && mode == 2u)
+                continue;                              /* SCL double taps page (SCL hang fix), no SCL lock */
             for (k = 0; k < 4u; k++)
                 for (pg = 0; pg <= NPAGES; pg++) {
                     if (pg < NPAGES && !page_visible(pg))
@@ -7053,6 +7083,7 @@ static int test_layer_knob_race(void)
                                    pg < NPAGES ? PAGES[pg].title : "HOME");
                     }
                 }
+        }
     bad += check("#102 FX GLO SCL EDIT (held, combo, locked) x KNOB 1..4, detents counted mid-pass: the layer's only",
                  !fails && runs > 400u);
     /* HOME, REC armed and playing: FX's macros and GLO's T2..T4 levels record nothing into T1's automation */
@@ -10423,6 +10454,7 @@ int main(void)
     bad += test_harmony_page();
     bad += test_fun11_project();
     bad += test_harmony_clock();
+    bad += test_scl_page_tap();
     bad += test_fun11_readonly_probe();
     bad += test_screen_off();
     bad += test_screen_wake();
