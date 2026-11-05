@@ -13,7 +13,7 @@
  * engine that maps the keys itself) ignores CHRD. Every source keeps the notes it started (kb_chord for a
  * key, mchord for a MIDI note) and its release ends exactly those, so CHRD / VOIC changed while it is held
  * leave nothing hanging. A note several sources hold sounds once and ends with the last of them. */
-enum { CH_OFF, CH_DIA3, CH_DIA7, CH_MAJ, CH_MIN, CH_DOM7, CH_MAJ7, CH_MIN7, CH_SUS4, CH_POW };
+enum { CH_OFF, CH_DIA3, CH_DIA7, CH_MAJ, CH_MIN, CH_DOM7, CH_MAJ7, CH_MIN7, CH_SUS4, CH_POW, CH_BUS };
 enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS };
 #define CHORD_MAX 4u
 #define MCHORD_N 24u                     /* MIDI notes held as chords at once (more: their root alone) */
@@ -41,6 +41,23 @@ static int chord_kit(const track_t *t)
 static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int32_t *iv)
 {
     uint32_t n = 0, i;
+    if (mode == CH_BUS) {
+        uint16_t bm = harmony_mask(t);
+        if (bm) {                                     /* the HARMONIC BUS chord, at the octave nearest the key */
+            int32_t br = (int32_t)hroot_get(harmony_bar);
+            while (br + 12 <= *root + 6)
+                br += 12;
+            while (br > *root + 6)
+                br -= 12;
+            *root = br;
+            iv[n++] = 0;
+            for (i = 1; i < 12u && n < CHORD_MAX; i++)
+                if ((bm >> ((hroot_get(harmony_bar) + i) % 12u)) & 1u)
+                    iv[n++] = (int32_t)i;
+            return n;
+        }
+        mode = CH_DIA3;                               /* bus off: the scale's triad, as DIA3 */
+    }
     if (mode >= CH_MAJ) {
         for (i = 0; i < CHORD_MAX && CHORD_SHAPE[mode - CH_MAJ][i] >= 0; i++)
             iv[n++] = CHORD_SHAPE[mode - CH_MAJ][i];
@@ -77,7 +94,7 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     uint16_t mask = 0;
     *rp = r;
     *maskp = 0;
-    if (!mode || mode > CH_POW || chord_kit(t)) {
+    if (!mode || mode > CH_BUS || chord_kit(t)) {
         out[0] = (uint8_t)root;
         return 1;
     }

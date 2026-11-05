@@ -6632,12 +6632,21 @@ static int test_harmony_page(void)
     ok &= harmony_snap(&trk[0], 1) == 0u || harmony_snap(&trk[0], 1) == 3u;
     {
         step_t s = {.note = {1}, .n = 1, .time = ST_NOTE, .vel = 100};
+        uint8_t out[4];
+        int32_t cr;
+        uint16_t cm;
+        uint32_t cn;
         trk[0].seq_n = 0;
         trk[0].seq_hold = 0;
         seq_step(&trk[0], &s, 0, div_samples(2), SEQ_ROLLED);
         ok &= trk[0].seq_n != 0u && ((mask >> (trk[0].seq_notes[0] % 12u)) & 1u) != 0u;
+        trk[0].p[P_CHRD] = CH_BUS;
+        trk[0].p[P_VOICE] = V_POLY;
+        cn = chord_make(&trk[0], 61, out, &cr, &cm);
+        ok &= cn == 3u && cr % 12 == 0 && out[0] % 12 == 0 && out[1] % 12 == 3 && out[2] % 12 == 7;
+        trk[0].p[P_CHRD] = CH_OFF;
     }
-    bad += check("HARMONY page: four chord roots, OCT+ on, C minor triad and a snapped strong-step note", ok);
+    bad += check("HARMONY page: four chord roots, OCT+ on, CHRD BUS plays the bus chord, strong-step seq snap", ok);
     press(B_OCTUP);
     bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
     ui_power_on();

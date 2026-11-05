@@ -34,8 +34,10 @@ yet tried on an FM-1.
   spare chain bytes, no format change). The chord is a diatonic triad in **T1's** `ROOT`/`SCL`; use `SCL + OCT+`
   or Key-Link to bring the tracks into that key.
 - **Where it acts:** strong steps (every fourth step) of the sequencer, the ARP, and `SEQ TOOLS > G5` GENERATE take a
-  chord tone. Live keys and the DRUM lanes stay the player's / the kit's. The bus is a four-bar loop; it is not a
-  per-song-section progression.
+  chord tone. Live keys and the DRUM lanes stay the player's / the kit's — unless you set `SCL > CHORD > K1 CHRD` to
+  **BUS**: then a key plays the current bus chord, at the octave nearest the key (`CHRD BUS` falls back to `DIA3`
+  while the bus is off). A held chord does not morph when the bar changes; retrigger it, or let the ARP play it. The bus
+  is a four-bar loop; it is not a per-song-section progression.
 - **GLO + G4** — **HARMONIC BUS** on/off from the GLO map (the same switch as the page's `OCT+`).
 - **GLO + G5** — **KEY LINK** on/off. All four tracks follow the source track's `ROOT`, `SCL` and `QNT`; the source is
   the selected track when the link goes on. `TRN`, `CHRD` and `VOIC` stay each track's own. Selecting another track does
