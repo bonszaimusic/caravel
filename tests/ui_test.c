@@ -179,6 +179,7 @@ static void ui_power_on(void)
     memset(link_retrig, 0, sizeof link_retrig);
     memset(harmony_root, 0, sizeof harmony_root);
     memset(harmony_dur, 0, sizeof harmony_dur);
+    memset(harmony_follow, 1, sizeof harmony_follow);
     harmony_on = 0;
     harmony_edit_dur = 0;
     harmony_bar = 0;
@@ -6586,6 +6587,10 @@ static int test_key_link(void)
     ok &= trk[1].p[P_ROOT] == 2 && trk[1].p[P_SCALE] == 1 && trk[1].p[P_QUANT] == 4;
     turn(EN_K2, 2);                                /* RETRIG LINK */
     ok &= link_retrig[1] == 2u;
+    turn(EN_K4, 1);                                /* HARMONY FOLLOW off for T2 */
+    ok &= harmony_follow[1] == 0u && harmony_mask(&trk[1]) == 0u;
+    turn(EN_K4, 1);
+    ok &= harmony_follow[1] == 1u;
     link_src[2] = 1u;                              /* T3 follows T1 too */
     link_src[0] = 2u;                              /* T1 would follow T3: a chain, not followed */
     frame();
@@ -6700,6 +6705,11 @@ static int test_fun11_project(void)
     ok &= harmony_on != 0u;
     for (uint32_t i = 0; i < 4u; i++)
         ok &= hroot_get(i) == (i * 2u + 1u) && hdur_get(i) == (i & 3u);
+    harmony_follow[1] = 0;
+    project_capture(&dec);
+    ok &= proj_pack(&st, &dec);
+    harmony_follow[1] = 1;
+    ok &= proj_import(&dec, st.raw, sizeof st) && harmony_follow[1] == 0u;
     ok &= link_src[1] == 1u && link_retrig[1] == 3u;
     bad += check("FUN11 project: roots, durations, bus on/off and LINK/RETRIG round-trip; magic FUNV", ok);
     ui_power_on();

@@ -1104,17 +1104,16 @@ static void draw_columns(void)
         draw_column(1, "RETRIG", RT[rt & 3u], "", VAL(1u), -1, ICON_AUTO);
         if (!src || src > NTRK) {
             draw_column(2, "KEY", "--", "", T_DIM, -1, ICON_SCALE);
-            draw_column(3, "STATUS", "OFF", "", T_DIM, -1, ICON_X_SONG);
         } else {
             const track_t *s = &trk[src - 1u];
             char key[12];
             str_cpy(key, N_NOTE[(uint32_t)s->p[P_ROOT] % 12u], sizeof key);
             str_cpy(key + str_len(key), " ", 2);
             str_cpy(key + str_len(key), N_SCALE[(uint32_t)s->p[P_SCALE] % (sizeof N_SCALE / sizeof N_SCALE[0])], sizeof key - str_len(key));
-            draw_column(2, "KEY", key, "", VAL(2u), -1, ICON_SCALE);
-            draw_column(3, "STATUS", link_src[src - 1u] ? "BLOCKED" : "LINKED", "",
-                        link_src[src - 1u] ? T_DIM : VAL(3u), -1, ICON_X_SONG);
+            draw_column(2, "KEY", key, "", link_src[src - 1u] ? T_DIM : VAL(2u), -1, ICON_SCALE);
         }
+        draw_column(3, "HARM", harmony_follow[sel] ? "ON" : "OFF", "",
+                    harmony_follow[sel] ? VAL(3u) : T_DIM, -1, ICON_X_SONG);
         return;
     }
     if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: BAR roots, and their DUR row */

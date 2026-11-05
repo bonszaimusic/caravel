@@ -1051,6 +1051,10 @@ static void edit_param(uint32_t slot, int32_t steps)
             if (r < 0) r += 4;
             link_retrig[song.sel] = (uint8_t)r;
             ui.force = 1;
+        } else if (slot == 3u) {
+            harmony_follow[song.sel] = (uint8_t)!harmony_follow[song.sel];
+            ui_message(harmony_follow[song.sel] ? "HARMONY: TRACK ON" : "HARMONY: TRACK OFF");
+            ui.force = 1;
         }
         return;
     }

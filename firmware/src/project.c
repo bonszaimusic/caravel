@@ -658,6 +658,13 @@ static void fun11_encode(chain_config_t *c)
     for (i = 0; i < NTRK; i++)
         c->row[0].slot[i] = (uint8_t)((c->row[0].slot[i] & 7u) | (((m >> (5u * i)) & 31u) << 3));
     c->row[0].repeat = (uint8_t)((c->row[0].repeat - 1u) | ((m >> 20) & 15u) << 4);
+    /* four per-track HARMONY FOLLOW bits: high five bits of row 1's first slot */
+    {
+        uint32_t f = 0;
+        for (i = 0; i < NTRK; i++)
+            f |= (harmony_follow[i] ? 1u : 0u) << i;
+        c->row[1].slot[0] = (uint8_t)((c->row[1].slot[0] & 7u) | (f << 3));
+    }
 }
 static int fun11_decode(chain_config_t *c)
 {
@@ -671,6 +678,12 @@ static int fun11_decode(chain_config_t *c)
     }
     m |= ((r0 >> 4) & 15u) << 20;
     c->row[0].repeat = (uint8_t)((r0 & 15u) + 1u);
+    {
+        uint32_t f = (c->row[1].slot[0] >> 3) & 15u;
+        c->row[1].slot[0] &= 7u;
+        for (i = 0; i < NTRK; i++)
+            harmony_follow[i] = (uint8_t)((f >> i) & 1u);
+    }
     harmony_root[0] = c->rsv[0] & 15u;
     harmony_root[1] = c->rsv[0] >> 4;
     harmony_root[2] = c->rsv[1] & 15u;
@@ -707,6 +720,7 @@ static void fun10_harmony(chain_config_t *c)
         harmony_dur[i] = 0;
         link_src[i] = 0;
         link_retrig[i] = 0;
+        harmony_follow[i] = 1;
     }
     harmony_on = (uint8_t)(c->rsv[2] & 1u);
 }
@@ -1286,6 +1300,7 @@ static void project_init_runtime(void)
     memset(harmony_dur, 0, sizeof harmony_dur);
     memset(link_src, 0, sizeof link_src);
     memset(link_retrig, 0, sizeof link_retrig);
+    memset(harmony_follow, 1, sizeof harmony_follow);
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);

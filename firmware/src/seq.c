@@ -52,6 +52,7 @@ static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 INT restart, 4 bar resync, 5 pulse resync, 6 cancel */
 static volatile uint8_t bar_reset_req;    /* GLO + OCT+: every track to its step 0 at the next bar (seq_resync) */
 static uint32_t scale_mask(const track_t *t);
+static uint32_t trk_index(const track_t *t);
 static void link_retrigger(uint32_t i);
 /* HARMONIC BUS (FUN11): four chords, each held for 1/2/4/8 bars; the on/off and the per-track LINK source and
  * RETRIG live in the project's FUN11 block (project.c). The chord is a diatonic triad in T1's scale; the note sources
@@ -63,6 +64,7 @@ static uint8_t harmony_root[4], harmony_dur[4];
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
 static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
+static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes) */
 static uint8_t hroot_get(uint32_t i) { return harmony_root[i & 3u] % 12u; }
 static void hroot_set(uint32_t i, uint8_t r) { harmony_root[i & 3u] = (uint8_t)(r % 12u); }
 static uint8_t hdur_get(uint32_t i) { return harmony_dur[i & 3u] & 3u; }
@@ -109,8 +111,10 @@ static uint16_t harmony_mask_root(uint32_t idx)
 static uint16_t harmony_mask_bar(uint32_t bar) { return harmony_mask_root(harmony_chord_at(bar)); }
 static uint16_t harmony_mask(const track_t *t)
 {
-    (void)t;
-    return harmony_on ? harmony_mask_bar(harmony_bar) : 0;
+    uint32_t k = trk_index(t);
+    if (!harmony_on || k >= NTRK || !harmony_follow[k])
+        return 0;
+    return harmony_mask_bar(harmony_bar);
 }
 static uint32_t harmony_snap(const track_t *t, uint32_t n)
 {
