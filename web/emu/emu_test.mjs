@@ -71,6 +71,14 @@ const home = a.screen();
 check(`boots: the splash, then HOME (${colours(home)} colours), the HOME LED lit`,
       splash > 1 && colours(home) > 4 && (a.ex.web_lit_buttons() >> B.HOME & 1) === 1);
 check("silent at rest", a.peak === 0);
+{ // HOME twice: the ACTION banks (compiled into the emulator since the fix in web/emu/build.sh)
+  const before = typeof a.ex.web_action_state === "function" ? a.ex.web_action_state() & 1 : -1;
+  a.tap(B.HOME); a.tap(B.HOME);
+  const on = typeof a.ex.web_action_state === "function" ? a.ex.web_action_state() & 1 : -1;
+  a.tap(B.HOME); a.tap(B.HOME);
+  const off = typeof a.ex.web_action_state === "function" ? a.ex.web_action_state() & 1 : -1;
+  check(`HOME twice: ACTION ${before ? "on" : "off"} -> on -> off (web_action_state)`, before === 0 && on === 1 && off === 0);
+}
 a.ex.web_keys(1 << 7);                                        // C4
 a.render(300);
 const keyLit = (a.ex.web_lit_keys() >> 7) & 1;
