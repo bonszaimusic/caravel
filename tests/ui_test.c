@@ -6721,6 +6721,13 @@ static int test_scl_page_tap(void)
     ok &= cur_page()->graph == GR_SCALE;
     bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
     ui_power_on();
+    go_title("ENV"); frame();
+    press(B_SCL); press(B_SCL); frames(100);
+    ok = ui.lock == LAYER_SCL && cur_page()->fam == FAM_SCL && !ui.home;
+    press(B_SCL); frames(16);
+    ok &= !ui.lock && cur_page()->fam == FAM_SCL;
+    bad += check("SCL double tap stays on the SCL page (not back on ENV); a tap closes the lock", ok);
+    ui_power_on();
     return bad;
 }
 
@@ -7445,6 +7452,8 @@ static int test_layer_lock(void)
     uint32_t i, pg;
     ok = 1; okk = 1;
     for (i = 0; i < 4u; i++) {                          /* double tap on ENV: locked, ENV under it */
+        if (LL[i] == LAYER_SCL)
+            continue;                                  /* SCL is pages only; its double tap goes on (page test) */
         ui_power_on();
         go_title("ENV"); frame();
         pg = ui.page;
@@ -7528,10 +7537,10 @@ static int test_layer_lock(void)
     go_title("ENV"); frame();
     press(B_SCL); press(B_SCL); frames(100);
     key_down(white(1)); frame(); key_up(white(1)); frame();   /* G3: ROOT G */
-    ok = TSEL->p[P_ROOT] == 7 && !gates();
+    ok = TSEL->p[P_ROOT] == 7 && !gates() && ui.lock == LAYER_SCL && cur_page()->fam == FAM_SCL;
     turn(EN_K2, 1);
-    ok &= TSEL->p[P_SCALE] == 1 && str_eq(cur_page()->title, "ENV");
-    bad += check("  SCL locked: a key sets ROOT, KNOB 2 SCL, the page stays ENV", ok);
+    ok &= TSEL->p[P_SCALE] == 1;
+    bad += check("  SCL locked: a key sets ROOT, KNOB 2 SCL, the lock stays on the SCL page", ok);
     ui_power_on();
     go_title("ENV"); frame();
     press(B_EDIT); press(B_EDIT); frames(100);
@@ -7548,8 +7557,8 @@ static int test_layer_lock(void)
     press(B_GLO); press(B_GLO); frames(100);
     press(B_LFO);
     ok = !ui.lock && !ui.layer && str_eq(cur_page()->title, "LFO");
-    press(B_SCL); press(B_SCL); frames(100);
-    ok &= ui.lock == LAYER_SCL && str_eq(cur_page()->title, "LFO");
+    press(B_SCL); frames(100);
+    ok &= !ui.lock && !ui.layer && cur_page()->fam == FAM_SCL;
     press(B_HOME); frames(16);
     ok &= !ui.lock && !ui.layer && ui.home;
     press(B_GLO); press(B_GLO); frames(100);

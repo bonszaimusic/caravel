@@ -211,11 +211,15 @@ static void layer_opened(uint32_t l);
 /* #83: the second tap of a double tap: the page the first one left comes back, and the layer locks open over it */
 static void layer_lock(uint32_t l, uint32_t now)
 {
-    ui.home = lys.nv.home;
-    ui.page = lys.nv.page;
-    memcpy(ui.fam_last, lys.nv.fam, sizeof ui.fam_last);
-    ui.act = lys.nv.act;
-    song.seq_mode = lys.nv.seq;
+    if (l != LAYER_SCL) {                               /* #83: back over the page the first tap left. SCL is
+                                                         * pages only: do not jump back from the page the tap
+                                                         * opened (the "SCL hangs" path); the lock stays over it. */
+        ui.home = lys.nv.home;
+        ui.page = lys.nv.page;
+        memcpy(ui.fam_last, lys.nv.fam, sizeof ui.fam_last);
+        ui.act = lys.nv.act;
+        song.seq_mode = lys.nv.seq;
+    }
     ui.entry_open = 0;
     if (lys.dt_hint || l == LAYER_REC)
         ui.msg_t = 0;                                   /* (the first tap's "HOLD [..] QUICK", REC's) */
