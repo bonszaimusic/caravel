@@ -52,32 +52,45 @@ static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 INT restart, 4 bar resync, 5 pulse resync, 6 cancel */
 static volatile uint8_t bar_reset_req;    /* GLO + OCT+: every track to its step 0 at the next bar (seq_resync) */
 static uint32_t scale_mask(const track_t *t);
-/* HARMONIC BUS: four chord roots, one per bar, stored in chain_config's spare bytes (the project's; no format change).
- * The on/off (rsv[2] bit 0) travels with the project too. The chord is a diatonic triad in T1's scale; all note sources
- * that use the bus (sequencer strong steps, ARP strong steps, the G5 generator) take chord tones there. */
+static void link_retrigger(uint32_t i);
+/* HARMONIC BUS (FUN11): four chords, each held for 1/2/4/8 bars; the on/off and the per-track LINK source and
+ * RETRIG live in the project's FUN11 block (project.c). The chord is a diatonic triad in T1's scale; the note sources
+ * that use the bus (sequencer strong steps, ARP strong steps, the G5 generator, CHRD BUS) take chord tones there. */
 static uint8_t harmony_on;
 static volatile uint8_t harmony_bar;
-static uint8_t hroot_get(uint32_t bar)
+static uint32_t harmony_base_bar;                 /* perf_bars_q16 >> 16 at Start / bar reset */
+static uint8_t harmony_root[4], harmony_dur[4];
+static uint8_t harmony_edit_dur;                 /* HARMONY page: K1..K4 edit the DUR row instead of the roots */
+static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
+static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
+static uint8_t hroot_get(uint32_t i) { return harmony_root[i & 3u] % 12u; }
+static void hroot_set(uint32_t i, uint8_t r) { harmony_root[i & 3u] = (uint8_t)(r % 12u); }
+static uint8_t hdur_get(uint32_t i) { return harmony_dur[i & 3u] & 3u; }
+static void hdur_set(uint32_t i, uint8_t d) { harmony_dur[i & 3u] = (uint8_t)(d & 3u); }
+static uint32_t harmony_chord_at(uint32_t bar)
 {
-    uint32_t bit = (bar & 3u) * 4u;
-    return (uint8_t)((chain_config.rsv[bit >> 3] >> (bit & 7u)) & 0x0Fu);
+    uint32_t total = 0, i;
+    for (i = 0; i < 4u; i++)
+        total += (uint32_t)hdur_get(i) + 1u;
+    bar %= total ? total : 4u;
+    for (i = 0; i < 4u; i++) {
+        uint32_t d = (uint32_t)hdur_get(i) + 1u;
+        if (bar < d)
+            return i;
+        bar -= d;
+    }
+    return 3u;
 }
-static void hroot_set(uint32_t bar, uint8_t root)
-{
-    uint32_t bit = (bar & 3u) * 4u, byte = bit >> 3, sh = bit & 7u;
-    chain_config.rsv[byte] = (uint8_t)((chain_config.rsv[byte] & ~(0x0Fu << sh)) | ((root & 0x0Fu) << sh));
-}
-static uint16_t harmony_mask_bar(uint32_t bar)
+static uint16_t harmony_mask_root(uint32_t idx)
 {
     const track_t *k = &trk[0];
-    uint32_t mask = scale_mask(k), notes[12], n = 0, i, at = 0, root;
+    uint32_t mask = scale_mask(k), notes[12], n = 0, i, at = 0, root = hroot_get(idx);
     uint16_t out = 0;
     for (i = 0; i < 12u; i++)
         if ((mask >> i) & 1u)
             notes[n++] = i;
     if (n < 3u)
         return 0;
-    root = hroot_get(bar);
     for (i = 0; i < n; i++)
         if (notes[i] == root) {
             at = i;
@@ -93,6 +106,7 @@ static uint16_t harmony_mask_bar(uint32_t bar)
         out |= (uint16_t)(1u << notes[(at + 2u * i) % n]);
     return out;
 }
+static uint16_t harmony_mask_bar(uint32_t bar) { return harmony_mask_root(harmony_chord_at(bar)); }
 static uint16_t harmony_mask(const track_t *t)
 {
     (void)t;
@@ -566,13 +580,11 @@ static __attribute__((noinline)) uint32_t arp_pick(track_t *t, uint32_t *list, u
 
 /* n: samples the arp advances by (the external clock's while it runs, 0 stopped); gate_n: samples its
  * gate counts down by (real time when the external transport stops: a tapped or latched note still ends) */
-#if FELUCCA_PERF_HW
-/* The transport's musical time for the MORPH JOURNEY's CONTINUE / START options: bars (Q16) the sequencer clock has advanced while it plays, on the
- * internal or the external clock alike (a tempo change moves it at the new tempo; a Stop freezes it), and a count of Starts (seq_start). Audio side
- * writes, the UI thread reads. */
+/* The transport's musical time: bars (Q16) the sequencer clock has advanced while it plays, on the internal or the
+ * external clock alike (a tempo change moves it at the new tempo; a Stop freezes it), and a count of Starts. Audio
+ * side writes, the UI thread reads. HARMONY's bar counter and the MORPH JOURNEY's CONTINUE / START use this one clock. */
 static volatile uint32_t perf_bars_q16, perf_starts;
 static uint32_t perf_bars_rem;
-#endif
 static volatile uint32_t beat_pos, beat_n;      /* samples into the beat, the beat of the bar (0..3) */
 
 /* the metronome (click.c) and the count-in (1.1, Discussion #131). The click follows the song tempo's quarter notes
@@ -1151,6 +1163,8 @@ static void seq_start(void)
         lfo2_trigger(t, 1);
     }
     song.tick = 0;
+    harmony_base_bar = perf_bars_q16 >> 16;        /* HARMONY BAR 1 with the transport, on either clock */
+    harmony_bar = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
     clk_pos = CLK_START;                           /* the metronome's first beat with step 0 */
     song.playing = 1;
@@ -1918,19 +1932,27 @@ static void events_block(uint32_t n)
             /* Stopped: PLAY starts every track at step 0 anyway. Only put the beat display back; no seq_resync,
              * whose arp step could sound a held chord while the transport is stopped. */
             bar_reset_req = 0;
+            harmony_base_bar = perf_bars_q16 >> 16;
+            harmony_bar = 0;
             beat_pos = beat_n = 0;
         } else if (beat_n == 3u && beat_pos + beat_n_samples >= beat_samples()) {
             bar_reset_req = 0;
+            harmony_base_bar = (perf_bars_q16 >> 16) + 1u;
+            harmony_bar = 0;
             seq_resync();
         }
     }
-#if FELUCCA_PERF_HW
     if (song.playing && seq_n) {
         uint32_t bar = 4u * (clock_mode ? MIDI_CLOCK_GRID : beat_samples()), num = (seq_n << 16) + perf_bars_rem;
+        uint8_t hb = harmony_bar;
         perf_bars_q16 += num / bar;
         perf_bars_rem = num % bar;
+        harmony_bar = (uint8_t)((perf_bars_q16 >> 16) - harmony_base_bar);
+        if (harmony_bar != hb)
+            for (i = 0; i < NTRK; i++)
+                if (link_retrig[i] & 1u)
+                    link_retrigger(i);
     }
-#endif
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
     project_pattern_tick(clock_mode ? midi_seq_preview(&trk[0], seq_n) : seq_n);
@@ -1949,12 +1971,9 @@ static void events_block(uint32_t n)
     beat_pos += beat_n_samples;                        /* ARP LED beat */
     slicer_follow(seq_n, n, clock_mode && song.playing);
     if (beat_pos >= beat_samples()) {
-        uint8_t was_beat = beat_n;
         beat_pos -= beat_samples();
         beat_pos = beat_pos < beat_samples() ? beat_pos : 0u;
-        beat_n = (beat_n + 1u) & 3u;
-        if (was_beat == 3u && beat_n == 0u)
-            harmony_bar++;                            /* HARMONIC CLOCK: the next bar's chord */
+        beat_n = (beat_n + 1u) & 3u;                  /* ARP LED beat only: HARMONY uses perf_bars_q16 */
     }
     if (song.playing)
         song.tick++;

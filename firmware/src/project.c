@@ -85,6 +85,14 @@
  * the lock bit kept (proj_motion_ids). Firmware before 1.1 refuses a project that holds a lock (an id out of its
  * range), as with RATCH below; FUN9 it refuses anyway (a newer format).
  *
+ * Format 11 ("FUNV", written now) = FUN10's field layout and size, with the HARMONY/LINK state in the 84-byte chain
+ * block: the four roots and four DUR codes (1/2/4/8 bars) in its three reserved bytes, and the bus on/off + the four
+ * LINK sources (3 bits: 0 OFF, 1..4 T1..T4) + the four RETRIG modes (2 bits: OFF CHORD LINK BOTH) in the high bits of
+ * the first section row (the slot bytes keep their low 3 bits, the repeat its low 4). The runtime chain never carries
+ * those high bits: project.c encodes/decodes at the save/load boundary. A FUN11 has its own magic; firmware before it
+ * shows the slot EMPTY, and this firmware reads every FUN10 (its 0.11 HARMONY roots/on-off in the chain reserved bytes
+ * migrate to the new block; the other new values start OFF / 1 bar). No sound, step or parameter byte moved.
+ *
  * A step's RATCH (core.h SF_RATCH, the hits - 1, 0..3) is in bit 7 of its velocity byte (bit 0) and of its chance
  * byte (bit 1) of FUN7 / FUN8: bits every firmware before wrote 0, so every older project loads with its steps x1,
  * and no format or size changed. Firmware before RATCH refuses a project that holds a ratchet (those bytes out
@@ -102,6 +110,7 @@
  * Built on the Mac too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
  * PROJ_HOST needs core.h, params.c (TP) and engines.c. */
 #define PROJ_MAGIC 0x46554E41u                 /* "FUNA" (FUN10): 104 (1.5: 111) parameters, 128 motion records, nudges */
+#define PROJ_MAGIC_V11 0x46554E56u             /* "FUNV" (FUN11): FUN10 + per-track LINK/RETRIG and HARMONY roots/durations */
 #define PROJ_MAGIC_V9 0x46554E39u              /* "FUN9": FUN8, 64 bytes longer (the DRUM lane levels, 99 parameters) */
 #define PROJ_MAGIC_V8 0x46554E38u              /* "FUN8": FUN7 + the tracks' FM6 patches */
 #define PROJ_MAGIC_V7 0x46554E37u              /* "FUN7": serialized (byte params, packed steps), chain, motion */
@@ -235,7 +244,7 @@ static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
     return s;
 }
 static uint32_t proj_sum(const project_t *p) { return proj_hash(p, sizeof *p - 4u); }
-static int proj_ok(const project_t *q) { return q->magic == PROJ_MAGIC && q->size == sizeof *q &&
+static int proj_ok(const project_t *q) { return q->magic == PROJ_MAGIC_V11 && q->size == sizeof *q &&
     q->sum == proj_sum(q) && chain_valid(&q->chain) && motion_valid(&q->motion); }
 
 /* G_RTYPE (id 24) was G_DRCH, the GM drum part's MIDI channel (0..16, 10 by default) until 1.0: a project of a
@@ -403,7 +412,7 @@ static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
         v4->sum != proj_hash(v4, sizeof *v4 - 4u))
         return 0;
     memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC;
+    q->magic = PROJ_MAGIC_V11;
     q->size = sizeof *q;
     memcpy(q->g, v4->g, sizeof q->g);
     proj_rtype_room(q->g);
@@ -425,7 +434,7 @@ static int proj_from_v3(project_t *q, const project_v3_t *v3, int n)
         v3->sum != proj_hash(v3, sizeof *v3 - 4u))
         return 0;
     memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC;
+    q->magic = PROJ_MAGIC_V11;
     q->size = sizeof *q;
     memcpy(q->g, v3->g, sizeof q->g);
     proj_rtype_room(q->g);
@@ -446,7 +455,7 @@ static int proj_from_v2(project_t *q, const project_v2_t *v2, int n)
         v2->sum != proj_hash(v2, sizeof *v2 - 4u))
         return 0;
     memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC;
+    q->magic = PROJ_MAGIC_V11;
     q->size = sizeof *q;
     proj_g_from_v2(q->g, v2->g);
     q->sel = v2->sel;
@@ -465,7 +474,7 @@ static int proj_from_v1(project_t *q, const project_v1_t *v1, int n)
         v1->sum != proj_hash(v1, sizeof *v1 - 4u))
         return 0;
     memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC;
+    q->magic = PROJ_MAGIC_V11;
     q->size = sizeof *q;
     proj_g_from_v2(q->g, v1->g);
     q->parts = NPART;                          /* (format 1 had no track 4) */
@@ -517,7 +526,7 @@ static int proj_import(project_t *q, const void *b, int n)
 }
 static int proj_import_any(project_t *q, const void *b, int n)
 {
-    if (n == PROJ_STORE_SIZE && (((const uint32_t *)b)[0] == PROJ_MAGIC || ((const uint32_t *)b)[0] == PROJ_MAGIC_DX || ((const uint32_t *)b)[0] == PROJ_MAGIC_L2))
+    if (n == PROJ_STORE_SIZE && (((const uint32_t *)b)[0] == PROJ_MAGIC_V11 || ((const uint32_t *)b)[0] == PROJ_MAGIC || ((const uint32_t *)b)[0] == PROJ_MAGIC_DX || ((const uint32_t *)b)[0] == PROJ_MAGIC_L2))
         return proj_unpack(q, b, PROJ_STORE_SIZE);
     if (n == PROJ_STORE_SIZE && ((const uint32_t *)b)[1] >= 8u && ((const uint32_t *)b)[1] < PROJ_STORE_SIZE)
         n = (int)((const uint32_t *)b)[1];      /* a retained slot holding an older, shorter record: its own size
@@ -550,7 +559,7 @@ static int proj_import_old(project_t *q, const void *b, int n)
              (bytes == sizeof *v6 && v->magic == PROJ_MAGIC_V6 && chain_from_v9(&c6, &v6->chain))) &&
             v->size == bytes && ((const uint32_t *)b)[bytes / 4u - 1u] == proj_hash(b, bytes - 4u)) {
             memset(q, 0, sizeof *q);
-            q->magic = PROJ_MAGIC; q->size = sizeof *q;
+            q->magic = PROJ_MAGIC_V11; q->size = sizeof *q;
             memcpy(q->g, v->g, sizeof q->g);
             proj_rtype_room(q->g);
             q->sel = v->sel; q->parts = v->parts; q->phys = v->phys;
@@ -625,20 +634,97 @@ static void proj_midi_unpack(project_t *q, const uint8_t *b)
         q->g[G_ROUTE] = ROUTE_TRACK;
 }
 
+/* FUN11 stores its new state in the 84-byte chain block, not in a new project_t field: the four roots and the four
+ * durations in the chain's three reserved bytes, and the 21 bits of on/off + LINK source (3 per track) + RETRIG
+ * (2 per track) in the high bits of the first section row (the slot bytes' low 3 bits and the repeat's low 4 keep
+ * the section itself). FUN10 wrote those high bits 0; a FUN11 is refused by older firmware by its magic. The runtime
+ * chain_config never carries the high bits: encode/decode happen at the project boundary. */
+static uint32_t fun11_meta(void)
+{
+    uint32_t m = harmony_on ? 1u : 0u, i;
+    for (i = 0; i < NTRK; i++)
+        m |= ((uint32_t)link_src[i] & 7u) << (1u + 3u * i);
+    for (i = 0; i < NTRK; i++)
+        m |= ((uint32_t)link_retrig[i] & 3u) << (13u + 2u * i);
+    return m;
+}
+static void fun11_encode(chain_config_t *c)
+{
+    uint32_t m = fun11_meta(), i;
+    c->rsv[0] = (uint8_t)((harmony_root[0] & 15u) | ((harmony_root[1] & 15u) << 4));
+    c->rsv[1] = (uint8_t)((harmony_root[2] & 15u) | ((harmony_root[3] & 15u) << 4));
+    c->rsv[2] = (uint8_t)((harmony_dur[0] & 3u) | ((harmony_dur[1] & 3u) << 2) |
+                          ((harmony_dur[2] & 3u) << 4) | ((harmony_dur[3] & 3u) << 6));
+    for (i = 0; i < NTRK; i++)
+        c->row[0].slot[i] = (uint8_t)((c->row[0].slot[i] & 7u) | (((m >> (5u * i)) & 31u) << 3));
+    c->row[0].repeat = (uint8_t)((c->row[0].repeat - 1u) | ((m >> 20) & 15u) << 4);
+}
+static int fun11_decode(chain_config_t *c)
+{
+    uint32_t m = 0, i, r0 = c->row[0].repeat;
+    if (c->count > CHAIN_ROWS)
+        return 0;
+    for (i = 0; i < NTRK; i++) {
+        uint32_t sl = c->row[0].slot[i];
+        m |= ((sl >> 3) & 31u) << (5u * i);
+        c->row[0].slot[i] = (uint8_t)(sl & 7u);
+    }
+    m |= ((r0 >> 4) & 15u) << 20;
+    c->row[0].repeat = (uint8_t)((r0 & 15u) + 1u);
+    harmony_root[0] = c->rsv[0] & 15u;
+    harmony_root[1] = c->rsv[0] >> 4;
+    harmony_root[2] = c->rsv[1] & 15u;
+    harmony_root[3] = c->rsv[1] >> 4;
+    for (i = 0; i < 4u; i++)
+        if (harmony_root[i] > 11u)
+            return 0;
+    harmony_dur[0] = (c->rsv[2] >> 0) & 3u;
+    harmony_dur[1] = (c->rsv[2] >> 2) & 3u;
+    harmony_dur[2] = (c->rsv[2] >> 4) & 3u;
+    harmony_dur[3] = (c->rsv[2] >> 6) & 3u;
+    harmony_on = (uint8_t)(m & 1u);
+    for (i = 0; i < NTRK; i++) {
+        uint32_t src = (m >> (1u + 3u * i)) & 7u, rt = (m >> (13u + 2u * i)) & 3u;
+        if (src > 4u)
+            return 0;
+        link_src[i] = (uint8_t)src;
+        link_retrig[i] = (uint8_t)rt;
+    }
+    if (!chain_valid(c))
+        return 0;
+    return 1;
+}
+/* a FUN10's save of the 0.11 branch kept four roots and the bus on/off in the chain reserved bytes; a FUN11
+ * always has the full block. The durations / links / retriggers start at their defaults. */
+static void fun10_harmony(chain_config_t *c)
+{
+    uint32_t i;
+    for (i = 0; i < 4u; i++) {
+        uint32_t bit = i * 4u;
+        harmony_root[i] = (c->rsv[bit >> 3] >> (bit & 7u)) & 15u;
+        if (harmony_root[i] > 11u)
+            harmony_root[i] = 0;
+        harmony_dur[i] = 0;
+        link_src[i] = 0;
+        link_retrig[i] = 0;
+    }
+    harmony_on = (uint8_t)(c->rsv[2] & 1u);
+}
+
 /* A stable serialized schema: first header retains FUN6's fields; at byte66
  * np, format flags, then four byte-param tracks and nine-byte steps; FUN8: the patches at PROJ_FM6_OFF. */
 static int proj_pack(project_store_t *out, const project_t *q)
 {
-    uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC, size = PROJ_STORE_SIZE, sum;
+    uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC_V11, size = PROJ_STORE_SIZE, sum;
+    chain_config_t wc = q->chain;
     for (t = 0; t < NTRK; t++)
         for (i = 0; i < FM6_PACKED; i++)
             if (q->fm6[t][i] > 127u) return 0;
     if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
-    for (t = 0; t < NTRK; t++) if (q->t[t].engine == ENGI_DRUM && q->t[t].p[P_E0] == DX_KIT_ID) magic = PROJ_MAGIC_DX;
+    fun11_encode(&wc);
     for (t = 0; t < NTRK; t++) {
         if (!lfo2_valid(&q->lfo2[t])) return 0;
-        if (lfo2_nonzero(&q->lfo2[t])) magic = PROJ_MAGIC_L2;
-        for (i = 0; i < NMSLOT; i++) if (q->t[t].p[P_M1SRC + 3u * i] >= MS_LFO2) magic = PROJ_MAGIC_L2;
+        (void)lfo2_nonzero(&q->lfo2[t]);           /* FUN11 always carries the LFO 2 block */
     }
     memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
     memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = P_COUNT;
@@ -663,12 +749,12 @@ static int proj_pack(project_store_t *out, const project_t *q)
             b[pos++] = (uint8_t)(s->probability | (r >> 1) << 7);
         }
     }
-    if (pos + sizeof q->chain + sizeof q->motion > PROJ_MIDI_OFF) return 0;
-    memcpy(b + pos, &q->chain, sizeof q->chain); pos += sizeof q->chain;
+    if (pos + sizeof wc + sizeof q->motion > PROJ_MIDI_OFF) return 0;
+    memcpy(b + pos, &wc, sizeof wc); pos += sizeof wc;
     memcpy(b + pos, &q->motion, sizeof q->motion);
     proj_midi_pack(b, q);
     memcpy(b + PROJ_FM6_OFF, q->fm6, sizeof q->fm6);
-    if (magic == PROJ_MAGIC_L2) for (t = 0; t < NTRK; t++)
+    if (magic == PROJ_MAGIC_V11 || magic == PROJ_MAGIC_L2) for (t = 0; t < NTRK; t++)
         for (i = 0; i < L2_N * 8u; i++)
             b[PROJ_FM6_OFF + t * FM6_PACKED + i] |= ((q->lfo2[t].p[i / 8u] >> (i % 8u)) & 1u) << 7;
     {   /* the name (0-padded; stops at the first 0) */
@@ -720,15 +806,20 @@ static int proj_motion_v9(motion_store_t *m, const uint8_t *b)
  * (PROJ_STORE_V8: FUN9 with its tail 64 bytes shorter) or FUN7 (PROJ_STORE_V7: no patches, the init one) */
 static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
 {
-    uint32_t pos = 68u, t, i, magic, size, sum, np = b[66], v7 = st == PROJ_STORE_V7, v10 = st == PROJ_STORE_SIZE;
+    uint32_t pos = 68u, t, i, magic, size, sum, np = b[66], v7 = st == PROJ_STORE_V7, v11, v10;
     uint32_t name_off = st - 4u - PROJ_NAME_LEN, end = v7 ? name_off : name_off - NTRK * FM6_PACKED;
-    uint32_t mot = v10 ? sizeof q->motion : PROJ_MOTION_V9, chn = v10 ? sizeof q->chain : sizeof(chain_v9_t);
+    uint32_t mot, chn;
     memcpy(&magic, b, 4); memcpy(&size, b + 4, 4); memcpy(&sum, b + st - 4u, 4);
-    if ((!(v10 && (magic == PROJ_MAGIC_DX || magic == PROJ_MAGIC_L2)) && magic != (v7 ? PROJ_MAGIC_V7 : st == PROJ_STORE_V8 ? PROJ_MAGIC_V8 : st == PROJ_STORE_V9 ? PROJ_MAGIC_V9 : PROJ_MAGIC)) ||
+    v11 = st == PROJ_STORE_SIZE && magic == PROJ_MAGIC_V11;
+    v10 = st == PROJ_STORE_SIZE && !v11;
+    mot = (v10 || v11) ? sizeof q->motion : PROJ_MOTION_V9;
+    chn = (v10 || v11) ? sizeof q->chain : sizeof(chain_v9_t);
+    if ((!(v10 && (magic == PROJ_MAGIC_DX || magic == PROJ_MAGIC_L2)) && magic != (v11 ? PROJ_MAGIC_V11 : v7 ? PROJ_MAGIC_V7 : st == PROJ_STORE_V8 ? PROJ_MAGIC_V8 : st == PROJ_STORE_V9 ? PROJ_MAGIC_V9 : PROJ_MAGIC)) ||
         size != st || sum != proj_hash(b, st - 4u) ||
-        np < 8u || np > P_COUNT || 68u + NTRK * (np + 2u + NSTEP * 9u) + chn + mot > end)
+        np < 8u || np > P_COUNT || 68u + NTRK * (np + 2u + NSTEP * 9u) + chn + mot > end) {
         return 0;
-    memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC; q->size = sizeof *q;
+    }
+    memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC_V11; q->size = sizeof *q;
     memcpy(q->g, b + 8, sizeof q->g); q->sel = b[62]; q->parts = b[63]; q->phys = b[64];
     if (v7 && (q->g[G_RTYPE] < 0 || q->g[G_RTYPE] > 1))   /* a FUN7 may still hold the old drum channel there */
         proj_rtype_room(q->g);
@@ -742,7 +833,7 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
         for (i = 0; i < NSTEP; i++) {
             step_t *s = &q->t[t].step[i]; uint32_t meta, nd = 0;
             for (uint32_t j = 0; j < 4u; j++) {         /* (FUN10: bit 7 of note j is bit j of the nudge) */
-                if (b[pos] > 127u && !v10) return 0;
+                if (b[pos] > 127u && !(v10 || v11)) return 0;
                 nd |= (uint32_t)(b[pos] >> 7) << j;
                 s->note[j] = b[pos++] & 127u;
             }
@@ -757,20 +848,32 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
             step_set_nudge(s, (int32_t)(nd ^ 8u) - 8);
         }
     }
-    if (v10)                                            /* (FUN10: sections, a slot per track; before: rows) */
+    if (v11) {                                          /* FUN11: the compact chain + the FUN11 block */
         memcpy(&q->chain, b + pos, sizeof q->chain);
-    else {
+        if (!fun11_decode(&q->chain)) return 0;
+    } else if (v10) {                                   /* FUN10: sections, a slot per track */
+        chain_config_t c;
+        memcpy(&c, b + pos, sizeof c);
+        if (!chain_valid(&c)) return 0;
+        fun10_harmony(&c);
+        q->chain = c;
+    } else {
         chain_v9_t c9;
+        memset(harmony_root, 0, sizeof harmony_root);
+        memset(harmony_dur, 0, sizeof harmony_dur);
+        memset(link_src, 0, sizeof link_src);
+        memset(link_retrig, 0, sizeof link_retrig);
+        harmony_on = 0;
         memcpy(&c9, b + pos, sizeof c9);
         if (!chain_from_v9(&q->chain, &c9)) return 0;
     }
     pos += chn;
-    if (v10)
+    if (v10 || v11)
         memcpy(&q->motion, b + pos, sizeof q->motion);
     else if (!proj_motion_v9(&q->motion, b + pos))
         return 0;
     if (!proj_motion_ids(&q->motion, np) || !chain_valid(&q->chain) || !motion_valid(&q->motion)) return 0;
-    if (v10)
+    if (v10 || v11)
         proj_midi_unpack(q, b);                         /* (1.5.5: 0 in every FUN10 before, FUN9..FUN7 have none) */
     for (t = 0; t < NTRK; t++) {
         if (v7)
@@ -785,9 +888,9 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     }
     for (t = 0; t < NTRK; t++) if (q->t[t].engine == ENGI_DRUM && q->t[t].p[P_E0] == DX_KIT_ID) {
         dx_config_t cfg;
-        if ((magic != PROJ_MAGIC_DX && magic != PROJ_MAGIC_L2) || !dx_decode(&cfg, q->fm6[t])) return 0;
+        if ((!(magic == PROJ_MAGIC_DX || magic == PROJ_MAGIC_L2 || magic == PROJ_MAGIC_V11)) || !dx_decode(&cfg, q->fm6[t])) return 0;
     }
-    if (magic == PROJ_MAGIC_L2) for (t = 0; t < NTRK; t++) {
+    if (magic == PROJ_MAGIC_V11 || magic == PROJ_MAGIC_L2) for (t = 0; t < NTRK; t++) {
         for (i = 0; i < L2_N * 8u; i++)
             q->lfo2[t].p[i / 8u] |= (b[end + t * FM6_PACKED + i] >> 7) << (i % 8u);
         if (!lfo2_valid(&q->lfo2[t])) return 0;
@@ -927,7 +1030,7 @@ static void project_capture(project_t *p)
     uint32_t i;
     uint32_t f;
     memset(p, 0, sizeof *p);
-    p->magic = PROJ_MAGIC;
+    p->magic = PROJ_MAGIC_V11;
     p->size = sizeof *p;
     /* Only the live data copy is guarded. Clearing, FM6 packing and hashing
      * run with audio interrupts enabled; the patch bytes are main-loop owned. */
@@ -1178,6 +1281,11 @@ static void project_init_runtime(void)
     chain_defaults(&chain_config);
     harmony_on = 0;
     harmony_bar = 0;
+    harmony_base_bar = perf_bars_q16 >> 16;
+    memset(harmony_root, 0, sizeof harmony_root);
+    memset(harmony_dur, 0, sizeof harmony_dur);
+    memset(link_src, 0, sizeof link_src);
+    memset(link_retrig, 0, sizeof link_retrig);
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);
@@ -1294,8 +1402,10 @@ static int project_restore_runtime(const project_t *input)
     seq_stop();
     transport_req = 0;
     chain_config = p->chain;
-    harmony_on = (uint8_t)(chain_config.rsv[2] & 1u);   /* the HARMONIC BUS on/off travels with the project */
     harmony_bar = 0;
+    harmony_base_bar = perf_bars_q16 >> 16;
+                                                       /* the FUN11 block already set harmony_on / roots / durations /
+                                                       * link sources / retrigger in the import */
     motion = p->motion;
     motion_fx_compact_off(&motion, (1u << NTRK) - 1u);
     memset(motion_active, 0, sizeof motion_active);

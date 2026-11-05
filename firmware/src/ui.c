@@ -94,8 +94,6 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define PREF_START_BAR (0x02u << 24)
 #define PREF_FX_HOLD (0x04u << 24)               /* MENU > VOICES > FX HOLD ON: a factory preset load keeps the track's sends
                                                   * (ui.c load_kept); clear in every older setting = OFF, the preset's sends */
-#define PREF_KEY_LINK (0x08u << 24)              /* SCL + PLAY: all tracks follow KEY LINK's source track */
-#define PREF_KEY_SRC (0x30u << 24)               /* .. its source track, 0..3, in bits 4..5 */
 #define PREF_FULL_LOAD (0x80u << 16)             /* LIVE LOAD: PATTERN (default) / FULL; settings, not a project value */
 /* MENU > CONTROL > SELECT: 0 BPM, 1 PAGE (1.5.5, #188), 2 MODW, 3 VEL (1.5.6, #84: ui_input.c sel_play), bit 4 and bit 6 of
  * ui_prefs2 (0 in every older setting = BPM; 1.5.5's PAGE keeps its bit; firmware before 1.5.6 reads MODW as BPM and
@@ -253,44 +251,38 @@ static struct {
                                   * for the same reason as ml.io; midi_pc_poll) */
 } ui;
 
-/* KEY LINK (SCL + PLAY): all four tracks follow the source track's ROOT / SCL / QNT; TRN, CHRD and VOIC stay each
- * track's own. The source is the selected track when the link is turned on; selecting another track does not move it
- * (turn the link off and on again to take the new track as the master). The poll runs in the main loop; a change of
- * the master is copied before the next frame is drawn. */
-static int key_link_on(void) { return (ui_prefs3 & (PREF_KEY_LINK >> 24)) != 0u; }
+/* KEY LINK (FUN11, per track): link_src[i] 0 = off, 1..4 = follow T1..T4. A follower copies ROOT / SCL / QNT from
+ * its source's own values; a linked source is not followed (no chains). RETRIG's LINK bit asks for held notes to be
+ * retriggered when the source's key changes. The poll runs in the main loop; a change is visible next frame. */
+static int key_link_on(void)
+{
+    uint32_t i;
+    for (i = 0; i < NTRK; i++)
+        if (link_src[i])
+            return 1;
+    return 0;
+}
 static void key_link_sync(void)
 {
-    uint32_t i, src;
-    const track_t *s;
-    if (!key_link_on())
-        return;
-    src = (ui_prefs3 >> 4) & 3u;
-    s = &trk[src];
+    uint32_t i;
     for (i = 0; i < NTRK; i++) {
+        uint32_t src = link_src[i];
         track_t *t = &trk[i];
-        if (i == src)
+        const track_t *s;
+        if (!src || src > NTRK || src == i + 1u)
             continue;
+        if (link_src[src - 1u])
+            continue;                                 /* no chains: only an unlinked track is a source */
+        s = &trk[src - 1u];
         if (t->p[P_ROOT] != s->p[P_ROOT] || t->p[P_SCALE] != s->p[P_SCALE] || t->p[P_QUANT] != s->p[P_QUANT]) {
             t->p[P_ROOT] = s->p[P_ROOT];
             t->p[P_SCALE] = s->p[P_SCALE];
             t->p[P_QUANT] = s->p[P_QUANT];
+            if (link_retrig[i] & 2u)
+                link_retrigger(i);
             ui.force = 1;
         }
     }
-}
-/* SCL + PLAY, on the press: on (the selected track becomes the master) / off. Saved with the settings. */
-static void key_link_toggle(void)
-{
-    if (key_link_on()) {
-        ui_prefs3 = (uint8_t)(ui_prefs3 & ~(PREF_KEY_LINK >> 24));
-        ui_message("KEY LINK OFF");
-    } else {
-        ui_prefs3 = (uint8_t)((ui_prefs3 & ~(PREF_KEY_SRC >> 24)) | (PREF_KEY_LINK >> 24) | ((song.sel & 3u) << 4));
-        key_link_sync();
-        ui_message("KEY LINK ON");
-    }
-    settings_save();
-    ui.force = 1;
 }
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,

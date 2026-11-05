@@ -29,20 +29,24 @@ yet tried on an FM-1.
 
 ### Generative layer (development build)
 
-- **SCL > HARMONY** — the four-bar **HARMONIC BUS**. `K1`..`K4` set the four bar roots (note names); `OCT+` turns
-  the bus on/off, `OCT-` puts all four roots back to C. The roots and the on/off are saved with the project (the
-  spare chain bytes, no format change). The chord is a diatonic triad in **T1's** `ROOT`/`SCL`; use `SCL + OCT+`
-  or Key-Link to bring the tracks into that key.
+- **SCL > LINK** — per track. `K1 SOURCE` = `OFF` / `T1`..`T4`; the follower copies the source's `ROOT`, `SCL` and
+  `QNT`. `TRN`, `CHRD` and `VOIC` stay its own. A linked track is not offered as a source (no chains). `K2 RETRIG`:
+  `OFF`, `CHORD` (a held `CHRD BUS` chord retriggers when the harmony chord changes), `LINK` (when the source's key
+  changes) or `BOTH`. The page is per track; it is saved with the project (FUN11).
+- **SCL > HARMONY** — the **HARMONIC BUS**: four chords, one per bar step. `K1`..`K4` set the four roots; `OCT-`
+  switches the knobs between the `BAR` roots and the `DUR` row (`1/2/4/8` bars each); `OCT+` turns the bus on/off.
+  The chord is a diatonic triad in **T1's** `ROOT`/`SCL`. The roots, durations and on/off are saved with the project
+  (FUN11). The cards show `BAR 1..4`, the chord and its duration.
+- **Clock:** the bus counts the transport's musical bars, not an audio beat: the internal BPM clock or the external
+  MIDI clock, whichever the sequencer uses. `PLAY` starts at BAR 1; `STOP` holds the chord; `CONT`/external Continue
+  goes on; `GLO + OCT+` (BAR RESET) returns to BAR 1. Journey `CONT`/`START` shares the same bars; Journey `FREE` has
+  no musical bars, so the bus holds. A song start is BAR 1; sections continue the progression.
 - **Where it acts:** strong steps (every fourth step) of the sequencer, the ARP, and `SEQ TOOLS > G5` GENERATE take a
   chord tone. Live keys and the DRUM lanes stay the player's / the kit's — unless you set `SCL > CHORD > K1 CHRD` to
   **BUS**: then a key plays the current bus chord, at the octave nearest the key (`CHRD BUS` falls back to `DIA3`
-  while the bus is off). A held chord does not morph when the bar changes; retrigger it, or let the ARP play it. The bus
-  is a four-bar loop; it is not a per-song-section progression.
-- **GLO + G4** — **HARMONIC BUS** on/off from the GLO map (the same switch as the page's `OCT+`).
-- **GLO + G5** — **KEY LINK** on/off. All four tracks follow the source track's `ROOT`, `SCL` and `QNT`; the source is
-  the selected track when the link goes on. `TRN`, `CHRD` and `VOIC` stay each track's own. Selecting another track does
-  not move the source; turn the link off and on again to make the new track the master. Saved with the settings.
-  The GLO footer names `G4 HARM` and `G5 LINK`, so the map itself shows where they are.
+  while the bus is off). A held bus chord follows `RETRIG` above; otherwise it ends with the key.
+- **No hidden setup keys:** the old `GLO + G4` / `GLO + G5` shortcuts are gone. Harmony and Link live on their SCL
+  pages; the GLO map stays performance only.
 - **SEQ TOOLS: G5** — **GENERATE**: a scale-aware phrase from a short motif, rests between the strong steps, and chord
   tones on the strong steps while the HARMONIC CLOCK is on. One undo; `SAVE` held puts the pattern back.
 - **ARP MODE TURING** — a 16-bit feedback register walks the held-note list, with an occasional random bit flip, so

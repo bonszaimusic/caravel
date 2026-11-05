@@ -1096,17 +1096,41 @@ static void draw_columns(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: the four bar chords (roots; the quality is T1's scale) */
+    if (cur_page()->graph == GR_LINK) {             /* per track: SOURCE, RETRIG, the source's key, the status */
+        uint32_t sel = song.sel, src = link_src[sel], rt = link_retrig[sel];
+        static const char *const RT[4] = {"OFF", "CHORD", "LINK", "BOTH"};
+        str_cpy(val, !src ? "OFF" : src == 1u ? "T1" : src == 2u ? "T2" : src == 3u ? "T3" : "T4", sizeof val);
+        draw_column(0, "SOURCE", val, "", src ? VAL(0u) : T_DIM, -1, ICON_X_SONG);
+        draw_column(1, "RETRIG", RT[rt & 3u], "", VAL(1u), -1, ICON_AUTO);
+        if (!src || src > NTRK) {
+            draw_column(2, "KEY", "--", "", T_DIM, -1, ICON_SCALE);
+            draw_column(3, "STATUS", "OFF", "", T_DIM, -1, ICON_X_SONG);
+        } else {
+            const track_t *s = &trk[src - 1u];
+            char key[12];
+            str_cpy(key, N_NOTE[(uint32_t)s->p[P_ROOT] % 12u], sizeof key);
+            str_cpy(key + str_len(key), " ", 2);
+            str_cpy(key + str_len(key), N_SCALE[(uint32_t)s->p[P_SCALE] % (sizeof N_SCALE / sizeof N_SCALE[0])], sizeof key - str_len(key));
+            draw_column(2, "KEY", key, "", VAL(2u), -1, ICON_SCALE);
+            draw_column(3, "STATUS", link_src[src - 1u] ? "BLOCKED" : "LINKED", "",
+                        link_src[src - 1u] ? T_DIM : VAL(3u), -1, ICON_X_SONG);
+        }
+        return;
+    }
+    if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: BAR roots, and their DUR row */
         for (c = 0; c < 4u; c++) {
-            uint32_t r = hroot_get(c), mask = harmony_mask_bar(c);
+            uint32_t r = hroot_get(c), mask = harmony_mask_root(c), d = (uint32_t)hdur_get(c) + 1u;
             const char *suf = "";
+            char du[10];
             if ((mask >> ((r + 3u) % 12u)) & 1u) suf = "m";
             else if ((mask >> ((r + 4u) % 12u)) & 1u) suf = "";
             else if ((mask >> ((r + 6u) % 12u)) & 1u) suf = "dim";
             str_cpy(val, N_NOTE[r % 12u], sizeof val);
             str_cpy(val + str_len(val), suf, sizeof val - str_len(val));
-            draw_column(c, c == 0u ? "CH1" : c == 1u ? "CH2" : c == 2u ? "CH3" : "CH4", val, "",
-                        harmony_on ? VAL(c) : T_DIM, -1, ICON_X_SONG);
+            fmt_int(du, (int32_t)(1u << (d - 1u)));
+            str_cpy(du + str_len(du), d == 1u ? " BAR" : " BARS", sizeof du - str_len(du));
+            draw_column(c, c == 0u ? "BAR 1" : c == 1u ? "BAR 2" : c == 2u ? "BAR 3" : "BAR 4", val, du,
+                        harmony_on || harmony_edit_dur ? VAL(c) : T_DIM, -1, ICON_X_SONG);
         }
         return;
     }

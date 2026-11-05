@@ -27,7 +27,7 @@ typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: t
 static mchord_t mchord[MCHORD_N];
 /* the last chord played per track (the CHORD page shows it): its root, notes, and the shape's tones above the
  * root (bit i = i semitones, 0..11) */
-static struct { uint8_t root, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen; } chord_last[NTRK];
+static struct { uint8_t root, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen, vel; } chord_last[NTRK];
 
 /* 1 = the track's keys are a kit: no chords */
 static int chord_kit(const track_t *t)
@@ -44,7 +44,7 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
     if (mode == CH_BUS) {
         uint16_t bm = harmony_mask(t);
         if (bm) {                                     /* the HARMONIC BUS chord, at the octave nearest the key */
-            int32_t br = (int32_t)hroot_get(harmony_bar);
+            int32_t br = (int32_t)hroot_get(harmony_chord_at(harmony_bar));
             while (br + 12 <= *root + 6)
                 br += 12;
             while (br > *root + 6)
@@ -52,7 +52,7 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
             *root = br;
             iv[n++] = 0;
             for (i = 1; i < 12u && n < CHORD_MAX; i++)
-                if ((bm >> ((hroot_get(harmony_bar) + i) % 12u)) & 1u)
+                if ((bm >> ((hroot_get(harmony_chord_at(harmony_bar)) + i) % 12u)) & 1u)
                     iv[n++] = (int32_t)i;
             return n;
         }
@@ -163,6 +163,7 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
         chord_last[k].root = (uint8_t)clamp(r, 0, 127);
         chord_last[k].mask = mask;
         chord_last[k].n = (uint8_t)m;
+        chord_last[k].vel = (uint8_t)(kb_vel ? kb_vel : 96u);
         for (i = 0; i < CHORD_MAX; i++)
             chord_last[k].note[i] = i < m ? out[i] : 0u;
         chord_last[k].gen++;
@@ -226,4 +227,22 @@ static void mchord_forget(uint32_t track)               /* panic: the track's MI
     for (i = 0; i < MCHORD_N; i++)
         if (mchord[i].id == track + 1u)
             mchord[i].id = 0;
+}
+
+
+/* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
+ * chord / the linked scale. Per track; only CHRD BUS has a held chord to follow (the sequencer and ARP retrigger
+ * their own steps anyway). */
+static void link_retrigger(uint32_t i)
+{
+    track_t *t = &trk[i];
+    uint32_t k = trk_index(t), j;
+    if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n)
+        return;
+    for (j = 0; j < chord_last[k].n; j++)
+        if (chord_last[k].note[j])
+            trk_note_off(t, chord_last[k].note[j]);
+    for (j = 0; j < chord_last[k].n; j++)
+        if (chord_last[k].note[j])
+            trk_note_on(t, chord_last[k].note[j], chord_last[k].vel ? chord_last[k].vel : 96u);
 }

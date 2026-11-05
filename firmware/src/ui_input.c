@@ -1034,12 +1034,38 @@ static void edit_param(uint32_t slot, int32_t steps)
         ev_knob(slot, steps);
         return;
     }
-    if (pg->graph == GR_HARMONY) {                    /* K1..K4: the four chord roots (note names, 0..11) */
+    if (pg->graph == GR_LINK) {                       /* K1 SOURCE, K2 RETRIG; K3/K4 show the source */
+        if (slot == 0u) {
+            uint32_t cur = link_src[song.sel], n = 0;
+            do {
+                cur = (uint8_t)((cur + (steps > 0 ? 1u : 4u)) % 5u);
+                n++;
+                if (!cur || (cur != song.sel + 1u && !link_src[cur - 1u]))
+                    break;
+            } while (n < 5u);
+            link_src[song.sel] = (uint8_t)(cur <= NTRK ? cur : 0u);
+            ui.force = 1;
+        } else if (slot == 1u) {
+            int32_t r = (int32_t)link_retrig[song.sel] + steps;
+            r %= 4;
+            if (r < 0) r += 4;
+            link_retrig[song.sel] = (uint8_t)r;
+            ui.force = 1;
+        }
+        return;
+    }
+    if (pg->graph == GR_HARMONY) {                    /* K1..K4: roots, or the DUR row after OCT- */
         if (slot < 4u) {
-            int32_t r = (int32_t)hroot_get(slot) + steps;
-            if (r < 0) r += 12;
-            if (r > 11) r -= 12;
-            hroot_set(slot, (uint8_t)r);
+            if (harmony_edit_dur) {
+                int32_t d = (int32_t)hdur_get(slot) + steps;
+                d &= 3;
+                hdur_set(slot, (uint8_t)d);
+            } else {
+                int32_t r = (int32_t)hroot_get(slot) + steps;
+                if (r < 0) r += 12;
+                if (r > 11) r -= 12;
+                hroot_set(slot, (uint8_t)r);
+            }
             ui.force = 1;
         }
         return;
@@ -1738,7 +1764,7 @@ static void ui_input(void)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
     oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on ||
-                          cur_page()->graph == GR_HARMONY
+                          (cur_page()->graph == GR_HARMONY && !layer_held())
 #if FELUCCA_HOME_PERF
         || hp_oct_button(B_OCTDN) || hp_oct_button(B_OCTUP)
 #endif
@@ -1752,19 +1778,17 @@ static void ui_input(void)
         else if(g==GR_MACROMAP&&(oct&1u)){hp_open_graph(GR_MACRO);oct=0;}
     }
 #endif
-    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && oct && cur_page()->graph == GR_HARMONY) {
-        /* OCT+: the bus on/off; OCT-: the four chords back to C (the page is outside the HOME_PERF block too) */
+    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && !layer_held() && oct &&
+        cur_page()->graph == GR_HARMONY) {
+        /* OCT+: the bus on/off; OCT-: K1..K4 edit the DUR row instead of the roots */
         if (oct & 2u) {
             harmony_on = (uint8_t)!harmony_on;
-            chain_config.rsv[2] = (uint8_t)((chain_config.rsv[2] & ~1u) | harmony_on);
-            if (harmony_on)
-                harmony_bar = 0;
+            harmony_base_bar = perf_bars_q16 >> 16;
+            harmony_bar = 0;
             ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
         } else if (oct & 1u) {
-            uint32_t i;
-            for (i = 0; i < 4u; i++)
-                hroot_set(i, 0);
-            ui_message("HARMONY RESET");
+            harmony_edit_dur = (uint8_t)!harmony_edit_dur;
+            ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
         }
         oct = 0;
         ui.force = 1;

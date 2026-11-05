@@ -12,8 +12,7 @@
  *              while held (1.5.5, #209: the steps' FILL / !FILL conditions, seq.c seq_fill; HOLD), F4 TAP
  *              tempo (external clock: F4 SYNC at the next pulse); KNOB 1..4 T1..T4 LEVEL;
  *              GLO + PLAY: INT restart; external clock: next counted 4/4 bar, again cancels; GLO + OCT+ (let go):
- *              BAR RESET, every track to step 0 at the next bar (stopped: at once); GLO + G4 HARMONIC CLOCK on/off;
- *              GLO + G5 KEY LINK on/off (all follow the selected source track)
+ *              BAR RESET, every track to step 0 at the next bar (stopped: at once)
  *   SCL  SET   any key: its note name is ROOT; KNOB 1..4 ROOT SCL CHRD VOIC (LY_SCL: the SCL page's first two,
  *              the CHORD page's two; QNT TRN stay on SCL); the LEDs show the root lit and the scale's notes breathing;
  *              SCL + OCT+ (let go): ROOT SCL QNT of this track onto all four (TRN CHRD VOIC stay their own)
@@ -63,7 +62,7 @@ typedef struct {
 static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
-    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_G4, "HARM"}, {KC_G5, "LINK"}}},
+    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTUP, "RESET"}, {KC_KEYS, "MUTES"}}},
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTUP, "ALL"}, {KC_OCTDN, "UNDO"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_G5, "GEN"}, {KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}}},
@@ -87,7 +86,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
-static const khint_t GLO_EXT_FOOT[3] = {{KC_PLAY, "BAR SYNC"}, {KC_G4, "HARM"}, {KC_G5, "LINK"}};
+static const khint_t GLO_EXT_FOOT[3] = {{KC_PLAY, "BAR SYNC"}, {KC_OCTUP, "RESET"}, {KC_KEYS, "MUTES"}};
 static const khint_t EU_FOOT[3] = {{KC_OCTUP, "APPLY"}, {KC_OCTDN, "CANCEL"}, {0, 0}};   /* (SEQ TOOLS' EUCLID open) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -643,18 +642,6 @@ static uint32_t eqa_sig(void)
     return h;
 }
 
-/* GLO + G4: the HARMONIC CLOCK on / off. Its four-chord loop is in seq.c; the generated patterns (SEQ TOOLS' G5)
- * put chord tones on their strong steps while it is on. */
-static void harmony_toggle(void)
-{
-    harmony_on = (uint8_t)!harmony_on;
-    chain_config.rsv[2] = (uint8_t)((chain_config.rsv[2] & ~1u) | harmony_on);
-    if (harmony_on)
-        harmony_bar = 0;
-    ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
-    ui.force = 1;
-}
-
 /* a key pressed in layer l (k: 0 = F3 .. 26 = G5) */
 static void layer_key(uint32_t l, uint32_t k)
 {
@@ -678,10 +665,6 @@ static void layer_key(uint32_t l, uint32_t k)
             ml_toggle();                                /* D4: MIDI LEARN on / off (midi_learn.c) */
         } else if (p == 6u) {
             lys.fill |= 1u << k;                        /* E4: FILL while held (layer_keys) */
-        } else if (p == 8u) {
-            harmony_toggle();                           /* G4: HARMONIC CLOCK on / off */
-        } else if (p == 15u) {
-            key_link_toggle();                          /* G5: KEY LINK on / off */
         }
     } else if (l == LAYER_SCL) {
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */

@@ -175,6 +175,13 @@ static void ui_power_on(void)
     memset(&chain, 0, sizeof chain);
     step_record_mask = 0;
     chain_defaults(&chain_config);
+    memset(link_src, 0, sizeof link_src);
+    memset(link_retrig, 0, sizeof link_retrig);
+    memset(harmony_root, 0, sizeof harmony_root);
+    memset(harmony_dur, 0, sizeof harmony_dur);
+    harmony_on = 0;
+    harmony_edit_dur = 0;
+    harmony_bar = 0;
     memset(&ui, 0, sizeof ui);
     page_over = 0;                                /* (no layer's knobs; roll_settle's test page gone) */
     cin_left = cin_total = 0;                     /* (no count-in) */
@@ -6556,53 +6563,38 @@ static int test_coupling(void)
     return bad;
 }
 
-/* KEY LINK (SCL + PLAY): the selected track at the moment the link goes on is the master; every frame copies its
- * ROOT / SCL / QNT to the other three. Selecting another track does not move the master. Off: no more copying. */
+/* KEY LINK (FUN11, per track): the LINK page's K1 picks a source (OFF/T1..T4) for the selected track and copies
+ * ROOT / SCL / QNT from it. A source that is itself linked is not followed (no chains). */
 static int test_key_link(void)
 {
     int bad = 0, ok;
-    uint32_t i;
     int16_t trn1, chrd1;
     ui_power_on();
-    song.sel = 0;
-    for (i = 0; i < NTRK; i++) {
-        trk[i].p[P_ROOT] = (int16_t)(i + 1);
-        trk[i].p[P_SCALE] = (int16_t)(i % 3);
-        trk[i].p[P_QUANT] = (int16_t)(i % 5);
-        trk[i].p[P_TRANS] = (int16_t)(i * 2 - 3);
-    }
+    song.sel = 1;                                  /* T2 follows T1 */
     trk[0].p[P_ROOT] = 7; trk[0].p[P_SCALE] = 2; trk[0].p[P_QUANT] = 3;
+    trk[1].p[P_TRANS] = -5; trk[1].p[P_CHRD] = CH_MIN;
     trn1 = trk[1].p[P_TRANS]; chrd1 = trk[1].p[P_CHRD];
-    btn_down(B_GLO);
-    frames(400);
-    key_down(key_at(0, 15)); frame(); key_up(key_at(0, 15)); frame();
-    ok = key_link_on() && msg_is("KEY LINK ON");
-    ok &= trk[1].p[P_ROOT] == 7 && trk[2].p[P_ROOT] == 7 && trk[3].p[P_ROOT] == 7 &&
-          trk[1].p[P_SCALE] == 2 && trk[2].p[P_SCALE] == 2 && trk[3].p[P_SCALE] == 2 &&
-          trk[1].p[P_QUANT] == 3 && trk[2].p[P_QUANT] == 3 && trk[3].p[P_QUANT] == 3 &&
+    go_page(GR_LINK);
+    frame();
+    turn(EN_K1, 1);                                /* OFF -> T1 */
+    ok = link_src[1] == 1u && link_retrig[1] == 0u;
+    frame();
+    ok &= trk[1].p[P_ROOT] == 7 && trk[1].p[P_SCALE] == 2 && trk[1].p[P_QUANT] == 3 &&
           trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1;
-    btn_up(B_GLO);
+    trk[0].p[P_ROOT] = 2; trk[0].p[P_SCALE] = 1; trk[0].p[P_QUANT] = 4;
     frame();
-    trk[0].p[P_ROOT] = 2;
-    trk[0].p[P_SCALE] = 1;
-    trk[0].p[P_QUANT] = 4;
+    ok &= trk[1].p[P_ROOT] == 2 && trk[1].p[P_SCALE] == 1 && trk[1].p[P_QUANT] == 4;
+    turn(EN_K2, 2);                                /* RETRIG LINK */
+    ok &= link_retrig[1] == 2u;
+    link_src[2] = 1u;                              /* T3 follows T1 too */
+    link_src[0] = 2u;                              /* T1 would follow T3: a chain, not followed */
     frame();
-    ok &= trk[1].p[P_ROOT] == 2 && trk[2].p[P_ROOT] == 2 && trk[3].p[P_ROOT] == 2 &&
-          trk[1].p[P_SCALE] == 1 && trk[2].p[P_SCALE] == 1 && trk[3].p[P_SCALE] == 1 &&
-          trk[1].p[P_QUANT] == 4 && trk[2].p[P_QUANT] == 4 && trk[3].p[P_QUANT] == 4;
-    song.sel = 2;                                      /* another track selected: the master does not move */
-    frame();
-    ok &= trk[1].p[P_ROOT] == 2 && trk[2].p[P_ROOT] == 2;
-    btn_down(B_GLO);
-    frames(400);
-    key_down(key_at(0, 15)); frame(); key_up(key_at(0, 15)); frame();
-    ok &= !key_link_on() && msg_is("KEY LINK OFF");
-    btn_up(B_GLO);
-    frame();
+    ok &= trk[0].p[P_ROOT] == 2; trk[1].p[P_ROOT] == 2;
+    link_src[1] = 0;                               /* off */
     trk[0].p[P_ROOT] = 9;
     frame();
-    ok &= trk[1].p[P_ROOT] == 2 && trk[2].p[P_ROOT] == 2;
-    bad += check("GLO + G5: KEY LINK follows the selected master, copies ROOT SCL QNT, keeps TRN / CHRD, and turns off", ok);
+    ok &= trk[1].p[P_ROOT] == 2;
+    bad += check("LINK page: T2 follows T1, copies ROOT SCL QNT, keeps TRN / CHRD, no chains, OFF stops it", ok);
     ui_power_on();
     return bad;
 }
@@ -6623,12 +6615,21 @@ static int test_harmony_page(void)
     turn(EN_K1, 1);
     turn(EN_K2, 2);
     ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
+    press(B_OCTDN);                                /* DUR row */
+    ok &= harmony_edit_dur != 0u && msg_is("HARMONY: DURATIONS");
+    turn(EN_K1, 1);
+    ok &= hdur_get(0) == 1u;
+    press(B_OCTDN);                                /* back to roots */
+    ok &= harmony_edit_dur == 0u && msg_is("HARMONY: ROOTS");
     press(B_OCTUP);
     ok &= harmony_on != 0u && msg_is("HARMONY ON");
     hroot_set(0, 0);
     harmony_bar = 0;
     mask = harmony_mask_bar(0);
     ok &= mask != 0u && ((mask >> 0) & 1u) && ((mask >> 3) & 1u) && ((mask >> 7) & 1u);
+    for (uint32_t i = 0; i < 4u; i++) { hdur_set(i, 0); hroot_set(i, (uint8_t)i); }
+    hdur_set(0, 1);                                /* BAR 1 lasts two bars */
+    ok &= harmony_chord_at(0) == 0u && harmony_chord_at(1) == 0u && harmony_chord_at(2) == 1u;
     ok &= harmony_snap(&trk[0], 1) == 0u || harmony_snap(&trk[0], 1) == 3u;
     {
         step_t s = {.note = {1}, .n = 1, .time = ST_NOTE, .vel = 100};
@@ -6646,9 +6647,35 @@ static int test_harmony_page(void)
         ok &= cn == 3u && cr % 12 == 0 && out[0] % 12 == 0 && out[1] % 12 == 3 && out[2] % 12 == 7;
         trk[0].p[P_CHRD] = CH_OFF;
     }
-    bad += check("HARMONY page: four chord roots, OCT+ on, CHRD BUS plays the bus chord, strong-step seq snap", ok);
+    bad += check("HARMONY page: BAR roots, OCT- DUR row, OCT+ on, CHRD BUS and strong-step seq snap", ok);
     press(B_OCTUP);
     bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
+    ui_power_on();
+    return bad;
+}
+
+/* FUN11: the four roots, the four durations, the bus on/off and the per-track LINK/RETRIG survive a project
+ * save/load, and a saved slot carries the FUN11 magic. */
+static int test_fun11_project(void)
+{
+    int bad = 0, ok;
+    project_store_t st;
+    project_t dec;
+    ui_power_on();
+    harmony_on = 1;
+    for (uint32_t i = 0; i < 4u; i++) { hroot_set(i, (uint8_t)(i * 2u + 1u)); hdur_set(i, (uint8_t)(i & 3u)); }
+    link_src[0] = 0; link_src[1] = 1; link_retrig[1] = 3;
+    project_capture(&dec);
+    ok = proj_pack(&st, &dec) && *(const uint32_t *)st.raw == PROJ_MAGIC_V11;
+    harmony_on = 0;
+    for (uint32_t i = 0; i < 4u; i++) { hroot_set(i, 0); hdur_set(i, 0); }
+    link_src[1] = 0; link_retrig[1] = 0;
+    ok &= proj_import(&dec, st.raw, sizeof st);
+    ok &= harmony_on != 0u;
+    for (uint32_t i = 0; i < 4u; i++)
+        ok &= hroot_get(i) == (i * 2u + 1u) && hdur_get(i) == (i & 3u);
+    ok &= link_src[1] == 1u && link_retrig[1] == 3u;
+    bad += check("FUN11 project: roots, durations, bus on/off and LINK/RETRIG round-trip; magic FUNV", ok);
     ui_power_on();
     return bad;
 }
@@ -6681,17 +6708,14 @@ static int test_generate(void)
     ok &= notes >= 4u;
     bad += check("G5 GENERATE: a scale-aware phrase, notes in C minor, the rest of the pattern empty", ok);
 
-    btn_down(B_GLO);
-    frames(400);
-    key_down(key_at(0, 8)); frame(); key_up(key_at(0, 8)); frame();
-    ok = harmony_on != 0u && msg_is("HARMONY ON");
-    btn_up(B_GLO);
+    harmony_on = 1; harmony_base_bar = perf_bars_q16 >> 16; harmony_bar = 0;
     frame();
+    ok = harmony_on != 0u;
     mask = harmony_mask(t);
     ok &= mask != 0u;
     tl_do(t, TL_GENERATE, 0);
     ok &= tl_gate(&t->step[0]) && ((mask >> (t->step[0].note[0] % 12u)) & 1u) != 0u;
-    bad += check("GLO + G4: HARMONIC CLOCK on; the generated strong step takes a chord tone", ok);
+    bad += check("HARMONY on: the generated strong step takes a chord tone", ok);
     harmony_on = 0;
     ui_power_on();
     return bad;
@@ -10327,6 +10351,7 @@ int main(void)
     bad += test_arp_turing();
     bad += test_generate();
     bad += test_harmony_page();
+    bad += test_fun11_project();
     bad += test_screen_off();
     bad += test_screen_wake();
     bad += test_idle_leds();
