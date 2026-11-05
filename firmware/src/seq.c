@@ -50,6 +50,7 @@ static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen
                                           * wakes it (silent, no layer, its release nothing) */
 static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 INT restart, 4 bar resync, 5 pulse resync, 6 cancel */
+static volatile uint8_t bar_reset_req;    /* GLO + OCT+: every track to its step 0 at the next bar (seq_resync) */
 static void midi_resync_cancel(void);
 static volatile uint8_t step_record_mask; /* transient per-track STEP REC; never live-write at the playhead */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
@@ -1051,6 +1052,7 @@ static void seq_start(void)
 #endif
     uint32_t i;
     midi_grid_reset();
+    bar_reset_req = 0;                             /* PLAY starts at the top; nothing left to reset */
     memset(seq_extend_end, 0, sizeof seq_extend_end);
     memset(seq_extend_target, 0, sizeof seq_extend_target);
     motion_fx_close();
@@ -1103,6 +1105,7 @@ static __attribute__((noinline)) void seq_stop(void)
     song.playing = 0;
     chain.live_pending = chain.live_applied = 0;
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
+    bar_reset_req = 0;                             /* a reset armed before the stop does not fire after it */
     cin_flush = 0;
     memset(cin_n, 0, sizeof cin_n);
     if (song.g[G_CLOCK])                           /* external clock: the arp stops with the transport, */
@@ -1825,6 +1828,21 @@ static void events_block(uint32_t n)
                 seq_n = midi_clock_advance(fm1_ms);
         }
     }
+    /* The beat's share of this block, advanced once (the ARP LED and the bar reset below use it). */
+    uint32_t beat_n_samples = clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n;
+    if (bar_reset_req) {
+        /* Stopped: reset at once. Playing: at the first bar line that falls in this block. A whole-block
+         * quantisation, as the external resync is; seq_resync enters step 0 before the ordinary step clocks. */
+        if (!song.playing) {
+            /* Stopped: PLAY starts every track at step 0 anyway. Only put the beat display back; no seq_resync,
+             * whose arp step could sound a held chord while the transport is stopped. */
+            bar_reset_req = 0;
+            beat_pos = beat_n = 0;
+        } else if (beat_n == 3u && beat_pos + beat_n_samples >= beat_samples()) {
+            bar_reset_req = 0;
+            seq_resync();
+        }
+    }
 #if FELUCCA_PERF_HW
     if (song.playing && seq_n) {
         uint32_t bar = 4u * (clock_mode ? MIDI_CLOCK_GRID : beat_samples()), num = (seq_n << 16) + perf_bars_rem;
@@ -1847,11 +1865,8 @@ static void events_block(uint32_t n)
         uint32_t arp_n = clock_mode ? midi_grid_advance(&midi_arp_grid[i], seq_n, (uint32_t)trk[i].p[P_ARATE]) : n;
         arp_step(&trk[i], arp_n, clock_mode && song.playing ? arp_n : n);
     }
-    {
-        uint32_t bn = clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n;
-        beat_pos += bn;                                /* ARP LED beat */
-        slicer_follow(seq_n, n, clock_mode && song.playing);
-    }
+    beat_pos += beat_n_samples;                        /* ARP LED beat */
+    slicer_follow(seq_n, n, clock_mode && song.playing);
     if (beat_pos >= beat_samples()) {
         beat_pos -= beat_samples();
         beat_pos = beat_pos < beat_samples() ? beat_pos : 0u;

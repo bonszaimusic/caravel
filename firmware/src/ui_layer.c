@@ -11,9 +11,11 @@
  *              held (HOLD cells, a corner triangle), C4 UNMUTE ALL, D4 MIDI LEARN on / off (1.5, midi_learn.c), E4 FILL
  *              while held (1.5.5, #209: the steps' FILL / !FILL conditions, seq.c seq_fill; HOLD), F4 TAP
  *              tempo (external clock: F4 SYNC at the next pulse); KNOB 1..4 T1..T4 LEVEL;
- *              GLO + PLAY: INT restart; external clock: next counted 4/4 bar, again cancels
+ *              GLO + PLAY: INT restart; external clock: next counted 4/4 bar, again cancels; GLO + OCT+ (let go):
+ *              BAR RESET, every track to step 0 at the next bar (stopped: at once)
  *   SCL  SET   any key: its note name is ROOT; KNOB 1..4 ROOT SCL CHRD VOIC (LY_SCL: the SCL page's first two,
- *              the CHORD page's two; QNT TRN stay on SCL); the LEDs show the root lit and the scale's notes breathing
+ *              the CHORD page's two; QNT TRN stay on SCL); the LEDs show the root lit and the scale's notes breathing;
+ *              SCL + OCT+ (let go): ROOT SCL QNT of this track onto all four (TRN CHRD VOIC stay their own)
  *   EDIT SET   the white keys from F3: the engines in PRESETS order (one key each, the NENG_SHOWN one can pick:
  *              engines.c eng_vis), the next white key INIT (LY_INIT: E5), the next CLEAN INIT (LY_CLEAN: F5, 1.5.5)
  *              (the dialog); KNOB 1 ENG, 2 No. (the engine's sounds), 3 FAV. Sound loads as on PRESETS: the steps
@@ -59,8 +61,8 @@ typedef struct {
 static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
-    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}}},
-    {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
+    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTUP, "RESET"}, {KC_OCTDN, "UNDO"}}},
+    {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTUP, "ALL"}, {KC_OCTDN, "UNDO"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
@@ -83,7 +85,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
-static const khint_t GLO_EXT_FOOT[3] = {{KC_PLAY, "BAR SYNC"}, {KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}};
+static const khint_t GLO_EXT_FOOT[3] = {{KC_PLAY, "BAR SYNC"}, {KC_OCTUP, "RESET"}, {KC_OCTDN, "UNDO"}};
 static const khint_t EU_FOOT[3] = {{KC_OCTUP, "APPLY"}, {KC_OCTDN, "CANCEL"}, {0, 0}};   /* (SEQ TOOLS' EUCLID open) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -776,6 +778,33 @@ static void layer_oct_open(uint32_t pressed)
     }
 }
 
+/* SCL + OCT+: the selected track's key, scale and quantize onto every track (TRN, CHRD, VOIC stay their own, so
+ * the tracks can still be transposed and voiced apart). */
+static void ly_scale_all(void)
+{
+    track_t *s = &trk[lys.trk % NTRK];
+    uint32_t i;
+    for (i = 0; i < NTRK; i++) {
+        trk[i].p[P_ROOT] = s->p[P_ROOT];
+        trk[i].p[P_SCALE] = s->p[P_SCALE];
+        trk[i].p[P_QUANT] = s->p[P_QUANT];
+    }
+    ui_message("SCALE TO ALL");
+    ui.force = 1;
+}
+
+/* GLO + OCT+: arm the downbeat reset. Playing, seq.c applies it at the next bar line; stopped, at once. */
+static void ly_bar_reset(void)
+{
+    if (chain_busy()) {
+        ui_message("STOP SONG FIRST");
+        return;
+    }
+    bar_reset_req = 1;
+    ui_message(song.playing ? "RESET NEXT BAR" : "BAR RESET");
+    ui.force = 1;
+}
+
 /* OCT- / OCT+ in a SET layer: no octave; OCT- let go puts back what the layer changed. Returns the taps left */
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 {
@@ -788,6 +817,13 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         ui_message(mine & 2u ? "EUCLID APPLIED" : "EUCLID CANCELLED");
         ui.force = 1;
         mine = 0;
+    }
+    if (mine & 2u) {                                    /* OCT+ let go: SCL puts its scale on all, GLO arms the bar reset */
+        if (lys.l == LAYER_SCL)
+            ly_scale_all();
+        else if (lys.l == LAYER_GLO)
+            ly_bar_reset();
+        mine &= ~2u;                                    /* (no other meaning in a SET layer) */
     }
     if (mine & 1u) {                                    /* OCT-: back to when it opened */
         if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */

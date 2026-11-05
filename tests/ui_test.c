@@ -6486,6 +6486,76 @@ static int test_scale_leds(void)
     return bad;
 }
 
+/* Caravel: SCL + OCT+ puts the selected track's key / scale / quantize on all four; GLO + OCT+ arms the bar reset,
+ * which seq.c applies at the next bar line (or at once when stopped) without stopping the transport. */
+static int test_coupling(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    int16_t trn1, chrd1;
+    ui_power_on();
+    song.sel = 0;
+    for (i = 0; i < NTRK; i++) {
+        trk[i].p[P_ROOT] = (int16_t)(i + 1);
+        trk[i].p[P_SCALE] = (int16_t)(i % 3);
+        trk[i].p[P_QUANT] = (int16_t)(i % 5);
+        trk[i].p[P_TRANS] = (int16_t)(i * 2 - 3);
+        trk[i].p[P_CHRD] = (int16_t)(i == 1);
+    }
+    trk[0].p[P_ROOT] = 7;
+    trk[0].p[P_SCALE] = 2;
+    trk[0].p[P_QUANT] = 3;
+    trk[0].p[P_TRANS] = 5;
+    trn1 = trk[1].p[P_TRANS];
+    chrd1 = trk[1].p[P_CHRD];
+    song.octave = 0;
+    btn_down(B_SCL);
+    frame();
+    press(B_OCTUP);                                  /* the combo opens the layer and acts */
+    ok = trk[0].p[P_ROOT] == 7 && trk[1].p[P_ROOT] == 7 && trk[2].p[P_ROOT] == 7 && trk[3].p[P_ROOT] == 7 &&
+         trk[0].p[P_SCALE] == 2 && trk[1].p[P_SCALE] == 2 && trk[2].p[P_SCALE] == 2 && trk[3].p[P_SCALE] == 2 &&
+         trk[0].p[P_QUANT] == 3 && trk[1].p[P_QUANT] == 3 && trk[2].p[P_QUANT] == 3 && trk[3].p[P_QUANT] == 3 &&
+         trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1 && song.octave == 0 && msg_is("SCALE TO ALL");
+    btn_up(B_SCL);
+    frame();
+    bad += check("SCL + OCT+: ROOT SCL QNT to all four tracks, TRN / CHRD kept, no octave shift", ok);
+
+    ui_power_on();
+    song.sel = 0;
+    song.playing = 1;
+    for (i = 0; i < NTRK; i++) {
+        trk[i].seq_idx = (uint16_t)(i * 3u + 2u);
+        trk[i].seq_pos = 1000u;
+    }
+    beat_n = 3;
+    beat_pos = beat_samples() - 1u;
+    btn_down(B_GLO);
+    frame();
+    press(B_OCTUP);
+    ok = bar_reset_req == 1u && msg_is("RESET NEXT BAR");
+    btn_up(B_GLO);
+    frame();
+    events_block(CTL);
+    ok &= !bar_reset_req && beat_n == 0u;
+    for (i = 0; i < NTRK; i++)
+        ok &= trk[i].seq_idx == 0u;
+    bad += check("GLO + OCT+: BAR RESET arms; at the next bar all four tracks are on step 0 without a stop", ok);
+
+    ui_power_on();
+    song.playing = 0;
+    btn_down(B_GLO);
+    frame();
+    press(B_OCTUP);
+    ok = bar_reset_req == 1u && msg_is("BAR RESET");
+    btn_up(B_GLO);
+    frame();
+    events_block(CTL);
+    ok &= !bar_reset_req;
+    bad += check("GLO + OCT+ stopped: BAR RESET is taken at once, not left armed for PLAY", ok);
+    ui_power_on();
+    return bad;
+}
+
 /* #37: QNT SEQ on the SCL page: the keys as SNAP, the sequence snapped as it plays, saved with the project */
 static int test_seq_quant(void)
 {
@@ -10090,6 +10160,7 @@ int main(void)
     bad += test_breath();
     bad += test_step_leds();
     bad += test_scale_leds();
+    bad += test_coupling();
     bad += test_screen_off();
     bad += test_screen_wake();
     bad += test_idle_leds();
