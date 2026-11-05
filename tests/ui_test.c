@@ -6654,6 +6654,32 @@ static int test_harmony_page(void)
     return bad;
 }
 
+/* HARMONY's bar counter is the transport's musical bar clock (perf_bars_q16), not the audio beat: it moves while
+ * the transport plays and holds when it stops. (External MIDI clock feeds the same perf_bars_q16 in seq.c.) */
+static int test_harmony_clock(void)
+{
+    int bad = 0, ok;
+    uint8_t at_play;
+    ui_power_on();
+    song.playing = 1;
+    harmony_on = 1;
+    harmony_base_bar = 0;
+    harmony_bar = 0;
+    perf_bars_q16 = 0;
+    perf_bars_rem = 0;
+    perf_bars_q16 = 1u << 16;                       /* one transport bar reached */
+    events_block(CTL);
+    at_play = harmony_bar;
+    ok = at_play >= 1u;
+    song.playing = 0;
+    perf_bars_q16 += 1u << 16;
+    events_block(CTL);
+    ok &= harmony_bar == at_play;
+    bad += check("HARMONY follows the transport bar clock while playing and holds on STOP", ok);
+    ui_power_on();
+    return bad;
+}
+
 /* FUN11: the four roots, the four durations, the bus on/off and the per-track LINK/RETRIG survive a project
  * save/load, and a saved slot carries the FUN11 magic. */
 static int test_fun11_project(void)
@@ -10352,6 +10378,7 @@ int main(void)
     bad += test_generate();
     bad += test_harmony_page();
     bad += test_fun11_project();
+    bad += test_harmony_clock();
     bad += test_screen_off();
     bad += test_screen_wake();
     bad += test_idle_leds();
