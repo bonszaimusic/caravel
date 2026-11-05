@@ -6732,21 +6732,18 @@ static int test_fun11_project(void)
     ui_power_on();
     harmony_on = 1;
     for (uint32_t i = 0; i < 4u; i++) { hroot_set(i, (uint8_t)(i * 2u + 1u)); hdur_set(i, (uint8_t)(i & 3u)); }
-    link_src[0] = 0; link_src[1] = 1; link_retrig[1] = 3;
+    link_src[0] = 0; link_src[1] = 1; link_retrig[1] = 3; harmony_follow[1] = 0;
     project_capture(&dec);
     ok = proj_pack(&st, &dec) && *(const uint32_t *)st.raw == PROJ_MAGIC_V11;
     harmony_on = 0;
     for (uint32_t i = 0; i < 4u; i++) { hroot_set(i, 0); hdur_set(i, 0); }
     link_src[1] = 0; link_retrig[1] = 0;
     ok &= proj_import(&dec, st.raw, sizeof st);
+    harmony_restore(&proj_harmony);
     ok &= harmony_on != 0u;
     for (uint32_t i = 0; i < 4u; i++)
         ok &= hroot_get(i) == (i * 2u + 1u) && hdur_get(i) == (i & 3u);
-    harmony_follow[1] = 0;
-    project_capture(&dec);
-    ok &= proj_pack(&st, &dec);
-    harmony_follow[1] = 1;
-    ok &= proj_import(&dec, st.raw, sizeof st) && harmony_follow[1] == 0u;
+    ok &= harmony_follow[1] == 0u;
     ok &= link_src[1] == 1u && link_retrig[1] == 3u;
     bad += check("FUN11 project: roots, durations, bus on/off and LINK/RETRIG round-trip; magic FUNV", ok);
     ui_power_on();

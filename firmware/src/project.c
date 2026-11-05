@@ -634,27 +634,32 @@ static void proj_midi_unpack(project_t *q, const uint8_t *b)
         q->g[G_ROUTE] = ROUTE_TRACK;
 }
 
+typedef struct {
+    uint8_t root[4], dur[4], on, link_src[NTRK], link_retrig[NTRK], follow[NTRK];
+    uint32_t bar, base;
+} harmony_saved_t;
+static harmony_saved_t proj_harmony;             /* the decoded/staged project's Harmony/Link state */
 /* FUN11 stores its new state in the 84-byte chain block, not in a new project_t field: the four roots and the four
  * durations in the chain's three reserved bytes, and the 21 bits of on/off + LINK source (3 per track) + RETRIG
  * (2 per track) in the high bits of the first section row (the slot bytes' low 3 bits and the repeat's low 4 keep
  * the section itself). FUN10 wrote those high bits 0; a FUN11 is refused by older firmware by its magic. The runtime
  * chain_config never carries the high bits: encode/decode happen at the project boundary. */
-static uint32_t fun11_meta(void)
+static uint32_t fun11_meta(const harmony_saved_t *h)
 {
-    uint32_t m = harmony_on ? 1u : 0u, i;
+    uint32_t m = h->on ? 1u : 0u, i;
     for (i = 0; i < NTRK; i++)
-        m |= ((uint32_t)link_src[i] & 7u) << (1u + 3u * i);
+        m |= ((uint32_t)h->link_src[i] & 7u) << (1u + 3u * i);
     for (i = 0; i < NTRK; i++)
-        m |= ((uint32_t)link_retrig[i] & 3u) << (13u + 2u * i);
+        m |= ((uint32_t)h->link_retrig[i] & 3u) << (13u + 2u * i);
     return m;
 }
-static void fun11_encode(chain_config_t *c)
+static void fun11_encode(chain_config_t *c, const harmony_saved_t *h)
 {
-    uint32_t m = fun11_meta(), i;
-    c->rsv[0] = (uint8_t)((harmony_root[0] & 15u) | ((harmony_root[1] & 15u) << 4));
-    c->rsv[1] = (uint8_t)((harmony_root[2] & 15u) | ((harmony_root[3] & 15u) << 4));
-    c->rsv[2] = (uint8_t)((harmony_dur[0] & 3u) | ((harmony_dur[1] & 3u) << 2) |
-                          ((harmony_dur[2] & 3u) << 4) | ((harmony_dur[3] & 3u) << 6));
+    uint32_t m = fun11_meta(h), i;
+    c->rsv[0] = (uint8_t)((h->root[0] & 15u) | ((h->root[1] & 15u) << 4));
+    c->rsv[1] = (uint8_t)((h->root[2] & 15u) | ((h->root[3] & 15u) << 4));
+    c->rsv[2] = (uint8_t)((h->dur[0] & 3u) | ((h->dur[1] & 3u) << 2) |
+                          ((h->dur[2] & 3u) << 4) | ((h->dur[3] & 3u) << 6));
     for (i = 0; i < NTRK; i++)
         c->row[0].slot[i] = (uint8_t)((c->row[0].slot[i] & 7u) | (((m >> (5u * i)) & 31u) << 3));
     c->row[0].repeat = (uint8_t)((c->row[0].repeat - 1u) | ((m >> 20) & 15u) << 4);
@@ -662,11 +667,11 @@ static void fun11_encode(chain_config_t *c)
     {
         uint32_t f = 0;
         for (i = 0; i < NTRK; i++)
-            f |= (harmony_follow[i] ? 1u : 0u) << i;
+            f |= (h->follow[i] ? 1u : 0u) << i;
         c->row[1].slot[0] = (uint8_t)((c->row[1].slot[0] & 7u) | (f << 3));
     }
 }
-static int fun11_decode(chain_config_t *c)
+static int fun11_decode(chain_config_t *c, harmony_saved_t *h)
 {
     uint32_t m = 0, i, r0 = c->row[0].repeat;
     if (c->count > CHAIN_ROWS)
@@ -682,26 +687,26 @@ static int fun11_decode(chain_config_t *c)
         uint32_t f = (c->row[1].slot[0] >> 3) & 15u;
         c->row[1].slot[0] &= 7u;
         for (i = 0; i < NTRK; i++)
-            harmony_follow[i] = (uint8_t)((f >> i) & 1u);
+            h->follow[i] = (uint8_t)((f >> i) & 1u);
     }
-    harmony_root[0] = c->rsv[0] & 15u;
-    harmony_root[1] = c->rsv[0] >> 4;
-    harmony_root[2] = c->rsv[1] & 15u;
-    harmony_root[3] = c->rsv[1] >> 4;
+    h->root[0] = c->rsv[0] & 15u;
+    h->root[1] = c->rsv[0] >> 4;
+    h->root[2] = c->rsv[1] & 15u;
+    h->root[3] = c->rsv[1] >> 4;
     for (i = 0; i < 4u; i++)
-        if (harmony_root[i] > 11u)
+        if (h->root[i] > 11u)
             return 0;
-    harmony_dur[0] = (c->rsv[2] >> 0) & 3u;
-    harmony_dur[1] = (c->rsv[2] >> 2) & 3u;
-    harmony_dur[2] = (c->rsv[2] >> 4) & 3u;
-    harmony_dur[3] = (c->rsv[2] >> 6) & 3u;
-    harmony_on = (uint8_t)(m & 1u);
+    h->dur[0] = (c->rsv[2] >> 0) & 3u;
+    h->dur[1] = (c->rsv[2] >> 2) & 3u;
+    h->dur[2] = (c->rsv[2] >> 4) & 3u;
+    h->dur[3] = (c->rsv[2] >> 6) & 3u;
+    h->on = (uint8_t)(m & 1u);
     for (i = 0; i < NTRK; i++) {
         uint32_t src = (m >> (1u + 3u * i)) & 7u, rt = (m >> (13u + 2u * i)) & 3u;
         if (src > 4u)
             return 0;
-        link_src[i] = (uint8_t)src;
-        link_retrig[i] = (uint8_t)rt;
+        h->link_src[i] = (uint8_t)src;
+        h->link_retrig[i] = (uint8_t)rt;
     }
     if (!chain_valid(c))
         return 0;
@@ -709,20 +714,20 @@ static int fun11_decode(chain_config_t *c)
 }
 /* a FUN10's save of the 0.11 branch kept four roots and the bus on/off in the chain reserved bytes; a FUN11
  * always has the full block. The durations / links / retriggers start at their defaults. */
-static void fun10_harmony(chain_config_t *c)
+static void fun10_harmony(chain_config_t *c, harmony_saved_t *h)
 {
     uint32_t i;
     for (i = 0; i < 4u; i++) {
         uint32_t bit = i * 4u;
-        harmony_root[i] = (c->rsv[bit >> 3] >> (bit & 7u)) & 15u;
-        if (harmony_root[i] > 11u)
-            harmony_root[i] = 0;
-        harmony_dur[i] = 0;
-        link_src[i] = 0;
-        link_retrig[i] = 0;
-        harmony_follow[i] = 1;
+        h->root[i] = (c->rsv[bit >> 3] >> (bit & 7u)) & 15u;
+        if (h->root[i] > 11u)
+            h->root[i] = 0;
+        h->dur[i] = 0;
+        h->link_src[i] = 0;
+        h->link_retrig[i] = 0;
+        h->follow[i] = 1;
     }
-    harmony_on = (uint8_t)(c->rsv[2] & 1u);
+    h->on = (uint8_t)(c->rsv[2] & 1u);
 }
 
 /* A stable serialized schema: first header retains FUN6's fields; at byte66
@@ -735,7 +740,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
         for (i = 0; i < FM6_PACKED; i++)
             if (q->fm6[t][i] > 127u) return 0;
     if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
-    fun11_encode(&wc);
+    fun11_encode(&wc, &proj_harmony);
     for (t = 0; t < NTRK; t++) {
         if (!lfo2_valid(&q->lfo2[t])) return 0;
         (void)lfo2_nonzero(&q->lfo2[t]);           /* FUN11 always carries the LFO 2 block */
@@ -864,20 +869,18 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     }
     if (v11) {                                          /* FUN11: the compact chain + the FUN11 block */
         memcpy(&q->chain, b + pos, sizeof q->chain);
-        if (!fun11_decode(&q->chain)) return 0;
+        if (!fun11_decode(&q->chain, &proj_harmony)) return 0;
     } else if (v10) {                                   /* FUN10: sections, a slot per track */
         chain_config_t c;
         memcpy(&c, b + pos, sizeof c);
         if (!chain_valid(&c)) return 0;
-        fun10_harmony(&c);
+        fun10_harmony(&c, &proj_harmony);
         q->chain = c;
     } else {
         chain_v9_t c9;
-        memset(harmony_root, 0, sizeof harmony_root);
-        memset(harmony_dur, 0, sizeof harmony_dur);
-        memset(link_src, 0, sizeof link_src);
-        memset(link_retrig, 0, sizeof link_retrig);
-        harmony_on = 0;
+        memset(&proj_harmony, 0, sizeof proj_harmony);
+        for (i = 0; i < NTRK; i++)
+            proj_harmony.follow[i] = 1;
         memcpy(&c9, b + pos, sizeof c9);
         if (!chain_from_v9(&q->chain, &c9)) return 0;
     }
@@ -1024,10 +1027,6 @@ static void proj_bound(project_t *q)
 /* Read-only project inspection and in-place rename must not make the live Harmony/Link state follow the slot
  * they decode. A decode writes the runtime arrays; these save/restore them around such a probe. A rename packs
  * while the decoded state is live, so the slot keeps its own values, then restores the music's state. */
-typedef struct {
-    uint8_t root[4], dur[4], on, link_src[NTRK], link_retrig[NTRK], follow[NTRK];
-    uint32_t bar, base;
-} harmony_saved_t;
 static void harmony_save(harmony_saved_t *s)
 {
     memcpy(s->root, harmony_root, sizeof s->root);
@@ -1088,6 +1087,7 @@ static void project_capture(project_t *p)
     p->parts = NPART;
     p->phys = PROJ_PHYS;
     p->chain = chain_config;
+    harmony_save(&proj_harmony);
     for (i = 0; i < NTRK; i++) {
         for (uint32_t j = 0; j < P_COUNT; j++) p->t[i].p[j] = motion_base_value(&trk[i], j);
         p->lfo2[i] = lfo2_config[i];
@@ -1459,6 +1459,7 @@ static int project_restore_runtime(const project_t *input)
     seq_stop();
     transport_req = 0;
     chain_config = p->chain;
+    harmony_restore(&proj_harmony);
     harmony_bar = 0;
     harmony_base_bar = perf_bars_q16 >> 16;
                                                        /* the FUN11 block already set harmony_on / roots / durations /
