@@ -60,7 +60,7 @@ static uint8_t harmony_on;
 static volatile uint8_t harmony_bar;
 static uint32_t harmony_base_bar;                 /* perf_bars_q16 >> 16 at Start / bar reset */
 static uint8_t harmony_root[4], harmony_dur[4];
-static uint8_t harmony_edit_dur;                 /* HARMONY page: K1..K4 edit the DUR row instead of the roots */
+static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
 static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
 static uint8_t hroot_get(uint32_t i) { return harmony_root[i & 3u] % 12u; }

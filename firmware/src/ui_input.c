@@ -1054,9 +1054,10 @@ static void edit_param(uint32_t slot, int32_t steps)
         }
         return;
     }
-    if (pg->graph == GR_HARMONY) {                    /* K1..K4: roots, or the DUR row after OCT- */
+    if (pg->graph == GR_HARMONY) {                    /* K1..K4: the roots (top) or the DUR row (bottom) */
+        uint32_t bottom = (uint32_t)dual_bottom(pg);
         if (slot < 4u) {
-            if (harmony_edit_dur) {
+            if (bottom || harmony_edit_dur) {
                 int32_t d = (int32_t)hdur_get(slot) + steps;
                 d &= 3;
                 hdur_set(slot, (uint8_t)d);
@@ -1179,6 +1180,8 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
     *vp = (int16_t)v;
+    if (dual_page(pg))
+        ui.force = 1;                               /* the two-group cards have no rolling digits: redraw them */
     if (pg->scope != SC_GLOBAL) {
         motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
         ml_knob(TSEL, (uint32_t)(vp - TSEL->p));        /* (MIDI LEARN: picked) */

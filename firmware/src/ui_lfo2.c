@@ -44,7 +44,7 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 }
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
-enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS };   /* DK_GRAPH: one page above, its graph in the lower block;
+enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS, DK_HARMONY };   /* DK_GRAPH: one page above, its graph in the lower block;
                                                                           * DK_INS: the upper group's fourth card is the type's curve (its third FX HOLD) */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
@@ -64,8 +64,8 @@ static const dual_t DUALS[] = {
 #endif
     {"INSERT", "INSERT 2", "INSERT TYPE MIX HOLD", "INSERT A B C FILTER", "INSERT", "INSERT A-C FILT", DK_INS},
     {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
-    {"SCL", "", "SCALE", "", "SCL", "", DK_GRAPH},
-    {"CHORD", "", "CHORD KEYS", "", "CHORD", "", DK_GRAPH},
+    {"SCL", "CHORD", "SCALE", "CHORD KEYS", "SCL", "CHORD", DK_PLAIN},
+    {"HARMONY", "", "HARMONY", "DURATION", "HARMONY", "DURATION", DK_HARMONY},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
 };
@@ -116,6 +116,20 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
     const param_desc_t *d;
     int16_t *vp = 0;
     *v = 0;
+    if (dd->kind == DK_HARMONY) {
+        static const char *const DUR[] = {"1 BAR", "2 BARS", "4 BARS", "8 BARS"};
+        static const param_desc_t RD[4] = {
+            {"BAR 1", F_NOTE, 0, 11, 0, 0, 0}, {"BAR 2", F_NOTE, 0, 11, 0, 0, 0},
+            {"BAR 3", F_NOTE, 0, 11, 0, 0, 0}, {"BAR 4", F_NOTE, 0, 11, 0, 0, 0}};
+        static const param_desc_t DD = {"DUR", F_ENUM, 0, 3, 0, DUR, 0};
+        if (col >= 4u) return 0;
+        if (row) {
+            *v = (int32_t)hdur_get(col);
+            return &DD;
+        }
+        *v = (int32_t)hroot_get(col);
+        return &RD[col];
+    }
     if (dd->kind == DK_LFO2) {
         uint32_t id = lfo2_page_target(row ? GR_LFO2SYNC : GR_LFO2, col);
         d = lfo2_desc(id);
@@ -299,7 +313,8 @@ static void lfo_cards(const page_t *pg)
     /* This layout has no rolling card digits; discard animations from the previous page. */
     for (uint32_t col = 0; col < 4u; col++)
         ui.roll[col].from[0] = 0;
-    uint32_t sig = 0xD0A100u + bottom + dd->kind * 2u + (uint32_t)(dd - DUALS) * 7u + song.sel * 31u + large_kind() * 113u;
+    uint32_t sig = 0xD0A100u + bottom + dd->kind * 2u + (uint32_t)(dd - DUALS) * 7u + song.sel * 31u +
+                   (uint32_t)ui.page * 257u + large_kind() * 113u;
     for (uint32_t row = 0; row < 2u; row++)
         for (uint32_t col = 0; col < 4u; col++) {
             int32_t v;
@@ -347,7 +362,8 @@ static void lfo_cards(const page_t *pg)
         cv_rrect(5, y + 2, 230, 76, 3, T_SURF, edge);
         cv_rect(5, y + 5, 230, 16, head);
         cv_text_on(10, y + 6, &AF_S, row ? dd->hb : dd->ht, active ? T_INK : T_TEXT, head);
-        cv_text_r(230, y + 6, &AF_S, active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+        cv_text_r(230, y + 6, &AF_S, dd->kind == DK_HARMONY ? (harmony_on ? "ON" : "OFF") :
+                  active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
         if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
             for (uint32_t k = 0; k < NMSLOT; k++) {
                 const int16_t *mp = &TSEL->p[P_M1SRC + 3u * k];
@@ -403,6 +419,10 @@ static void lfo_cards(const page_t *pg)
 #endif
             const aafont_t *vf = &AF_M;
             param_format(d, v, val, &unit);
+            if (dd->kind == DK_HARMONY && !row) {  /* the top row: the chord's name, not only its root */
+                chord_name(val, (uint32_t)hroot_get(col), harmony_mask_root(col));
+                unit = "";
+            }
 #if CARAVEL_STASIS_EXPAND
             /* The generic formatter intentionally limits values to five
              * letters. This view has room for the complete effect name. */

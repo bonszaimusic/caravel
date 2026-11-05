@@ -6615,11 +6615,11 @@ static int test_harmony_page(void)
     turn(EN_K1, 1);
     turn(EN_K2, 2);
     ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
-    press(B_OCTDN);                                /* DUR row */
+    press(B_OCTDN);                                /* the lower row: K1..K4 edit the durations */
     ok &= harmony_edit_dur != 0u && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
     ok &= hdur_get(0) == 1u;
-    press(B_OCTDN);                                /* back to roots */
+    press(B_OCTDN);                                /* back to the roots */
     ok &= harmony_edit_dur == 0u && msg_is("HARMONY: ROOTS");
     press(B_OCTUP);
     ok &= harmony_on != 0u && msg_is("HARMONY ON");

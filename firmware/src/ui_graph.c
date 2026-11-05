@@ -443,6 +443,51 @@ static void graph_chord(const track_t *t, uint16_t c)
                  !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : c, T_SURF);
     }
 }
+/* the SCL family's four pages as a 2 x 2 strip: SCL, CHORD, LINK, HARMONY (the current one accented) */
+static void scl_page_strip(int32_t y)
+{
+    static const char *const names[4] = {"SCL", "CHORD", "LINK", "HARM"};
+    static const uint8_t graphs[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
+    uint32_t i;
+    for (i = 0; i < 4u; i++) {
+        int32_t x = 12 + (int32_t)(i & 1u) * 108, yy = y + (int32_t)(i >> 1) * 24;
+        int cur = cur_page()->graph == graphs[i];
+        cv_rrect(x, yy, 100, 20, 4, cur ? T_ACCENT : T_RAISE, T_SURF);
+        cv_text_in(x + 4, yy + 4, 92, &AF_S, names[i], cur ? T_INK : T_MID, cur ? T_ACCENT : T_RAISE);
+    }
+}
+/* HARMONY's graph: its ON/OFF state, the loop and the current bar; the SCL page strip underneath */
+static void graph_harmony(void)
+{
+    uint32_t i, total = 0, at = 0, pos, idx = harmony_chord_at(harmony_bar), x = 12;
+    char b[12];
+    cv_text_on(12, 2, &AF_M, "HARMONY", T_TEXT, T_SURF);
+    cv_text_r(228, 2, &AF_M, harmony_on ? "ON" : "OFF", harmony_on ? T_ACCENT : T_DIM, T_SURF);
+    for (i = 0; i < 4u; i++)
+        total += (uint32_t)hdur_get(i) + 1u;
+    pos = harmony_bar % (total ? total : 4u);
+    for (i = 0; i < 4u; i++) {
+        uint32_t d = (uint32_t)hdur_get(i) + 1u, w = 216u * d / (total ? total : 4u);
+        cv_rrect((int32_t)x, 24, (int32_t)(w > 3u ? w - 2u : 2u), 10, 3,
+                 i == idx ? (harmony_on ? T_ACCENT : T_DIM) : T_RAISE, T_SURF);
+        if (pos >= d) pos -= d; else at = i;
+        x += w;
+    }
+    fmt_int(b, (int32_t)at + 1);
+    cv_text_on(12, 40, &AF_S, "BAR", T_MID, T_SURF);
+    cv_text_on(36, 40, &AF_M, b, T_TEXT, T_SURF);
+    cv_text_on(60, 40, &AF_S, harmony_edit_dur ? "DUR: K1-4" : "ROOT: K1-4", T_MID, T_SURF);
+    scl_page_strip(62);
+}
+/* LINK's graph: the same page strip, above a one-line explanation of the per-track link */
+static void graph_link(void)
+{
+    uint32_t sel = song.sel, src = link_src[sel];
+    cv_text_on(12, 2, &AF_M, "KEY LINK", T_TEXT, T_SURF);
+    cv_text_on(12, 24, &AF_S, src ? "FOLLOWS SOURCE" : "NO LINK", src ? T_THEME : T_DIM, T_SURF);
+    cv_text_on(12, 42, &AF_S, src ? "SOURCE KEY" : "K1 SOURCE", T_MID, T_SURF);
+    scl_page_strip(62);
+}
 /* the four sends as faders under their cards: a RAISE slot, the THEME fill from the bottom, a cap */
 static void graph_fx(const track_t *t, uint16_t c)
 {
@@ -2344,6 +2389,14 @@ static void draw_graph(void)
             break;
         case GR_SCALE:
             graph_scale(t, c);
+            break;
+        case GR_LINK:
+            cv_oy = 0;
+            graph_link();
+            break;
+        case GR_HARMONY:
+            cv_oy = 0;
+            graph_harmony();
             break;
         case GR_CHORD:
             cv_oy = 0;

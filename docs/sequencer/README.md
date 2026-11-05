@@ -32,11 +32,13 @@ yet tried on an FM-1.
 - **SCL > LINK** — per track. `K1 SOURCE` = `OFF` / `T1`..`T4`; the follower copies the source's `ROOT`, `SCL` and
   `QNT`. `TRN`, `CHRD` and `VOIC` stay its own. A linked track is not offered as a source (no chains). `K2 RETRIG`:
   `OFF`, `CHORD` (a held `CHRD BUS` chord retriggers when the harmony chord changes), `LINK` (when the source's key
-  changes) or `BOTH`. The page is per track; it is saved with the project (FUN11).
-- **SCL > HARMONY** — the **HARMONIC BUS**: four chords, one per bar step. `K1`..`K4` set the four roots; `OCT-`
-  switches the knobs between the `BAR` roots and the `DUR` row (`1/2/4/8` bars each); `OCT+` turns the bus on/off.
-  The chord is a diatonic triad in **T1's** `ROOT`/`SCL`. The roots, durations and on/off are saved with the project
-  (FUN11). The cards show `BAR 1..4`, the chord and its duration.
+  changes) or `BOTH`. Saved with the project (FUN11).
+- **SCL / CHORD** are one two-group page, like ENV / ENV DEST: **two rows of four cells** on screen. The upper row is
+  the SCL page (ROOT SCL QNT TRN), the lower one CHORD (CHRD VOIC LATCH); the page you tapped is the row K1..K4 edit,
+  the other is a view. **HARMONY** is the same two-row layout: the upper row is `BAR 1..4` (the chord names), the
+  lower row the four durations (`1/2/4/8` bars); `OCT-` switches K1..K4 between the roots and the durations, `OCT+`
+  turns the bus on/off, and the header shows `ON`/`OFF`. The roots, durations and on/off are saved with the project
+  (FUN11).
 - **Clock:** the bus counts the transport's musical bars, not an audio beat: the internal BPM clock or the external
   MIDI clock, whichever the sequencer uses. `PLAY` starts at BAR 1; `STOP` holds the chord; `CONT`/external Continue
   goes on; `GLO + OCT+` (BAR RESET) returns to BAR 1. Journey `CONT`/`START` shares the same bars; Journey `FREE` has
