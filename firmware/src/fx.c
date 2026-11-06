@@ -145,8 +145,8 @@ static int32_t lc_l1, lc_l2, lc_r1, lc_r2, dc_l, dc_r, dce_l, dce_r;
  * to +-31 at the output after silence.) */
 static inline int32_t dc_block(int32_t x, int32_t *dc, int32_t *err)
 {
-    int32_t e = (x << 6) - *dc + *err, d = e >> 12;
-    *err = e - (d << 12);
+    int32_t e = x * 64 - *dc + *err, d = e >> 12;
+    *err = (int32_t)((uint32_t)e & 4095u);
     *dc += d;
     return x - ((*dc + 32) >> 6);
 }
@@ -155,7 +155,7 @@ static int32_t lce[4];
 static inline int32_t lowcut1(int32_t x, int32_t *lc, int32_t *err, uint32_t sh)   /* x minus its one-pole low-pass */
 {
     int32_t e = x - *lc + *err, d = e >> sh;
-    *err = e - (d << sh);
+    *err = (int32_t)((uint32_t)e & ((1u << sh) - 1u));
     *lc += d;
     return x - *lc;
 }
@@ -1106,7 +1106,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             uint32_t ri = (uint32_t)r >> 8;
             int32_t f = r & 255, c0 = cho_buf[(fx.cho_w - ri) & (CHO_LEN - 1u)];
             int32_t c1 = cho_buf[(fx.cho_w - ri - 1u) & (CHO_LEN - 1u)];
-            y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
+            y += (c0 + (((c1 - c0) * f) >> 8)) * 2;
         }
         fx.cho_w++;
         if (rt == 3u) {
@@ -1142,7 +1142,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             if (++st.delay_fill >= DLY_LEN)
                 st.delay_dirty = 0;
         }
-        y += mulq15(x << 1, dmix);
+        y += mulq15(x * 2, dmix);
         wet[i] = y;
     }
     hl.side = 0;
@@ -1233,7 +1233,7 @@ static inline int32_t ins_shape(uint32_t ty, int32_t v, uint32_t sh)
     case IT_FUZZ:
         return v > 0 ? (v > 20000 ? 20000 : v) : softclip(v) >> 1;
     case IT_CRUSH:                                      /* sh: 16 - BITS; to the nearest step */
-        return sh ? ((v + (1 << (sh - 1u))) >> sh) << sh : v;
+        return sh ? ((v + (1 << (sh - 1u))) >> sh) * (int32_t)(1u << sh) : v;
     default:
         return v;
     }

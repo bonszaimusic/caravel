@@ -261,6 +261,7 @@ static void chord_live_sync(uint32_t i);
 static void chord_panic(uint32_t i);
 static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn);
 static int chord_owner_fallback(uint32_t i, uint32_t *src, uint8_t *old, uint32_t *oldn);
+static int chord_note_held(uint32_t i, uint32_t note);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
@@ -286,8 +287,11 @@ static void link_retrigger(uint32_t i)
      * root/fifth and never sound the new third. */
     nn = chord_make(t, src, out, &r, &mask);
     chord_last[k].key = (uint8_t)clamp((int32_t)src, 0, 127);
+    /* Move this chord's owners first. Other voicings may still own one of its old pitches. */
+    retrigger_owners(i, old, oldn, out, nn);
     for (j = 0; j < oldn; j++)
-        trk_note_off(t, old[j]);                    /* fallback selected this owner's list, not the stale cache */
+        if (!chord_note_held(k, old[j]))
+            trk_note_off(t, old[j]);
     chord_last[k].n = (uint8_t)nn;
     chord_last[k].root = (uint8_t)clamp(r, 0, 127);
     chord_last[k].mask = mask;
@@ -296,5 +300,4 @@ static void link_retrigger(uint32_t i)
     for (j = 0; j < nn; j++)
         if (out[j])
             trk_note_on(t, out[j], chord_last[k].vel ? chord_last[k].vel : 96u);
-    retrigger_owners(i, old, oldn, out, nn);
 }

@@ -6840,6 +6840,85 @@ static int test_harmony_owner_lifecycle(void)
     return bad;
 }
 
+/* Different +OCT owners share one pitch; retriggering the newest must retain the other's whole chord. */
+static int test_harmony_owner_overlap(void)
+{
+    static const uint8_t both_c[] = {36, 48, 52, 55, 60, 64, 67};
+    static const uint8_t low_c[] = {36, 48, 52, 55};
+    static const uint8_t high_f[] = {53, 65, 69, 72};
+    static const uint8_t both_cf[] = {36, 48, 52, 55, 53, 65, 69, 72};
+    static const uint8_t high_c[] = {48, 60, 64, 67};
+    uint32_t mode, low_first;
+    int bad = 0;
+    for (mode = 0; mode < 4u; mode++)
+        for (low_first = 0; low_first < 2u; low_first++) {
+            int low_midi = mode == 1u || mode == 3u;
+            int high_midi = mode == 1u || mode == 2u;
+            int ok;
+            harmony_owner_reset();
+            trk[0].p[P_VOIC] = VC_BASS;
+            song.octave = -1;
+            if (low_midi) harmony_owner_midi(0x90, 48, 90);
+            else harmony_owner_key(7, 1);
+            if (high_midi) harmony_owner_midi(0x90, 60, 110);
+            else harmony_owner_key(19, 1);
+            ok = harmony_owner_notes(both_c, NELEM(both_c));
+            harmony_owner_boundary();
+            ok &= harmony_bar == 1u && harmony_owner_notes(both_cf, NELEM(both_cf));
+            if (low_first) {
+                if (low_midi) harmony_owner_midi(0x80, 48, 0);
+                else harmony_owner_key(7, 0);
+                ok &= harmony_owner_notes(high_f, NELEM(high_f));
+            } else {
+                if (high_midi) harmony_owner_midi(0x80, 60, 0);
+                else harmony_owner_key(19, 0);
+                ok &= harmony_owner_notes(low_c, NELEM(low_c));
+            }
+            harmony_owner_boundary();
+            ok &= harmony_bar == 2u && harmony_owner_notes(low_first ? high_c : low_c, 4);
+            if (low_first) {
+                if (high_midi) harmony_owner_midi(0x80, 60, 0);
+                else harmony_owner_key(19, 0);
+            } else {
+                if (low_midi) harmony_owner_midi(0x80, 48, 0);
+                else harmony_owner_key(7, 0);
+            }
+            ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+            harmony_owner_boundary();
+            ok &= harmony_owner_notes(0, 0);
+            printf("ui: overlap source %u, %s released first: ", mode, low_first ? "low" : "high");
+            bad += check("BUS retrigger preserves shared pitch and both release identities", ok);
+        }
+    for (low_first = 0; low_first < 2u; low_first++) {
+        int ok;
+        harmony_owner_reset();
+        trk[0].p[P_VOIC] = VC_BASS;
+        harmony_owner_midi(0xB0, 64, 127);
+        harmony_owner_midi(0x90, 48, 90);
+        harmony_owner_midi(0x90, 48, 0);          /* velocity-zero release, retained by sustain */
+        harmony_owner_midi(0x90, 60, 110);
+        ok = harmony_owner_notes(both_c, NELEM(both_c));
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(both_cf, NELEM(both_cf));
+        if (low_first) {
+            harmony_owner_midi(0xB0, 64, 0);
+            ok &= harmony_owner_notes(high_f, NELEM(high_f));
+            harmony_owner_midi(0x90, 60, 0);
+        } else {
+            harmony_owner_midi(0x80, 60, 0);
+            ok &= harmony_owner_notes(both_cf, NELEM(both_cf));
+            harmony_owner_midi(0xB0, 64, 0);
+        }
+        ok &= harmony_owner_notes(0, 0);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+        bad += check(low_first ? "BUS overlap: pedal-up preserves the held MIDI owner until velocity-zero release" :
+                                "BUS overlap: sustained owners end together on pedal-up", ok);
+    }
+    usb.config = 0;
+    return bad;
+}
+
 /* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
  * notes themselves. */
 static int test_latch_retrigger(void)
@@ -11069,6 +11148,7 @@ int main(void)
     bad += test_harmony_page();
     bad += test_latch_retrigger();
     bad += test_harmony_owner_lifecycle();
+    bad += test_harmony_owner_overlap();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();

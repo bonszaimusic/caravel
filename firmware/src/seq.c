@@ -508,6 +508,13 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
     }
 }
 
+static int midi_note_held(const track_t *t, uint32_t note);
+static int midi_local_held(const track_t *t, uint32_t note);
+static int chord_note_held(uint32_t i, uint32_t note)
+{
+    return midi_local_held(&trk[i], note) || midi_note_held(&trk[i], note) || lat_get(lat_stay[i], note);
+}
+
 static int midi_any_held(const track_t *t);
 static void arp_drop(track_t *t, uint32_t note);
 /* a note of track t sounds now because LATCH keeps it (without ARP: a voice or the mono stack plays it) */

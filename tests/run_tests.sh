@@ -385,6 +385,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O1 -g -w -fsanitize=undefined -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src \
         -o "$OUT/drum_output_test" tests/drum_output_test.c -lm
     run "DRUM / DRUM-X bipolar output, levels, drive, ramps and mute (UBSan including shifts)" "$OUT/drum_output_test"
+    $CC -O1 -g -w -fsanitize=undefined -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src \
+        -o "$OUT/fx_feedback_test" tests/fx_feedback_test.c -lm
+    run "DC/lowcut wide references and host sample-object addressing (UBSan including shifts/bounds)" "$OUT/fx_feedback_test"
     # The host UI suite exercises SLICE's built-in BREAK and PIANO. A target build with FELUCCA_SLICE=0 writes
     # {0} fixtures; rebuild the host fixtures for the slice tests instead of reporting six false failures.
     if ! grep -q '^#define SLC_BREAK_BPM ' build/gen/felucca_samples.h 2>/dev/null; then
@@ -392,6 +395,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     fi
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test" tests/ui_test.c -lm
     run "UI: sounds keep steps, undo, recording, MIDI overflow, pending saves, panel recovery, drum grid, song chain, GREY gray, MONO neutral" "$OUT/ui_test"
+    $CC -O1 -g -w -fsanitize=undefined -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src \
+        -o "$OUT/ui_ubsan_test" tests/ui_test.c -lm
+    run "Complete UI with UBSan: shifts, bounds, arithmetic and Harmony ownership (no suppressions)" "$OUT/ui_ubsan_test"
     $CC -w -DFELUCCA_CPU2=0 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_c1" tests/ui_test.c -lm
     run "UI, a FELUCCA_CPU2=0 build: MENU > SYSTEM without 2ND CORE, the rest as the default build" "$OUT/ui_test_c1"
     $CC -DPREEMPT -g -fwrapv -fsanitize=address,undefined -fno-sanitize=shift -fno-sanitize-recover=all -w \
