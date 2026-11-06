@@ -348,10 +348,11 @@ static void layer_tap(uint32_t l)
         lys.dt_hint = 1;
     }
     if (!acted && !name_on() && !ui.confirm && !ui.menu &&
-        !(l == LAYER_SCL && page_before < NPAGES && PAGES[page_before].fam == FAM_SCL &&
-          page_before != ui.page)) {
-        /* A page-changing SCL tap must stay a page step, or two quick SCL taps jump back and lock (the
-         * "SCL hangs"). Other families keep #83's second-tap lock. */
+        !(l == LAYER_SCL && page_before != ui.page &&
+          (lys.nv.home || (page_before < NPAGES && PAGES[page_before].fam == FAM_SCL) ||
+           (page_before < NPAGES && PAGES[page_before].fam == FAM_SEQ)))) {
+        /* A page-changing SCL tap from SCL itself, HOME or SEQ must stay a page step, or two quick taps
+         * lock/jump back (the "SCL hangs"). SCL from ENV keeps #83's second-tap lock. */
         lys.dt_l = (uint8_t)l;
         lys.dt_ms = fm1_ms;
     } else {

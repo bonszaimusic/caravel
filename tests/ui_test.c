@@ -6720,6 +6720,27 @@ static int test_scl_page_tap(void)
     }
     ok &= cur_page()->graph == GR_SCALE;
     bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
+    /* uninterrupted rapid taps, starting from each page: no lock, no jump back */
+    ok = 1;
+    for (uint32_t start = 0; start < 4u; start++) {
+        ui_power_on();
+        go_page(order[start]);
+        for (uint32_t j = 0; j < 4u; j++) {
+            press(B_SCL);
+            ok &= !ui.lock && !ui.home && cur_page()->graph == order[(start + j + 1u) & 3u];
+        }
+    }
+    bad += check("SCL rapid taps from every SCL page: no layer lock, the next page every time", ok);
+    /* entering from HOME and from SEQ: the first SCL tap opens SCL, the next pages on */
+    ok = 1;
+    ui_power_on(); go_home(); frame();
+    press(B_SCL); printf("ENTRY home1 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_SCALE;
+    press(B_SCL); printf("ENTRY home2 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    ui_power_on(); open_family(FAM_SEQ); frame();
+    press(B_SCL); printf("ENTRY seq1 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_SCALE;
+    press(B_SCL); printf("ENTRY seq2 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    bad += check("SCL entry from HOME and SEQ pages without a lock", ok);
+    /* double tap from ENV: SCL lock stays on the page the tap opened; a tap closes it */
     ui_power_on();
     go_title("ENV"); frame();
     press(B_SCL); press(B_SCL); frames(100);
