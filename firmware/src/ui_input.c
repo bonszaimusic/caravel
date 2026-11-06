@@ -1578,16 +1578,7 @@ static int page_tap(uint32_t b)
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
-    if (b == B_SCL && !ui.home) {                        /* SCL is the row key inside its family */
-        if (str_eq(cur_page()->title, "SCL") || str_eq(cur_page()->title, "CHORD")) {
-            const char *want = str_eq(cur_page()->title, "SCL") ? "CHORD" : "SCL";
-            for (f = 0; f < NPAGES; f++)
-                if (str_eq(PAGES[f].title, want)) { ui.page = (uint8_t)f; break; }
-            ui.fam_last[FAM_SCL] = ui.page;
-            ui_message(want);
-            ui.force = 1;
-            return 1;
-        }
+    if (b == B_SCL && !ui.home) {                        /* LINK/HARMONY are rows; SCL/CHORD are pages */
         if (cur_page()->graph == GR_LINK) {
             link_setup_row = (uint8_t)!link_setup_row;
             ui_message(link_setup_row ? "HARMONY SETUP" : "LINK");
