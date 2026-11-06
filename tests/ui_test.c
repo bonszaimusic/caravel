@@ -6757,6 +6757,27 @@ static int test_latch_retrigger(void)
         ok &= chord_last[0].root <= base + 12u && chord_last[0].root + 12u >= base;
     }
     bad += check("CHRD BUS retriggers stay in the input key's octave over repeated cycles", ok);
+    {
+        uint32_t g = 0;
+        seq_stop();
+        for (i = 0; i < NVOICE; i++)
+            if (trk[0].v[i].active && trk[0].v[i].gate) g++;
+        ok = g == 0u;
+    }
+    bad += check("STOP releases a retriggered CHRD BUS chord (no hanging tones)", ok);
+    /* A live key follows HARMONY on a follower track, too. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF; trk[0].p[P_VOICE] = V_POLY;
+    hroot_set(0, 0); hdur_set(0, 0); harmony_bar = 0; kb_vel = 100;
+    kb_note[0] = 61;                                /* C# -> nearest C-major bus tone */
+    key_on(0, &trk[0]);
+    ok = 0;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate &&
+            (trk[0].v[i].note == 60u || trk[0].v[i].note == 64u || trk[0].v[i].note == 67u))
+            ok = 1;
+    key_off(0, &trk[0]);
+    bad += check("live key snaps to a HARMONY chord tone", ok);
     ui_power_on();
     return bad;
 }

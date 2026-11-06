@@ -1056,6 +1056,8 @@ static __attribute__((noinline)) void perf_key_remap(void)
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
+    if (harmony_on && harmony_follow[trk_index(t)] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
+        kb_note[k] = (uint8_t)harmony_snap(t, kb_note[k]);   /* live single notes follow HARMONY */
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
     kb_chn[k] = 0;
     eat = (uint32_t)latch_press(t, kb_chord[k], n);   /* LATCH STACK: the key again ends its latched notes */
@@ -1215,6 +1217,8 @@ static void seq_start(void)
         t->rat_left = 0;
         t->nd_late = t->nd_early = ND_NONE;
         t->nd_fired = 0;
+        t->arp_pos = 0xFFFFFFF;                    /* ARP phrase starts with the sequencer */
+        t->arp_idx = 0xFFFFFFFFu;
         if (t->p[P_LTRIG] && t->p[P_LSYNC])        /* LFO 2 FREE + SYNC: in time with the bars from PLAY */
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
         lfo2_trigger(t, 1);
@@ -1277,6 +1281,7 @@ static __attribute__((noinline)) void seq_stop(void)
         trk[i].nd_late = trk[i].nd_early = ND_NONE;   /* (a nudged step not played yet: not after the stop) */
         trk[i].nd_fired = 0;
     }
+    chord_stop_all();                              /* a retriggered bus chord is not in any holder list */
     chain_stop();
     motion_end();
 }

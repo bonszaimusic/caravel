@@ -54,9 +54,9 @@ yet tried on an FM-1.
   goes on; `GLO + OCT+` (BAR RESET) returns to BAR 1. Journey `CONT`/`START` shares the same bars; Journey `FREE` has
   no musical bars, so the bus holds. A song start is BAR 1; sections continue the progression.
 - **Where it acts:** strong steps (every fourth step) of the sequencer, the ARP, and `SEQ TOOLS > G5` GENERATE take a
-  chord tone. Live keys and the DRUM lanes stay the player's / the kit's — unless you set `SCL > CHORD > K1 CHRD` to
-  **BUS**: then a key plays the current bus chord, at the octave nearest the key (`CHRD BUS` falls back to `DIA3`
-  while the bus is off). A held bus chord follows `RETRIG` above; otherwise it ends with the key.
+  chord tone. With HARMONY ON, a follower track's **live keys and MIDI notes** are snapped to the nearest bus chord
+  tone; DRUM lanes stay the kit's. If `SCL > CHORD > K1 CHRD` is **BUS**, the key plays the whole current bus chord at
+  the octave nearest the key instead (`CHRD BUS` falls back to `DIA3` while the bus is off). A held bus chord follows `RETRIG` above; otherwise it ends with the key.
 - **No hidden setup keys:** the old `GLO + G4` / `GLO + G5` shortcuts are gone. Harmony and Link live on their SCL
   pages; the GLO map stays performance only.
 - **SEQ TOOLS: G5** — **GENERATE**: a scale-aware phrase from a short motif, rests between the strong steps, and chord

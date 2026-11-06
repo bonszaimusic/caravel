@@ -231,6 +231,19 @@ static void mchord_forget(uint32_t track)               /* panic: the track's MI
 }
 
 
+/* STOP/panic: a bus chord started or retriggered by the HARMONY engine is not in the key/sequence owner lists;
+ * release it explicitly so no tone can hang. */
+static void chord_stop_all(void)
+{
+    uint32_t i, j;
+    for (i = 0; i < NTRK; i++) {
+        for (j = 0; j < chord_last[i].n; j++)
+            if (chord_last[i].note[j])
+                trk_note_off(&trk[i], chord_last[i].note[j]);
+        chord_last[i].n = 0;
+    }
+}
+
 /* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
  * chord / the linked scale. Per track; only CHRD BUS has a held chord to follow (the sequencer and ARP retrigger
  * their own steps anyway). */
