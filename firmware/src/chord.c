@@ -23,11 +23,14 @@ static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
 };
 
 static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
+static uint8_t kb_midi[27][CHORD_MAX], kb_midin[27];  /* the notes key k last sent to MIDI OUT: retriggers move
+                                                       * only the local list, so the external NoteOns stay matched */
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: track + 1, 0 = free */
 static mchord_t mchord[MCHORD_N];
 /* the last chord played per track (the CHORD page shows it): its root, notes, and the shape's tones above the
  * root (bit i = i semitones, 0..11) */
 static struct { uint8_t root, key, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen, vel; } chord_last[NTRK];
+static uint8_t chord_live[NTRK];        /* an owner still holds the CHRD BUS chord: eligibility for retrigger */
 
 /* 1 = the track's keys are a kit: no chords */
 static int chord_kit(const track_t *t)
@@ -168,6 +171,8 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
         for (i = 0; i < CHORD_MAX; i++)
             chord_last[k].note[i] = i < m ? out[i] : 0u;
         chord_last[k].gen++;
+        if (t->p[P_CHRD] == CH_BUS)
+            chord_live[k] = 1;
     }
     return m;
 }
@@ -241,6 +246,7 @@ static void chord_stop_all(void)
             if (chord_last[i].note[j])
                 trk_note_off(&trk[i], chord_last[i].note[j]);
         chord_last[i].n = 0;
+        chord_live[i] = 0;
     }
 }
 
@@ -249,6 +255,7 @@ static void chord_stop_all(void)
  * their own steps anyway). */
 static void retrigger_latched(uint32_t i);
 static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn);
+static void chord_live_sync(uint32_t i);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
@@ -258,6 +265,10 @@ static void link_retrigger(uint32_t i)
     uint16_t mask = 0;
     for (j = 0; j < oldn; j++)
         old[j] = chord_last[k].note[j];
+    if (!chord_live[k]) {                          /* released chord: not a reason to sound again */
+        retrigger_latched(i);
+        return;
+    }
     if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n) {
         retrigger_latched(i);                          /* LATCH without CHRD BUS */
         return;

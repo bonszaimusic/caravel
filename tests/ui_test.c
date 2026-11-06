@@ -6778,7 +6778,12 @@ static int test_latch_retrigger(void)
     for (i = 0; i < NVOICE; i++)
         if (trk[0].v[i].active && trk[0].v[i].gate)
             ok = 0;
-    bad += check("key-up releases a rebuilt CHRD BUS chord", ok);
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);                              /* released: must not resurrect the cached chord */
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    bad += check("key-up releases a rebuilt CHRD BUS chord and no later harmony step revives it", ok);
     /* A snapped MIDI note must keep the original MIDI key as its release identity. */
     ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
     trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
@@ -6799,6 +6804,46 @@ static int test_latch_retrigger(void)
          trk[0].mono_note == 67u;
     trk_all_off(&trk[0]);
     bad += check("mixed latched/held mono retrigger keeps LAST priority", ok);
+    /* MIDI OUT is a separate ownership list: a retrigger must not change which notes key-up sends off. */
+    ui_power_on(); usb.config = 1;
+    harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60;
+    {
+        uint32_t start = mo_w, on[16], off[16], non = 0, noff = 0;
+        key_on(0, &trk[0]);
+        hroot_set(0, 5); harmony_bar = 1;
+        link_retrigger(0);
+        key_off(0, &trk[0]);
+        for (i = start; i != mo_w; i++) {
+            uint32_t pk = midi_out_q[i % MQ];
+            uint32_t st = (pk >> 8) & 0xF0u, nt = (pk >> 16) & 0x7Fu;
+            if (st == 0x90u && non < 16u) on[non++] = nt;
+            if (st == 0x80u && noff < 16u) off[noff++] = nt;
+        }
+        ok = 1;
+        for (i = 0; i < non; i++) {
+            uint32_t j;
+            for (j = 0; j < noff && off[j] != on[i]; j++)
+                ;
+            if (j == noff) ok = 0;
+        }
+        ok &= non > 0u && noff >= non;
+    }
+    bad += check("MIDI OUT retrigger keeps every NoteOn matched by a NoteOff", ok);
+    usb.config = 0;
+    /* A full mchord table must not write past its end for a snapped MIDI note. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    hroot_set(0, 0); hdur_set(0, 0); harmony_bar = 0;
+    for (i = 0; i < MCHORD_N; i++) {
+        mchord[i].id = 1; mchord[i].n = 1; mchord[i].src = 60; mchord[i].note[0] = 60;
+    }
+    midi_play(&trk[0], 0, 61, 100);                 /* snapped to 60, but no mapping slot: play original 61 */
+    ok = mchord[MCHORD_N - 1].id == 1u && mchord[MCHORD_N - 1].src == 60u;
+    input_off(&trk[0], 61);
+    bad += check("full mchord table falls back without an out-of-bounds write", ok);
     /* A live key follows HARMONY on a follower track, too. */
     ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
     trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF; trk[0].p[P_VOICE] = V_POLY;

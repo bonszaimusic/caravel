@@ -307,6 +307,7 @@ static int arp_replace(const track_t *t)
     return m == LT_NEW || (t->p[P_AHOLD] && m != LT_STACK);
 }
 
+static void chord_live_sync(uint32_t i);
 /* the latched notes end (LATCH off, ARP on, a new set, the release gesture; the notes a key holds are not among them) */
 static __attribute__((noinline)) void latch_free(track_t *t)
 {
@@ -317,6 +318,7 @@ static __attribute__((noinline)) void latch_free(track_t *t)
             lat_vel[k][n] = 0;
         }
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
+    chord_live_sync(k);
 }
 /* the track's latch state is gone (a panic ended every note; trk_all_off) */
 static void latch_forget(uint32_t k)
@@ -325,6 +327,26 @@ static void latch_forget(uint32_t k)
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
     memset(lat_vel[k], 0, sizeof lat_vel[k]);
 }
+/* A rebuilt CHRD BUS chord must stay eligible only while some owner still holds it. */
+static void chord_live_sync(uint32_t i)
+{
+    uint32_t k, m;
+    for (k = 0; k < 27u; k++)
+        if (kb_chn[k] && kb_trk[k] == i) {
+            chord_live[i] = 1;
+            return;
+        }
+    for (m = 0; m < MCHORD_N; m++)
+        if (mchord[m].id == i + 1u) {
+            chord_live[i] = 1;
+            return;
+        }
+    if (lat_any(lat_stay[i]))
+        chord_live[i] = 1;
+    else
+        chord_live[i] = 0;
+}
+
 /* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note.
  * MONO/LEGATO/UNISON keep the full logical stack (a physically held newer note must stay newer) and every note
  * keeps the velocity it was played with. */
@@ -1137,6 +1159,9 @@ static void key_on(uint32_t k, track_t *t)
         kb_note[k] = (uint8_t)harmony_snap(t, kb_note[k]);   /* live single notes follow HARMONY */
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
     kb_chn[k] = 0;
+    kb_midin[k] = (uint8_t)n;
+    for (i = 0; i < n; i++)
+        kb_midi[k][i] = kb_chord[k][i];
     eat = (uint32_t)latch_press(t, kb_chord[k], n);   /* LATCH STACK: the key again ends its latched notes */
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
@@ -1155,15 +1180,20 @@ static void key_on(uint32_t k, track_t *t)
 /* key k is up: the notes it started end, but those another key still holds */
 static void key_off(uint32_t k, track_t *t)
 {
-    uint32_t n = kb_chn[k], i, mc = trk_midi_ch(trk_index(t));
+    uint32_t n = kb_chn[k], mn = kb_midin[k], i, mc = trk_midi_ch(trk_index(t));
     kb_chn[k] = 0;
+    kb_midin[k] = 0;
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
-        if (midi_local_held(t, x))
-            continue;
-        input_off(t, x);
-        midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+        if (!midi_local_held(t, x))
+            input_off(t, x);
     }
+    for (i = 0; i < mn; i++) {
+        uint32_t x = kb_midi[k][i];
+        if (!midi_local_held(t, x))
+            midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+    }
+    chord_live_sync(trk_index(t));
 }
 
 #ifdef FM1_INPUT_LAT
