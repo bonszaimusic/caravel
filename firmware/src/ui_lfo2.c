@@ -368,6 +368,7 @@ static void lfo_cards(const page_t *pg)
     uint32_t bottom;
     const dual_t *dd = dual_of(pg, &bottom);
     if (dd->kind == DK_LINK) bottom = link_setup_row ? 1u : 0u;
+    if (dd->kind == DK_HARMONY) bottom = harmony_edit_dur ? 1u : 0u;   /* the active row follows the SCL row key */
     const page_t *rps[2] = {dual_row_page(dd, 0), dual_row_page(dd, 1)};
     /* This layout has no rolling card digits; discard animations from the previous page. */
     for (uint32_t col = 0; col < 4u; col++)
