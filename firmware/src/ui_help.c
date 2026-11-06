@@ -38,7 +38,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"SCL", "[K2]SCALE[K3]QUANTIZE[SCL]CHORDS"},
     {"CHORD", "[K1]CHORD[K3]LATCH[SCL]SCL"},
     {"LINK", "[K1]SOURCE[K2]RETRIG[K4]HARM"},
-    {"HARMONY", "[SELECT]ROOT/DUR[OCT+]ON/OFF"},
+    {"HARMONY", "[SCL]HOLD[OCT+]ON/OFF"},
     {"EDIT 1", H_EDIT},
     {"EDIT 2", H_EDIT},
     {"FILTER", "[K1]LP BP HP[K2]CUTOFF[EDIT]VOICE"},

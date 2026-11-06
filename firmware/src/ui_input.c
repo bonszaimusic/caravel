@@ -1794,17 +1794,7 @@ static void ui_input(void)
         else if(g==GR_MACROMAP&&(oct&1u)){hp_open_graph(GR_MACRO);oct=0;}
     }
 #endif
-    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && !layer_held() &&
-        (oct & 2u) && cur_page()->graph == GR_HARMONY) {
-        /* OCT+: the bus on/off. OCT- is not taken here: it stays the ordinary octave-down key. The duration
-         * row is switched with SELECT or a tap of SCL. */
-        harmony_on = (uint8_t)!harmony_on;
-        harmony_base_bar = perf_bars_q16 >> 16;
-        harmony_bar = 0;
-        ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
-        oct &= ~2u;
-        ui.force = 1;
-    }
+
                       /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();

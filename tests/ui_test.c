@@ -6630,7 +6630,12 @@ static int test_harmony_page(void)
     press(B_OCTDN);                                /* OCT- is the ordinary octave-down key again */
     ok &= song.octave == -1 && harmony_edit_dur == 0u;
     song.octave = 0;
-    press(B_OCTUP);
+    press(B_OCTUP);                                /* and OCT+ the ordinary octave-up key */
+    ok &= song.octave == 1 && harmony_on == 0u;
+    song.octave = 0;
+    btn_down(B_SCL); frame();
+    press(B_OCTUP);                                /* SCL + OCT+: the HARMONY bus */
+    btn_up(B_SCL); frame();
     ok &= harmony_on != 0u && msg_is("HARMONY ON");
     hroot_set(0, 0);
     harmony_bar = 0;
@@ -6659,9 +6664,11 @@ static int test_harmony_page(void)
         ok &= cn == 3u && cr % 12 == 0 && out[0] % 12 == 0 && out[1] % 12 == 3 && out[2] % 12 == 7;
         trk[0].p[P_CHRD] = CH_OFF;
     }
-    bad += check("HARMONY page: BAR roots, SELECT DUR row, OCT- octave, OCT+ on, CHRD BUS and strong-step seq snap", ok);
+    bad += check("HARMONY page: BAR roots, SELECT DUR row, free OCT-/OCT+, SCL+OCT+ bus, CHRD BUS and strong-step seq snap", ok);
+    btn_down(B_SCL); frame();
     press(B_OCTUP);
-    bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
+    btn_up(B_SCL); frame();
+    bad += check("HARMONY page: SCL + OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
     ui_power_on();
     return bad;
 }
