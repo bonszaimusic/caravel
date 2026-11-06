@@ -6854,11 +6854,13 @@ static int test_scl_page_tap(void)
     }
     bad += check("HOME after HARMONY still copies ROOT/SCL/QNT; visible HARMONY changes no track state", ok);
     ui_power_on(); harmony_on = 1; go_title("HARMONY");
+    harmony_edit_dur = 1;                          /* stale row state must not swallow the first SCL */
+    go_title("HARMONY"); frames(4);
     press(B_SCL);
     ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
     press(B_SCL);
     ok &= cur_page()->graph == GR_SCALE && !harmony_edit_dur;
-    bad += check("SCL press on HARMONY: duration row, then the next page", ok);
+    bad += check("SCL press on HARMONY: first tap opens durations, next pages on", ok);
     /* double tap from ENV: SCL lock stays on the page the tap opened; a tap closes it */
     ui_power_on();
     go_title("ENV"); frame();
