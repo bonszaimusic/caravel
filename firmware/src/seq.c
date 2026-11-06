@@ -86,10 +86,13 @@ static uint32_t harmony_chord_at(uint32_t bar)
 static uint16_t harmony_mask_root(uint32_t idx)
 {
     const track_t *k = &trk[0];
-    uint32_t mask = scale_mask(k), notes[12], n = 0, i, at = 0, root = hroot_get(idx);
-    uint16_t out = 0;
+    uint32_t sm = scale_mask(k), abs = 0, notes[12], n = 0, i, at = 0, root = hroot_get(idx);
+    uint16_t out;
+    for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
+        if ((sm >> i) & 1u)
+            abs |= 1u << ((k->p[P_ROOT] + (int32_t)i + 120) % 12);
     for (i = 0; i < 12u; i++)
-        if ((mask >> i) & 1u)
+        if ((abs >> i) & 1u)
             notes[n++] = i;
     if (n < 3u)
         return 0;
@@ -104,8 +107,24 @@ static uint16_t harmony_mask_root(uint32_t idx)
             if (notes[i] < root)
                 at = i;
     }
-    for (i = 0; i < 3u; i++)
-        out |= (uint16_t)(1u << notes[(at + 2u * i) % n]);
+    out = (uint16_t)(1u << notes[at]);              /* a third and a fifth, not "every other scale note":
+                                                     * a pentatonic scale would otherwise give no third */
+    {
+        static const int8_t third[] = {3, 4, 2, 5};
+        static const int8_t fifth[] = {7, 6, 8};
+        uint32_t want = notes[at];
+        for (i = 0; i < sizeof third; i++)
+            if ((abs >> ((want + (uint32_t)third[i]) % 12)) & 1u) {
+                out |= (uint16_t)(1u << ((want + (uint32_t)third[i]) % 12));
+                break;
+            }
+        for (i = 0; i < sizeof fifth; i++)
+            if (!((out >> ((want + (uint32_t)fifth[i]) % 12)) & 1u) &&
+                ((abs >> ((want + (uint32_t)fifth[i]) % 12)) & 1u)) {
+                out |= (uint16_t)(1u << ((want + (uint32_t)fifth[i]) % 12));
+                break;
+            }
+    }
     return out;
 }
 static uint16_t harmony_mask_bar(uint32_t bar) { return harmony_mask_root(harmony_chord_at(bar)); }

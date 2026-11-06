@@ -237,15 +237,26 @@ static void retrigger_latched(uint32_t i);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
-    uint32_t k = trk_index(t), j;
+    uint32_t k = trk_index(t), j, nn = 0;
+    uint8_t out[CHORD_MAX];
+    int32_t r = 0;
+    uint16_t mask = 0;
     if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n) {
         retrigger_latched(i);                          /* LATCH without CHRD BUS */
         return;
     }
+    /* Rebuild the bus chord for the new harmony chord; reusing the old chord_last notes would repeat the old
+     * root/fifth and never sound the new third. */
+    nn = chord_make(t, chord_last[k].root, out, &r, &mask);
     for (j = 0; j < chord_last[k].n; j++)
         if (chord_last[k].note[j])
             trk_note_off(t, chord_last[k].note[j]);
-    for (j = 0; j < chord_last[k].n; j++)
-        if (chord_last[k].note[j])
-            trk_note_on(t, chord_last[k].note[j], chord_last[k].vel ? chord_last[k].vel : 96u);
+    chord_last[k].n = (uint8_t)nn;
+    chord_last[k].root = (uint8_t)clamp(r, 0, 127);
+    chord_last[k].mask = mask;
+    for (j = 0; j < CHORD_MAX; j++)
+        chord_last[k].note[j] = j < nn ? out[j] : 0u;
+    for (j = 0; j < nn; j++)
+        if (out[j])
+            trk_note_on(t, out[j], chord_last[k].vel ? chord_last[k].vel : 96u);
 }

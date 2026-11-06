@@ -6694,6 +6694,7 @@ static int test_latch_retrigger(void)
     int bad = 0, ok = 1;
     track_t *t = &trk[0];
     uint32_t i, n, hits = 0;
+    uint16_t mask;
     static const uint8_t N[3] = {60, 64, 67};
     ui_power_on();
     t->p[P_CHRD] = CH_OFF;
@@ -6710,6 +6711,26 @@ static int test_latch_retrigger(void)
     ok = hits == 3u;
     latch_free(t);
     bad += check("LATCH chord retrigger without CHRD BUS sounds all three latched notes", ok);
+    ui_power_on();
+    /* HARMONY's scale mask is absolute; a pentatonic scale must still yield a third, and CHRD BUS retrigger must
+     * rebuild the bus chord instead of replaying the old root/fifth. */
+    harmony_on = 1;
+    trk[0].p[P_ROOT] = 9; trk[0].p[P_SCALE] = 6;       /* root A, minor pentatonic */
+    hroot_set(0, 9); hdur_set(0, 0);
+    mask = harmony_mask_root(0);
+    ok = ((mask >> 9) & 1u) && (((mask >> 0) & 1u) || ((mask >> 1) & 1u)) && ((mask >> 4) & 1u);
+    trk[0].p[P_CHRD] = CH_BUS; trk[0].p[P_VOICE] = V_POLY;
+    hroot_set(0, 0); harmony_bar = 0;
+    {
+        uint8_t out[CHORD_MAX]; int32_t cr; uint16_t cm;
+        chord_build(&trk[0], 60, out);
+        chord_make(&trk[0], 60, out, &cr, &cm);
+        hroot_set(0, 4);                               /* E: a new bus chord */
+        link_retrigger(0);
+        ok &= chord_last[0].mask != cm && (chord_last[0].mask & (1u << ((chord_last[0].root + 3u) % 12u)) ||
+                                           (chord_last[0].mask & (1u << ((chord_last[0].root + 4u) % 12u))));
+    }
+    bad += check("HARMONY mask keeps a third for pentatonic/nonzero roots; CHRD BUS retrigger rebuilds it", ok);
     ui_power_on();
     return bad;
 }
@@ -6783,8 +6804,8 @@ static int test_scl_page_tap(void)
     ui_power_on(); ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16); harmony_on = 1; go_page(GR_SCALE); frames(4);
     ok = 1;
     {
-        static const uint8_t cycle[4] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_SCALE};
-        for (uint32_t i = 0; i < 4u; i++) {
+        static const uint8_t cycle[3] = {GR_CHORD, GR_LINK, GR_HARMONY};
+        for (uint32_t i = 0; i < 3u; i++) {
             turn(EN_SELECT, 1);
             ok &= cur_page()->graph == cycle[i];
             if (cur_page()->graph == GR_SCALE) {
@@ -6802,8 +6823,9 @@ static int test_scl_page_tap(void)
             }
         }
     }
-    ok &= cur_page()->graph == GR_SCALE;
-    bad += check("SELECT pages SCL -> CHORD -> LINK -> HARMONY -> SCL", ok);
+    turn(EN_SELECT, 1);                          /* SELECT on HARMONY highlights DURATIONS */
+    ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur;
+    bad += check("SELECT pages SCL -> CHORD -> LINK -> HARMONY and highlights DURATIONS", ok);
     /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
     for (uint32_t start = 0; start < 4u; start++) {

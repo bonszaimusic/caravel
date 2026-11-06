@@ -43,12 +43,12 @@ yet tried on an FM-1.
   (ROOT SCL QNT TRN), the lower one CHORD (CHRD VOIC LATCH); the page you are on is the K1..K4 edit row, the other is
   a view. The SCL button and SELECT both step SCL -> CHORD -> LINK -> HARMONY, exactly like ENV. **HARMONY** follows at
   the end of the family: its upper row is `BAR 1..4` (the chord names), the lower row the four durations
-  (`1/2/4/8` bars); on the HARMONY page the first `SCL` press switches roots to durations, the next steps on;
-  `K1..K4` edit roots or durations. It is visible only while the bus is ON; the bus switch is the lower row of
+  (`1/2/4/8` bars); on the HARMONY page **SELECT** switches ROOT/DURATION and updates the highlighted row; the
+  first `SCL` press also switches roots to durations, and the next SCL press steps on. `K1..K4` edit the active row. It is visible only while the bus is ON; the bus switch is the lower row of
   LINK / HARMONY SETUP. The roots, durations and on/off are saved with the project (FUN11).
 - **Page order:** `SCL -> CHORD -> LINK/HARMONY SETUP -> HARMONY` while HARMONY is ON; `SCL -> CHORD -> LINK/HARMONY SETUP`
-  while it is OFF. `SELECT` scrolls the pages; a tap of `SCL` first switches the active row where the page has
-  one, then steps the page. `SCL+OCT+` is not a HARMONY shortcut; OCT- and OCT+ are the normal octave keys.
+  while it is OFF. `SELECT` scrolls the pages (on HARMONY it switches ROOT/DURATION); a tap of `SCL` first switches
+  the active row where the page has one, then steps the page. `SCL+OCT+` is not a HARMONY shortcut; OCT- and OCT+ are the normal octave keys.
 - **Clock:** the bus counts the transport's musical bars, not an audio beat: the internal BPM clock or the external
   MIDI clock, whichever the sequencer uses. `PLAY` starts at BAR 1; `STOP` holds the chord; `CONT`/external Continue
   goes on; `GLO + OCT+` (BAR RESET) returns to BAR 1. Journey `CONT`/`START` shares the same bars; Journey `FREE` has

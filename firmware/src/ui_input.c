@@ -2124,7 +2124,11 @@ static void ui_input(void)
         else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
         else
 #endif
-        if (!glo && sel_mode() >= SEL_MODW) {  /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
+        if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_HARMONY) {
+            harmony_edit_dur = (uint8_t)(s > 0);             /* HARMONY: SELECT highlights ROOT/DUR */
+            ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
+            ui.force = 1;
+        } else if (!glo && sel_mode() >= SEL_MODW) {  /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE) {   /* MENU > SELECT PAGE (1.5.5, #188): the pages, a detent
                                                          * each (ui.c page_turn); the tempo is GLO + SELECT, CLOCK's
