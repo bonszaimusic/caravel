@@ -6621,15 +6621,15 @@ static int test_harmony_page(void)
     turn(EN_K2, 2);
     ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
     turn(EN_SELECT, 1);                            /* SELECT: the duration row */
-    ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY;
-    turn(EN_SELECT, 1);                            /* back to roots */
-    ok &= harmony_edit_dur == 0u;
-    press(B_OCTDN);                                /* the lower row: K1..K4 edit the durations */
-    ok &= harmony_edit_dur != 0u && msg_is("HARMONY: DURATIONS");
+    ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
     ok &= hdur_get(0) == 1u;
-    press(B_OCTDN);                                /* back to the roots */
+    turn(EN_SELECT, 1);                            /* back to the roots */
     ok &= harmony_edit_dur == 0u && msg_is("HARMONY: ROOTS");
+    song.octave = 0;
+    press(B_OCTDN);                                /* OCT- is the ordinary octave-down key again */
+    ok &= song.octave == -1 && harmony_edit_dur == 0u;
+    song.octave = 0;
     press(B_OCTUP);
     ok &= harmony_on != 0u && msg_is("HARMONY ON");
     hroot_set(0, 0);
@@ -6659,7 +6659,7 @@ static int test_harmony_page(void)
         ok &= cn == 3u && cr % 12 == 0 && out[0] % 12 == 0 && out[1] % 12 == 3 && out[2] % 12 == 7;
         trk[0].p[P_CHRD] = CH_OFF;
     }
-    bad += check("HARMONY page: BAR roots, OCT- DUR row, OCT+ on, CHRD BUS and strong-step seq snap", ok);
+    bad += check("HARMONY page: BAR roots, SELECT DUR row, OCT- octave, OCT+ on, CHRD BUS and strong-step seq snap", ok);
     press(B_OCTUP);
     bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
     ui_power_on();

@@ -1794,19 +1794,15 @@ static void ui_input(void)
         else if(g==GR_MACROMAP&&(oct&1u)){hp_open_graph(GR_MACRO);oct=0;}
     }
 #endif
-    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && !layer_held() && oct &&
-        cur_page()->graph == GR_HARMONY) {
-        /* OCT+: the bus on/off; OCT-: K1..K4 edit the DUR row instead of the roots */
-        if (oct & 2u) {
-            harmony_on = (uint8_t)!harmony_on;
-            harmony_base_bar = perf_bars_q16 >> 16;
-            harmony_bar = 0;
-            ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
-        } else if (oct & 1u) {
-            harmony_edit_dur = (uint8_t)!harmony_edit_dur;
-            ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
-        }
-        oct = 0;
+    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && !layer_held() &&
+        (oct & 2u) && cur_page()->graph == GR_HARMONY) {
+        /* OCT+: the bus on/off. OCT- is not taken here: it stays the ordinary octave-down key. The duration
+         * row is switched with SELECT or a tap of SCL. */
+        harmony_on = (uint8_t)!harmony_on;
+        harmony_base_bar = perf_bars_q16 >> 16;
+        harmony_bar = 0;
+        ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
+        oct &= ~2u;
         ui.force = 1;
     }
                       /* (a SET layer's OCT-: put back) */
