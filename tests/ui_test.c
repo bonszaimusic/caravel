@@ -6731,6 +6731,25 @@ static int test_latch_retrigger(void)
                                            (chord_last[0].mask & (1u << ((chord_last[0].root + 4u) % 12u))));
     }
     bad += check("HARMONY mask keeps a third for pentatonic/nonzero roots; CHRD BUS retrigger rebuilds it", ok);
+    /* Repeated four-bar cycles must not walk the bus chord up an octave each time: retain the input key. */
+    ui_power_on(); harmony_on = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS; trk[0].p[P_VOICE] = V_POLY;
+    for (i = 0; i < 4u; i++) { hdur_set(i, 0); hroot_set(i, 0); }
+    hroot_set(1, 7);                                   /* C then G */
+    harmony_bar = 0;
+    {
+        uint8_t out[CHORD_MAX]; int32_t cr; uint16_t cm;
+        uint8_t base;
+        chord_build(&trk[0], 60, out);
+        base = chord_last[0].root;
+        for (i = 0; i < 32u; i++) {
+            harmony_bar = (uint8_t)(i & 1u);
+            link_retrigger(0);
+            ok = chord_last[0].root >= 48u && chord_last[0].root <= 72u && chord_last[0].key == 60u;
+        }
+        ok &= chord_last[0].root <= base + 12u && chord_last[0].root + 12u >= base;
+    }
+    bad += check("CHRD BUS retriggers stay in the input key's octave over repeated cycles", ok);
     ui_power_on();
     return bad;
 }

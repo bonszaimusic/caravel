@@ -27,7 +27,7 @@ typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: t
 static mchord_t mchord[MCHORD_N];
 /* the last chord played per track (the CHORD page shows it): its root, notes, and the shape's tones above the
  * root (bit i = i semitones, 0..11) */
-static struct { uint8_t root, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen, vel; } chord_last[NTRK];
+static struct { uint8_t root, key, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen, vel; } chord_last[NTRK];
 
 /* 1 = the track's keys are a kit: no chords */
 static int chord_kit(const track_t *t)
@@ -161,6 +161,7 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
     uint32_t m = chord_make(t, root, out, &r, &mask), i, k = trk_index(t);
     if (m > 1u) {
         chord_last[k].root = (uint8_t)clamp(r, 0, 127);
+        chord_last[k].key = (uint8_t)clamp((int32_t)root, 0, 127);
         chord_last[k].mask = mask;
         chord_last[k].n = (uint8_t)m;
         chord_last[k].vel = (uint8_t)(kb_vel ? kb_vel : 96u);
@@ -247,7 +248,7 @@ static void link_retrigger(uint32_t i)
     }
     /* Rebuild the bus chord for the new harmony chord; reusing the old chord_last notes would repeat the old
      * root/fifth and never sound the new third. */
-    nn = chord_make(t, chord_last[k].root, out, &r, &mask);
+    nn = chord_make(t, chord_last[k].key, out, &r, &mask);
     for (j = 0; j < chord_last[k].n; j++)
         if (chord_last[k].note[j])
             trk_note_off(t, chord_last[k].note[j]);
