@@ -22,7 +22,7 @@ int main(void)
     assert(dx_get(0, decay_b) == 117 && dx_get(0, DX_FIRST + DX_FB) == 7);
     pk[0] = 0; assert(!dx_unpack(0, pk)); memcpy(pk, oldpk, 128);
     project_capture(&p); assert(proj_pack(&wire, &p));
-    assert(*(uint32_t *)wire.raw == PROJ_MAGIC_DX);
+    assert(*(uint32_t *)wire.raw == PROJ_MAGIC_V11);
     assert(proj_import(&q, wire.raw, sizeof wire));
     dx_reset(0); project_restore_runtime(&q);
     assert(dx_track(TSEL) && dx_get(0, decay_b) == 117);

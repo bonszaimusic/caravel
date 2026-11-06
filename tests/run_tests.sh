@@ -382,6 +382,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "step recording during playback: cursor, chords, live mode, MIDI, automation and RAM save" "$OUT/step_play_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drumx_test" tests/drumx_test.c -lm
     run "DRUM-X: fixed A/B MIDI Learn, 64 slots, project/preset, payload and audio" "$OUT/drumx_test"
+    $CC -O1 -g -w -fsanitize=undefined -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src \
+        -o "$OUT/drum_output_test" tests/drum_output_test.c -lm
+    run "DRUM / DRUM-X bipolar output, levels, drive, ramps and mute (UBSan including shifts)" "$OUT/drum_output_test"
     # The host UI suite exercises SLICE's built-in BREAK and PIANO. A target build with FELUCCA_SLICE=0 writes
     # {0} fixtures; rebuild the host fixtures for the slice tests instead of reporting six false failures.
     if ! grep -q '^#define SLC_BREAK_BPM ' build/gen/felucca_samples.h 2>/dev/null; then
