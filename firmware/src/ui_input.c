@@ -1038,7 +1038,7 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (pg->graph == GR_LINK) {                       /* K1 SOURCE, K2 RETRIG; K3/K4 show the source */
         if (link_setup_row) {                         /* the lower HARMONY SETUP row: K1 only */
             if (slot == 0u) {
-                harmony_on = (uint8_t)!harmony_on;
+                harmony_on = (uint8_t)(steps > 0);           /* positive ON, negative OFF: no multi-detent flip-flop */
                 harmony_base_bar = perf_bars_q16 >> 16;
                 harmony_bar = 0;
                 ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");

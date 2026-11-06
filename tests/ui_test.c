@@ -6673,10 +6673,10 @@ static int test_harmony_page(void)
         ok &= link_setup_row == 1u && msg_is("HARMONY SETUP");
         turn(EN_K1, 1);
         ok &= harmony_on != 0u && msg_is("HARMONY ON") && page_visible(hi);
-        turn(EN_K1, 1);
+        turn(EN_K1, -1);
         ok &= harmony_on == 0u && msg_is("HARMONY OFF") && !page_visible(hi);
     }
-    bad += check("LINK lower row: SELECT switches to HARMONY SETUP, K1 the bus; roots hidden while off", ok);
+    bad += check("LINK lower row: SCL switches to HARMONY SETUP, K1 the bus; roots hidden while off", ok);
     ui_power_on();
     return bad;
 }
