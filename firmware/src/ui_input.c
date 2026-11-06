@@ -1578,19 +1578,21 @@ static int page_tap(uint32_t b)
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
-    if (b == B_SCL && !ui.home) {                        /* LINK/HARMONY are rows; SCL/CHORD are pages */
-        if (cur_page()->graph == GR_LINK) {
-            link_setup_row = (uint8_t)!link_setup_row;
-            ui_message(link_setup_row ? "HARMONY SETUP" : "LINK");
+    if (b == B_SCL && !ui.home) {                        /* one row step, then the page step */
+        if (cur_page()->graph == GR_LINK && !link_setup_row) {
+            link_setup_row = 1;
+            ui_message("HARMONY SETUP");
             ui.force = 1;
             return 1;
         }
-        if (cur_page()->graph == GR_HARMONY) {
-            harmony_edit_dur = (uint8_t)!harmony_edit_dur;
-            ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
+        if (cur_page()->graph == GR_HARMONY && !harmony_edit_dur) {
+            harmony_edit_dur = 1;
+            ui_message("HARMONY: DURATIONS");
             ui.force = 1;
             return 1;
         }
+        link_setup_row = 0;
+        harmony_edit_dur = 0;                           /* the next SCL press is a page step */
     }
     for (f = FAM_HOME + 1u; f < FAM_COUNT; f++)        /* (GLO SEQ SAVE ..: HOME is ui_input's, home_tap) */
         if (FAM_BTN[f] == b && b != B_HOME) {

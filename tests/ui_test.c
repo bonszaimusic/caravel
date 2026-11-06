@@ -6625,8 +6625,9 @@ static int test_harmony_page(void)
     ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
     ok &= hdur_get(0) == 1u;
-    press(B_SCL);                                  /* back to the roots */
-    ok &= harmony_edit_dur == 0u && msg_is("HARMONY: ROOTS");
+    press(B_SCL);                                  /* the next SCL is a page step */
+    ok &= harmony_edit_dur == 0u;
+    go_title("HARMONY"); frames(4);
     song.octave = 0;
     press(B_OCTDN);                                /* OCT- is the ordinary octave-down key again */
     ok &= song.octave == -1 && harmony_edit_dur == 0u;
@@ -6856,8 +6857,8 @@ static int test_scl_page_tap(void)
     press(B_SCL);
     ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
     press(B_SCL);
-    ok &= cur_page()->graph == GR_HARMONY && !harmony_edit_dur;
-    bad += check("SCL press on HARMONY: duration row, then back to roots", ok);
+    ok &= cur_page()->graph == GR_SCALE && !harmony_edit_dur;
+    bad += check("SCL press on HARMONY: duration row, then the next page", ok);
     /* double tap from ENV: SCL lock stays on the page the tap opened; a tap closes it */
     ui_power_on();
     go_title("ENV"); frame();
