@@ -333,7 +333,7 @@ static void chord_live_sync(uint32_t i)
 {
     uint32_t k, m;
     for (k = 0; k < 27u; k++)
-        if (kb_chn[k] && kb_trk[k] == i) {
+        if (kb_chn[k] && kb_live[k] && kb_trk[k] == i) {
             chord_live[i] = 1;
             return;
         }
@@ -346,6 +346,48 @@ static void chord_live_sync(uint32_t i)
         chord_live[i] = 1;
     else
         chord_live[i] = 0;
+}
+
+/* Panic/CC120: no held panel key may re-arm the cached bus chord until a fresh press. The key's outgoing
+ * NoteOff list stays intact; only its retrigger eligibility is gone. */
+static void chord_panic(uint32_t i)
+{
+    uint32_t k;
+    for (k = 0; k < 27u; k++)
+        if (kb_trk[k] == i)
+            kb_live[k] = 0;
+    chord_live[i] = 0;
+}
+
+/* Is there a real owner whose note list is exactly the cached chord? An unrelated remaining key (different
+ * octave/voicing) must not resurrect chord_last. */
+static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn)
+{
+    uint32_t k, m, j;
+    for (k = 0; k < 27u; k++) {
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i || kb_chn[k] != oldn)
+            continue;
+        for (j = 0; j < oldn && kb_chord[k][j] == old[j]; j++)
+            ;
+        if (j == oldn)
+            return 1;
+    }
+    for (m = 0; m < MCHORD_N; m++) {
+        mchord_t *c = &mchord[m];
+        if (c->id != i + 1u || c->n != oldn)
+            continue;
+        for (j = 0; j < oldn && c->note[j] == old[j]; j++)
+            ;
+        if (j == oldn)
+            return 1;
+    }
+    if (oldn) {
+        for (j = 0; j < oldn; j++)
+            if (!lat_get(lat_stay[i], old[j]))
+                return 0;
+        return 1;
+    }
+    return 0;
 }
 
 /* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note.
@@ -623,13 +665,20 @@ static __attribute__((noinline)) void arp_chord_off(track_t *t, int rec)   /* th
 
 static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list, uint32_t n)
 {
-    uint32_t i, nt, top = 0, o = t->arp_idx % (uint32_t)(t->p[P_AOCT] > 0 ? t->p[P_AOCT] : 1);
+    uint32_t i, j, nt, o = t->arp_idx % (uint32_t)(t->p[P_AOCT] > 0 ? t->p[P_AOCT] : 1);
+    uint8_t used[CHORD_MAX], nu = 0;
     if (n > 4u)
         n = 4u;
-    for (i = 0; i < n; i++) {                       /* the held notes (sorted or as played), o octaves up */
+    for (i = 0; i < n; i++) {
         nt = (uint32_t)clamp((int32_t)list[i] + 12 * (int32_t)o, 0, 127);
-        if (nt == 127u && top++)
-            continue;                               /* (notes clamped onto the top one: once) */
+        nt = harmony_snap(t, nt);                   /* AM_CHORD follows HARMONY like every other ARP mode */
+        for (j = 0; j < nu && used[j] != nt; j++)
+            ;
+        if (j == nu && nu < CHORD_MAX)
+            used[nu++] = (uint8_t)nt;
+    }
+    for (i = 0; i < nu; i++) {
+        nt = used[i];
         if (!t->arp_note)
             t->arp_note = (uint8_t)nt;
         else
@@ -1174,6 +1223,7 @@ static void key_on(uint32_t k, track_t *t)
         kb_note[k] = (uint8_t)harmony_snap(t, kb_note[k]);   /* live single notes follow HARMONY */
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
     kb_chn[k] = 0;
+    kb_live[k] = 1;                                 /* a fresh press is eligible for retrigger */
     kb_midin[k] = (uint8_t)n;
     for (i = 0; i < n; i++)
         kb_midi[k][i] = kb_chord[k][i];
@@ -1198,6 +1248,7 @@ static void key_off(uint32_t k, track_t *t)
 {
     uint32_t n = kb_chn[k], mn = kb_midin[k], i, mc = trk_midi_ch(trk_index(t));
     kb_chn[k] = 0;
+    kb_live[k] = 0;
     kb_midin[k] = 0;
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
@@ -1899,6 +1950,7 @@ static __attribute__((noinline)) void project_sound_apply(void)
         arp_silence(t);
         trk_all_off(t);
         latch_forget(k);
+        chord_panic(k);
         chord_live_sync(k);
         for (uint32_t i = 0; i < NVOICE; i++) active |= t->v[i].active;
         t->nheld = t->arp_phys = 0;
@@ -2058,6 +2110,7 @@ static void events_block(uint32_t n)
             t->arp_phys = 0;
             arp_forget(t);
             latch_forget(i);
+            chord_panic(i);
             chord_live_sync(i);
         }
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */

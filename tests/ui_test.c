@@ -169,6 +169,12 @@ static void ui_power_on(void)
 {
     uint32_t i;
     memset(trk, 0, sizeof trk);
+    memset(kb_chord, 0, sizeof kb_chord);
+    memset(kb_chn, 0, sizeof kb_chn);
+    memset(kb_midi, 0, sizeof kb_midi);
+    memset(kb_midin, 0, sizeof kb_midin);
+    memset(kb_live, 0, sizeof kb_live);
+    memset(chord_live, 0, sizeof chord_live);
     memset(&song, 0, sizeof song);
     memset(&motion, 0, sizeof motion);
     memset(midi_lit_ms, 0, sizeof midi_lit_ms); midi_seen = 0;   /* (1.5.5: no MIDI IN light) */
@@ -6687,6 +6693,18 @@ static int test_harmony_page(void)
     return bad;
 }
 
+/* Test-only owner for the direct chord_build cases (production installs one in key_on/midi_play). */
+static void test_bus_owner(void)
+{
+    uint32_t j;
+    kb_chn[0] = chord_last[0].n;
+    kb_trk[0] = 0;
+    kb_live[0] = 1;
+    kb_midin[0] = 0;
+    for (j = 0; j < CHORD_MAX; j++)
+        kb_chord[0][j] = chord_last[0].note[j];
+}
+
 /* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
  * notes themselves. */
 static int test_latch_retrigger(void)
@@ -6731,6 +6749,7 @@ static int test_latch_retrigger(void)
     {
         uint8_t out[CHORD_MAX]; int32_t cr; uint16_t cm;
         chord_build(&trk[0], 60, out);
+        test_bus_owner();
         chord_make(&trk[0], 60, out, &cr, &cm);
         hroot_set(0, 4);                               /* E: a new bus chord */
         link_retrigger(0);
@@ -6748,6 +6767,7 @@ static int test_latch_retrigger(void)
         uint8_t out[CHORD_MAX]; int32_t cr; uint16_t cm;
         uint8_t base;
         chord_build(&trk[0], 60, out);
+        test_bus_owner();
         base = chord_last[0].root;
         ok = 1;
         for (i = 0; i < 32u; i++) {
@@ -6818,6 +6838,37 @@ static int test_latch_retrigger(void)
         if (trk[0].v[i].active && trk[0].v[i].gate)
             ok = 0;
     bad += check("CC120 leaves no retriggerable cached chord", ok);
+    /* A panel key held across CC120 must not re-arm the cached chord either. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60;
+    key_on(0, &trk[0]);
+    midi_control(0, 120, 0);
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    key_off(0, &trk[0]);
+    bad += check("panel key held across CC120 does not re-arm the bus chord", ok);
+    /* Releasing the newest of two octave-separated owners must not revive its cached chord. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 48; kb_note[1] = 72;
+    key_on(0, &trk[0]);
+    key_on(1, &trk[0]);
+    key_off(1, &trk[0]);                           /* leave the low owner */
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate && trk[0].v[i].note >= 60)
+            ok = 0;                                /* only the low C chord may remain */
+    key_off(0, &trk[0]);
+    bad += check("unrelated low owner cannot resurrect a released high chord", ok);
     /* MIDI OUT is a separate ownership list: a retrigger must not change which notes key-up sends off. */
     ui_power_on(); usb.config = 1;
     harmony_on = 1; harmony_follow[0] = 1;
@@ -6908,6 +6959,25 @@ static int test_latch_retrigger(void)
     ok = trk[0].arp_note && ((harmony_mask(&trk[0]) >> (trk[0].arp_note % 12u)) & 1u);
     arp_off(&trk[0]);
     bad += check("TURING arp notes follow HARMONY on every step", ok);
+    /* AM_CHORD emits snapped chord tones too. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    trk[0].p[P_AMODE] = AM_CHORD; trk[0].p[P_APROB] = 127;
+    trk[0].p[P_AOCT] = 1; trk[0].p[P_AGATE] = 64;
+    hroot_set(0, 5); hdur_set(0, 0); harmony_bar = 0; /* F bus */
+    trk[0].nheld = 3; trk[0].held[0] = 60; trk[0].held[1] = 64; trk[0].held[2] = 67;
+    memset(held_key[0], 0, sizeof held_key[0]);
+    memset(held_dt[0], 0, sizeof held_dt[0]);
+    trk[0].arp_idx = 0;
+    arp_fire(&trk[0], div_samples(2));
+    ok = trk[0].arp_note != 0u || trk[0].arp_ch[0] != 0u;
+    for (i = 0; i < 3u; i++) {
+        uint32_t nt = i == 0u ? trk[0].arp_note : trk[0].arp_ch[i - 1u];
+        if (nt)
+            ok &= ((harmony_mask(&trk[0]) >> (nt % 12u)) & 1u);
+    }
+    arp_off(&trk[0]);
+    bad += check("ARP CHORD emits HARMONY chord tones", ok);
     /* A one-bar rate realigns at the bar; 2BAR/4BAR keep their own phase. */
     ui_power_on();
     arp_bar_last = 0; perf_bars_q16 = 1u << 16;

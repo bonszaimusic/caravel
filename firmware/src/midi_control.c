@@ -229,6 +229,7 @@ static void midi_silence_track(uint32_t track)
             voice_kill(&t->v[i]);             /* one-block fade, regardless of RELEASE */
     sl[track].rec = sl[track].loop = 0;       /* do not keep replaying captured sound */
     midi_forget_track(track);
+    chord_panic(track);
     chord_live_sync(track);
 }
 
@@ -390,6 +391,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
             if ((mask & (1u << i)) && !midi_track_held(i)) {
                 trk_all_off(&trk[i]);
                 latch_forget(i);
+                chord_panic(i);
                 chord_live_sync(i);
                 trk[i].nheld = trk[i].arp_phys = trk[i].rh_n = 0;
                 arp_forget(&trk[i]);

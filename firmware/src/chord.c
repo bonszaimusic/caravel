@@ -25,6 +25,7 @@ static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
 static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
 static uint8_t kb_midi[27][CHORD_MAX], kb_midin[27];  /* the notes key k last sent to MIDI OUT: retriggers move
                                                        * only the local list, so the external NoteOns stay matched */
+static uint8_t kb_live[27];                            /* this press may still retrigger (panic clears it until re-press) */
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: track + 1, 0 = free */
 static mchord_t mchord[MCHORD_N];
 /* the last chord played per track (the CHORD page shows it): its root, notes, and the shape's tones above the
@@ -248,6 +249,7 @@ static void chord_stop_all(void)
         chord_last[i].n = 0;
         chord_live[i] = 0;
     }
+    memset(kb_live, 0, sizeof kb_live);
 }
 
 /* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
@@ -256,6 +258,8 @@ static void chord_stop_all(void)
 static void retrigger_latched(uint32_t i);
 static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn);
 static void chord_live_sync(uint32_t i);
+static void chord_panic(uint32_t i);
+static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
@@ -265,7 +269,8 @@ static void link_retrigger(uint32_t i)
     uint16_t mask = 0;
     for (j = 0; j < oldn; j++)
         old[j] = chord_last[k].note[j];
-    if (!chord_live[k]) {                          /* released chord: not a reason to sound again */
+    if (!chord_live[k] || !chord_owner_matches(k, old, oldn)) {   /* released/stale cache: no resurrection */
+        chord_live[k] = 0;
         retrigger_latched(i);
         return;
     }
