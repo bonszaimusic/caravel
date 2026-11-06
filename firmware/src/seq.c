@@ -326,6 +326,7 @@ static void latch_forget(uint32_t k)
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
     memset(lat_vel[k], 0, sizeof lat_vel[k]);
+    chord_live_sync(k);
 }
 /* A rebuilt CHRD BUS chord must stay eligible only while some owner still holds it. */
 static void chord_live_sync(uint32_t i)
@@ -1151,6 +1152,20 @@ static __attribute__((noinline)) void perf_key_remap(void)
     }
 }
 
+/* outgoing MIDI ownership: a NoteOff may only be sent when no other key on this track still owns the note */
+static int midi_out_held(uint32_t ignore, uint32_t trk, uint32_t note)
+{
+    uint32_t j, i;
+    for (j = 0; j < 27u; j++) {
+        if (j == ignore || !kb_midin[j] || kb_trk[j] != trk)
+            continue;
+        for (i = 0; i < kb_midin[j]; i++)
+            if (kb_midi[j][i] == note)
+                return 1;
+    }
+    return 0;
+}
+
 /* key k plays kb_note[k] on track t: its chord (chord.c; the note alone with CHRD OFF). A note another key
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
@@ -1166,11 +1181,12 @@ static void key_on(uint32_t k, track_t *t)
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
-        if (midi_local_held(t, x))
-            continue;
-        if (!eat)
-            input_on(t, x, vel);
-        midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
+        if (!midi_local_held(t, x)) {
+            if (!eat)
+                input_on(t, x, vel);
+        }
+        if (!midi_out_held(k, (uint32_t)kb_trk[k], x))
+            midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
     }
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
@@ -1190,7 +1206,7 @@ static void key_off(uint32_t k, track_t *t)
     }
     for (i = 0; i < mn; i++) {
         uint32_t x = kb_midi[k][i];
-        if (!midi_local_held(t, x))
+        if (!midi_out_held(k, (uint32_t)kb_trk[k] % NTRK, x))
             midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
     }
     chord_live_sync(trk_index(t));
@@ -1883,6 +1899,7 @@ static __attribute__((noinline)) void project_sound_apply(void)
         arp_silence(t);
         trk_all_off(t);
         latch_forget(k);
+        chord_live_sync(k);
         for (uint32_t i = 0; i < NVOICE; i++) active |= t->v[i].active;
         t->nheld = t->arp_phys = 0;
         arp_forget(t);
@@ -2041,6 +2058,7 @@ static void events_block(uint32_t n)
             t->arp_phys = 0;
             arp_forget(t);
             latch_forget(i);
+            chord_live_sync(i);
         }
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
         if ((lr >> i) & 1u) {                         /* OCT- + OCT+: let go of everything latched */

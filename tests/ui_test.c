@@ -6804,6 +6804,20 @@ static int test_latch_retrigger(void)
          trk[0].mono_note == 67u;
     trk_all_off(&trk[0]);
     bad += check("mixed latched/held mono retrigger keeps LAST priority", ok);
+    /* CC120 must clear the rebuilt-chord eligibility, even when the later NoteOff has no mapping. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    midi_note_event(0, 60, 100);
+    midi_control(0, 120, 0);                       /* All Sound Off */
+    midi_note_event(0, 60, 0);                     /* no mapping left; must not hurt */
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    bad += check("CC120 leaves no retriggerable cached chord", ok);
     /* MIDI OUT is a separate ownership list: a retrigger must not change which notes key-up sends off. */
     ui_power_on(); usb.config = 1;
     harmony_on = 1; harmony_follow[0] = 1;
@@ -6832,6 +6846,29 @@ static int test_latch_retrigger(void)
         ok &= non > 0u && noff >= non;
     }
     bad += check("MIDI OUT retrigger keeps every NoteOn matched by a NoteOff", ok);
+    /* Overlapping keys: releasing the first must not send NoteOffs still owned by the second. */
+    ui_power_on(); usb.config = 1;
+    harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60; kb_note[1] = 60;
+    {
+        uint32_t start = mo_w, off0 = 0, off1 = 0;
+        key_on(0, &trk[0]);
+        key_on(1, &trk[0]);
+        hroot_set(0, 5); harmony_bar = 1;
+        link_retrigger(0);
+        key_off(0, &trk[0]);
+        for (i = start; i != mo_w; i++)
+            if (((midi_out_q[i % MQ] >> 8) & 0xF0u) == 0x80u)
+                off0++;
+        key_off(1, &trk[0]);
+        for (i = start; i != mo_w; i++)
+            if (((midi_out_q[i % MQ] >> 8) & 0xF0u) == 0x80u)
+                off1++;
+        ok = off0 == 0u && off1 > 0u;
+    }
+    bad += check("overlapping keys do not release outgoing notes early", ok);
     usb.config = 0;
     /* A full mchord table must not write past its end for a snapped MIDI note. */
     ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
