@@ -6723,6 +6723,11 @@ static int test_scl_page_tap(void)
     ui_power_on();
     harmony_on = 1;
     go_page(GR_SCALE);
+    turn(EN_SELECT, 1);
+    ok = cur_page()->graph == GR_CHORD && msg_is("CHORD");
+    turn(EN_SELECT, 1);
+    ok &= cur_page()->graph == GR_SCALE && msg_is("SCL");
+    bad += check("SELECT switches the SCL/CHORD two-row page; SCL keeps paging", ok);
     {
         static const uint8_t cycle[5] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_SCALE};
         for (uint32_t i = 0; i < 5u; i++) {

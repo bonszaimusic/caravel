@@ -2114,7 +2114,15 @@ static void ui_input(void)
         else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
         else
 #endif
-        if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_HARMONY) {
+        if (!glo && !lay && !kq && !mom_down() && !lock_held() &&
+            (str_eq(cur_page()->title, "SCL") || str_eq(cur_page()->title, "CHORD"))) {
+            const char *want = str_eq(cur_page()->title, "SCL") ? "CHORD" : "SCL";
+            for (uint32_t i = 0; i < NPAGES; i++) {
+                if (str_eq(PAGES[i].title, want)) { ui.page = (uint8_t)i; break; }
+            }
+            ui_message(want);
+            ui.force = 1;                                /* SELECT: the SCL / CHORD row, SCL pages */
+        } else if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_HARMONY) {
             harmony_edit_dur = (uint8_t)!harmony_edit_dur;   /* SELECT: roots row <-> duration row */
             ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
             ui.force = 1;
