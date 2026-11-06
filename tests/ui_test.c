@@ -6708,33 +6708,39 @@ static int test_scl_page_tap(void)
     int bad, ok = 1;
     ui_power_on();
     go_page(GR_SCALE);
-    for (uint32_t i = 0; i < 4u; i++) {
-        uint32_t g = cur_page()->graph;
-        ok &= g == order[i];
-        if (g == GR_SCALE) {
-            int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
-        } else if (g == GR_CHORD) {
-            int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
-        } else if (g == GR_LINK) {
-            uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
-        } else if (g == GR_HARMONY) {
-            uint8_t b = hroot_get(0); turn(EN_K1, 1); ok &= hroot_get(0) != b;
+    {
+        static const uint8_t cycle[5] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_SCALE};
+        for (uint32_t i = 0; i < 5u; i++) {
+            press(B_SCL);
+            ok &= cur_page()->graph == cycle[i];
+            if (cur_page()->graph == GR_SCALE) {
+                int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
+            } else if (cur_page()->graph == GR_CHORD) {
+                int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
+            } else if (cur_page()->graph == GR_LINK) {
+                uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
+            } else if (cur_page()->graph == GR_HARMONY) {
+                if (harmony_edit_dur) {
+                    uint8_t b = hdur_get(0); turn(EN_K1, 1); ok &= hdur_get(0) != b;
+                } else {
+                    uint8_t b = hroot_get(0); turn(EN_K1, 1); ok &= hroot_get(0) != b;
+                }
+            }
         }
-        press(B_SCL);
     }
     ok &= cur_page()->graph == GR_SCALE;
     bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
-    /* uninterrupted rapid taps, starting from each page: no lock, no jump back */
+    /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
     for (uint32_t start = 0; start < 4u; start++) {
         ui_power_on();
         go_page(order[start]);
         for (uint32_t j = 0; j < 4u; j++) {
             press(B_SCL);
-            ok &= !ui.lock && !ui.home && cur_page()->graph == order[(start + j + 1u) & 3u];
+            ok &= !ui.lock && !ui.home && cur_page()->fam == FAM_SCL;
         }
     }
-    bad += check("SCL rapid taps from every SCL page: no layer lock, the next page every time", ok);
+    bad += check("SCL rapid taps from every SCL page: no layer lock, always an SCL page", ok);
     /* entering from HOME and from SEQ: the first SCL tap opens SCL, the next pages on */
     ok = 1;
     ui_power_on(); go_home(); frame();
@@ -6744,6 +6750,12 @@ static int test_scl_page_tap(void)
     press(B_SCL); printf("ENTRY seq1 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_SCALE;
     press(B_SCL); printf("ENTRY seq2 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_CHORD && !ui.lock;
     bad += check("SCL entry from HOME and SEQ pages without a lock", ok);
+    ui_power_on(); go_page(GR_HARMONY);
+    press(B_SCL);
+    ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
+    press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !harmony_edit_dur;
+    bad += check("SCL press on HARMONY: first tap the duration row, second tap the next page", ok);
     /* double tap from ENV: SCL lock stays on the page the tap opened; a tap closes it */
     ui_power_on();
     go_title("ENV"); frame();

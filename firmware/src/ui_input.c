@@ -1567,6 +1567,15 @@ static int page_tap(uint32_t b)
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
+    if (b == B_SCL && !ui.home && cur_page()->graph == GR_HARMONY) {
+        if (!harmony_edit_dur) {                        /* SCL: the duration row, then the next page */
+            harmony_edit_dur = 1;
+            ui_message("HARMONY: DURATIONS");
+            ui.force = 1;
+            return 1;
+        }
+        harmony_edit_dur = 0;                           /* the second tap: roots reset, then the next page */
+    }
     for (f = FAM_HOME + 1u; f < FAM_COUNT; f++)        /* (GLO SEQ SAVE ..: HOME is ui_input's, home_tap) */
         if (FAM_BTN[f] == b && b != B_HOME) {
             open_family(f);
