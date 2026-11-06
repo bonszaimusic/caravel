@@ -386,7 +386,7 @@ function bindKnob(k) {
       drag.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
     }
     const distance=drag.axis === "x" ? dx : dy;
-    const detents=Math.trunc(distance/(k.role === "master" ? 3 : 8));
+    const detents=Math.trunc(distance/(k.role === "master" ? 3 : k.role === EN.SELECT ? 40 : 8));
     const delta=detents-drag.sent;
     drag.sent=detents;
     if (delta) turn(k,delta);

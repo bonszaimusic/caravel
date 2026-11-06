@@ -6725,10 +6725,10 @@ static int test_scl_page_tap(void)
     harmony_on = 1;
     go_page(GR_SCALE);
     turn(EN_SELECT, 1);
-    ok = cur_page()->graph == GR_CHORD;
+    ok = cur_page()->graph == GR_LINK;
     turn(EN_SELECT, -1);
     ok &= cur_page()->graph == GR_SCALE;
-    bad += check("SELECT pages SCL -> CHORD -> SCL", ok);
+    bad += check("SELECT pages SCL -> LINK -> SCL (CHORD is a row, not a page)", ok);
     /* real row bookkeeping: HOME/another family must recall the last SELECT row */
     ui_power_on(); ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16); go_page(GR_SCALE); frames(4);
     press(B_SCL);
@@ -6748,9 +6748,9 @@ static int test_scl_page_tap(void)
     bad += check("SCL row is remembered across HOME; CHORD/SCL knobs hit the right row", ok);
     ui_power_on(); ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16); harmony_on = 1; go_page(GR_SCALE); frames(4);
     {
-        static const uint8_t cycle[4] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_SCALE};
+        static const uint8_t cycle[4] = {GR_LINK, GR_HARMONY, GR_LINK, GR_SCALE};
         for (uint32_t i = 0; i < 4u; i++) {
-            turn(EN_SELECT, 1);
+            turn(EN_SELECT, i < 2u ? 1 : -1);
             ok &= cur_page()->graph == cycle[i];
             if (cur_page()->graph == GR_SCALE) {
                 int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
@@ -6768,7 +6768,7 @@ static int test_scl_page_tap(void)
         }
     }
     ok &= cur_page()->graph == GR_SCALE;
-    bad += check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
+    bad += check("SELECT pages SCL -> LINK -> HARMONY -> LINK -> SCL; SCL switches rows", ok);
     /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
     for (uint32_t start = 0; start < 4u; start++) {

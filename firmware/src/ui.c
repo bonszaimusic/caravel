@@ -977,7 +977,7 @@ static void page_turn(int32_t dir)
     if (fam == FAM_TRK)ring[m++] = 0xFFu;
 #endif
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == fam && page_visible(i)) {
+        if (PAGES[i].fam == fam && page_visible(i) && !str_eq(PAGES[i].title, "CHORD")) {   /* CHORD is SCL's row */
             if (!ui.home && i == ui.page)
                 at = m;
             ring[m++] = (uint8_t)i;
