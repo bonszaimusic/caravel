@@ -362,8 +362,15 @@ static void lfo_cards(const page_t *pg)
         cv_rrect(5, y + 2, 230, 76, 3, T_SURF, edge);
         cv_rect(5, y + 5, 230, 16, head);
         cv_text_on(10, y + 6, &AF_S, row ? dd->hb : dd->ht, active ? T_INK : T_TEXT, head);
-        cv_text_r(230, y + 6, &AF_S, dd->kind == DK_HARMONY ? (harmony_on ? "ON" : "OFF") :
-                  active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+        {
+            char htxt[12];
+            if (dd->kind == DK_HARMONY) {
+                str_cpy(htxt, harmony_edit_dur ? "DUR " : "ROOT ", sizeof htxt);
+                str_cpy(htxt + str_len(htxt), harmony_on ? "ON" : "OFF", sizeof htxt - str_len(htxt));
+                cv_text_r(230, y + 6, &AF_S, htxt, active ? T_INK : T_MID, head);
+            } else
+                cv_text_r(230, y + 6, &AF_S, active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+        }
         if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
             for (uint32_t k = 0; k < NMSLOT; k++) {
                 const int16_t *mp = &TSEL->p[P_M1SRC + 3u * k];

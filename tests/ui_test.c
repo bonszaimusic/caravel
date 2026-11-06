@@ -6620,6 +6620,10 @@ static int test_harmony_page(void)
     turn(EN_K1, 1);
     turn(EN_K2, 2);
     ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
+    turn(EN_SELECT, 1);                            /* SELECT: the duration row */
+    ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY;
+    turn(EN_SELECT, 1);                            /* back to roots */
+    ok &= harmony_edit_dur == 0u;
     press(B_OCTDN);                                /* the lower row: K1..K4 edit the durations */
     ok &= harmony_edit_dur != 0u && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
