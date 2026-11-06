@@ -93,7 +93,7 @@ static int midi_any_held(const track_t *t)
     if (midi_owners[trk_index(t)])
         return 1;
     for (k = 0; k < 27u; k++)
-        if (kb_chn[k] && kb_trk[k] == trk_index(t))
+        if (kb_chn[k] && kb_live[k] && kb_trk[k] == trk_index(t))
             return 1;
     return 0;
 }

@@ -6851,8 +6851,17 @@ static int test_latch_retrigger(void)
     for (i = 0; i < NVOICE; i++)
         if (trk[0].v[i].active && trk[0].v[i].gate)
             ok = 0;
+    kb_note[1] = 60;                                /* a fresh key must sound despite the dead owner */
+    key_on(1, &trk[0]);
+    {
+        uint32_t hit = 0;
+        for (i = 0; i < NVOICE; i++)
+            if (trk[0].v[i].active && trk[0].v[i].gate) hit++;
+        ok &= hit > 0u;
+    }
+    key_off(1, &trk[0]);
     key_off(0, &trk[0]);
-    bad += check("panel key held across CC120 does not re-arm the bus chord", ok);
+    bad += check("panel key held across CC120 does not block a fresh press", ok);
     /* Releasing the newest of two octave-separated owners must not revive its cached chord. */
     ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
     trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
@@ -6864,11 +6873,18 @@ static int test_latch_retrigger(void)
     hroot_set(0, 5); harmony_bar = 1;
     link_retrigger(0);
     ok = 1;
-    for (i = 0; i < NVOICE; i++)
-        if (trk[0].v[i].active && trk[0].v[i].gate && trk[0].v[i].note >= 60)
-            ok = 0;                                /* only the low C chord may remain */
+    {
+        uint32_t hit = 0, badnote = 0;
+        for (i = 0; i < NVOICE; i++)
+            if (trk[0].v[i].active && trk[0].v[i].gate) {
+                hit++;
+                if (!((harmony_mask(&trk[0]) >> (trk[0].v[i].note % 12u)) & 1u) || trk[0].v[i].note >= 60)
+                    badnote = 1;
+            }
+        ok = hit > 0u && !badnote;                  /* low owner now follows F */
+    }
     key_off(0, &trk[0]);
-    bad += check("unrelated low owner cannot resurrect a released high chord", ok);
+    bad += check("surviving low owner follows the new harmony chord", ok);
     /* MIDI OUT is a separate ownership list: a retrigger must not change which notes key-up sends off. */
     ui_power_on(); usb.config = 1;
     harmony_on = 1; harmony_follow[0] = 1;

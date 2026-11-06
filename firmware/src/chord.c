@@ -260,27 +260,32 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
 static void chord_live_sync(uint32_t i);
 static void chord_panic(uint32_t i);
 static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn);
+static int chord_owner_fallback(uint32_t i, uint32_t *src, uint8_t *old, uint32_t *oldn);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
-    uint32_t k = trk_index(t), j, nn = 0, oldn = chord_last[k].n;
+    uint32_t k = trk_index(t), j, nn = 0, oldn = chord_last[k].n, src = chord_last[k].key;
     uint8_t out[CHORD_MAX], old[CHORD_MAX];
     int32_t r = 0;
     uint16_t mask = 0;
     for (j = 0; j < oldn; j++)
         old[j] = chord_last[k].note[j];
-    if (!chord_live[k] || !chord_owner_matches(k, old, oldn)) {   /* released/stale cache: no resurrection */
-        chord_live[k] = 0;
-        retrigger_latched(i);
-        return;
+    if (!chord_live[k] || !chord_owner_matches(k, old, oldn)) {
+        if (!chord_owner_fallback(k, &src, old, &oldn)) {   /* no real owner: no resurrection */
+            chord_live[k] = 0;
+            retrigger_latched(i);
+            return;
+        }
+        chord_live[k] = 1;
     }
-    if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n) {
+    if (t->p[P_CHRD] != CH_BUS || !oldn) {
         retrigger_latched(i);                          /* LATCH without CHRD BUS */
         return;
     }
     /* Rebuild the bus chord for the new harmony chord; reusing the old chord_last notes would repeat the old
      * root/fifth and never sound the new third. */
-    nn = chord_make(t, chord_last[k].key, out, &r, &mask);
+    nn = chord_make(t, src, out, &r, &mask);
+    chord_last[k].key = (uint8_t)clamp((int32_t)src, 0, 127);
     for (j = 0; j < chord_last[k].n; j++)
         if (chord_last[k].note[j])
             trk_note_off(t, chord_last[k].note[j]);

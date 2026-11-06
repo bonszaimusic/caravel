@@ -390,6 +390,33 @@ static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn)
     return 0;
 }
 
+/* The cached chord no longer belongs to any owner: select a surviving live owner and rebuild from its own input
+ * key. This keeps a held low chord following HARMONY after the newest owner was released. */
+static int chord_owner_fallback(uint32_t i, uint32_t *src, uint8_t *old, uint32_t *oldn)
+{
+    uint32_t k, m, j;
+    for (k = 0; k < 27u; k++) {
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i)
+            continue;
+        *src = kb_note[k];
+        *oldn = kb_chn[k];
+        for (j = 0; j < *oldn; j++)
+            old[j] = kb_chord[k][j];
+        return 1;
+    }
+    for (m = 0; m < MCHORD_N; m++) {
+        mchord_t *c = &mchord[m];
+        if (c->id != i + 1u)
+            continue;
+        *src = c->src;
+        *oldn = c->n;
+        for (j = 0; j < *oldn; j++)
+            old[j] = c->note[j];
+        return 1;
+    }
+    return 0;
+}
+
 /* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note.
  * MONO/LEGATO/UNISON keep the full logical stack (a physically held newer note must stay newer) and every note
  * keeps the velocity it was played with. */
@@ -445,7 +472,7 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
             break;
         }
     for (k = 0; k < 27u; k++) {
-        if (!kb_chn[k] || kb_trk[k] != i || kb_chn[k] != oldn)
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i || kb_chn[k] != oldn)
             continue;
         for (j = 0; j < oldn && kb_chord[k][j] == old[j]; j++)
             ;
