@@ -6768,37 +6768,64 @@ static int test_scl_page_tap(void)
     ok &= cur_page()->graph == GR_SCALE && !ui.lock;
     press(B_SCL);
     ok &= cur_page()->graph == GR_CHORD && !ui.lock;
-    /* the same round-trip through the remembered page (go_home keeps ui.page) */
-    for (uint32_t i = 0; i < 4u; i++) {
-        ui_power_on(); harmony_on = 1; go_page(order[i]); frames(4);
-        press(B_HOME); frames(4);
-        press(B_SCL);
-        ok &= !ui.lock && !ui.home && cur_page()->fam == FAM_SCL;
-        press(B_SCL);
-        ok &= !ui.lock && cur_page()->fam == FAM_SCL;
+    /* the same round-trip through the remembered page: go_home() keeps ui.page, fam_last names it */
+    {
+        static const char *const T[4] = {"SCL", "CHORD", "LINK", "HARMONY"};
+        for (uint32_t i = 0; i < 4u; i++) {
+            uint8_t want;
+            ui_power_on(); harmony_on = 1; go_title(T[i]); frames(4);
+            want = ui.page;
+            ui.fam_last[FAM_SCL] = want;
+            press(B_HOME); frames(4);
+            press(B_SCL);
+            ok &= ui.page == want && !ui.lock && !ui.home;
+            press(B_SCL);
+            if (i == 0u) ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+            else if (i == 1u) ok &= cur_page()->graph == GR_LINK && !ui.lock;
+            else if (i == 2u) ok &= cur_page()->graph == GR_HARMONY && !ui.lock;
+            else ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur && !ui.lock;
+        }
     }
-    bad += check("SCL entry from HOME, SEQ and a remembered SCL page: no lock, CHORD next", ok);
+    bad += check("SCL entry from HOME, SEQ and every remembered SCL page: exact page/row, no lock", ok);
     /* SCL+OCT+ on HOME must use the visible HOME, not a hidden HARMONY page */
     ui_power_on(); harmony_on = 1; song.sel = 0;
-    trk[0].p[P_ROOT] = 3; trk[1].p[P_ROOT] = 4; trk[2].p[P_ROOT] = 5; trk[3].p[P_ROOT] = 6;
-    trk[0].p[P_SCALE] = 1; trk[1].p[P_SCALE] = 2; trk[2].p[P_SCALE] = 0; trk[3].p[P_SCALE] = 3;
-    go_title("HARMONY"); frames(4); go_home(); frames(4);
+    for (uint32_t i = 0; i < NTRK; i++) {
+        trk[i].p[P_ROOT] = (int16_t)(3u + i);
+        trk[i].p[P_SCALE] = (int16_t)((i + 1u) & 3u);
+        trk[i].p[P_QUANT] = (int16_t)(i & 3u);
+        trk[i].p[P_TRANS] = (int16_t)(i - 1);
+        trk[i].p[P_CHRD] = (int16_t)(i == 1u ? CH_MIN : CH_OFF);
+        trk[i].p[P_VOICE] = (int16_t)(i & 1u);
+    }
     {
+        int16_t trn[NTRK], chrd[NTRK], voic[NTRK], snap[NTRK][P_COUNT];
         uint8_t on = harmony_on;
         uint32_t ph = harmony_bar;
+        for (uint32_t i = 0; i < NTRK; i++) {
+            trn[i] = trk[i].p[P_TRANS]; chrd[i] = trk[i].p[P_CHRD]; voic[i] = trk[i].p[P_VOICE];
+        }
+        go_title("HARMONY"); frames(4); go_home(); frames(4);
         ok = 1;
         btn_down(B_SCL); frame(); press(B_OCTUP); btn_up(B_SCL); frame();
         for (uint32_t i = 0; i < NTRK; i++)
-            ok &= trk[i].p[P_ROOT] == 3 && trk[i].p[P_SCALE] == 1;
+            ok &= trk[i].p[P_ROOT] == 3 && trk[i].p[P_SCALE] == 1 && trk[i].p[P_QUANT] == 0 &&
+                  trk[i].p[P_TRANS] == trn[i] && trk[i].p[P_CHRD] == chrd[i] && trk[i].p[P_VOICE] == voic[i];
         ok &= harmony_on == on && harmony_bar == ph;
+        /* distinct again: the visible HARMONY gesture must not copy or change anything */
+        for (uint32_t i = 0; i < NTRK; i++) {
+            trk[i].p[P_ROOT] = (int16_t)(5u + i);
+            trk[i].p[P_SCALE] = (int16_t)((i + 2u) & 3u);
+            trk[i].p[P_QUANT] = (int16_t)((i + 1u) & 3u);
+            memcpy(snap[i], trk[i].p, sizeof snap[i]);
+        }
         go_title("HARMONY"); frames(4);
         on = harmony_on; ph = harmony_bar;
         btn_down(B_SCL); frame(); press(B_OCTUP); btn_up(B_SCL); frame();
         for (uint32_t i = 0; i < NTRK; i++)
-            ok &= trk[i].p[P_ROOT] == 3 && trk[i].p[P_SCALE] == 1;   /* no change on visible HARMONY */
+            ok &= !memcmp(snap[i], trk[i].p, sizeof snap[i]);
         ok &= harmony_on == on && harmony_bar == ph;
     }
-    bad += check("HOME after HARMONY still does SCALE TO ALL; visible HARMONY has no SCL+OCT+ side effect", ok);
+    bad += check("HOME after HARMONY still copies ROOT/SCL/QNT; visible HARMONY changes no track state", ok);
     ui_power_on(); harmony_on = 1; go_title("HARMONY");
     press(B_SCL);
     ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
