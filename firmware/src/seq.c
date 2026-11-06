@@ -326,24 +326,34 @@ static void latch_forget(uint32_t k)
     memset(lat_vel[k], 0, sizeof lat_vel[k]);
 }
 /* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note.
- * MONO/LEGATO/UNISON keep their stack order (PRIO LAST would otherwise change pitch) and every note keeps
- * the velocity it was played with. */
+ * MONO/LEGATO/UNISON keep the full logical stack (a physically held newer note must stay newer) and every note
+ * keeps the velocity it was played with. */
 static void retrigger_latched(uint32_t i)
 {
     track_t *t = &trk[i];
-    uint32_t k = trk_index(t), n, j;
-    uint8_t order[8], vel[8];
+    uint32_t k = trk_index(t), n, j, nl = 0, nf = 0;
+    uint8_t full[8], vel[8], order[8];
     if (trk_vmode(t) != V_POLY) {
-        for (n = 0, j = 0; j < t->nmono && n < 8u; j++)
-            if (lat_get(lat_stay[k], t->mono_stack[j])) {
-                order[n] = t->mono_stack[j];
-                vel[n] = lat_vel[k][order[n]] ? lat_vel[k][order[n]] : 100u;
-                n++;
+        for (j = 0; j < t->nmono && nf < 8u; j++)
+            full[nf++] = t->mono_stack[j];
+        for (j = 0; j < nf; j++)
+            if (lat_get(lat_stay[k], full[j])) {
+                order[nl] = full[j];
+                vel[nl] = lat_vel[k][order[nl]] ? lat_vel[k][order[nl]] : 100u;
+                nl++;
             }
-        for (j = 0; j < n; j++)
+        for (j = 0; j < nl; j++)
             trk_note_off(t, order[j]);
-        for (j = 0; j < n; j++)
+        for (j = 0; j < nl; j++)
             trk_note_on(t, order[j], vel[j]);
+        for (j = 0; j < nf; j++)                        /* restore the complete stack order, held notes included */
+            t->mono_stack[j] = full[j];
+        t->nmono = (uint8_t)nf;
+        {
+            uint32_t want = mono_pick(t), v = t->v[0].vel ? t->v[0].vel : 100u;
+            if (want && want != t->mono_note)
+                mono_play(t, want, v, 0, 0);
+        }
         return;
     }
     for (n = 0; n < 128u; n++) {
@@ -352,6 +362,57 @@ static void retrigger_latched(uint32_t i)
         uint8_t v = lat_vel[k][n] ? lat_vel[k][n] : 100u;
         trk_note_off(t, n);
         trk_note_on(t, n, v);
+    }
+}
+
+/* A CHRD BUS retrigger replaces the notes in chord_last. The physical key and MIDI mchord still own the old
+ * notes, so move those owners to the new list; a LATCH bit moves too. Without this a key-up would release only
+ * the old chord and the new notes would hang. */
+static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn)
+{
+    uint32_t k, j, m;
+    int was_latched = 0;
+    uint8_t lv = 100u;
+    for (j = 0; j < oldn; j++)
+        if (lat_get(lat_stay[i], old[j])) {
+            was_latched = 1;
+            lv = lat_vel[i][old[j]] ? lat_vel[i][old[j]] : 100u;
+            break;
+        }
+    for (k = 0; k < 27u; k++) {
+        if (!kb_chn[k] || kb_trk[k] != i || kb_chn[k] != oldn)
+            continue;
+        for (j = 0; j < oldn && kb_chord[k][j] == old[j]; j++)
+            ;
+        if (j != oldn)
+            continue;
+        for (j = 0; j < newn; j++)
+            kb_chord[k][j] = new[j];
+        kb_chn[k] = (uint8_t)newn;
+    }
+    for (m = 0; m < MCHORD_N; m++) {
+        mchord_t *c = &mchord[m];
+        if (c->id != i + 1u || c->n != oldn)
+            continue;
+        for (j = 0; j < oldn && c->note[j] == old[j]; j++)
+            ;
+        if (j != oldn)
+            continue;
+        for (j = 0; j < newn; j++)
+            c->note[j] = new[j];
+        c->n = (uint8_t)newn;
+    }
+    if (was_latched) {
+        for (j = 0; j < oldn; j++) {
+            lat_put(lat_stay[i], old[j], 0);
+            lat_put(lat_eat[i], old[j], 0);
+            lat_vel[i][old[j]] = 0;
+        }
+        for (j = 0; j < newn; j++) {
+            lat_put(lat_stay[i], new[j], 1);
+            lat_put(lat_eat[i], new[j], 0);
+            lat_vel[i][new[j]] = lv;
+        }
     }
 }
 

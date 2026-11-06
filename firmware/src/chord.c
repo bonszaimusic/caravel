@@ -248,13 +248,16 @@ static void chord_stop_all(void)
  * chord / the linked scale. Per track; only CHRD BUS has a held chord to follow (the sequencer and ARP retrigger
  * their own steps anyway). */
 static void retrigger_latched(uint32_t i);
+static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
-    uint32_t k = trk_index(t), j, nn = 0;
-    uint8_t out[CHORD_MAX];
+    uint32_t k = trk_index(t), j, nn = 0, oldn = chord_last[k].n;
+    uint8_t out[CHORD_MAX], old[CHORD_MAX];
     int32_t r = 0;
     uint16_t mask = 0;
+    for (j = 0; j < oldn; j++)
+        old[j] = chord_last[k].note[j];
     if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n) {
         retrigger_latched(i);                          /* LATCH without CHRD BUS */
         return;
@@ -273,4 +276,5 @@ static void link_retrigger(uint32_t i)
     for (j = 0; j < nn; j++)
         if (out[j])
             trk_note_on(t, out[j], chord_last[k].vel ? chord_last[k].vel : 96u);
+    retrigger_owners(i, old, oldn, out, nn);
 }

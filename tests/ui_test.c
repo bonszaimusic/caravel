@@ -6749,10 +6749,11 @@ static int test_latch_retrigger(void)
         uint8_t base;
         chord_build(&trk[0], 60, out);
         base = chord_last[0].root;
+        ok = 1;
         for (i = 0; i < 32u; i++) {
             harmony_bar = (uint8_t)(i & 1u);
             link_retrigger(0);
-            ok = chord_last[0].root >= 48u && chord_last[0].root <= 72u && chord_last[0].key == 60u;
+            ok &= chord_last[0].root >= 48u && chord_last[0].root <= 72u && chord_last[0].key == 60u;
         }
         ok &= chord_last[0].root <= base + 12u && chord_last[0].root + 12u >= base;
     }
@@ -6765,6 +6766,39 @@ static int test_latch_retrigger(void)
         ok = g == 0u;
     }
     bad += check("STOP releases a retriggered CHRD BUS chord (no hanging tones)", ok);
+    /* A normal key-up must release the rebuilt bus chord, not only its original notes. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS; trk[0].p[P_VOICE] = V_POLY;
+    hroot_set(0, 0); hroot_set(1, 0); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60;
+    key_on(0, &trk[0]);
+    link_retrigger(0);
+    key_off(0, &trk[0]);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    bad += check("key-up releases a rebuilt CHRD BUS chord", ok);
+    /* A snapped MIDI note must keep the original MIDI key as its release identity. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    hroot_set(0, 0); hdur_set(0, 0); harmony_bar = 0;
+    midi_play(&trk[0], 0, 61, 100);
+    ok = mchord[0].id == 1u && mchord[0].src == 61u && mchord[0].n == 1u && mchord[0].note[0] == 60u;
+    if (mchord[0].id)
+        input_off(&trk[0], mchord[0].note[0]);
+    bad += check("snapped MIDI keeps its original release identity", ok);
+    /* A mixed held/latched mono stack keeps the physical newer note on top. */
+    ui_power_on();
+    trk[0].p[P_VOICE] = V_MONO; trk[0].p[P_PRIO] = 0; trk[0].p[P_CHRD] = CH_OFF;
+    trk_note_on(&trk[0], 60, 100); trk_note_on(&trk[0], 67, 100);
+    memset(lat_stay[0], 0, sizeof lat_stay[0]);
+    lat_put(lat_stay[0], 60, 1); lat_vel[0][60] = 100;
+    link_retrigger(0);
+    ok = trk[0].nmono == 2u && trk[0].mono_stack[0] == 60u && trk[0].mono_stack[1] == 67u &&
+         trk[0].mono_note == 67u;
+    trk_all_off(&trk[0]);
+    bad += check("mixed latched/held mono retrigger keeps LAST priority", ok);
     /* A live key follows HARMONY on a follower track, too. */
     ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
     trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF; trk[0].p[P_VOICE] = V_POLY;
