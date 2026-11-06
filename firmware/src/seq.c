@@ -283,6 +283,7 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 enum { LT_OFF, LT_NEW, LT_STACK };
 static uint32_t lat_stay[NTRK][4];       /* bit n: note n was let go and sounds on */
 static uint32_t lat_eat[NTRK][4];        /* bit n: the press of note n ended it (STACK): its release does nothing */
+static uint8_t lat_vel[NTRK][128];       /* the input velocity of a latched note (retrigger keeps the dynamics) */
 static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
 
 static uint32_t latch_mode(const track_t *t)
@@ -311,8 +312,10 @@ static __attribute__((noinline)) void latch_free(track_t *t)
 {
     uint32_t k = trk_index(t), n;
     for (n = 0; n < 128u; n++)
-        if (lat_get(lat_stay[k], n))
+        if (lat_get(lat_stay[k], n)) {
             trk_note_off(t, n);
+            lat_vel[k][n] = 0;
+        }
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
 }
 /* the track's latch state is gone (a panic ended every note; trk_all_off) */
@@ -320,17 +323,35 @@ static void latch_forget(uint32_t k)
 {
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
+    memset(lat_vel[k], 0, sizeof lat_vel[k]);
 }
-/* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note */
+/* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note.
+ * MONO/LEGATO/UNISON keep their stack order (PRIO LAST would otherwise change pitch) and every note keeps
+ * the velocity it was played with. */
 static void retrigger_latched(uint32_t i)
 {
     track_t *t = &trk[i];
-    uint32_t k = trk_index(t), n;
+    uint32_t k = trk_index(t), n, j;
+    uint8_t order[8], vel[8];
+    if (trk_vmode(t) != V_POLY) {
+        for (n = 0, j = 0; j < t->nmono && n < 8u; j++)
+            if (lat_get(lat_stay[k], t->mono_stack[j])) {
+                order[n] = t->mono_stack[j];
+                vel[n] = lat_vel[k][order[n]] ? lat_vel[k][order[n]] : 100u;
+                n++;
+            }
+        for (j = 0; j < n; j++)
+            trk_note_off(t, order[j]);
+        for (j = 0; j < n; j++)
+            trk_note_on(t, order[j], vel[j]);
+        return;
+    }
     for (n = 0; n < 128u; n++) {
         if (!lat_get(lat_stay[k], n))
             continue;
+        uint8_t v = lat_vel[k][n] ? lat_vel[k][n] : 100u;
         trk_note_off(t, n);
-        trk_note_on(t, n, 100u);
+        trk_note_on(t, n, v);
     }
 }
 
@@ -935,6 +956,7 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
     last_note = (uint8_t)note;
+    lat_vel[trk_index(t)][note & 127u] = (uint8_t)clamp((int32_t)vel, 1, 127);
     lat_put(lat_stay[trk_index(t)], note, 0);       /* (LATCH: a latched note pressed again is held by the key again) */
     lat_put(lat_eat[trk_index(t)], note, 0);
     if (cin_left)

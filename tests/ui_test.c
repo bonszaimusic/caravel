@@ -6702,15 +6702,22 @@ static int test_latch_retrigger(void)
     t->p[P_LATCH] = LT_NEW;
     t->p[P_VOICE] = V_POLY;
     memset(lat_stay[0], 0, sizeof lat_stay[0]);
-    for (i = 0; i < 3u; i++) lat_put(lat_stay[0], N[i], 1);
+    for (i = 0; i < 3u; i++) {
+        lat_put(lat_stay[0], N[i], 1);
+        lat_vel[0][N[i]] = (uint8_t)(24u + 24u * i);
+    }
     link_retrigger(0);
     for (i = 0; i < NVOICE; i++)
         if (t->v[i].active && t->v[i].gate)
             for (n = 0; n < 3u; n++)
-                if (t->v[i].note == N[n]) { hits++; break; }
-    ok = hits == 3u;
+                if (t->v[i].note == N[n]) {
+                    hits++;
+                    ok &= t->v[i].vel == 24u + 24u * n;
+                    break;
+                }
+    ok &= hits == 3u;
     latch_free(t);
-    bad += check("LATCH chord retrigger without CHRD BUS sounds all three latched notes", ok);
+    bad += check("LATCH chord retrigger without CHRD BUS sounds all three latched notes with their velocities", ok);
     ui_power_on();
     /* HARMONY's scale mask is absolute; a pentatonic scale must still yield a third, and CHRD BUS retrigger must
      * rebuild the bus chord instead of replaying the old root/fifth. */
@@ -6868,6 +6875,7 @@ static int test_scl_page_tap(void)
     ok &= cur_page()->graph == GR_SCALE && !ui.lock;
     press(B_SCL);
     ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    bad += check("SCL entry from HOME and SEQ: no lock, SCL then CHORD", ok);
     /* the same round-trip through the remembered page: go_home() keeps ui.page, fam_last names it */
     {
         static const char *const T[4] = {"SCL", "CHORD", "LINK", "HARMONY"};
@@ -6886,8 +6894,8 @@ static int test_scl_page_tap(void)
             else if (i == 2u) ok &= cur_page()->graph == GR_LINK && link_setup_row && !ui.lock;
             else ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur && !ui.lock;
         }
+        bad += check("every remembered SCL page recalls its exact page/row, no lock", ok);
     }
-    bad += check("SCL entry from HOME, SEQ and every remembered SCL page: exact page/row, no lock", ok);
     /* SCL+OCT+ on HOME must use the visible HOME, not a hidden HARMONY page */
     ui_power_on(); harmony_on = 1; song.sel = 0;
     for (uint32_t i = 0; i < NTRK; i++) {
