@@ -727,7 +727,7 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
             arp_chord(t, list, cnt);
             return;
         }
-        t->arp_note = (uint8_t)(harmony_on && (t->arp_idx & 3u) == 0u ? harmony_snap(t, list[j]) : list[j]);
+        t->arp_note = (uint8_t)harmony_snap(t, list[j]);   /* every ARP step, TURING included */
         if (rec_on(t))
             rec_note(t, t->arp_note, 100);           /* recording: what the arp plays */
         trk_note_on(t, t->arp_note, 100);

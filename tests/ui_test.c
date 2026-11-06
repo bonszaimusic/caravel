@@ -6778,6 +6778,20 @@ static int test_latch_retrigger(void)
             ok = 1;
     key_off(0, &trk[0]);
     bad += check("live key snaps to a HARMONY chord tone", ok);
+    /* TURING must use the harmony chord for every arp step, not only every fourth one. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    trk[0].p[P_AMODE] = AM_TURING; trk[0].p[P_APROB] = 127;
+    trk[0].p[P_AOCT] = 1; trk[0].p[P_AGATE] = 64;
+    hroot_set(0, 2); hdur_set(0, 0); harmony_bar = 0;   /* D: snapped notes are not MIDI 0 */
+    trk[0].nheld = 3; trk[0].held[0] = 62; trk[0].held[1] = 66; trk[0].held[2] = 69;
+    memset(held_key[0], 0, sizeof held_key[0]);
+    memset(held_dt[0], 0, sizeof held_dt[0]);
+    trk[0].arp_idx = 0; trk[0].arp_pos = 0xFFFFFFF;
+    arp_fire(&trk[0], div_samples(2));
+    ok = trk[0].arp_note && ((harmony_mask(&trk[0]) >> (trk[0].arp_note % 12u)) & 1u);
+    arp_off(&trk[0]);
+    bad += check("TURING arp notes follow HARMONY on every step", ok);
     ui_power_on();
     return bad;
 }
