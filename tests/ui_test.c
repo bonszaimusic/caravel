@@ -6792,6 +6792,16 @@ static int test_latch_retrigger(void)
     ok = trk[0].arp_note && ((harmony_mask(&trk[0]) >> (trk[0].arp_note % 12u)) & 1u);
     arp_off(&trk[0]);
     bad += check("TURING arp notes follow HARMONY on every step", ok);
+    /* A one-bar rate realigns at the bar; 2BAR/4BAR keep their own phase. */
+    ui_power_on();
+    arp_bar_last = 0; perf_bars_q16 = 1u << 16;
+    trk[0].p[P_ARATE] = 2; trk[0].arp_pos = 123; trk[0].arp_idx = 7;
+    arp_bar_sync();
+    ok = trk[0].arp_pos == 0xFFFFFFFu && trk[0].arp_idx == 0xFFFFFFFFu;
+    trk[0].p[P_ARATE] = 8; trk[0].arp_pos = 123; trk[0].arp_idx = 7;
+    perf_bars_q16 = 2u << 16; arp_bar_sync();
+    ok &= trk[0].arp_pos == 123u && trk[0].arp_idx == 7u;
+    bad += check("ARP bar sync realigns <=1-bar rates and leaves 2BAR/4BAR alone", ok);
     ui_power_on();
     return bad;
 }

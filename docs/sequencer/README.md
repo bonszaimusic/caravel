@@ -53,8 +53,8 @@ yet tried on an FM-1.
   MIDI clock, whichever the sequencer uses. `PLAY` starts at BAR 1; `STOP` holds the chord; `CONT`/external Continue
   goes on; `GLO + OCT+` (BAR RESET) returns to BAR 1. Journey `CONT`/`START` shares the same bars; Journey `FREE` has
   no musical bars, so the bus holds. A song start is BAR 1; sections continue the progression.
-- **Where it acts:** strong steps (every fourth step) of the sequencer, the ARP, and `SEQ TOOLS > G5` GENERATE take a
-  chord tone. With HARMONY ON, a follower track's **live keys and MIDI notes** are snapped to the nearest bus chord
+- **Where it acts:** strong steps (every fourth step) of the sequencer, every ARP step, and `SEQ TOOLS > G5` GENERATE
+  take a chord tone. With HARMONY ON, a follower track's **live keys and MIDI notes** are snapped to the nearest bus chord
   tone; DRUM lanes stay the kit's. If `SCL > CHORD > K1 CHRD` is **BUS**, the key plays the whole current bus chord at
   the octave nearest the key instead (`CHRD BUS` falls back to `DIA3` while the bus is off). A held bus chord follows `RETRIG` above; otherwise it ends with the key.
 - **No hidden setup keys:** the old `GLO + G4` / `GLO + G5` shortcuts are gone. Harmony and Link live on their SCL
@@ -62,4 +62,6 @@ yet tried on an FM-1.
 - **SEQ TOOLS: G5** — **GENERATE**: a scale-aware phrase from a short motif, rests between the strong steps, and chord
   tones on the strong steps while the HARMONIC CLOCK is on. One undo; `SAVE` held puts the pattern back.
 - **ARP MODE TURING** — a 16-bit feedback register walks the held-note list, with an occasional random bit flip, so
-  the line moves without locking onto one note. It uses the existing ARP controls; no new parameter.
+  the line moves without locking onto one note. It uses the existing ARP controls; no new parameter. Every TURING
+  step follows HARMONY (like every ARP step). The ARP phase realigns on PLAY and at each transport bar for RATE
+  values up to one bar; 2BAR/4BAR keep their own longer cycle.

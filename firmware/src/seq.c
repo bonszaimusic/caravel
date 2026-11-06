@@ -578,6 +578,7 @@ static void arp_off(track_t *t)                  /* the sounding arp note(s) end
  * maximal-length polynomial; one random bit flips now and then so the loop does not lock. No new parameter: the
  * register is the mode's own state, and a mode change leaves it where it is. */
 static uint16_t arp_turing[NTRK];
+static uint32_t arp_bar_last;                   /* the transport bar the ARP was last aligned to */
 
 /* the place in the note list (len notes) the step arp_idx plays (not inlined, as arp_chord); UP+8 adds its note */
 static __attribute__((noinline)) uint32_t arp_pick(track_t *t, uint32_t *list, uint32_t len)
@@ -783,6 +784,21 @@ static void arp_step(track_t *t, uint32_t n, uint32_t gate_n)
 }
 
 static void arp_tick(track_t *t, uint32_t n) { arp_step(t, n, n); }
+/* ARP SYNC: realign the free-running arp phase at every transport bar. RATE 2BAR/4BAR are longer than the bar
+ * and would be cut, so they keep their own cycle. */
+static void arp_bar_sync(void)
+{
+    uint32_t now = perf_bars_q16 >> 16, i;
+    if (now == arp_bar_last)
+        return;
+    arp_bar_last = now;
+    for (i = 0; i < NTRK; i++) {
+        if ((uint32_t)trk[i].p[P_ARATE] >= 8u)          /* 2BAR / 4BAR: not reset by a one-bar boundary */
+            continue;
+        trk[i].arp_pos = 0xFFFFFFF;
+        trk[i].arp_idx = 0xFFFFFFFFu;
+    }
+}
 
 /* -------------------------------------------------------- note input --- */
 /* the length of step idx in samples: SWING (the track's + the global, at most 100) makes the even steps longer
@@ -1229,6 +1245,7 @@ static void seq_start(void)
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
     clk_pos = CLK_START;                           /* the metronome's first beat with step 0 */
     song.playing = 1;
+    arp_bar_last = perf_bars_q16 >> 16;
 #if FELUCCA_PERF_HW
     perf_starts++;
 #endif
@@ -1679,6 +1696,7 @@ static __attribute__((noinline)) void seq_resync(void)
         arp_step(t, 0, 0);
     }
     song.tick = 0;
+    arp_bar_last = perf_bars_q16 >> 16;
     beat_pos = beat_n = clk_step = 0;
     clk_pos = 0;
     if (click_wanted()) click_req = 2;              /* retain queued-clock progress after the downbeat */
@@ -2010,6 +2028,7 @@ static void events_block(uint32_t n)
         perf_bars_q16 += num / bar;
         perf_bars_rem = num % bar;
         harmony_bar = (perf_bars_q16 >> 16) - harmony_base_bar;
+        arp_bar_sync();
         if (harmony_bar != hb && harmony_on && old_chord != harmony_chord_at(harmony_bar))
             for (i = 0; i < NTRK; i++)
                 if ((link_retrig[i] & 1u) && harmony_follow[i])
