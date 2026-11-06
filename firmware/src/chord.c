@@ -233,12 +233,15 @@ static void mchord_forget(uint32_t track)               /* panic: the track's MI
 /* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
  * chord / the linked scale. Per track; only CHRD BUS has a held chord to follow (the sequencer and ARP retrigger
  * their own steps anyway). */
+static void retrigger_latched(uint32_t i);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
     uint32_t k = trk_index(t), j;
-    if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n)
+    if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n) {
+        retrigger_latched(i);                          /* LATCH without CHRD BUS */
         return;
+    }
     for (j = 0; j < chord_last[k].n; j++)
         if (chord_last[k].note[j])
             trk_note_off(t, chord_last[k].note[j]);

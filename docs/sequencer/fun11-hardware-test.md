@@ -35,7 +35,8 @@ Status: prepared for the FM-1; not yet run on hardware.
 ## 4. Harmony / Link sound
 
 1. `CHRD BUS` + `HARMONY ON`: a held key plays the current bus chord; on a bar change with `RETRIG CHORD` it retriggers.
-2. T2 `SOURCE T1`, `RETRIG LINK`: change T1's ROOT/SCL; T2's held `CHRD BUS` chord retriggers.
+2. Play a chord with `LATCH` on and `RETRIG CHORD`: a harmony chord change retriggers the latched notes too.
+3. T2 `SOURCE T1`, `RETRIG LINK`: change T1's ROOT/SCL; T2's held chord retriggers.
 3. Sequencer and ARP strong steps take chord tones; weak steps stay scale notes.
 4. `SEQ TOOLS > G5` GENERATE: strong steps take chord tones while HARMONY is on.
 5. `SCL + OCT+` on SCL/CHORD: one-shot copy still works. On visible HARMONY it does nothing; on HOME it still copies the SCL of the selected track even if HARMONY was the hidden last page. `GLO + G4/G5` must do **nothing** (removed setup shortcuts).

@@ -302,6 +302,18 @@ static void latch_forget(uint32_t k)
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
 }
+/* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note */
+static void retrigger_latched(uint32_t i)
+{
+    track_t *t = &trk[i];
+    uint32_t k = trk_index(t), n;
+    for (n = 0; n < 128u; n++) {
+        if (!lat_get(lat_stay[k], n))
+            continue;
+        trk_note_off(t, n);
+        trk_note_on(t, n, 100u);
+    }
+}
 
 static int midi_any_held(const track_t *t);
 static void arp_drop(track_t *t, uint32_t note);

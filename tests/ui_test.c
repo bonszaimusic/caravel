@@ -6687,6 +6687,33 @@ static int test_harmony_page(void)
     return bad;
 }
 
+/* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
+ * notes themselves. */
+static int test_latch_retrigger(void)
+{
+    int bad = 0, ok = 1;
+    track_t *t = &trk[0];
+    uint32_t i, n, hits = 0;
+    static const uint8_t N[3] = {60, 64, 67};
+    ui_power_on();
+    t->p[P_CHRD] = CH_OFF;
+    t->p[P_AMODE] = 0;
+    t->p[P_LATCH] = LT_NEW;
+    t->p[P_VOICE] = V_POLY;
+    memset(lat_stay[0], 0, sizeof lat_stay[0]);
+    for (i = 0; i < 3u; i++) lat_put(lat_stay[0], N[i], 1);
+    link_retrigger(0);
+    for (i = 0; i < NVOICE; i++)
+        if (t->v[i].active && t->v[i].gate)
+            for (n = 0; n < 3u; n++)
+                if (t->v[i].note == N[n]) { hits++; break; }
+    ok = hits == 3u;
+    latch_free(t);
+    bad += check("LATCH chord retrigger without CHRD BUS sounds all three latched notes", ok);
+    ui_power_on();
+    return bad;
+}
+
 /* A read-only project probe must not move the live Harmony/Link state into the slot it decodes. */
 static int test_fun11_readonly_probe(void)
 {
@@ -10609,6 +10636,7 @@ int main(void)
     bad += test_arp_turing();
     bad += test_generate();
     bad += test_harmony_page();
+    bad += test_latch_retrigger();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();
