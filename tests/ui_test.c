@@ -6625,7 +6625,7 @@ static int test_harmony_page(void)
     ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
     ok &= hdur_get(0) == 1u;
-    turn(EN_SELECT, 1);                            /* back to the roots */
+    turn(EN_SELECT, -1);                           /* back to the roots */
     ok &= harmony_edit_dur == 0u && msg_is("HARMONY: ROOTS");
     song.octave = 0;
     press(B_OCTDN);                                /* OCT- is the ordinary octave-down key again */
@@ -6719,15 +6719,33 @@ static int test_fun11_readonly_probe(void)
 static int test_scl_page_tap(void)
 {
     static const uint8_t order[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
-    int bad, ok = 1;
+    int bad = 0, ok = 1;
     ui_power_on();
     harmony_on = 1;
     go_page(GR_SCALE);
     turn(EN_SELECT, 1);
     ok = cur_page()->graph == GR_CHORD && msg_is("CHORD");
-    turn(EN_SELECT, 1);
+    turn(EN_SELECT, -1);
     ok &= cur_page()->graph == GR_SCALE && msg_is("SCL");
     bad += check("SELECT switches the SCL/CHORD two-row page; SCL keeps paging", ok);
+    /* real row bookkeeping: HOME/another family must recall the last SELECT row */
+    ui_power_on(); go_page(GR_SCALE); frames(4);
+    turn(EN_SELECT, 1);
+    ok = cur_page()->graph == GR_CHORD;
+    press(B_HOME); frames(4); press(B_SCL);
+    ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    {
+        int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
+    }
+    turn(EN_SELECT, -1);
+    ok &= cur_page()->graph == GR_SCALE;
+    press(B_HOME); frames(4); press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !ui.lock;
+    {
+        int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
+    }
+    bad += check("SELECT row is remembered across HOME; CHORD/SCL knobs hit the right row", ok);
+    ui_power_on(); harmony_on = 1; go_page(GR_SCALE); frames(4);
     {
         static const uint8_t cycle[5] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_SCALE};
         for (uint32_t i = 0; i < 5u; i++) {
@@ -6749,7 +6767,7 @@ static int test_scl_page_tap(void)
         }
     }
     ok &= cur_page()->graph == GR_SCALE;
-    bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
+    bad += check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
     /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
     for (uint32_t start = 0; start < 4u; start++) {

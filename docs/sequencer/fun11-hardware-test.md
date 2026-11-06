@@ -18,11 +18,11 @@ Status: prepared for the FM-1; not yet run on hardware.
 
 ## 2. SCL two-group pages
 
-1. `SCL` shows two rows of four cells: `SCL` above, `CHORD` below. The page you tapped is the row `K1..K4` edit.
-2. Tap `SCL` again: the lower row becomes active; its knobs edit `CHRD / VOIC / LATCH`.
-3. Tap `SCL` until `LINK`: `K1 SOURCE`, `K2 RETRIG`; no source that is itself linked may be offered.
-4. Tap `SCL` until `HARMONY`: top row chord names, bottom row durations. `OCT-` switches `K1..K4` between roots and durations; the header shows `ON`/`OFF`.
-5. Turn a knob after every page change; the value and the card must change. Repeat `SCL`-tap and knob turns 20 times.
+1. `SCL` shows two rows of four cells: `SCL` above, `CHORD` below. **SELECT** switches `K1..K4` between the rows; `SCL` keeps paging. The active row is the header's page.
+2. On `CHORD`, its knobs edit `CHRD / VOIC / LATCH`; on `SCL`, `ROOT / SCL / QNT / TRN`.
+3. `SCL` next opens **LINK / HARMONY SETUP**: the upper row is `K1 SOURCE`, `K2 RETRIG`, `K3 KEY`, `K4 HARMONY`; no source that is itself linked may be offered. **SELECT** switches to the lower HARMONY SETUP row; its `K1` is the bus ON/OFF.
+4. With HARMONY ON, `SCL` next opens the HARMONY page: top row chord names, bottom row durations; **SELECT** switches `K1..K4` between roots and durations. The bus switch is on LINK / HARMONY SETUP, not this page.
+5. `OCT-/OCT+` are ordinary octave keys everywhere; they do not switch rows or the bus. Turn a knob after every page/row change; the value and the card must change. Repeat the routes 20 times and from HOME.
 
 ## 3. Clock
 
@@ -38,7 +38,7 @@ Status: prepared for the FM-1; not yet run on hardware.
 2. T2 `SOURCE T1`, `RETRIG LINK`: change T1's ROOT/SCL; T2's held `CHRD BUS` chord retriggers.
 3. Sequencer and ARP strong steps take chord tones; weak steps stay scale notes.
 4. `SEQ TOOLS > G5` GENERATE: strong steps take chord tones while HARMONY is on.
-5. `SCL + OCT+`: one-shot copy still works. `GLO + G4/G5` must do **nothing** (removed setup shortcuts).
+5. `SCL + OCT+` on SCL/CHORD: one-shot copy still works. On visible HARMONY it does nothing; on HOME it still copies the SCL of the selected track even if HARMONY was the hidden last page. `GLO + G4/G5` must do **nothing** (removed setup shortcuts).
 
 ## 5. Regressions
 

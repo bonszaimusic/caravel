@@ -2116,18 +2116,19 @@ static void ui_input(void)
 #endif
         if (!glo && !lay && !kq && !mom_down() && !lock_held() &&
             (str_eq(cur_page()->title, "SCL") || str_eq(cur_page()->title, "CHORD"))) {
-            const char *want = str_eq(cur_page()->title, "SCL") ? "CHORD" : "SCL";
+            const char *want = s > 0 ? "CHORD" : "SCL";
             for (uint32_t i = 0; i < NPAGES; i++) {
                 if (str_eq(PAGES[i].title, want)) { ui.page = (uint8_t)i; break; }
             }
+            ui.fam_last[FAM_SCL] = ui.page;             /* HOME / another family recalls this row */
             ui_message(want);
             ui.force = 1;                                /* SELECT: the SCL / CHORD row, SCL pages */
         } else if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_HARMONY) {
-            harmony_edit_dur = (uint8_t)!harmony_edit_dur;   /* SELECT: roots row <-> duration row */
+            harmony_edit_dur = (uint8_t)(s > 0);             /* SELECT: positive DUR, negative ROOT */
             ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
             ui.force = 1;
         } else if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_LINK) {
-            link_setup_row = (uint8_t)!link_setup_row;       /* SELECT: LINK row <-> HARMONY SETUP row */
+            link_setup_row = (uint8_t)(s > 0);              /* SELECT: positive SETUP, negative LINK */
             ui_message(link_setup_row ? "HARMONY SETUP" : "LINK");
             ui.force = 1;
         } else if (!glo && sel_mode() >= SEL_MODW) {  /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
