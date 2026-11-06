@@ -18,9 +18,9 @@ Status: prepared for the FM-1; not yet run on hardware.
 
 ## 2. SCL two-group pages
 
-1. `SCL` shows two rows of four cells: `SCL` above, `CHORD` below. **SELECT** scrolls the pages like ENV/LFO; **SCL** toggles the active row and must not jump pages.
+1. `SCL` shows two rows of four cells: `SCL` above, `CHORD` below. The SCL button and **SELECT** both step the pages SCL -> CHORD -> LINK -> HARMONY, as ENV/ENV DEST.
 2. On `CHORD`, its knobs edit `CHRD / VOIC / LATCH`; on `SCL`, `ROOT / SCL / QNT / TRN`.
-3. `SELECT` next opens **LINK / HARMONY SETUP**: upper row `K1 SOURCE`, `K2 RETRIG`, `K3 KEY`, `K4 HARMONY`; **SCL** toggles to the lower HARMONY SETUP row, whose `K1` is the bus ON/OFF. No linked source may be offered.
+3. Next opens **LINK / HARMONY SETUP**: upper row `K1 SOURCE`, `K2 RETRIG`, `K3 KEY`, `K4 HARMONY`; on this page **SCL** toggles to the lower HARMONY SETUP row, whose `K1` is the bus ON/OFF. No linked source may be offered.
 4. With HARMONY ON, `SELECT` opens the HARMONY page: top row chord names, bottom row durations; **SCL** toggles roots/durations. The bus switch is on LINK / HARMONY SETUP, not this page.
 5. `OCT-/OCT+` are ordinary octave keys everywhere; they do not switch rows or the bus. Turn a knob after every page/row change; the value and the card must change. Repeat the SELECT page turns and SCL row taps 20 times and from HOME.
 

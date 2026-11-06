@@ -35,14 +35,14 @@ yet tried on an FM-1.
   chord changes), `LINK` (when the source's key changes) or `BOTH`. `K4 HARM` is this track's **HARMONY FOLLOW**:
   `OFF` means the track ignores the bus (its sequencer/ARP strong steps stay scale notes, `CHRD BUS` falls back to
   `DIA3`, and GENERATE adds no chord tones); the other tracks keep following. Saved with the project (FUN11).
-- **LINK / HARMONY SETUP** is one two-row page. `SCL` switches K1..K4 between the upper LINK row and the lower
-  HARMONY SETUP row; the lower row's `K1` is the bus ON/OFF. `SELECT` scrolls the SCL pages like ENV/LFO. The page is
-  always in the SCL family.
-- **SCL / CHORD** are one two-group page, like ENV / ENV DEST: **two rows of four cells** on screen. The upper row is
-  the SCL page (ROOT SCL QNT TRN), the lower one CHORD (CHRD VOIC LATCH); the page you tapped is the row K1..K4 edit,
-  the other is a view. **HARMONY** follows at the end of the family: its upper row is `BAR 1..4` (the chord names),
-  the lower row the four durations (`1/2/4/8` bars); `SCL` switches the edited row; `SELECT` scrolls the pages;
-  `K1..K4` edit roots or durations. It is visible only while the bus is ON; the bus switch is the lower row of
+- **LINK / HARMONY SETUP** is one two-row page. On this page `SCL` switches K1..K4 between the upper LINK row and
+  the lower HARMONY SETUP row; the lower row's `K1` is the bus ON/OFF. `SELECT` scrolls the SCL pages like ENV/LFO.
+  The page is always in the SCL family.
+- **SCL / CHORD** are two ordinary pages with the ENV/ENV DEST two-row view. The upper row is the SCL page
+  (ROOT SCL QNT TRN), the lower one CHORD (CHRD VOIC LATCH); the page you are on is the K1..K4 edit row, the other is
+  a view. The SCL button and SELECT both step SCL -> CHORD -> LINK -> HARMONY, exactly like ENV. **HARMONY** follows at
+  the end of the family: its upper row is `BAR 1..4` (the chord names), the lower row the four durations
+  (`1/2/4/8` bars); on the HARMONY page `SCL` toggles roots/durations; `K1..K4` edit roots or durations. It is visible only while the bus is ON; the bus switch is the lower row of
   LINK / HARMONY SETUP. The roots, durations and on/off are saved with the project (FUN11).
 - **Page order:** `SCL -> CHORD -> LINK/HARMONY SETUP -> HARMONY` while HARMONY is ON; `SCL -> CHORD -> LINK/HARMONY SETUP`
   while it is OFF. `SELECT` scrolls the pages; a tap of `SCL` switches the active row and never jumps pages.
