@@ -600,6 +600,7 @@ static const page_t PAGES[] = {
     {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, P_LATCH, 0xFF}},   /* SCL again: the chord keys (chord.c) */
     {"LINK", FAM_SCL, SC_TRACK, GR_LINK, {0xFF, 0xFF, 0xFF, 0xFF}},            /* per-track key link (ui.c) */
+    {"HARMONY SETUP", FAM_SCL, SC_TRACK, GR_HARMONY, {0xFF, 0xFF, 0xFF, 0xFF}}, /* the bus switch, its own row */
     {"HARMONY", FAM_SCL, SC_TRACK, GR_HARMONY, {0xFF, 0xFF, 0xFF, 0xFF}},       /* the four-bar bus (seq.c) */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
@@ -612,7 +613,9 @@ static const page_t PAGES[] = {
     {"X LAYER", FAM_EDIT, SC_TRACK, GR_DXLAYER, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"LANES", FAM_EDIT, SC_TRACK, GR_NONE, {P_LN0, P_LN1, P_LN2, P_LN3}},   /* DRUM only: the lane levels */
     {"LANES 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_LN4, P_LN5, P_LN6, P_LN7}},
+#if FELUCCA_SLICE
     {"SLICES", FAM_EDIT, SC_TRACK, GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SLICE only: the slices by hand (ui_slice.c) */
+#endif
     {"OPERATOR", FAM_EDIT, SC_TRACK, GR_FMOP, {0xFF, 0xFF, 0xFF, 0xFF}},    /* FM6 only: KNOB 1 the operator, then its */
     {"OP ENV", FAM_EDIT, SC_TRACK, GR_FMENV, {0xFF, 0xFF, 0xFF, 0xFF}},     /* bytes of the track's patch (ui_fm6op.c): */
     {"OPERATOR 2", FAM_EDIT, SC_TRACK, GR_FMOP2, {0xFF, 0xFF, 0xFF, 0xFF}}, /* CRS FINE LEVEL / STG RATE LEVEL / MODE DTUN VEL */

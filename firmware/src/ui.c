@@ -503,6 +503,8 @@ static int more_slot_ok(uint32_t id)
 }
 static int page_visible(uint32_t i)
 {
+    if (str_eq(PAGES[i].title, "HARMONY")) return harmony_on != 0u;
+    if (str_eq(PAGES[i].title, "HARMONY SETUP")) return 1;
 #if CARAVEL_REVERB_MINIMAL
     if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
 #endif

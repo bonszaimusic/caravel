@@ -1116,6 +1116,13 @@ static void draw_columns(void)
                     harmony_follow[sel] ? VAL(3u) : T_DIM, -1, ICON_X_SONG);
         return;
     }
+    if (cur_page()->graph == GR_HARMONY && str_eq(cur_page()->title, "HARMONY SETUP")) {
+        draw_column(0, "HARM", harmony_on ? "ON" : "OFF", "K1", harmony_on ? VAL(0u) : T_DIM, -1, ICON_X_SONG);
+        draw_column(1, "ROOT", "4", "", T_DIM, -1, ICON_X_SONG);
+        draw_column(2, "DUR", "BARS", "", T_DIM, -1, ICON_PULSE);
+        draw_column(3, "NEXT", "SCL", "", T_DIM, -1, ICON_SCALE);
+        return;
+    }
     if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: BAR roots, and their DUR row */
         for (c = 0; c < 4u; c++) {
             uint32_t r = hroot_get(c), mask = harmony_mask_root(c), d = (uint32_t)hdur_get(c) + 1u;
@@ -1848,9 +1855,8 @@ static void ui_draw_page(uint32_t counting)
 #if FELUCCA_HOME_PERF
     if (ui.home) { hp_draw_home(); ui.force=0; if(ui.msg_t)ui.msg_t--; if(ui.hot_t)ui.hot_t--; return; }
 #endif
-    if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
-                                                         * FELUCCA_FM4: any track): EDIT 1 */
-        ui.page = (uint8_t)page_first(FAM_EDIT);
+    if (!ui.home && !page_visible(ui.page)) {          /* a hidden page: SCL's page if it was SCL's, else EDIT 1 */
+        ui.page = (uint8_t)page_first(cur_page()->fam == FAM_SCL ? FAM_SCL : FAM_EDIT);
         page_entered();
     }
     cursor_fix();

@@ -1567,7 +1567,8 @@ static int page_tap(uint32_t b)
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
-    if (b == B_SCL && !ui.home && cur_page()->graph == GR_HARMONY) {
+    if (b == B_SCL && !ui.home && cur_page()->graph == GR_HARMONY &&
+        !str_eq(cur_page()->title, "HARMONY SETUP")) {
         if (!harmony_edit_dur) {                        /* SCL: the duration row, then the next page */
             harmony_edit_dur = 1;
             ui_message("HARMONY: DURATIONS");
@@ -2103,7 +2104,8 @@ static void ui_input(void)
         else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
         else
 #endif
-        if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_HARMONY) {
+        if (!glo && !lay && !kq && !mom_down() && !lock_held() && cur_page()->graph == GR_HARMONY &&
+            !str_eq(cur_page()->title, "HARMONY SETUP")) {
             harmony_edit_dur = (uint8_t)!harmony_edit_dur;   /* SELECT: roots row <-> duration row */
             ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
             ui.force = 1;
@@ -2131,6 +2133,16 @@ static void ui_input(void)
         uint64_t held;
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
+        if (!lay && cur_page()->graph == GR_HARMONY && str_eq(cur_page()->title, "HARMONY SETUP")) {
+            if (k == 0u) {
+                harmony_on = (uint8_t)!harmony_on;
+                harmony_base_bar = perf_bars_q16 >> 16;
+                harmony_bar = 0;
+                ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
+                ui.force = 1;
+            }
+            continue;
+        }
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */
             ui.pg_down &= (uint16_t)~(1u << panel.btn[B_LFO]);
         if ((held = lock_held()) != 0u) {               /* a step held on STEP: KNOB k locks (parameter locks) */

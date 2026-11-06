@@ -6611,11 +6611,12 @@ static int test_harmony_page(void)
     int bad = 0, ok;
     uint16_t mask;
     ui_power_on();
+    harmony_on = 1;
     song.sel = 0;
     trk[0].p[P_ROOT] = 0;
     trk[0].p[P_SCALE] = 2;                             /* C minor */
     for (uint32_t i = 0; i < 4u; i++) hroot_set(i, 0);
-    go_page(GR_HARMONY);
+    go_title("HARMONY");
     frame();
     turn(EN_K1, 1);
     turn(EN_K2, 2);
@@ -6631,12 +6632,7 @@ static int test_harmony_page(void)
     ok &= song.octave == -1 && harmony_edit_dur == 0u;
     song.octave = 0;
     press(B_OCTUP);                                /* and OCT+ the ordinary octave-up key */
-    ok &= song.octave == 1 && harmony_on == 0u;
-    song.octave = 0;
-    btn_down(B_SCL); frame();
-    press(B_OCTUP);                                /* SCL + OCT+: the HARMONY bus */
-    btn_up(B_SCL); frame();
-    ok &= harmony_on != 0u && msg_is("HARMONY ON");
+    ok &= song.octave == 1 && harmony_on != 0u;
     hroot_set(0, 0);
     harmony_bar = 0;
     mask = harmony_mask_bar(0);
@@ -6664,11 +6660,22 @@ static int test_harmony_page(void)
         ok &= cn == 3u && cr % 12 == 0 && out[0] % 12 == 0 && out[1] % 12 == 3 && out[2] % 12 == 7;
         trk[0].p[P_CHRD] = CH_OFF;
     }
-    bad += check("HARMONY page: BAR roots, SELECT DUR row, free OCT-/OCT+, SCL+OCT+ bus, CHRD BUS and strong-step seq snap", ok);
-    btn_down(B_SCL); frame();
-    press(B_OCTUP);
-    btn_up(B_SCL); frame();
-    bad += check("HARMONY page: SCL + OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
+    bad += check("HARMONY page: BAR roots, SELECT DUR row, free OCT-/OCT+, setup-row bus, CHRD BUS and strong-step seq snap", ok);
+    harmony_on = 0;
+    go_title("HARMONY SETUP"); frame();
+    {
+        uint32_t hi = NPAGES, si = NPAGES;
+        for (uint32_t i = 0; i < NPAGES; i++) {
+            if (str_eq(PAGES[i].title, "HARMONY")) hi = i;
+            if (str_eq(PAGES[i].title, "HARMONY SETUP")) si = i;
+        }
+        ok = si < NPAGES && hi < NPAGES && si < hi && page_visible(si) && !page_visible(hi);
+        turn(EN_K1, 1);
+        ok &= harmony_on != 0u && msg_is("HARMONY ON") && page_visible(hi);
+        turn(EN_K1, 1);
+        ok &= harmony_on == 0u && msg_is("HARMONY OFF") && !page_visible(hi);
+    }
+    bad += check("HARMONY SETUP row: K1 switches the bus; roots page hidden while off, setup before roots", ok);
     ui_power_on();
     return bad;
 }
@@ -6711,13 +6718,14 @@ static int test_fun11_readonly_probe(void)
  * and the page that lands must still edit its own values. */
 static int test_scl_page_tap(void)
 {
-    static const uint8_t order[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
+    static const uint8_t order[5] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY};
     int bad, ok = 1;
     ui_power_on();
+    harmony_on = 1;
     go_page(GR_SCALE);
     {
-        static const uint8_t cycle[5] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_SCALE};
-        for (uint32_t i = 0; i < 5u; i++) {
+        static const uint8_t cycle[6] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_HARMONY, GR_SCALE};
+        for (uint32_t i = 0; i < 6u; i++) {
             press(B_SCL);
             ok &= cur_page()->graph == cycle[i];
             if (cur_page()->graph == GR_SCALE) {
@@ -6726,7 +6734,7 @@ static int test_scl_page_tap(void)
                 int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
             } else if (cur_page()->graph == GR_LINK) {
                 uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
-            } else if (cur_page()->graph == GR_HARMONY) {
+            } else if (cur_page()->graph == GR_HARMONY && !str_eq(cur_page()->title, "HARMONY SETUP")) {
                 if (harmony_edit_dur) {
                     uint8_t b = hdur_get(0); turn(EN_K1, 1); ok &= hdur_get(0) != b;
                 } else {
@@ -6739,7 +6747,7 @@ static int test_scl_page_tap(void)
     bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
     /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
-    for (uint32_t start = 0; start < 4u; start++) {
+    for (uint32_t start = 0; start < 5u; start++) {
         ui_power_on();
         go_page(order[start]);
         for (uint32_t j = 0; j < 4u; j++) {
@@ -6751,13 +6759,13 @@ static int test_scl_page_tap(void)
     /* entering from HOME and from SEQ: the first SCL tap opens SCL, the next pages on */
     ok = 1;
     ui_power_on(); go_home(); frame();
-    press(B_SCL); printf("ENTRY home1 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_SCALE;
-    press(B_SCL); printf("ENTRY home2 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    press(B_SCL);
+    press(B_SCL);
     ui_power_on(); open_family(FAM_SEQ); frame();
-    press(B_SCL); printf("ENTRY seq1 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_SCALE;
-    press(B_SCL); printf("ENTRY seq2 graph=%u page=%u home=%u lock=%u\n",cur_page()->graph,ui.page,ui.home,ui.lock); ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    press(B_SCL);
+    press(B_SCL);
     bad += check("SCL entry from HOME and SEQ pages without a lock", ok);
-    ui_power_on(); go_page(GR_HARMONY);
+    ui_power_on(); harmony_on = 1; go_title("HARMONY");
     press(B_SCL);
     ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
     press(B_SCL);

@@ -792,15 +792,6 @@ static void layer_oct_open(uint32_t pressed)
 
 /* SCL + OCT+: the selected track's key, scale and quantize onto every track (TRN, CHRD, VOIC stay their own, so
  * the tracks can still be transposed and voiced apart). */
-static void ly_harmony_toggle(void)
-{
-    harmony_on = (uint8_t)!harmony_on;
-    harmony_base_bar = perf_bars_q16 >> 16;
-    harmony_bar = 0;
-    ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
-    ui.force = 1;
-}
-
 static void ly_scale_all(void)
 {
     track_t *s = &trk[lys.trk % NTRK];
@@ -840,12 +831,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         mine = 0;
     }
     if (mine & 2u) {                                    /* OCT+ let go: SCL puts its scale on all, GLO arms the bar reset */
-        if (lys.l == LAYER_SCL) {
-            if (cur_page()->graph == GR_HARMONY)
-                ly_harmony_toggle();                   /* SCL + OCT+ on HARMONY: the bus */
-            else
-                ly_scale_all();
-        }
+        if (lys.l == LAYER_SCL && cur_page()->graph != GR_HARMONY)
+            ly_scale_all();                            /* no SCL+OCT+ combo on HARMONY: it has its own row */
         else if (lys.l == LAYER_GLO)
             ly_bar_reset();
         mine &= ~2u;                                    /* (no other meaning in a SET layer) */
