@@ -286,9 +286,8 @@ static void link_retrigger(uint32_t i)
      * root/fifth and never sound the new third. */
     nn = chord_make(t, src, out, &r, &mask);
     chord_last[k].key = (uint8_t)clamp((int32_t)src, 0, 127);
-    for (j = 0; j < chord_last[k].n; j++)
-        if (chord_last[k].note[j])
-            trk_note_off(t, chord_last[k].note[j]);
+    for (j = 0; j < oldn; j++)
+        trk_note_off(t, old[j]);                    /* fallback selected this owner's list, not the stale cache */
     chord_last[k].n = (uint8_t)nn;
     chord_last[k].root = (uint8_t)clamp(r, 0, 127);
     chord_last[k].mask = mask;

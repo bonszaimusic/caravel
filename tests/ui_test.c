@@ -6705,6 +6705,141 @@ static void test_bus_owner(void)
         kb_chord[0][j] = chord_last[0].note[j];
 }
 
+/* Real input/transport regressions for panic-muted keys and a surviving BUS owner. */
+static void harmony_owner_reset(void)
+{
+    uint32_t i;
+    ui_power_on();
+    fm1_in.notes = kb_prev = 0;
+    mo_r = mo_w = 0;
+    usb.config = 1;
+    song.g[G_CLOCK] = 0;
+    song.g[G_ROUTE] = 0;
+    song.octave = 0;
+    for (i = 0; i < NTRK; i++) {
+        track_defaults_steps(&trk[i]);
+        latch_forget(i);
+    }
+    trk[0].p[P_ROOT] = 0;
+    trk[0].p[P_SCALE] = 1;
+    trk[0].p[P_QUANT] = QN_OFF;
+    trk[0].p[P_TRANS] = 0;
+    trk[0].p[P_CHRD] = CH_BUS;
+    trk[0].p[P_VOIC] = VC_CLOSE;
+    trk[0].p[P_VOICE] = V_POLY;
+    trk[0].p[P_AMODE] = 0;
+    trk[0].p[P_LATCH] = LT_OFF;
+    harmony_on = harmony_follow[0] = 1;
+    link_retrig[0] = 1;
+    for (i = 0; i < 4u; i++) { hroot_set(i, i & 1u ? 5u : 0u); hdur_set(i, 0); }
+    seq_start();
+    events_block(CTL);
+}
+
+static void harmony_owner_key(uint32_t k, int down)
+{
+    if (down) fm1_in.notes |= 1u << k;
+    else fm1_in.notes &= ~(1u << k);
+    events_block(CTL);
+}
+
+static void harmony_owner_midi(uint32_t status, uint32_t note, uint32_t value)
+{
+    midi_enqueue((status >> 4) | status << 8 | note << 16 | value << 24, 1);
+    events_block(CTL);
+}
+
+static void harmony_owner_boundary(void)
+{
+    /* Advance to just before the next bar, then let events_block dispatch the real boundary. */
+    perf_bars_q16 = ((harmony_base_bar + harmony_bar + 1u) << 16) - 1u;
+    perf_bars_rem = 0;
+    events_block(CTL);
+}
+
+static int harmony_owner_notes(const uint8_t *notes, uint32_t n)
+{
+    uint32_t i, j, hit = 0;
+    for (i = 0; i < NVOICE; i++) {
+        const voice_t *v = &trk[0].v[i];
+        if (!v->active || !v->gate) continue;
+        for (j = 0; j < n && v->note != notes[j]; j++) ;
+        if (j == n) return 0;
+        hit++;
+    }
+    return hit == n;
+}
+
+static int harmony_owner_midi_balanced(void)
+{
+    int count[128] = {0};
+    uint32_t q, n;
+    for (q = mo_r; q != mo_w; q++) {
+        uint32_t p = midi_out_q[q % MQ], st = (p >> 8) & 0xF0u;
+        n = (p >> 16) & 127u;
+        if (st == 0x90u && (p >> 24)) count[n]++;
+        if (st == 0x80u || (st == 0x90u && !(p >> 24))) count[n]--;
+        if (count[n] < 0) return 0;
+    }
+    for (n = 0; n < 128u; n++) if (count[n]) return 0;
+    return 1;
+}
+
+static int test_harmony_owner_lifecycle(void)
+{
+    static const uint8_t c60[] = {60, 64, 67}, f60[] = {65, 69, 72};
+    static const uint8_t f48[] = {53, 57, 60};
+    int bad = 0, ok;
+    uint32_t midi;
+    for (midi = 0; midi < 2u; midi++) {
+        harmony_owner_reset();
+        harmony_owner_key(7, 1);                   /* physical C4 */
+        harmony_owner_midi(0xB0, 120, 0);          /* hold the dead key across CC120 */
+        ok = harmony_owner_notes(0, 0);
+        if (midi) harmony_owner_midi(0x90, 62, 90);
+        else harmony_owner_key(9, 1);             /* D4 builds the same C BUS chord */
+        ok &= harmony_owner_notes(c60, 3);        /* no chord change may mask the suppression */
+        if (midi) harmony_owner_midi(0x80, 62, 0);
+        else harmony_owner_key(9, 0);
+        ok &= harmony_owner_notes(0, 0);          /* release while the dead key is still down */
+        harmony_owner_key(7, 0);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+        bad += check(midi ? "panic-muted panel key cannot suppress fresh MIDI input/release" :
+                            "panic-muted panel key cannot suppress fresh panel input/release", ok);
+    }
+    for (midi = 0; midi < 2u; midi++) {
+        harmony_owner_reset();
+        if (midi) {
+            harmony_owner_midi(0x90, 48, 90);
+            harmony_owner_midi(0x90, 72, 110);
+            harmony_owner_midi(0x80, 72, 0);
+        } else {
+            song.octave = -1; harmony_owner_key(7, 1);   /* C3, note 48 */
+            song.octave = 1; harmony_owner_key(19, 1);   /* C6, note 84 */
+            harmony_owner_key(19, 0);
+        }
+        harmony_owner_boundary();
+        ok = harmony_bar == 1u && harmony_owner_notes(f48, 3);
+        if (midi) harmony_owner_midi(0x80, 48, 0);
+        else harmony_owner_key(7, 0);
+        ok &= harmony_owner_notes(0, 0);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+        bad += check(midi ? "surviving MIDI BUS owner follows C->F and releases every old/new tone" :
+                            "surviving panel BUS owner follows C->F and releases every old/new tone", ok);
+    }
+    harmony_owner_reset();
+    harmony_owner_key(7, 1);
+    harmony_owner_boundary();
+    ok = harmony_bar == 1u && harmony_owner_notes(f60, 3);
+    harmony_owner_key(7, 0);
+    ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+    bad += check("single BUS key releases a changed chord through the input/transport path", ok);
+    usb.config = 0;
+    return bad;
+}
+
 /* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
  * notes themselves. */
 static int test_latch_retrigger(void)
@@ -10933,6 +11068,7 @@ int main(void)
     bad += test_generate();
     bad += test_harmony_page();
     bad += test_latch_retrigger();
+    bad += test_harmony_owner_lifecycle();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();
