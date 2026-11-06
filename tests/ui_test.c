@@ -6671,10 +6671,16 @@ static int test_harmony_page(void)
         ok = hi < NPAGES && !page_visible(hi) && link_setup_row == 0u;
         press(B_SCL);                                  /* the lower HARMONY SETUP row */
         ok &= link_setup_row == 1u && msg_is("HARMONY SETUP");
+        harmony_base_bar = 4; harmony_bar = 6;
         turn(EN_K1, 1);
-        ok &= harmony_on != 0u && msg_is("HARMONY ON") && page_visible(hi);
+        ok &= harmony_on != 0u && msg_is("HARMONY ON") && page_visible(hi) && harmony_bar == 0u;
+        harmony_base_bar = 4; harmony_bar = 6;
+        turn(EN_K1, 2);                                 /* ON -> ON must not restart the progression */
+        ok &= harmony_on != 0u && harmony_bar == 6u && harmony_base_bar == 4u;
         turn(EN_K1, -1);
         ok &= harmony_on == 0u && msg_is("HARMONY OFF") && !page_visible(hi);
+        turn(EN_K1, 1);
+        ok &= harmony_on != 0u && harmony_bar == 0u;
     }
     bad += check("LINK lower row: SCL switches to HARMONY SETUP, K1 the bus; roots hidden while off", ok);
     ui_power_on();
@@ -6797,10 +6803,10 @@ static int test_scl_page_tap(void)
     /* the same round-trip through the remembered page: go_home() keeps ui.page, fam_last names it */
     {
         static const char *const T[4] = {"SCL", "CHORD", "LINK", "HARMONY"};
+        ok = 1;
         for (uint32_t i = 0; i < 4u; i++) {
             uint8_t want;
             ui_power_on(); harmony_on = 1; go_title(T[i]); frames(4);
-            ok = 1;
             want = ui.page;
             ui.fam_last[FAM_SCL] = want;
             press(B_HOME); frames(4);
@@ -6808,7 +6814,7 @@ static int test_scl_page_tap(void)
             ok &= ui.page == want && !ui.lock && !ui.home;
             press(B_SCL);
             if (i == 0u) ok &= cur_page()->graph == GR_CHORD && !ui.lock;
-            else if (i == 1u) ok &= cur_page()->graph == GR_SCALE && !ui.lock;
+            else if (i == 1u) ok &= cur_page()->graph == GR_LINK && !ui.lock;
             else if (i == 2u) ok &= cur_page()->graph == GR_LINK && link_setup_row && !ui.lock;
             else ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur && !ui.lock;
         }

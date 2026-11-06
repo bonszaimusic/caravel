@@ -995,6 +995,7 @@ static void page_turn(int32_t dir)
         go_home();
         return;
     }
+    if (i == ui.page) return;                          /* the clamped endpoint is no page entry */
     ui.page = (uint8_t)i;
     ui.fam_last[fam] = ui.page;
     ui.home = 0;
