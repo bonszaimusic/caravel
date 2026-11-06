@@ -1116,13 +1116,6 @@ static void draw_columns(void)
                     harmony_follow[sel] ? VAL(3u) : T_DIM, -1, ICON_X_SONG);
         return;
     }
-    if (cur_page()->graph == GR_HARMONY && str_eq(cur_page()->title, "HARMONY SETUP")) {
-        draw_column(0, "HARM", harmony_on ? "ON" : "OFF", "K1", harmony_on ? VAL(0u) : T_DIM, -1, ICON_X_SONG);
-        draw_column(1, "ROOT", "4", "", T_DIM, -1, ICON_X_SONG);
-        draw_column(2, "DUR", "BARS", "", T_DIM, -1, ICON_PULSE);
-        draw_column(3, "NEXT", "SCL", "", T_DIM, -1, ICON_SCALE);
-        return;
-    }
     if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: BAR roots, and their DUR row */
         for (c = 0; c < 4u; c++) {
             uint32_t r = hroot_get(c), mask = harmony_mask_root(c), d = (uint32_t)hdur_get(c) + 1u;

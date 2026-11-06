@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+extern uint8_t link_setup_row;
 static int lfo2_page(uint32_t graph) { return graph == GR_LFO2 || graph == GR_LFO2SYNC; }
 static uint32_t lfo2_page_target(uint32_t graph, uint32_t col)
 {
@@ -44,7 +45,7 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 }
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
-enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS, DK_HARMONY };   /* DK_GRAPH: one page above, its graph in the lower block;
+enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS, DK_HARMONY, DK_LINK };   /* DK_GRAPH: one page above, its graph in the lower block;
                                                                           * DK_INS: the upper group's fourth card is the type's curve (its third FX HOLD) */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
@@ -66,6 +67,7 @@ static const dual_t DUALS[] = {
     {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
     {"SCL", "CHORD", "SCALE", "CHORD KEYS", "SCL", "CHORD", DK_PLAIN},
     {"HARMONY", "", "HARMONY", "DURATION", "HARMONY", "DURATION", DK_HARMONY},
+    {"LINK", "LINK", "LINK", "HARMONY SETUP", "LINK / HARMONY SETUP", "LINK / HARMONY SETUP", DK_LINK},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
 };
@@ -129,6 +131,31 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         }
         *v = (int32_t)hroot_get(col);
         return &RD[col];
+    }
+    if (dd->kind == DK_LINK) {
+        static const char *const SRC[] = {"OFF", "T1", "T2", "T3", "T4"};
+        static const char *const RT[] = {"OFF", "CHORD", "LINK", "BOTH"};
+        static const char *const ONOFF[] = {"OFF", "ON"};
+        static const param_desc_t SD = {"SOURCE", F_ENUM, 0, 4, 0, SRC, 0};
+        static const param_desc_t RD = {"RETRIG", F_ENUM, 0, 3, 0, RT, 0};
+        static const param_desc_t KD = {"KEY", F_NOTE, 0, 11, 0, 0, 0};
+        static const param_desc_t HD = {"HARM", F_ENUM, 0, 1, 0, ONOFF, 0};
+        static const param_desc_t HON = {"HARM", F_ENUM, 0, 1, 0, ONOFF, 0};
+        if (col >= 4u) return 0;
+        if (row) {
+            *v = col == 0u ? harmony_on : 0;
+            return col == 0u ? &HON : 0;
+        }
+        uint32_t src = link_src[song.sel];
+        if (col == 0u) { *v = src; return &SD; }
+        if (col == 1u) { *v = link_retrig[song.sel]; return &RD; }
+        if (col == 2u) {
+            if (!src || src > NTRK) { *v = 0; return 0; }
+            *v = trk[src - 1u].p[P_ROOT];
+            return &KD;
+        }
+        *v = harmony_follow[song.sel];
+        return &HD;
     }
     if (dd->kind == DK_LFO2) {
         uint32_t id = lfo2_page_target(row ? GR_LFO2SYNC : GR_LFO2, col);
@@ -305,10 +332,42 @@ static void chord_block(const track_t *t)
     }
     cv_blit(0, Y_LABEL + 90u);
 }
+static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int active)
+{
+    const char *lab = "", *val = "";
+    char buf[20];
+    uint32_t src = link_src[song.sel];
+    if (!row) {
+        static const char *const SRC[] = {"OFF", "T1", "T2", "T3", "T4"};
+        static const char *const RT[] = {"OFF", "CHORD", "LINK", "BOTH"};
+        if (col == 0u) { lab = "SOURCE"; val = SRC[src <= 4u ? src : 0u]; }
+        else if (col == 1u) { lab = "RETRIG"; val = RT[link_retrig[song.sel] & 3u]; }
+        else if (col == 2u) {
+            lab = "KEY";
+            if (!src || src > NTRK) val = "--";
+            else {
+                str_cpy(buf, N_NOTE[(uint32_t)trk[src - 1u].p[P_ROOT] % 12u], sizeof buf);
+                str_cpy(buf + str_len(buf), " ", sizeof buf - str_len(buf));
+                str_cpy(buf + str_len(buf), N_SCALE[(uint32_t)trk[src - 1u].p[P_SCALE] %
+                        (sizeof N_SCALE / sizeof N_SCALE[0])], sizeof buf - str_len(buf));
+                val = buf;
+            }
+        } else { lab = "HARM"; val = harmony_follow[song.sel] ? "ON" : "OFF"; }
+    } else {
+        if (col == 0u) { lab = "HARM"; val = harmony_on ? "ON" : "OFF"; }
+        else if (col == 1u) { lab = "ROOTS"; val = "4"; }
+        else if (col == 2u) { lab = "DUR"; val = "1-8"; }
+        else { lab = "NEXT"; val = "SCL"; }
+    }
+    uint16_t c = active ? T_TEXT : T_MID;
+    cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, lab, active ? T_TEXT : T_DIM, T_SURF);
+    cv_text_in(x, y + 44 - AF_M_CAP_Y, 56, &AF_M, val, c, T_SURF);
+}
 static void lfo_cards(const page_t *pg)
 {
     uint32_t bottom;
     const dual_t *dd = dual_of(pg, &bottom);
+    if (dd->kind == DK_LINK) bottom = link_setup_row ? 1u : 0u;
     const page_t *rps[2] = {dual_row_page(dd, 0), dual_row_page(dd, 1)};
     /* This layout has no rolling card digits; discard animations from the previous page. */
     for (uint32_t col = 0; col < 4u; col++)
@@ -320,6 +379,10 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
+    if (dd->kind == DK_LINK) {
+        uint32_t src = link_src[song.sel];
+        sig = sig * 33u + link_setup_row * 131u + (src && src <= NTRK ? (uint32_t)trk[src - 1u].p[P_SCALE] * 17u : 0u);
+    }
 #if CARAVEL_STASIS_EXPAND
     if(rps[1] && rps[1]->graph==GR_STLAYER)
         sig=sig*33u+st_layer.phase+st_layer.request*8u+st.auto_hold*32u+st.releasing*64u+st.stopping*128u;
@@ -410,6 +473,10 @@ static void lfo_cards(const page_t *pg)
 #endif
             if (dd->kind == DK_INS && !row && col == 3u) {     /* the fourth card: the type's curve, one card wide */
                 insert_curve(TSEL, active ? T_THEME : T_MID, x + 3, 50, y + 49, 20);
+                continue;
+            }
+            if (dd->kind == DK_LINK) {
+                link_card(row, col, x, y, active);
                 continue;
             }
             if (!d || !d->label || d->label[0] == '-') {

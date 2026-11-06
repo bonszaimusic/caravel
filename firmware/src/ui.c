@@ -504,7 +504,6 @@ static int more_slot_ok(uint32_t id)
 static int page_visible(uint32_t i)
 {
     if (str_eq(PAGES[i].title, "HARMONY")) return harmony_on != 0u;
-    if (str_eq(PAGES[i].title, "HARMONY SETUP")) return 1;
 #if CARAVEL_REVERB_MINIMAL
     if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
 #endif
@@ -644,9 +643,11 @@ static int help_on(void) { return (ui_prefs2 & (PREF_HELP >> 16)) != 0u; }
 static uint32_t midi_lit_ms[NTRK];
 static int midi_lit(uint32_t k) { return midi_lit_ms[k % NTRK] && (fm1_ms | 1u) - midi_lit_ms[k % NTRK] < MLIT_MS; }
 static void help_start(void) { ui.help_t = (uint8_t)(help_on() ? HELP_FRAMES : 0u); }
+extern uint8_t link_setup_row;
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
+    if (!ui.home && str_eq(pg->title, "LINK")) link_setup_row = 0;
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
         ev_enter();
     if (!ui.home && lock_page_ok(ui.page))

@@ -6662,20 +6662,20 @@ static int test_harmony_page(void)
     }
     bad += check("HARMONY page: BAR roots, SELECT DUR row, free OCT-/OCT+, setup-row bus, CHRD BUS and strong-step seq snap", ok);
     harmony_on = 0;
-    go_title("HARMONY SETUP"); frame();
+    go_page(GR_LINK); frame();
     {
-        uint32_t hi = NPAGES, si = NPAGES;
-        for (uint32_t i = 0; i < NPAGES; i++) {
+        uint32_t hi = NPAGES;
+        for (uint32_t i = 0; i < NPAGES; i++)
             if (str_eq(PAGES[i].title, "HARMONY")) hi = i;
-            if (str_eq(PAGES[i].title, "HARMONY SETUP")) si = i;
-        }
-        ok = si < NPAGES && hi < NPAGES && si < hi && page_visible(si) && !page_visible(hi);
+        ok = hi < NPAGES && !page_visible(hi) && link_setup_row == 0u;
+        turn(EN_SELECT, 1);                            /* the lower HARMONY SETUP row */
+        ok &= link_setup_row == 1u && msg_is("HARMONY SETUP");
         turn(EN_K1, 1);
         ok &= harmony_on != 0u && msg_is("HARMONY ON") && page_visible(hi);
         turn(EN_K1, 1);
         ok &= harmony_on == 0u && msg_is("HARMONY OFF") && !page_visible(hi);
     }
-    bad += check("HARMONY SETUP row: K1 switches the bus; roots page hidden while off, setup before roots", ok);
+    bad += check("LINK lower row: SELECT switches to HARMONY SETUP, K1 the bus; roots hidden while off", ok);
     ui_power_on();
     return bad;
 }
@@ -6718,14 +6718,14 @@ static int test_fun11_readonly_probe(void)
  * and the page that lands must still edit its own values. */
 static int test_scl_page_tap(void)
 {
-    static const uint8_t order[5] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY};
+    static const uint8_t order[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
     int bad, ok = 1;
     ui_power_on();
     harmony_on = 1;
     go_page(GR_SCALE);
     {
-        static const uint8_t cycle[6] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_HARMONY, GR_SCALE};
-        for (uint32_t i = 0; i < 6u; i++) {
+        static const uint8_t cycle[5] = {GR_CHORD, GR_LINK, GR_HARMONY, GR_HARMONY, GR_SCALE};
+        for (uint32_t i = 0; i < 5u; i++) {
             press(B_SCL);
             ok &= cur_page()->graph == cycle[i];
             if (cur_page()->graph == GR_SCALE) {
@@ -6747,7 +6747,7 @@ static int test_scl_page_tap(void)
     bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
     /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
-    for (uint32_t start = 0; start < 5u; start++) {
+    for (uint32_t start = 0; start < 4u; start++) {
         ui_power_on();
         go_page(order[start]);
         for (uint32_t j = 0; j < 4u; j++) {
