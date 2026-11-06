@@ -1,5 +1,7 @@
 # Caravel tutorials
 
+**Development: [Live Harmony and the HOME ACTION key map](harmony-live.md)** — two-way BANK selection, HARM after JOURNEY, HOLD/PREV/NEXT/RESET, scale-degree SHIFT and MIDI Learn.
+
 **New: [Random Morph and Morph Journey](random-morph-journey.md)** (0.9.0). The sections below cover STASIS (0.6.0) and the performance workflow (0.5.0).
 Back to the [README](../../README.md#tutorials).
 

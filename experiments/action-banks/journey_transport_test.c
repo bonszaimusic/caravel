@@ -5,7 +5,7 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN journey_transport_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void tap(uint32_t k){key(1u<<(ACT_KEY_FIRST+k));key(0);}
+static void tap(uint32_t k){key(1u<<(k?action_keys[k-1u]:ACT_BANK_NEXT));key(0);}
 static int32_t absd(int32_t a){return a<0?-a:a;}
 static void set_all(int r,int p){trk[0].p[P_REV]=(int16_t)r;trk[0].p[P_PAN]=(int16_t)p;}
 static void leg_state(const char*what){(void)what;}

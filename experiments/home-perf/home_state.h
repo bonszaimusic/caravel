@@ -38,7 +38,14 @@ static uint8_t hp_dirty,hp_combo_pending;
 #else
 #define HP_JVN 0u
 #endif
-static int hp_virtual(uint32_t id) { return id >= HP_VFIRST && id < HP_VFIRST+8u+HP_JVN; }
+#define HP_HFIRST (HP_VFIRST+16u)
+#if CARAVEL_ACTION_BANKS
+#define HP_HVN 5u
+#else
+#define HP_HVN 0u
+#endif
+static int hp_harmony_target(uint32_t id) {return HP_HVN && id>=HP_HFIRST && id<HP_HFIRST+HP_HVN;}
+static int hp_virtual(uint32_t id) { return (id >= HP_VFIRST && id < HP_VFIRST+8u+HP_JVN)||hp_harmony_target(id); }
 static int hp_journey_target(uint32_t id) { return HP_JVN && id >= HP_VFIRST+8u && id < HP_VFIRST+8u+HP_JVN; }
 static void hp_journey_cc(uint32_t id, uint32_t value);
 static void hp_begin(track_t *t);

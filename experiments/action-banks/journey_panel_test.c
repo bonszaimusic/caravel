@@ -4,9 +4,9 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN journey_panel_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void tap(uint32_t k){key(1u<<(ACT_KEY_FIRST+k));key(0);}   /* 0 = BANK, 1..4 = A1..A4 */
+static void tap(uint32_t k){key(1u<<(k?action_keys[k-1u]:ACT_BANK_NEXT));key(0);}   /* 0 = BANK, 1..4 = A1..A4 */
 static void goto_bank(uint32_t b){uint32_t g=0;while(action_bank!=b&&g++<8u)tap(0);CHECK(action_bank==b);}
-static void hold(uint32_t k,uint32_t ms){web_keys(1u<<(ACT_KEY_FIRST+k));run_ms(ms);web_keys(0);run_ms(60);}
+static void hold(uint32_t k,uint32_t ms){web_keys(1u<<(k?action_keys[k-1u]:ACT_BANK_NEXT));run_ms(ms);web_keys(0);run_ms(60);}
 static int32_t rev(void){return trk[0].p[P_REV];}
 static void store(uint32_t slot,int32_t r,int32_t p){
  trk[0].p[P_REV]=(int16_t)r;trk[0].p[P_PAN]=(int16_t)p;
@@ -21,9 +21,9 @@ int main(void){
  hp_rm_reset();hp_rm.scope=HP_RM_TRACK;hp_rm.bars=1;hp_rm.depth=100;hp_rm.shape=HP_RM_LINEAR;
  store(0,10,-40);store(1,90,40);store(2,50,0);action_snap_slot=0;
  /* BANK steps RANDOM, JOURNEY, STASIS, PAIR, LIVE and wraps; the four existing banks keep their numbers */
- CHECK(ACT_BANKS==5u&&ACT_BANK_JOURNEY==4u);
+ CHECK(ACT_BANKS==6u&&ACT_BANK_JOURNEY==4u);
  tap(0);CHECK(action_bank==ACT_BANK_JOURNEY&&!strcmp(action_bank_names[action_bank],"JOURNEY"));
- tap(0);CHECK(action_bank==1u);tap(0);CHECK(action_bank==2u);tap(0);CHECK(action_bank==3u);
+ tap(0);CHECK(action_bank==ACT_BANK_HARMONY);tap(0);CHECK(action_bank==1u);tap(0);CHECK(action_bank==2u);tap(0);CHECK(action_bank==3u);
  goto_bank(0u);tap(0);CHECK(action_bank==ACT_BANK_JOURNEY);
  /* A1 PLAY: the journey starts from the selected slot, no MIDI involved */
  trk[0].p[P_REV]=77;
@@ -98,7 +98,7 @@ int main(void){
  tap(1);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_PLAY);ui.ml.pick=0;
  tap(2);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_DIR);ui.ml.pick=0;
  tap(3);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_NEXT);ui.ml.pick=0;
- web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(120);web_keys(0);run_ms(60);
+ web_keys(1u<<(action_keys[3]));run_ms(120);web_keys(0);run_ms(60);
  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_WAIT);ui.ml.pick=0;
  {uint32_t n=hp_rm_snapshot_count(0,0);hold(4,700);CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0,0)==n);ui.ml.pick=0;}
  ui.ml.on=0;

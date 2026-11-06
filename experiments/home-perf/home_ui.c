@@ -20,7 +20,16 @@ static const param_desc_t HP_JDESC[HP_JVN]={
  {"JRN WAIT",F_PCT,0,127,0,0,0},{"RM BARS",F_PCT,0,127,0,0,0},
  {"RM DEPTH",F_PCT,0,127,0,0,0},{"RM SCOPE",F_PCT,0,127,0,0,0},{"RM SHAPE",F_PCT,0,127,0,0,0}};
 #endif
+#if CARAVEL_ACTION_BANKS
+static const param_desc_t HP_HDESC[5]={
+ {"HARM HOLD",F_PCT,0,127,0,0,0},{"HARM PREV",F_PCT,0,127,0,0,0},
+ {"HARM NEXT",F_PCT,0,127,0,0,0},{"HARM RESET",F_PCT,0,127,0,0,0},
+ {"HARM SHIFT",F_PCT,0,127,64,0,0}};
+#endif
 static const param_desc_t *hp_vdesc(uint32_t id){
+#if CARAVEL_ACTION_BANKS
+ if(hp_harmony_target(id))return &HP_HDESC[id-HP_HFIRST];
+#endif
 #if HP_JVN
  if(id>=HP_VFIRST+8u)return &HP_JDESC[(id-HP_VFIRST-8u)%HP_JVN];
 #endif
@@ -98,6 +107,14 @@ static void hp_set(hp_ref_t r,int32_t value,int capture)
 #endif
 static void hp_midi(track_t*t,uint32_t id,uint32_t value)
 {
+#if CARAVEL_ACTION_BANKS
+ if(hp_harmony_target(id)){
+  uint32_t k=id-HP_HFIRST;
+  if(k==4u){harmony_shift_want=(int8_t)((value*14u+63u)/127u)-7;harmony_shift_dirty=1;}
+  else {uint8_t hi=value>=64u;if(hi&&!harmony_cc_hi[k]&&harmony_on)harmony_command=(uint8_t)(k+1u);harmony_cc_hi[k]=hi;}
+  return;
+ }
+#endif
 #if HP_JVN
  if(hp_journey_target(id)){hp_journey_cc(id,value);return;} /* (a mailbox: the UI thread acts on it) */
 #endif
@@ -486,8 +503,20 @@ static void hp_draw_home(void)
    }else{
     cv_rrect(7,ya+3,60,17,4,T_RAISE,T_SURF);cv_text_in(7,ya+4,60,&AF_S,bank,T_ACCENT,T_RAISE);
    }
-   hp_sea(ya+2);
-   if(!action_setup)hp_tracks(7,ya+22);
+   if(action_bank==ACT_BANK_HARMONY){
+    static const char *const names[12]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+    uint32_t idx=harmony_chord_at(harmony_bar);char status[32];
+    for(uint32_t i=0;i<4u;i++){
+     int x=82+(int)i*37;cv_rrect(x,ya+4,35,14,3,i==idx?T_ACCENT:T_RAISE,T_SURF);
+     uint32_t r=hroot_live(i),mask=harmony_mask_root(i);char cn[8];
+     const char *suf=(mask&(1u<<((r+3u)%12u)))?((mask&(1u<<((r+6u)%12u)))?"dim":"m"):"";
+     perf_format(cn,sizeof cn,"%s%s",names[r],suf);
+     cv_text_in(x,ya+5,35,&AF_S,cn,i==idx?T_INK:T_TEXT,i==idx?T_ACCENT:T_RAISE);
+    }
+    perf_format(status,sizeof status,"%s %s%d%s",!harmony_on?"OFF":harmony_hold?"HOLD S":"SHIFT",harmony_shift_want>0?"+":"",harmony_shift_want,
+     harmony_pending==H_PREV?" PREV*":harmony_pending==H_NEXT||harmony_pending==H_RESUME?" NEXT*":harmony_pending==H_RESET?" RESET*":harmony_shift_pending?" *":"");
+    cv_text(82,ya+22,&AF_S,status,T_TEXT);
+   }else {hp_sea(ya+2);if(!action_setup)hp_tracks(7,ya+22);}
   }
   #if FELUCCA_RANDOM_MORPH
   #endif
@@ -505,6 +534,7 @@ static void hp_draw_home(void)
    }
    #endif
    #endif
+   if(action_bank==ACT_BANK_HARMONY && k==0u && harmony_hold)label=harmony_pending==H_RESUME?"QUEUED":"RESUME";
    int kx=7+(int)k*57;cv_rrect(kx,ky,54,30,4,T_RAISE,T_SURF);
    const aafont_t*f=text_w(&AF_M,label)<=48?&AF_M:&AF_S;
    cv_text_in(kx,ky+(30-(f==&AF_M?15:12))/2,54,f,label,T_TEXT,T_RAISE);

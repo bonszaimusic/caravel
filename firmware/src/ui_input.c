@@ -1040,6 +1040,7 @@ static void edit_param(uint32_t slot, int32_t steps)
             if (slot == 0u) {
                 uint8_t nv = (uint8_t)(steps > 0);           /* positive ON, negative OFF */
                 if (nv != harmony_on) {                      /* idempotent: no phase restart on ON -> ON */
+                    harmony_perf_clear();
                     harmony_on = nv;
                     harmony_base_bar = perf_bars_q16 >> 16;
                     harmony_bar = 0;

@@ -4,7 +4,7 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN journey_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void random_press(void){key(1u<<(ACT_KEY_FIRST+1u));key(0);}
+static void random_press(void){key(1u<<(action_keys[0]));key(0);}
 static int32_t rev(void){return trk[0].p[P_REV];}
 static int32_t absd(int32_t a,int32_t b){return a>b?a-b:b-a;}
 /* a button CC: 0 then 127 = one rising edge */
@@ -96,12 +96,12 @@ int main(void){
  hp_j.on=hp_j.paused=hp_j.held=0;hp_rm_reset();run_ms(30);
  /* MIDI LEARN entry points on the ACTION controls */
  ui.ml.on=1;ui.ml.pick=0;
- key(1u<<(ACT_KEY_FIRST+1u));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_PLAY);ui.ml.pick=0;
- key(1u<<(ACT_KEY_FIRST+2u));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_DIR);ui.ml.pick=0;
- key(1u<<(ACT_KEY_FIRST+3u));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_NEXT);ui.ml.pick=0;
- web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(120);web_keys(0);run_ms(60);   /* tap A4 */
+ key(1u<<(action_keys[0]));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_PLAY);ui.ml.pick=0;
+ key(1u<<(action_keys[1]));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_DIR);ui.ml.pick=0;
+ key(1u<<(action_keys[2]));CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_NEXT);ui.ml.pick=0;
+ web_keys(1u<<(action_keys[3]));run_ms(120);web_keys(0);run_ms(60);   /* tap A4 */
  CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_WAIT);ui.ml.pick=0;
- {uint32_t n=hp_rm_snapshot_count(0,0);web_keys(1u<<(ACT_KEY_FIRST+4u));run_ms(700);web_keys(0);run_ms(60);   /* hold A4 */
+ {uint32_t n=hp_rm_snapshot_count(0,0);web_keys(1u<<(action_keys[3]));run_ms(700);web_keys(0);run_ms(60);   /* hold A4 */
   CHECK(!ui.ml.pick&&hp_rm_snapshot_count(0,0)==n);ui.ml.pick=0;}      /* nothing is learned and nothing is saved while learning */
  action_setup_turn(2,1);CHECK(ui.ml.pick&&ui.ml.id==HP_VFIRST+8u+HJ_BARS+2u);ui.ml.pick=0;
  ui.ml.on=0;

@@ -1335,6 +1335,7 @@ static void project_init_runtime(void)
     motion_fx_recording = 0;
     motion_base_valid = 0;
     chain_defaults(&chain_config);
+    harmony_perf_clear();
     harmony_on = 0;
     harmony_bar = 0;
     harmony_base_bar = perf_bars_q16 >> 16;
@@ -1460,6 +1461,7 @@ static int project_restore_runtime(const project_t *input)
     transport_req = 0;
     chain_config = p->chain;
     harmony_restore(&proj_harmony);
+    harmony_perf_clear();
     harmony_bar = 0;
     harmony_base_bar = perf_bars_q16 >> 16;
                                                        /* the FUN11 block already set harmony_on / roots / durations /

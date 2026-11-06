@@ -65,6 +65,23 @@ static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
 static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
 static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes) */
+#if CARAVEL_ACTION_BANKS
+/* Transient performance overlay. Only events_block moves the musical playhead. */
+enum {H_NONE,H_HOLD,H_PREV,H_NEXT,H_RESET,H_RESUME};
+static volatile uint8_t harmony_command, harmony_pending, harmony_hold;
+static volatile int8_t harmony_shift_want;
+static int8_t harmony_shift;
+static volatile uint8_t harmony_shift_pending, harmony_shift_dirty;
+static uint8_t harmony_cc_hi[4];
+static void harmony_perf_clear(void)
+{
+ harmony_command=harmony_pending=harmony_hold=harmony_shift_pending=harmony_shift_dirty=0;
+ harmony_shift=harmony_shift_want=0;
+ memset(harmony_cc_hi,0,sizeof harmony_cc_hi);
+}
+#else
+static void harmony_perf_clear(void) {}
+#endif
 static uint8_t hroot_get(uint32_t i) { return harmony_root[i & 3u] % 12u; }
 static void hroot_set(uint32_t i, uint8_t r) { harmony_root[i & 3u] = (uint8_t)(r % 12u); }
 static uint8_t hdur_get(uint32_t i) { return harmony_dur[i & 3u] & 3u; }
@@ -83,10 +100,25 @@ static uint32_t harmony_chord_at(uint32_t bar)
     }
     return 3u;
 }
-static uint16_t harmony_mask_root(uint32_t idx)
+/* Root edits/store remain the prepared progression; SHIFT moves its scale degree. */
+static uint8_t hroot_live(uint32_t idx)
+{
+ uint8_t root=hroot_get(idx);
+#if CARAVEL_ACTION_BANKS
+ if(harmony_shift){
+  uint32_t mask=scale_mask(&trk[0]),abs=0,n=0,at=0;uint8_t notes[12];
+  for(uint32_t i=0;i<12u;i++)if(mask&(1u<<i))abs|=1u<<((i+trk[0].p[P_ROOT]+120)%12);
+  for(uint32_t i=0;i<12u;i++)if(abs&(1u<<i))notes[n++]=(uint8_t)i;
+  if(n){at=n-1u;for(uint32_t i=0;i<n;i++)if(notes[i]<=root)at=i;
+   int32_t pos=((int32_t)at+harmony_shift)%(int32_t)n;if(pos<0)pos+=(int32_t)n;root=notes[pos];}
+ }
+#endif
+ return root;
+}
+static uint16_t harmony_mask_pitch(uint32_t root)
 {
     const track_t *k = &trk[0];
-    uint32_t sm = scale_mask(k), abs = 0, notes[12], n = 0, i, at = 0, root = hroot_get(idx);
+    uint32_t sm = scale_mask(k), abs = 0, notes[12], n = 0, i, at = 0;
     uint16_t out;
     for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
         if ((sm >> i) & 1u)
@@ -127,6 +159,7 @@ static uint16_t harmony_mask_root(uint32_t idx)
     }
     return out;
 }
+static uint16_t harmony_mask_root(uint32_t idx) { return harmony_mask_pitch(hroot_live(idx)); }
 static uint16_t harmony_mask_bar(uint32_t bar) { return harmony_mask_root(harmony_chord_at(bar)); }
 static uint16_t harmony_mask(const track_t *t)
 {
@@ -149,6 +182,26 @@ static uint32_t harmony_snap(const track_t *t, uint32_t n)
     }
     return n;
 }
+#if CARAVEL_ACTION_BANKS
+static uint32_t harmony_chord_start(uint32_t idx)
+{
+ uint32_t bar=0;for(uint32_t i=0;i<idx;i++)bar+=1u<<hdur_get(i);return bar;
+}
+/* Called at the audio control boundary, stopped immediately or playing at a bar line. */
+static void harmony_perf_apply(uint32_t bar)
+{
+ uint32_t idx=harmony_chord_at(harmony_bar),cmd=harmony_pending;
+ if(cmd){
+  if(cmd==H_PREV)idx=(idx+3u)&3u;
+  else if(cmd==H_NEXT||cmd==H_RESUME)idx=(idx+1u)&3u;
+  else if(cmd==H_RESET){idx=0;harmony_hold=0;harmony_shift=harmony_shift_want=0;harmony_shift_pending=0;}
+  if(cmd==H_RESUME)harmony_hold=0;
+  harmony_bar=harmony_chord_start(idx);harmony_base_bar=bar-harmony_bar;
+  harmony_pending=H_NONE;
+ }
+ if(harmony_shift_pending){harmony_shift=harmony_shift_want;harmony_shift_pending=0;}
+}
+#endif
 static void midi_resync_cancel(void);
 static volatile uint8_t step_record_mask; /* transient per-track STEP REC; never live-write at the playhead */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
@@ -1432,6 +1485,7 @@ static void seq_start(void)
         lfo2_trigger(t, 1);
     }
     song.tick = 0;
+    harmony_perf_clear();
     harmony_base_bar = perf_bars_q16 >> 16;        /* HARMONY BAR 1 with the transport, on either clock */
     harmony_bar = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
@@ -2201,6 +2255,21 @@ static void events_block(uint32_t n)
     }
     /* The beat's share of this block, advanced once (the ARP LED and the bar reset below use it). */
     uint32_t beat_n_samples = clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n;
+#if CARAVEL_ACTION_BANKS
+    if(!harmony_on){
+        if(harmony_command||harmony_pending||harmony_hold||harmony_shift||harmony_shift_pending||harmony_shift_dirty)harmony_perf_clear();
+    }
+    else {
+        uint8_t cmd=harmony_command,shift_dirty=harmony_shift_dirty;
+        harmony_command=H_NONE;harmony_shift_dirty=0;
+        if(shift_dirty)harmony_shift_pending=1;
+        if(cmd==H_HOLD){
+            if(harmony_hold){harmony_pending=harmony_pending==H_RESUME?H_NONE:H_RESUME;}
+            else {harmony_hold=1;harmony_pending=H_NONE;}
+        }else if(cmd)harmony_pending=cmd;
+        if(!song.playing && (cmd||shift_dirty))harmony_perf_apply(perf_bars_q16>>16);
+    }
+#endif
     if (bar_reset_req) {
         /* Stopped: reset at once. Playing: at the first bar line that falls in this block. A whole-block
          * quantisation, as the external resync is; seq_resync enters step 0 before the ordinary step clocks. */
@@ -2208,11 +2277,13 @@ static void events_block(uint32_t n)
             /* Stopped: PLAY starts every track at step 0 anyway. Only put the beat display back; no seq_resync,
              * whose arp step could sound a held chord while the transport is stopped. */
             bar_reset_req = 0;
+            harmony_perf_clear();
             harmony_base_bar = perf_bars_q16 >> 16;
             harmony_bar = 0;
             beat_pos = beat_n = 0;
         } else if (beat_n == 3u && beat_pos + beat_n_samples >= beat_samples()) {
             bar_reset_req = 0;
+            harmony_perf_clear();
             harmony_base_bar = (perf_bars_q16 >> 16) + 1u;
             harmony_bar = 0;
             seq_resync();
@@ -2220,12 +2291,23 @@ static void events_block(uint32_t n)
     }
     if (song.playing && seq_n) {
         uint32_t bar = 4u * (clock_mode ? MIDI_CLOCK_GRID : beat_samples()), num = (seq_n << 16) + perf_bars_rem;
-        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb);
+        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb), prev_bar=perf_bars_q16>>16;
         perf_bars_q16 += num / bar;
         perf_bars_rem = num % bar;
+        uint32_t boundary=(perf_bars_q16>>16)!=prev_bar;
+        uint16_t old_mask=boundary&&harmony_on?harmony_mask_bar(hb):0;
+#if CARAVEL_ACTION_BANKS
+        if(harmony_hold)harmony_base_bar+=(perf_bars_q16>>16)-prev_bar;
+#endif
         harmony_bar = (perf_bars_q16 >> 16) - harmony_base_bar;
+#if CARAVEL_ACTION_BANKS
+        if(boundary){
+            if(harmony_pending)harmony_bar=hb; /* a queued NEXT advances once, not once plus the natural change */
+            harmony_perf_apply(perf_bars_q16>>16);
+        }
+#endif
         arp_bar_sync();
-        if (harmony_bar != hb && harmony_on && old_chord != harmony_chord_at(harmony_bar))
+        if (boundary && harmony_on && (old_chord != harmony_chord_at(harmony_bar) || old_mask != harmony_mask_bar(harmony_bar)))
             for (i = 0; i < NTRK; i++)
                 if ((link_retrig[i] & 1u) && harmony_follow[i])
                     link_retrigger(i);

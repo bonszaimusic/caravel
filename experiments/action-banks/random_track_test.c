@@ -2,7 +2,7 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN random_track_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void random_key(void){key(1u<<(ACT_KEY_FIRST+1u));key(0);}
+static void random_key(void){key(1u<<(action_keys[0]));key(0);}
 static void targets(uint32_t track,uint32_t id){
     CHECK(hp_rm.count==1u);CHECK(hp_rm.cell[0].ref.track==track);CHECK(hp_tid(hp_rm.cell[0].ref)==id);
 }

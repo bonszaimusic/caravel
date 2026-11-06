@@ -55,26 +55,26 @@ const n1=count(0),n2=count(1);
 assert.ok(n1>0&&n2>0);
 key(26);assert.equal(slot(),2,'S3 selected');
 assert.equal(count(2),0);
-key(25);assert.equal(e.web_action_random_state(),0,'recall of empty slot does not start morph');
+key(24);assert.equal(e.web_action_random_state(),0,'recall of empty slot does not start morph');
 key(26);assert.equal(slot(),3,'S4 selected');
 key(26);assert.equal(slot(),0,'A4 wraps to S1');
 assert.equal(count(0),n1,'S1 intact');
 // Recall S1 from arbitrary live level. The audio DSP continues rendering.
 setLevel(10);render(100);
-key(25);
+key(24);
 assert.equal(e.web_action_random_state(),5,'A3 recalls saved snapshot with a real morph');
 render(450);
 assert.ok(level()>10&&level()<90,'morph interpolates, not jumps');
-key(24);assert.equal(e.web_action_random_state(),2,'A2 freezes snapshot recall');
+key(23);assert.equal(e.web_action_random_state(),2,'A2 freezes snapshot recall');
 const frozen=level();render(550);
 assert.equal(level(),frozen,'frozen snapshot stays fixed');
-key(24);assert.equal(e.web_action_random_state(),5,'A2 resumes snapshot recall');
+key(23);assert.equal(e.web_action_random_state(),5,'A2 resumes snapshot recall');
 render(4300);
 assert.equal(level(),90,'S1 recall reaches exact saved value');
 assert.equal(e.web_action_random_state(),0,'completed recall goes idle');
 // Save S2, reuse same four bytes of shared engine parameter, not shadow state.
 key(26);assert.equal(slot(),1);
-key(25);assert.equal(e.web_action_random_state(),5,'S2 recall starts from current S1');
+key(24);assert.equal(e.web_action_random_state(),5,'S2 recall starts from current S1');
 render(4300);
 assert.equal(level(),40,'S2 value stays independent of S1');
 assert.equal(count(1),n2);
@@ -83,16 +83,16 @@ setLevel(75);render(120);
 hold(26);
 assert.equal(count(1),n2,'rewriting slot preserves original ref count');
 setLevel(15);render(120);
-key(25);render(4300);
+key(24);render(4300);
 assert.equal(level(),75,'overwritten S2 value is recalled');
 key(26);key(26);key(26);assert.equal(slot(),0);
-key(25);render(4300);
+key(24);render(4300);
 assert.equal(level(),90,'S1 still holds original 90 after S2 rewrite');
 // Existing RANDOM/RETURN workflow still works without an explicit REC destination.
-key(23);
+key(21);
 assert.equal(e.web_action_random_state(),1,'A1 still starts real RANDOM morph');
-key(24);assert.equal(e.web_action_random_state(),2);
-key(24);assert.equal(e.web_action_random_state(),1);
+key(23);assert.equal(e.web_action_random_state(),2);
+key(23);assert.equal(e.web_action_random_state(),1);
 // A4 long during live RANDOM stores the audible intermediate and cancels
 // only the morph trajectory; it never resets any sound parameter.
 render(250);

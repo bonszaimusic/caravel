@@ -1118,7 +1118,7 @@ static void draw_columns(void)
     }
     if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: BAR roots, and their DUR row */
         for (c = 0; c < 4u; c++) {
-            uint32_t r = hroot_get(c), mask = harmony_mask_root(c), d = (uint32_t)hdur_get(c) + 1u;
+            uint32_t r = hroot_get(c), mask = harmony_mask_pitch(r), d = (uint32_t)hdur_get(c) + 1u;
             const char *suf = "";
             char du[10];
             if ((mask >> ((r + 3u) % 12u)) & 1u) suf = "m";
