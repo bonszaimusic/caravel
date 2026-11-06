@@ -348,9 +348,9 @@ static void layer_tap(uint32_t l)
         lys.dt_hint = 1;
     }
     if (!acted && !name_on() && !ui.confirm && !ui.menu &&
-        !(l == LAYER_SCL && page_before != ui.page &&
-          (lys.nv.home || (page_before < NPAGES && PAGES[page_before].fam == FAM_SCL) ||
-           (page_before < NPAGES && PAGES[page_before].fam == FAM_SEQ)))) {
+        !(l == LAYER_SCL &&
+          (lys.nv.home || (page_before < NPAGES &&
+                           (PAGES[page_before].fam == FAM_SCL || PAGES[page_before].fam == FAM_SEQ))))) {
         /* A page-changing SCL tap from SCL itself, HOME or SEQ must stay a page step, or two quick taps
          * lock/jump back (the "SCL hangs"). SCL from ENV keeps #83's second-tap lock. */
         lys.dt_l = (uint8_t)l;
@@ -831,8 +831,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         mine = 0;
     }
     if (mine & 2u) {                                    /* OCT+ let go: SCL puts its scale on all, GLO arms the bar reset */
-        if (lys.l == LAYER_SCL && cur_page()->graph != GR_HARMONY)
-            ly_scale_all();                            /* no SCL+OCT+ combo on HARMONY: it has its own row */
+        if (lys.l == LAYER_SCL && (ui.home || cur_page()->graph != GR_HARMONY))
+            ly_scale_all();                            /* HOME keeps SCALE TO ALL; visible HARMONY has no combo */
         else if (lys.l == LAYER_GLO)
             ly_bar_reset();
         mine &= ~2u;                                    /* (no other meaning in a SET layer) */

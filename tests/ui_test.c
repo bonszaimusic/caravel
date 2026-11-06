@@ -6760,11 +6760,45 @@ static int test_scl_page_tap(void)
     ok = 1;
     ui_power_on(); go_home(); frame();
     press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !ui.lock && !ui.home;
     press(B_SCL);
+    ok &= cur_page()->graph == GR_CHORD && !ui.lock;
     ui_power_on(); open_family(FAM_SEQ); frame();
     press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !ui.lock;
     press(B_SCL);
-    bad += check("SCL entry from HOME and SEQ pages without a lock", ok);
+    ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    /* the same round-trip through the remembered page (go_home keeps ui.page) */
+    for (uint32_t i = 0; i < 4u; i++) {
+        ui_power_on(); harmony_on = 1; go_page(order[i]); frames(4);
+        press(B_HOME); frames(4);
+        press(B_SCL);
+        ok &= !ui.lock && !ui.home && cur_page()->fam == FAM_SCL;
+        press(B_SCL);
+        ok &= !ui.lock && cur_page()->fam == FAM_SCL;
+    }
+    bad += check("SCL entry from HOME, SEQ and a remembered SCL page: no lock, CHORD next", ok);
+    /* SCL+OCT+ on HOME must use the visible HOME, not a hidden HARMONY page */
+    ui_power_on(); harmony_on = 1; song.sel = 0;
+    trk[0].p[P_ROOT] = 3; trk[1].p[P_ROOT] = 4; trk[2].p[P_ROOT] = 5; trk[3].p[P_ROOT] = 6;
+    trk[0].p[P_SCALE] = 1; trk[1].p[P_SCALE] = 2; trk[2].p[P_SCALE] = 0; trk[3].p[P_SCALE] = 3;
+    go_title("HARMONY"); frames(4); go_home(); frames(4);
+    {
+        uint8_t on = harmony_on;
+        uint32_t ph = harmony_bar;
+        ok = 1;
+        btn_down(B_SCL); frame(); press(B_OCTUP); btn_up(B_SCL); frame();
+        for (uint32_t i = 0; i < NTRK; i++)
+            ok &= trk[i].p[P_ROOT] == 3 && trk[i].p[P_SCALE] == 1;
+        ok &= harmony_on == on && harmony_bar == ph;
+        go_title("HARMONY"); frames(4);
+        on = harmony_on; ph = harmony_bar;
+        btn_down(B_SCL); frame(); press(B_OCTUP); btn_up(B_SCL); frame();
+        for (uint32_t i = 0; i < NTRK; i++)
+            ok &= trk[i].p[P_ROOT] == 3 && trk[i].p[P_SCALE] == 1;   /* no change on visible HARMONY */
+        ok &= harmony_on == on && harmony_bar == ph;
+    }
+    bad += check("HOME after HARMONY still does SCALE TO ALL; visible HARMONY has no SCL+OCT+ side effect", ok);
     ui_power_on(); harmony_on = 1; go_title("HARMONY");
     press(B_SCL);
     ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
