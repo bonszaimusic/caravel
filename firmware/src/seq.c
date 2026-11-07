@@ -336,6 +336,10 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 enum { LT_OFF, LT_NEW, LT_STACK };
 static uint32_t lat_stay[NTRK][4];       /* bit n: note n was let go and sounds on */
 static uint32_t lat_eat[NTRK][4];        /* bit n: the press of note n ended it (STACK): its release does nothing */
+/* Older STACK voicings keep their pitches when the newest BUS chord moves. One bit per
+ * pitch is sufficient: only chord_last follows Harmony; earlier voicings stay in place. */
+static uint32_t lat_bus_other[NTRK][4];
+static uint8_t lat_bus_last[NTRK];
 static uint8_t lat_vel[NTRK][128];       /* the input velocity of a latched note (retrigger keeps the dynamics) */
 static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
 
@@ -360,22 +364,58 @@ static int arp_replace(const track_t *t)
     return m == LT_NEW || (t->p[P_AHOLD] && m != LT_STACK);
 }
 
+static int midi_note_held(const track_t *t, uint32_t note);
+static int midi_local_held(const track_t *t, uint32_t note);
+/* Before a fresh input replaces chord_last, its released pitches become older owners. */
+static void latch_bus_capture(track_t *t)
+{
+    uint32_t k = trk_index(t), j;
+    if (t->p[P_CHRD] == CH_BUS && !t->p[P_AMODE] && latch_mode(t) != LT_OFF)
+        for (j = 0; j < 4u; j++)
+            lat_bus_other[k][j] |= lat_stay[k][j];
+    lat_bus_last[k] = 0;
+}
+/* A released BUS input remains an owner even when another held chord shares a pitch
+ * (input_off is deliberately skipped for those shared pitches). Inspect the whole list
+ * before input_off consumes STACK's lat_eat bits. Sustain reaches this on pedal-up. */
+static void latch_bus_release(track_t *t, const uint8_t *notes, uint32_t n)
+{
+    uint32_t k = trk_index(t), j;
+    int matches = n == chord_last[k].n;
+    if (t->p[P_CHRD] != CH_BUS || t->p[P_AMODE] || latch_mode(t) == LT_OFF || !n)
+        return;
+    for (j = 0; j < n; j++) {
+        if (lat_get(lat_eat[k], notes[j])) return;
+        if (j >= chord_last[k].n || notes[j] != chord_last[k].note[j]) matches = 0;
+    }
+    if (matches)
+        lat_bus_last[k] = 1;
+    else
+        for (j = 0; j < n; j++)
+            lat_put(lat_bus_other[k], notes[j], 1);
+}
+
 static void chord_live_sync(uint32_t i);
 /* the latched notes end (LATCH off, ARP on, a new set, the release gesture; the notes a key holds are not among them) */
 static __attribute__((noinline)) void latch_free(track_t *t)
 {
     uint32_t k = trk_index(t), n;
     for (n = 0; n < 128u; n++)
-        if (lat_get(lat_stay[k], n)) {
-            trk_note_off(t, n);
+        if (lat_get(lat_stay[k], n) || lat_get(lat_bus_other[k], n)) {
+            if (!midi_local_held(t, n) && !midi_note_held(t, n))
+                trk_note_off(t, n);
             lat_vel[k][n] = 0;
         }
+    memset(lat_bus_other[k], 0, sizeof lat_bus_other[k]);
+    lat_bus_last[k] = 0;
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     chord_live_sync(k);
 }
 /* the track's latch state is gone (a panic ended every note; trk_all_off) */
 static void latch_forget(uint32_t k)
 {
+    memset(lat_bus_other[k], 0, sizeof lat_bus_other[k]);
+    lat_bus_last[k] = 0;
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
     memset(lat_vel[k], 0, sizeof lat_vel[k]);
@@ -395,7 +435,7 @@ static void chord_live_sync(uint32_t i)
             chord_live[i] = 1;
             return;
         }
-    if (lat_any(lat_stay[i]))
+    if (lat_any(lat_stay[i]) || lat_any(lat_bus_other[i]) || lat_bus_last[i])
         chord_live[i] = 1;
     else
         chord_live[i] = 0;
@@ -434,13 +474,7 @@ static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn)
         if (j == oldn)
             return 1;
     }
-    if (oldn) {
-        for (j = 0; j < oldn; j++)
-            if (!lat_get(lat_stay[i], old[j]))
-                return 0;
-        return 1;
-    }
-    return 0;
+    return oldn && lat_bus_last[i];
 }
 
 /* The cached chord no longer belongs to any owner: select a surviving live owner and rebuild from its own input
@@ -516,11 +550,10 @@ static void retrigger_latched(uint32_t i)
 static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn)
 {
     uint32_t k, j, m;
-    int was_latched = 0;
+    int was_latched = lat_bus_last[i];
     uint8_t lv = 100u;
     for (j = 0; j < oldn; j++)
         if (lat_get(lat_stay[i], old[j])) {
-            was_latched = 1;
             lv = lat_vel[i][old[j]] ? lat_vel[i][old[j]] : 100u;
             break;
         }
@@ -549,9 +582,11 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
     }
     if (was_latched) {
         for (j = 0; j < oldn; j++) {
-            lat_put(lat_stay[i], old[j], 0);
+            if (!lat_get(lat_bus_other[i], old[j])) {
+                lat_put(lat_stay[i], old[j], 0);
+                lat_vel[i][old[j]] = 0;
+            }
             lat_put(lat_eat[i], old[j], 0);
-            lat_vel[i][old[j]] = 0;
         }
         for (j = 0; j < newn; j++) {
             lat_put(lat_stay[i], new[j], 1);
@@ -565,7 +600,7 @@ static int midi_note_held(const track_t *t, uint32_t note);
 static int midi_local_held(const track_t *t, uint32_t note);
 static int chord_note_held(uint32_t i, uint32_t note)
 {
-    return midi_local_held(&trk[i], note) || midi_note_held(&trk[i], note) || lat_get(lat_stay[i], note);
+    return midi_local_held(&trk[i], note) || midi_note_held(&trk[i], note) || lat_get(lat_stay[i], note) || lat_get(lat_bus_other[i], note);
 }
 
 static int midi_any_held(const track_t *t);
@@ -623,6 +658,8 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
             arp_drop(t, nn[i]);
         } else {
             lat_put(lat_stay[k], nn[i], 0);
+            lat_put(lat_bus_other[k], nn[i], 0);
+            lat_bus_last[k] = 0;
             trk_note_off(t, nn[i]);
         }
         lat_put(lat_eat[k], nn[i], 1);
@@ -1333,14 +1370,19 @@ static void key_on(uint32_t k, track_t *t)
 /* key k is up: the notes it started end, but those another key still holds */
 static void key_off(uint32_t k, track_t *t)
 {
-    uint32_t n = kb_chn[k], mn = kb_midin[k], i, mc = trk_midi_ch(trk_index(t));
+    uint32_t n = kb_chn[k], mn = kb_midin[k], live = kb_live[k], i, mc = trk_midi_ch(trk_index(t));
     kb_chn[k] = 0;
     kb_live[k] = 0;
     kb_midin[k] = 0;
+    if (live) latch_bus_release(t, kb_chord[k], n);
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
-        if (!midi_local_held(t, x))
-            input_off(t, x);
+        if (!midi_local_held(t, x)) {
+            if (live)
+                input_off(t, x);
+            else if (!chord_note_held(trk_index(t), x))
+                trk_note_off(t, x);              /* STOP/panic: release any old gate without creating a fresh LATCH */
+        }
     }
     for (i = 0; i < mn; i++) {
         uint32_t x = kb_midi[k][i];
@@ -2218,7 +2260,8 @@ static void events_block(uint32_t n)
             if (t->arp_note)
                 arp_silence(t);
         }
-        if (lat_any(lat_stay[i]) && (t->p[P_AMODE] || latch_mode(t) == LT_OFF))
+        if ((lat_any(lat_stay[i]) || lat_any(lat_bus_other[i]) || lat_bus_last[i]) &&
+            (t->p[P_AMODE] || latch_mode(t) == LT_OFF))
             latch_free(t);                            /* LATCH turned off, or ARP on: the latched notes end */
         t->armp = t->p[P_AMODE];
         t->aholdp = arp_hold(t);

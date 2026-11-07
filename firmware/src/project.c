@@ -662,7 +662,7 @@ static void fun11_encode(chain_config_t *c, const harmony_saved_t *h)
                           ((h->dur[2] & 3u) << 4) | ((h->dur[3] & 3u) << 6));
     for (i = 0; i < NTRK; i++)
         c->row[0].slot[i] = (uint8_t)((c->row[0].slot[i] & 7u) | (((m >> (5u * i)) & 31u) << 3));
-    c->row[0].repeat = (uint8_t)((c->row[0].repeat - 1u) | ((m >> 20) & 15u) << 4);
+    c->row[0].repeat = (uint8_t)(((c->row[0].repeat - 1u) & 15u) | ((m >> 20) & 15u) << 4);
     /* four per-track HARMONY FOLLOW bits: high five bits of row 1's first slot */
     {
         uint32_t f = 0;
@@ -710,6 +710,7 @@ static int fun11_decode(chain_config_t *c, harmony_saved_t *h)
     }
     if (!chain_valid(c))
         return 0;
+    memset(c->rsv, 0, sizeof c->rsv);            /* Harmony was decoded into its sidecar; no wire metadata in the runtime chain */
     return 1;
 }
 /* a FUN10's save of the 0.11 branch kept four roots and the bus on/off in the chain reserved bytes; a FUN11

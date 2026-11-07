@@ -158,12 +158,14 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
 }
 
 /* chord_make for a note played now: a chord is kept in chord_last (the CHORD page shows it) */
+static void latch_bus_capture(track_t *t);
 static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
 {
     int32_t r;
     uint16_t mask;
     uint32_t m = chord_make(t, root, out, &r, &mask), i, k = trk_index(t);
     if (m > 1u) {
+        latch_bus_capture(t);
         chord_last[k].root = (uint8_t)clamp(r, 0, 127);
         chord_last[k].key = (uint8_t)clamp((int32_t)root, 0, 127);
         chord_last[k].mask = mask;

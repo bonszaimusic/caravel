@@ -118,6 +118,7 @@ static void midi_release(uint32_t ch, uint32_t note)
                 nn[i] = m->note[i];
             m->id = 0;
         }
+        latch_bus_release(&trk[id - 1u], nn, n);
         for (i = 0; i < n; i++)
             if (!midi_local_held(&trk[id - 1u], nn[i]))
                 input_off(&trk[id - 1u], nn[i]);  /* input_off also checks other MIDI owners */

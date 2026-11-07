@@ -6919,6 +6919,72 @@ static int test_harmony_owner_overlap(void)
     return bad;
 }
 
+/* A newer BUS chord may share a pitch with a previously latched voicing. Moving the newer
+ * chord must preserve the older voicing's ownership, across every panel/MIDI release path. */
+static int test_harmony_latch_overlap(void)
+{
+    static const uint8_t before[] = {36,48,52,55,60,64,67};
+    static const uint8_t after[] = {36,48,52,55,53,65,69,72};
+    int bad = 0;
+    for (uint32_t mode = 0; mode < 4u; mode++) {
+        int low_midi = mode == 1u || mode == 3u, high_midi = mode == 1u || mode == 2u;
+        for (uint32_t release = 0; release < 3u; release++) {
+            int ok;
+            harmony_owner_reset();
+            trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+            if (low_midi) harmony_owner_midi(0x90,48,90); else harmony_owner_key(7,1);
+            if (release != 1u) {
+                if (low_midi) harmony_owner_midi(0x80,48,0); else harmony_owner_key(7,0);
+            }
+            if (high_midi) harmony_owner_midi(0x90,60,110); else harmony_owner_key(19,1);
+            if (release != 2u) {
+                if (high_midi) harmony_owner_midi(0x80,60,0); else harmony_owner_key(19,0);
+            }
+            ok = harmony_owner_notes(before,NELEM(before));
+            harmony_owner_boundary();
+            ok &= harmony_owner_notes(after,NELEM(after));
+            if (release == 1u) {
+                if (low_midi) harmony_owner_midi(0x80,48,0); else harmony_owner_key(7,0);
+            }
+            if (release == 2u) {
+                if (high_midi) harmony_owner_midi(0x80,60,0); else harmony_owner_key(19,0);
+            }
+            ok &= harmony_owner_notes(after,NELEM(after));
+            for (uint32_t bar = 0; bar < 4u; bar++) {
+                harmony_owner_boundary();
+                ok &= harmony_owner_notes(bar & 1u ? after : before, bar & 1u ? NELEM(after) : NELEM(before));
+            }
+            latch_req = 1u; events_block(CTL);
+            ok &= harmony_owner_notes(0,0) && !lat_any(lat_stay[0]);
+            harmony_owner_boundary();
+            ok &= harmony_owner_notes(0,0) && harmony_owner_midi_balanced();
+            bad += check("LATCH BUS overlap: both released / older held / newer held preserve union and clear",ok);
+        }
+    }
+    for (uint32_t finish = 0; finish < 4u; finish++) {
+        int ok;
+        harmony_owner_reset();
+        trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+        harmony_owner_key(7,1);                  /* keep the older panel owner down */
+        harmony_owner_midi(0x90,60,110); harmony_owner_midi(0x80,60,0);
+        harmony_owner_boundary();
+        if (finish == 0u) harmony_owner_midi(0xB0,120,0);
+        else if (finish == 1u) {
+            harmony_owner_key(7,0);             /* CC123 honours panel keys and sustain; now no input is held */
+            harmony_owner_midi(0xB0,123,0);
+        }
+        else if (finish == 2u) seq_stop();
+        else { trk[0].p[P_LATCH] = LT_OFF; events_block(CTL); }
+        harmony_owner_key(7,0);
+        ok = harmony_owner_notes(0,0) && !lat_any(lat_stay[0]);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0,0) && harmony_owner_midi_balanced();
+        bad += check("LATCH BUS cleanup: CC120 / CC123 / STOP / LATCH OFF and old panel release stay silent",ok);
+    }
+    usb.config = 0;
+    return bad;
+}
+
 /* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
  * notes themselves. */
 static int test_latch_retrigger(void)
@@ -7466,6 +7532,16 @@ static int test_fun11_project(void)
     ok &= harmony_follow[1] == 0u;
     ok &= link_src[1] == 1u && link_retrig[1] == 3u;
     bad += check("FUN11 project: roots, durations, bus on/off and LINK/RETRIG round-trip; magic FUNV", ok);
+    /* Unused SONG rows may be all-zero in an imported/cleared runtime. Encoding
+     * repeat 0 must not leak unsigned underflow into Harmony's metadata bits. */
+    project_capture(&dec);
+    memset(&dec.chain, 0, sizeof dec.chain);
+    ok = proj_pack(&st, &dec) && proj_import(&dec, st.raw, sizeof st);
+    for (uint32_t i = 0; i < NTRK; i++)
+        ok &= proj_harmony.link_src[i] == link_src[i] && proj_harmony.link_retrig[i] == link_retrig[i] &&
+              proj_harmony.root[i] == hroot_get(i) && proj_harmony.dur[i] == hdur_get(i) &&
+              proj_harmony.follow[i] == harmony_follow[i];
+    bad += check("FUN11 zero unused SONG rows cannot overwrite Harmony metadata", ok);
     ui_power_on();
     return bad;
 }
@@ -11149,6 +11225,7 @@ int main(void)
     bad += test_latch_retrigger();
     bad += test_harmony_owner_lifecycle();
     bad += test_harmony_owner_overlap();
+    bad += test_harmony_latch_overlap();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();

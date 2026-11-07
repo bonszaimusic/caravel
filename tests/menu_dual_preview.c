@@ -198,7 +198,7 @@ int main(int argc, char **argv)
                         chord_build(TSEL, 62u, tmp);                       /* a chord played: D# MIN's second degree */
                     }
                     go_title(T2[k]); frame();
-                    assert(dual_page(cur_page()) && !dual_bottom(cur_page()));
+                    assert(dual_page(cur_page()) && dual_bottom(cur_page()) == k);
                     snprintf(p2, sizeof p2, "%s/%s-palette-%02u-%s.ppm", argv[1], k ? "chord" : "scl", palette, large ? "large" : "normal");
                     save_screen(p2);
                 }

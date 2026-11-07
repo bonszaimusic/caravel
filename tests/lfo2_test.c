@@ -156,7 +156,7 @@ int main(void)
     set_engine_of(&trk[3],ENGI_SEM);
     for(uint32_t k=0;k<NTRK;k++) { lfo2_set(k,L2_FIRST,17+k); lfo2_set(k,L2_FIRST+L2_WAVE,k); }
     project_t p,q; project_store_t wire;
-    project_capture(&p); assert(proj_pack(&wire,&p)); assert(*(uint32_t*)wire.raw==PROJ_MAGIC_L2);
+    project_capture(&p); assert(proj_pack(&wire,&p)); assert(*(uint32_t*)wire.raw==PROJ_MAGIC_V11);
     assert(sizeof wire==3840 && proj_import(&q,wire.raw,sizeof wire));
     assert(!memcmp(p.fm6,q.fm6,sizeof p.fm6) && !memcmp(p.lfo2,q.lfo2,sizeof p.lfo2));
     project_store_t broken=wire;
@@ -181,9 +181,9 @@ int main(void)
     song.sel=0; undo.keep=0; lfo2_set(0,L2_FIRST,51); apply_preset(0);
     assert(lfo2_get(0,L2_FIRST)==0); undo_swap(); assert(lfo2_get(0,L2_FIRST)==51);
     uint32_t sig=autosave_sig(); lfo2_set(0,L2_FIRST,52); assert(sig!=autosave_sig());
-    /* Legacy imports clear LFO2. Ordinary saves keep their original format. */
+    /* Empty LFO2 remains empty in the current FUN11 writer as well. */
     for(uint32_t k=0;k<NTRK;k++) { set_engine_of(&trk[k],0); lfo2_load(k,0); }
-    project_capture(&p); assert(proj_pack(&wire,&p)); assert(*(uint32_t*)wire.raw==PROJ_MAGIC);
+    project_capture(&p); assert(proj_pack(&wire,&p)); assert(*(uint32_t*)wire.raw==PROJ_MAGIC_V11);
     assert(proj_import(&q,wire.raw,sizeof wire)); for(uint32_t k=0;k<NTRK;k++) assert(!lfo2_nonzero(&q.lfo2[k]));
     /* Tagged preset transfer: a melodic frame and invalid data are handled atomically. */
     uint8_t args[400]; uint32_t n=0,slot=99; up_rec_t rec;
