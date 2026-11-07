@@ -121,8 +121,8 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
     if (dd->kind == DK_HARMONY) {
         static const char *const DUR[] = {"1 BAR", "2 BARS", "4 BARS", "8 BARS"};
         static const param_desc_t RD[4] = {
-            {"BAR 1", F_NOTE, 0, 11, 0, 0, 0}, {"BAR 2", F_NOTE, 0, 11, 0, 0, 0},
-            {"BAR 3", F_NOTE, 0, 11, 0, 0, 0}, {"BAR 4", F_NOTE, 0, 11, 0, 0, 0}};
+            {"CHORD 1", F_NOTE, 0, 11, 0, 0, 0}, {"CHORD 2", F_NOTE, 0, 11, 0, 0, 0},
+            {"CHORD 3", F_NOTE, 0, 11, 0, 0, 0}, {"CHORD 4", F_NOTE, 0, 11, 0, 0, 0}};
         static const param_desc_t DD = {"DUR", F_ENUM, 0, 3, 0, DUR, 0};
         if (col >= 4u) return 0;
         if (row) {
@@ -445,6 +445,8 @@ static void lfo_cards(const page_t *pg)
         sig = sig * 33u + chord_last[k].n * 131u + chord_last[k].mask * 7u + (uint32_t)chord_last[k].root + trk_vmode(TSEL) * 977u +
               (uint32_t)TSEL->p[P_ROOT] * 31u;
     }
+    if (str_eq(dd->top, "SCL"))                            /* the CHRD card's LOCAL DIA3 note follows the bus switches */
+        sig = sig * 33u + harmony_on * 3u + harmony_follow[song.sel] * 7u;
     if (dd->kind == DK_GRAPH && str_eq(dd->top, "SCL"))
         sig = sig * 33u + scale_mask(TSEL) + (uint32_t)TSEL->p[P_ROOT] * 31u;
     if (dd->kind == DK_GRAPH && str_eq(dd->top, "SLICER"))   /* the graph: the pattern, the mode, the rate, the depth, the playing step */
@@ -572,6 +574,10 @@ static void lfo_cards(const page_t *pg)
             cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, d->label, disabled ? T_DIM : T_TEXT, T_SURF);
             cv_text_in(x, y + (vf == &AF_L ? 40 - AF_L_CAP_Y : vf == &AF_S ? 46 - AF_S_CAP_Y : 44 - AF_M_CAP_Y), 56, vf, val,
                        disabled ? T_DIM : T_TEXT, T_SURF);
+            if (rps[row] && rps[row]->id[col] == P_CHRD && v == CH_BUS && !(harmony_on && harmony_follow[song.sel]))
+                unit = text_w(&AF_S, "OWN DIA3") <= 56 ? "OWN DIA3" : "LOCAL";   /* U10: no bus for this track: its own in-key triad plays */
+            if (dd->kind == DK_HARMONY && row)                  /* U09/U12/U13: the row's own line: what HARMONY does, in what unit, how to switch it on */
+                unit = "";
             if (unit[0])
                 cv_text_in(x, y + 65 - AF_S_CAP_Y, 56, &AF_S, unit, T_MID, T_SURF);
             if (icon)
@@ -580,6 +586,19 @@ static void lfo_cards(const page_t *pg)
             cv_rect(x + 5, y + 76, 46, 1, T_RAISE);
             if (fill)
                 cv_rect(x + 5, y + 76, fill, 1, disabled ? T_DIM : active ? T_THEME : T_MID);
+        }
+        if (dd->kind == DK_HARMONY && row) {                  /* one line under the DUR cards */
+            char hl[32];
+            str_cpy(hl, "ARP EVERY NOTE, SEQ 1 5 9 13", sizeof hl);
+#if CARAVEL_ACTION_BANKS
+            if (harmony_shift) {
+                str_cpy(hl, "SHIFT ", sizeof hl);
+                fmt_int(hl + str_len(hl) + (harmony_shift > 0 ? 1 : 0), harmony_shift);
+                if (harmony_shift > 0) hl[6] = '+';
+                str_cpy(hl + str_len(hl), " DEG (SCALE STEPS)", sizeof hl - str_len(hl));
+            }
+#endif
+            cv_text_in(6, y + 65 - AF_S_CAP_Y, 228, &AF_S, hl, T_MID, T_SURF);
         }
         cv_blit(0, Y_LABEL + row * 90u);
     }

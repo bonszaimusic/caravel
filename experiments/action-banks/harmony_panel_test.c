@@ -3,9 +3,9 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN harmony_panel_baseline_main
 /* The text the real renderer draws, through gfx.c's host hook: the usability checks read what the screen says. */
-static char hk_txt[96][24];
+static char hk_txt[96][40];
 static unsigned hk_n;
-static void hk_text(const char *s) { if (hk_n < 96u && s) { unsigned i = 0; while (s[i] && i < 23u) { hk_txt[hk_n][i] = s[i]; i++; } hk_txt[hk_n++][i] = 0; } }
+static void hk_text(const char *s) { if (hk_n < 96u && s) { unsigned i = 0; while (s[i] && i < 39u) { hk_txt[hk_n][i] = s[i]; i++; } hk_txt[hk_n++][i] = 0; } }
 #define GFX_HOOK_TEXT(x0, y0, x1, y1, s, flags) hk_text(s)
 #define GFX_HOOK_BLIT(x, y, r0) ((void)0)
 #define GFX_HOOK_BEGIN() ((void)0)
@@ -197,6 +197,47 @@ static void usability_fixes(void){
    }
    CHECK(strong>=8u);CHECK(bad==0u);
  }
+ }
+ if(ux_on("U13")){
+ /* U13: the four slots are CHORD 1..4 (their duration is 1/2/4/8 bars); HARMONY off says where to switch it on; the ARP/SEQ effect is stated (U09); SHIFT is in degrees (U12) */
+ ux_reset();ux_page(GR_HARMONY);harmony_edit_dur=0;ux_redraw();
+ if(!(hk_has("CHORD 1")&&hk_has("CHORD 4")&&!hk_has("BAR 1")))hk_dump("U13");
+ CHECK(hk_has("CHORD 1")&&hk_has("CHORD 2")&&hk_has("CHORD 3")&&hk_has("CHORD 4")&&!hk_has("BAR 1")&&!hk_has("BAR 4"));
+ CHECK(hk_has("ARP EVERY NOTE, SEQ 1 5 9 13"));                                        /* U09: what HARMONY does per note source */
+ harmony_on=1;harmony_shift=harmony_shift_want=2;harmony_shift_pending=0;ux_redraw();
+ CHECK(hk_has("SHIFT +2 DEG (SCALE STEPS)"));
+ harmony_shift=harmony_shift_want=-3;ux_redraw();CHECK(hk_has("SHIFT -3 DEG (SCALE STEPS)"));
+ harmony_shift=harmony_shift_want=0;ux_redraw();CHECK(hk_has("ARP EVERY NOTE, SEQ 1 5 9 13"));
+ }
+ if(ux_on("U10")){
+ /* U10: CHRD BUS on a track that has no bus (HARMONY off, or FOLLOW off) plays its own in-key triad: the card says OWN DIA3 */
+ ux_reset();trk[0].p[P_CHRD]=CH_BUS;ux_page(GR_CHORD);harmony_on=1;harmony_follow[0]=1;ux_redraw();
+ CHECK(!hk_has("OWN DIA3")&&!hk_has("OWN DIA3"));
+ harmony_follow[0]=0;ux_redraw();
+ if(!hk_has("OWN DIA3"))hk_dump("U10");
+ CHECK(hk_has("OWN DIA3"));
+ harmony_follow[0]=1;harmony_on=0;ux_redraw();CHECK(hk_has("OWN DIA3"));
+ harmony_on=1;ux_redraw();CHECK(!hk_has("OWN DIA3"));                                  /* the cache follows both switches */
+ trk[0].p[P_CHRD]=CH_OFF;harmony_follow[0]=0;ux_redraw();CHECK(!hk_has("OWN DIA3"));    /* only the BUS value says it */
+ }
+ if(ux_on("U08")){
+ /* U08/U11/U12: the HARM bank spells out what is queued for the next bar and the SHIFT in degrees; the other banks and ACTION off keep a HARMONY chip while HOLD/SHIFT/a command is on */
+ ux_reset();go_home();action_enabled=1;action_bank=ACT_BANK_HARMONY;action_setup=0;action_refresh();harmony_on=1;harmony_hold=0;harmony_pending=H_NONE;harmony_shift=harmony_shift_want=0;harmony_shift_pending=0;ux_redraw();
+ CHECK(hk_has("RUN SHIFT 0 DEG"));
+ harmony_on=0;ux_redraw();CHECK(hk_has("OFF: SCL > HARMONY SETUP"));harmony_on=1;harmony_hold=0;       /* U13: OFF says where to switch it on */
+ harmony_hold=1;harmony_shift=harmony_shift_want=1;ux_redraw();CHECK(hk_has("HOLD SHIFT +1 DEG"));
+ harmony_pending=H_NEXT;ux_redraw();CHECK(hk_has("NEXT BAR SHIFT +1 DEG"));
+ harmony_pending=H_PREV;ux_redraw();CHECK(hk_has("PREV BAR SHIFT +1 DEG"));
+ harmony_pending=H_RESUME;ux_redraw();CHECK(hk_has("RESUME: NEXT BAR +1 DEG"));                       /* (the longest queued text: SHIFT without its word, it must fit the bank) */
+ harmony_pending=H_RESET;ux_redraw();CHECK(hk_has("RESET: CHORD 1, SHIFT 0"));
+ harmony_pending=H_NONE;harmony_shift_pending=1;ux_redraw();CHECK(hk_has("SHIFT NEXT BAR +1 DEG"));
+ harmony_shift_pending=0;
+ action_bank=0;ux_redraw();CHECK(hk_has("HARM HOLD SHIFT +1 DEG"));                       /* another bank: the chip */
+ harmony_hold=0;harmony_shift=harmony_shift_want=0;ux_redraw();CHECK(!hk_has("HARM RUN")&&!hk_has("HARM HOLD"));   /* nothing going on: no chip */
+ harmony_hold=1;ux_redraw();CHECK(hk_has("HARM HOLD"));
+ action_enabled=0;ux_redraw();CHECK(hk_has("HARM HOLD"));                                 /* ACTION off: the chip replaces the hint */
+ harmony_on=0;harmony_hold=0;ux_redraw();CHECK(hk_has("HOME x2: ACTION")&&!hk_has("HARM HOLD"));
+ harmony_perf_clear();
  }
  if(ux_on("U14a")||ux_on("U14c")){
  ux_reset();trk[1].eng_req=ENGI_DRUM;run_ms(80);CHECK(drum_track(&trk[1])&&chord_kit(&trk[1]));

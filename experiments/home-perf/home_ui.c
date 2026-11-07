@@ -464,6 +464,21 @@ static void hp_tracks(int x0,int y)
 static void hp_sea(int y){(void)y;}                   /* no snapshots or journey in this profile: no chart */
 static void hp_tracks(int x,int y){(void)x;(void)y;}
 #endif
+/* The HARMONY performance state in words (U08/U11/U12): the next bar's command when one is queued (what NEXT / RESUME / RESET will do), else
+ * the run state, then the SHIFT in scale degrees. brief: the permanent chip on the other banks (nothing while HARMONY is off or nothing is going on). */
+static void hp_harm_status(char*b,uint32_t n,int brief)
+{
+ char sh[16];const char*st;
+ if(!harmony_on){str_cpy(b,brief?"":"OFF: SCL > HARMONY SETUP",n);return;}
+ perf_format(sh,sizeof sh,"SHIFT %s%d DEG",harmony_shift_want>0?"+":"",harmony_shift_want);
+ st=harmony_pending==H_PREV?"PREV BAR":harmony_pending==H_NEXT?"NEXT BAR":harmony_pending==H_RESUME?"RESUME: NEXT BAR":
+    harmony_pending==H_RESET?"RESET: CHORD 1":harmony_shift_pending?"SHIFT NEXT BAR":harmony_hold?"HOLD":"RUN";
+ if(brief&&!harmony_hold&&!harmony_shift_want&&!harmony_pending&&!harmony_shift_pending){str_cpy(b,"",n);return;}
+ if(harmony_pending==H_RESET)perf_format(b,n,"RESET: CHORD 1, SHIFT 0");
+ else if(brief)perf_format(b,n,"HARM %s%s%s",st,harmony_shift_want?" ":"",harmony_shift_want?sh:"");
+ else{perf_format(b,n,"%s %s",st,sh);
+  if(text_w(&AF_S,b)>154){perf_format(sh,sizeof sh,"%s%d DEG",harmony_shift_want>0?"+":"",harmony_shift_want);perf_format(b,n,"%s %s",st,sh);}}   /* too long for the bank: SHIFT without its word */
+}
 static void hp_draw_home(void)
 {
  hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
@@ -513,10 +528,9 @@ static void hp_draw_home(void)
      perf_format(cn,sizeof cn,"%s%s",names[r],suf);
      cv_text_in(x,ya+5,35,&AF_S,cn,i==idx?T_INK:T_TEXT,i==idx?T_ACCENT:T_RAISE);
     }
-    perf_format(status,sizeof status,"%s %s%d%s",!harmony_on?"OFF":harmony_hold?"HOLD S":"SHIFT",harmony_shift_want>0?"+":"",harmony_shift_want,
-     harmony_pending==H_PREV?" PREV*":harmony_pending==H_NEXT||harmony_pending==H_RESUME?" NEXT*":harmony_pending==H_RESET?" RESET*":harmony_shift_pending?" *":"");
-    cv_text(82,ya+22,&AF_S,status,T_TEXT);
-   }else {hp_sea(ya+2);if(!action_setup)hp_tracks(7,ya+22);}
+    hp_harm_status(status,sizeof status,0);
+    cv_text_in(82,ya+22,155,&AF_S,status,T_TEXT,T_SURF);
+   }else {hp_sea(ya+2);if(!action_setup)hp_tracks(7,ya+22);{char hs[40];hp_harm_status(hs,sizeof hs,1);if(hs[0])cv_free_text(8,ya+74,&AF_S,hs,T_ACCENT,T_BG,230);}}   /* U08: HARMONY goes on in the other banks (under the panel: the strip above is the sea) */
   }
   #if FELUCCA_RANDOM_MORPH
   #endif
@@ -544,7 +558,10 @@ static void hp_draw_home(void)
    cv_rrect(3,y+3,234,38,5,T_SURF,T_BG);cv_bg=T_SURF;
    cv_rrect(7,y+7,60,22,4,T_RAISE,T_SURF);cv_text_in(7,y+9,60,&AF_S,"ACTION",T_MID,T_RAISE);
    hp_sea(y+5);
-   cv_free_text(5,y+44,&AF_S,ui.msg_t?ui.msg:"HOME x2: ACTION",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+   {char hs[40];hp_harm_status(hs,sizeof hs,1);
+    if(ui.msg_t)cv_free_text(5,y+44,&AF_S,ui.msg,T_ACCENT,T_BG,230);
+    else if(hs[0])cv_free_text(5,y+44,&AF_S,hs,T_ACCENT,T_BG,230);                 /* U08: the HARMONY state stays in view with ACTION off */
+    else cv_free_text(5,y+44,&AF_S,"HOME x2: ACTION",T_MID,T_BG,230);}
   }
 #endif
  {                                                     /* the common footer: engine, preset (the partner's and the morph for a pair member), page */

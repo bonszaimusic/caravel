@@ -474,9 +474,9 @@ static void graph_harmony(void)
         x += w;
     }
     fmt_int(b, (int32_t)at + 1);
-    cv_text_on(12, 40, &AF_S, "BAR", T_MID, T_SURF);
-    cv_text_on(36, 40, &AF_M, b, T_TEXT, T_SURF);
-    cv_text_on(60, 40, &AF_S, harmony_edit_dur ? "DUR: K1-4" : "ROOT: K1-4", T_MID, T_SURF);
+    cv_text_on(12, 40, &AF_S, "CHORD", T_MID, T_SURF);
+    cv_text_on(52, 40, &AF_M, b, T_TEXT, T_SURF);
+    cv_text_on(72, 40, &AF_S, harmony_edit_dur ? "DUR: K1-4" : "ROOT: K1-4", T_MID, T_SURF);
     scl_page_strip(62);
 }
 /* LINK's graph: the same page strip, above a one-line explanation of the per-track link */

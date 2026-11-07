@@ -26,7 +26,8 @@ Backward selection follows the reverse order.
 
 ## Prepare the progression
 
-Open **SCL** and turn **SELECT** one detent per row:
+SELECT moves between the rows only while **SELECT = PAGE** (the display preference); with
+another SELECT setting use the SCL button. Open **SCL** and turn **SELECT** one detent per row:
 **SCALE → CHORD → LINK → HARMONY SETUP → HARMONY ROOTS → DURATIONS**.
 Turn left to follow the same rows backward; the first and last rows stop at
 their endpoints. Fast turns consume every detent, including page transitions.
@@ -43,6 +44,11 @@ scale, and each name shows the chord built on that root (C, Am, F, G in C major)
 A root stored outside the scale (an older project, or a scale changed later) plays and
 shows as the scale note below it; the stored value is not rewritten. With SHIFT on, the
 roots stay the prepared chords (PREP); the slot that sounds now also shows LIVE.
+The four slots are **CHORD 1..4**; each lasts 1, 2, 4 or 8 bars (the DURATION row). The
+HARMONY, DURATION and SETUP rows carry the **ALL** badge (they are global, not the selected
+track's) and name the key the bus is built in, from T1's ROOT and SCALE (for example
+C MAJ T1). The line under the DURATION cards says what HARMONY does per note source (ARP: every
+note; SEQ: steps 1 5 9 13) and, with SHIFT, the shift in degrees (scale steps, not semitones).
 On **LINK**, the track switch is **FOLLOW** (K4: turn right ON, left OFF) and the bus
 itself is **HARMONY**. Set FOLLOW on each participating track; enable
 RETRIG CHORD/BOTH for a held CHRD BUS chord to change with the bus. Kits, slices and
@@ -57,6 +63,13 @@ other engines that map the keys themselves are never moved by Harmony.
 | A3 NEXT | Queue the next chord, wrapping from chord 4 to chord 1. |
 | A4 RESET | At the next bar, return to chord 1, clear HOLD and set SHIFT to zero. |
 | SETUP K1 SHIFT | Queue a shift of the entire progression by -7 to +7 scale degrees within T1's scale. Zero is the original progression. K2–K4 are unused. |
+
+The bank's status line spells out what is queued for the next bar (PREV BAR, NEXT BAR,
+RESUME: NEXT BAR, RESET: CHORD 1, SHIFT 0) or the run state (RUN, HOLD) and the SHIFT in
+degrees (DEG). In the other banks, and with ACTION off, a line under the bank (HARM HOLD,
+SHIFT, a queued command) keeps the state in view while HOLD, a SHIFT or a command is on.
+A track whose CHRD is BUS but has no bus (HARMONY off, or FOLLOW off) plays its own in-key
+triad; its CHRD card says **OWN DIA3**.
 
 PREV, NEXT, RESET and SHIFT take effect at the next **transport bar line**.
 The most recent PREV/NEXT/RESET request replaces any earlier queued movement.

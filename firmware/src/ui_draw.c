@@ -1123,7 +1123,7 @@ static void draw_columns(void)
             harmony_card_name(c, val, 0);               /* the prepared chord's name, as the two-line editor shows it */
             fmt_int(du, (int32_t)(1u << (d - 1u)));
             str_cpy(du + str_len(du), d == 1u ? " BAR" : " BARS", sizeof du - str_len(du));
-            draw_column(c, c == 0u ? "BAR 1" : c == 1u ? "BAR 2" : c == 2u ? "BAR 3" : "BAR 4", val, du,
+            draw_column(c, c == 0u ? "CHORD 1" : c == 1u ? "CHORD 2" : c == 2u ? "CHORD 3" : "CHORD 4", val, du,
                         harmony_on || harmony_edit_dur ? VAL(c) : T_DIM, -1, ICON_X_SONG);
         }
         return;
