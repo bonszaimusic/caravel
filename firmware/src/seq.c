@@ -100,45 +100,78 @@ static uint32_t harmony_chord_at(uint32_t bar)
     }
     return 3u;
 }
+/* T1's scale as absolute pitch classes (its scale mask turned by T1's ROOT): what every bus root and chord is built from. */
+static uint32_t harmony_scale_abs(void)
+{
+    const track_t *k = &trk[0];
+    uint32_t sm = scale_mask(k), abs = 0, i;
+    for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
+        if ((sm >> i) & 1u)
+            abs |= 1u << ((k->p[P_ROOT] + (int32_t)i + 120) % 12);
+    return abs;
+}
+/* The one effective root of a bus chord, for tone generation, the editor and the display: a root inside T1's scale is
+ * itself; a stored root outside it (a project from before roots were limited to the scale, or a scale changed after the
+ * roots were set) is the scale note below it, wrapping to the highest one. The stored value is never rewritten. */
+static uint32_t harmony_root_eff(uint32_t root)
+{
+    uint32_t abs = harmony_scale_abs(), d;
+    root %= 12u;
+    for (d = 0; abs && d < 12u; d++)
+        if ((abs >> ((root + 12u - d) % 12u)) & 1u)
+            return (root + 12u - d) % 12u;
+    return root;
+}
+/* The next root from `root` along T1's scale, `steps` scale degrees (+ up, - down, wrapping at the octave); a chromatic
+ * scale (or one with fewer than three notes) steps by semitones. The start is the effective root: what the card shows. */
+static uint32_t harmony_root_step(uint32_t root, int32_t steps)
+{
+    uint32_t abs = harmony_scale_abs(), notes[12], n = 0, i, at = 0;
+    root = harmony_root_eff(root);
+    if (__builtin_popcount(abs) < 3)
+        abs = 0xFFFu;
+    for (i = 0; i < 12u; i++)
+        if ((abs >> i) & 1u) {
+            if (i == root)
+                at = n;
+            notes[n++] = i;
+        }
+    {
+        int32_t pos = ((int32_t)at + steps) % (int32_t)n;
+        if (pos < 0)
+            pos += (int32_t)n;
+        return notes[pos];
+    }
+}
 /* Root edits/store remain the prepared progression; SHIFT moves its scale degree. */
 static uint8_t hroot_live(uint32_t idx)
 {
  uint8_t root=hroot_get(idx);
 #if CARAVEL_ACTION_BANKS
  if(harmony_shift){
-  uint32_t mask=scale_mask(&trk[0]),abs=0,n=0,at=0;uint8_t notes[12];
-  for(uint32_t i=0;i<12u;i++)if(mask&(1u<<i))abs|=1u<<((i+trk[0].p[P_ROOT]+120)%12);
+  uint32_t abs=harmony_scale_abs(),n=0,at=0;uint8_t notes[12];
   for(uint32_t i=0;i<12u;i++)if(abs&(1u<<i))notes[n++]=(uint8_t)i;
   if(n){at=n-1u;for(uint32_t i=0;i<n;i++)if(notes[i]<=root)at=i;
    int32_t pos=((int32_t)at+harmony_shift)%(int32_t)n;if(pos<0)pos+=(int32_t)n;root=notes[pos];}
  }
 #endif
- return root;
+ return (uint8_t)harmony_root_eff(root);
 }
 static uint16_t harmony_mask_pitch(uint32_t root)
 {
-    const track_t *k = &trk[0];
-    uint32_t sm = scale_mask(k), abs = 0, notes[12], n = 0, i, at = 0;
+    uint32_t abs = harmony_scale_abs(), notes[12], n = 0, i, at = 0;
     uint16_t out;
-    for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
-        if ((sm >> i) & 1u)
-            abs |= 1u << ((k->p[P_ROOT] + (int32_t)i + 120) % 12);
     for (i = 0; i < 12u; i++)
         if ((abs >> i) & 1u)
             notes[n++] = i;
     if (n < 3u)
         return 0;
+    root = harmony_root_eff(root);
     for (i = 0; i < n; i++)
         if (notes[i] == root) {
             at = i;
             break;
         }
-    if (i == n) {                                  /* outside T1's scale: the scale note below it */
-        at = n - 1u;
-        for (i = 0; i < n; i++)
-            if (notes[i] < root)
-                at = i;
-    }
     out = (uint16_t)(1u << notes[at]);              /* a third and a fifth, not "every other scale note":
                                                      * a pentatonic scale would otherwise give no third */
     {
@@ -159,6 +192,21 @@ static uint16_t harmony_mask_pitch(uint32_t root)
     }
     return out;
 }
+/* One description of a bus chord for tone generation (chord.c), the editor and the live display: its effective root (a
+ * pitch class) and its tones relative to that root (bit i: i semitones above it, the form chord_name() takes; 0: the
+ * scale has no triad). The editor names the PREPARED chord of a slot, the sounding one is the LIVE chord. */
+static uint32_t harmony_chord_desc(uint32_t root, uint16_t *rel)
+{
+    uint32_t r = harmony_root_eff(root), i;
+    uint16_t abs = harmony_mask_pitch(r), m = 0;
+    for (i = 0; i < 12u; i++)
+        if ((abs >> ((r + i) % 12u)) & 1u)
+            m |= (uint16_t)(1u << i);
+    *rel = m;
+    return r;
+}
+static uint32_t harmony_prepared_desc(uint32_t idx, uint16_t *rel) { return harmony_chord_desc(hroot_get(idx), rel); }
+static uint32_t harmony_live_desc(uint32_t idx, uint16_t *rel) { return harmony_chord_desc(hroot_live(idx), rel); }
 static uint16_t harmony_mask_root(uint32_t idx) { return harmony_mask_pitch(hroot_live(idx)); }
 static uint16_t harmony_mask_bar(uint32_t bar) { return harmony_mask_root(harmony_chord_at(bar)); }
 static uint16_t harmony_mask(const track_t *t)
@@ -168,11 +216,12 @@ static uint16_t harmony_mask(const track_t *t)
         return 0;
     return harmony_mask_bar(harmony_bar);
 }
+static int chord_kit(const track_t *t);                /* chord.c: the track's keys are a kit / slices / hits */
 static uint32_t harmony_snap(const track_t *t, uint32_t n)
 {
     uint16_t mask = harmony_mask(t);
     uint32_t d;
-    if (!mask)
+    if (!mask || chord_kit(t))                      /* a note that picks a drum / slice is not a pitch to move */
         return n;
     for (d = 0; d <= 6u; d++) {
         if ((mask >> ((n + d) % 12u)) & 1u)
@@ -324,6 +373,18 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 }
 
 #include "chord.c"
+/* A bus chord's name for the editor and the display: "C", "Am", "F", "G" ... from the shared description (an
+ * effective root with root-relative tones); the bare note when the scale has no triad. live: the chord as it sounds now
+ * (SHIFT applied), else the one the slot prepares. b: 12 bytes. */
+static void harmony_card_name(uint32_t slot, char *b, int live)
+{
+    uint16_t rel;
+    uint32_t r = live ? harmony_live_desc(slot, &rel) : harmony_prepared_desc(slot, &rel);
+    if (rel)
+        chord_name(b, r, rel);
+    else
+        str_cpy(b, N_NOTE[r % 12u], 12);
+}
 
 /* ----------------------------------------------------------- latch --- */
 /* LATCH (P_LATCH, CHORD page; Caravel): the notes the keys and MIDI IN play go on sounding after their release, per track.

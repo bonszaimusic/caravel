@@ -2,6 +2,14 @@
 /* Real firmware panel, musical transport and MIDI-event regression; no device acceptance. */
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN harmony_panel_baseline_main
+/* The text the real renderer draws, through gfx.c's host hook: the usability checks read what the screen says. */
+static char hk_txt[96][24];
+static unsigned hk_n;
+static void hk_text(const char *s) { if (hk_n < 96u && s) { unsigned i = 0; while (s[i] && i < 23u) { hk_txt[hk_n][i] = s[i]; i++; } hk_txt[hk_n++][i] = 0; } }
+#define GFX_HOOK_TEXT(x0, y0, x1, y1, s, flags) hk_text(s)
+#define GFX_HOOK_BLIT(x, y, r0) ((void)0)
+#define GFX_HOOK_BEGIN() ((void)0)
+#define GFX_HOOK_PIXELS(n) ((void)0)
 #include "../engine-pair-morph/pair_test.c"
 static void hit(uint32_t k){key(1u<<k);key(0);}
 static void bank_hold(uint32_t mask){web_keys(mask);run_ms(650);web_keys(0);run_ms(70);}
@@ -15,6 +23,147 @@ static void external_ms(uint32_t n){while(n--){pulse_us+=1000;while(pulse_us>=20
 static void screenshot(void){
  const char *path=getenv("HARM_SCREEN");if(!path)return;FILE *f=fopen(path,"wb");CHECK(f!=NULL);
  fprintf(f,"P6\n240 240\n255\n");for(uint32_t i=0;i<240u*240u;i++){uint16_t q=web_fb[i];q=(q>>8)|(q<<8);uint8_t rgb[3]={(q>>11)*255/31,((q>>5)&63)*255/63,(q&31)*255/31};fwrite(rgb,1,3,f);}fclose(f);
+}
+
+/* ---- Usability fixes U01-U04, U06, U07, U14 (the 0.12.0 HARMONY audit, 7b99c43): the screen's own text, the real knobs, the
+ * real note paths. Every group below fails on the unfixed sources. */
+static int hk_has(const char *s){for(unsigned i=0;i<hk_n;i++){unsigned j=0;while(s[j]&&hk_txt[i][j]==s[j])j++;if(!s[j]&&!hk_txt[i][j])return 1;}return 0;}
+static void hk_dump(const char *tag){fprintf(stderr,"%s texts:",tag);for(unsigned i=0;i<hk_n;i++)fprintf(stderr," [%s]",hk_txt[i]);fprintf(stderr,"\n");}
+static void ux_page(uint32_t graph){for(uint32_t i=0;i<NPAGES;i++)if(PAGES[i].graph==graph){ui.page=i;ui.home=0;page_entered();ui.msg_t=0;ui.force=1;hk_n=0;run_ms(40);return;}CHECK(0);}
+static void ux_redraw(void){ui.msg_t=0;ui.force=1;hk_n=0;run_ms(40);}
+static void ux_reset(void){
+ normal_off();pair_disable();song.sel=0;song.g[G_CLOCK]=0;seq_stop();action_enabled=0;action_setup=0;harmony_perf_clear();
+ harmony_on=1;roots();memset(link_src,0,sizeof link_src);memset(link_retrig,0,sizeof link_retrig);memset(harmony_follow,1,sizeof harmony_follow);
+ trk[0].p[P_ROOT]=0;trk[0].p[P_SCALE]=1;trk[0].p[P_QUANT]=QN_OFF;trk[0].p[P_CHRD]=CH_BUS;trk[0].p[P_VOIC]=VC_CLOSE;trk[0].p[P_VOICE]=V_POLY;
+ harmony_bar=0;harmony_edit_dur=0;link_setup_row=0;ui_prefs2|=(uint8_t)(PREF_SEL_PAGE>>16);
+}
+static uint32_t ux_pcs(const uint8_t *nn,uint32_t n){uint32_t m=0;for(uint32_t i=0;i<n;i++)m|=1u<<(nn[i]%12u);return m;}
+static int ux_on(const char *g){const char *o=getenv("UX_GROUP");return !o||!strcmp(o,g);}   /* UX_GROUP=U02: one group only (negative controls) */
+static void usability_fixes(void){
+ if(ux_on("U01")){
+ /* U01: C - Am - F - G in C major reads C, Am, F, G (the editor passed an absolute mask where a root-relative one belongs) */
+ ux_reset();ux_page(GR_HARMONY);
+ if(!(hk_has("Am")&&!hk_has("A6")&&!hk_has("Fsus4")&&!hk_has("Gsus2")))hk_dump("U01");
+ CHECK(hk_has("Am")&&hk_has("C")&&hk_has("F")&&hk_has("G"));
+ CHECK(!hk_has("A6")&&!hk_has("Fsus4")&&!hk_has("Gsus2"));
+ { const uint8_t r[4]={2,4,11,7};for(uint32_t i=0;i<4;i++)hroot_set(i,r[i]);ux_redraw();   /* D E B G: Dm Em Bdim G */
+   if(!(hk_has("Dm")&&hk_has("Em")&&hk_has("Bdim")))hk_dump("U01b");
+   CHECK(hk_has("Dm")&&hk_has("Em")&&hk_has("Bdim")&&hk_has("G"));roots();}
+ }
+ if(ux_on("U03")){
+ ux_reset();ux_page(GR_HARMONY);
+ /* U03: with SHIFT the editor names the PREPARED chords, says so, and marks the sounding slot LIVE; never a mixed name */
+ harmony_shift=harmony_shift_want=1;harmony_shift_pending=0;ux_redraw();
+ if(!(hk_has("Am")&&hk_has("PREP")&&hk_has("LIVE Dm")&&!hk_has("Csus4")))hk_dump("U03");
+ CHECK(hk_has("C")&&hk_has("Am")&&hk_has("F")&&hk_has("G")&&!hk_has("Csus4"));
+ CHECK(hk_has("PREP")&&hk_has("LIVE Dm"));
+ CHECK(hroot_get(0)==0&&hroot_live(0)==2);                              /* the stored progression is untouched */
+ }
+ if(ux_on("U01c")){
+ /* U01/U03 render cache: T1's scale / ROOT change the names, so they are part of the cache signature (no forced redraw) */
+ ux_reset();ux_page(GR_HARMONY);
+ hk_n=0;run_ms(40);CHECK(hk_n==0);                                      /* nothing changed: cached */
+ trk[0].p[P_ROOT]=2;hk_n=0;run_ms(40);CHECK(hk_n>0);                    /* D major: the names are rebuilt */
+ hk_n=0;run_ms(40);CHECK(hk_n==0);trk[0].p[P_SCALE]=2;hk_n=0;run_ms(40);CHECK(hk_n>0);   /* another scale: rebuilt again */
+ }
+ if(ux_on("U03c")){
+ /* the render cache follows what the names depend on: SHIFT, T1's scale and ROOT (no forced redraw) */
+ ux_reset();ux_page(GR_HARMONY);
+ harmony_shift=harmony_shift_want=1;harmony_shift_pending=0;ux_redraw();CHECK(hk_has("PREP"));
+ harmony_shift=harmony_shift_want=0;hk_n=0;run_ms(40);
+ CHECK(hk_n>0&&!hk_has("PREP"));                                        /* SHIFT 0: redrawn without PREP / LIVE */
+ hk_n=0;run_ms(40);CHECK(hk_n==0);                                      /* nothing changed: cached */
+ trk[0].p[P_ROOT]=2;hk_n=0;run_ms(40);                                  /* D major: C is outside, plays as the scale note below */
+ CHECK(hk_n>0);trk[0].p[P_ROOT]=0;hk_n=0;run_ms(40);CHECK(hk_n>0&&hk_has("Am"));
+ }
+ if(ux_on("U02")){
+ /* U02: an off-scale root is one effective root everywhere: C# in C major sounds C - E - G from CHRD BUS, and is
+  * edited only along the scale */
+ ux_reset();hroot_set(0,1);harmony_bar=0;
+ { uint8_t out[CHORD_MAX];int32_t rt;uint16_t rel;uint32_t n=chord_make(&trk[0],60,out,&rt,&rel);
+   CHECK(n==3&&out[0]==60&&out[1]==64&&out[2]==67);                       /* was C# E G C (61 64 67 72) */CHECK(ux_pcs(out,n)==((1u<<0)|(1u<<4)|(1u<<7)));
+   CHECK(rt%12==0&&rel==((1u<<0)|(1u<<4)|(1u<<7)));
+   rt=0;n=chord_make(&trk[0],64,out,&rt,&rel);CHECK(ux_pcs(out,n)==((1u<<0)|(1u<<4)|(1u<<7)));}
+ }
+ if(ux_on("U02e")){
+ ux_reset();hroot_set(0,1);harmony_bar=0;
+ ux_page(GR_HARMONY);CHECK(hk_has("C")&&!hk_has("C#"));                   /* the card shows what sounds */
+ }
+ if(ux_on("U02s")){
+ ux_reset();hroot_set(0,1);harmony_bar=0;ux_page(GR_HARMONY);
+ {
+   web_enc(EN_K1,1);run_ms(30);CHECK(hroot_get(0)==2);                  /* from the stored C#, shown as C: next scale degree D */
+   web_enc(EN_K1,-1);run_ms(30);CHECK(hroot_get(0)==0);                 /* back to C */
+   web_enc(EN_K1,-1);run_ms(30);CHECK(hroot_get(0)==11);                /* below C: B, never B-flat (11 is in the scale) */
+   web_enc(EN_K1,3);run_ms(30);CHECK(hroot_get(0)==4);                  /* B -> C D E in one burst: three degrees */
+   for(int i=0;i<7;i++){web_enc(EN_K1,1);run_ms(10);}CHECK(hroot_get(0)==4);   /* a full turn of seven degrees is the same root */
+   hroot_set(0,1);web_enc(EN_K1,-1);run_ms(30);CHECK(hroot_get(0)==11); }  /* stored C# going down: below its effective C */
+ }
+ if(ux_on("U02c")){
+ /* a scale change after the roots were set leaves foreign roots: still one effective root for the bus and the editor */
+ ux_reset();trk[0].p[P_SCALE]=1;trk[0].p[P_ROOT]=2;                        /* D major: C is outside, B is outside; C plays as B...C# */
+ { uint8_t out[CHORD_MAX];int32_t rt;uint16_t rel;hroot_set(0,0);harmony_bar=0;
+   uint32_t n=chord_make(&trk[0],60,out,&rt,&rel);uint16_t bm=harmony_mask_root(0);
+   CHECK(n>=3);CHECK((ux_pcs(out,n)&~(uint32_t)bm)==0);}                  /* every tone CHRD BUS plays is a tone the snapping uses */
+ }
+ if(ux_on("U04")){
+ /* U04: K4 FOLLOW is direction based: right ON, left OFF, the burst size does not matter */
+ ux_reset();ux_page(GR_LINK);link_setup_row=0;ux_redraw();
+ harmony_follow[0]=0;
+ web_enc(EN_K4,1);run_ms(30);CHECK(harmony_follow[0]==1);
+ web_enc(EN_K4,1);run_ms(30);CHECK(harmony_follow[0]==1);              /* another click right stays ON (it toggled OFF) */
+ web_enc(EN_K4,3);run_ms(30);CHECK(harmony_follow[0]==1);
+ web_enc(EN_K4,-1);run_ms(30);CHECK(harmony_follow[0]==0);
+ web_enc(EN_K4,-1);run_ms(30);CHECK(harmony_follow[0]==0);
+ web_enc(EN_K4,2);run_ms(30);CHECK(harmony_follow[0]==1);              /* one impulse of +2 */
+ web_enc(EN_K4,-4);run_ms(30);CHECK(harmony_follow[0]==0);
+ harmony_follow[0]=1;web_enc(EN_K4,0);run_ms(30);CHECK(harmony_follow[0]==1);
+ }
+ if(ux_on("U06")){
+ ux_reset();ux_page(GR_LINK);link_setup_row=0;
+ /* U06: the track's switch is FOLLOW, the bus is HARMONY; both states are on the page together */
+ harmony_follow[0]=1;harmony_on=0;ux_redraw();
+ if(!(hk_has("FOLLOW")&&hk_has("HARMONY")&&!hk_has("HARM")))hk_dump("U06");
+ CHECK(hk_has("FOLLOW")&&hk_has("HARMONY")&&!hk_has("HARM"));
+ CHECK(hk_has("ON")&&hk_has("OFF"));
+ harmony_on=1;harmony_follow[0]=0;ux_redraw();CHECK(hk_has("ON")&&hk_has("OFF")&&hk_has("FOLLOW")&&hk_has("HARMONY"));
+ }
+ if(ux_on("U07")){
+ ux_reset();ux_page(GR_LINK);
+ /* U07: HARMONY SETUP: only K1 is a control; K2..K4 are no cards (hint text instead) and do nothing */
+ link_setup_row=1;harmony_on=1;ux_redraw();
+ if(!(hk_has("HARMONY")&&!hk_has("ROOTS")&&!hk_has("DUR")&&!hk_has("NEXT")&&!hk_has("SCL")))hk_dump("U07");
+ CHECK(hk_has("HARMONY")&&!hk_has("ROOTS")&&!hk_has("DUR")&&!hk_has("NEXT")&&!hk_has("SCL")&&!hk_has("1-8"));
+ CHECK(hk_has("ONLY K1 WORKS HERE"));
+ { uint8_t rr=hroot_get(0),dd=hdur_get(0),fo=harmony_follow[0],on=harmony_on;
+   web_enc(EN_K2,1);web_enc(EN_K3,1);web_enc(EN_K4,1);run_ms(30);
+   CHECK(link_setup_row==1&&hroot_get(0)==rr&&hdur_get(0)==dd&&harmony_follow[0]==fo&&harmony_on==on);}
+ harmony_on=0;ux_redraw();CHECK(hk_has("ONLY K1 WORKS HERE")&&hk_has("THEN SELECT"));      /* OFF: say how to reach the roots */
+ }
+ if(ux_on("U14")){
+ /* U14: Harmony never moves a note that picks a drum: DRUM track, FOLLOW ON, GM 49 stays 49 (SEQ note step, ARP, ARP CHORD) */
+ ux_reset();
+ trk[1].eng_req=ENGI_DRUM;run_ms(80);CHECK(drum_track(&trk[1])&&chord_kit(&trk[1]));
+ trk[1].p[P_QUANT]=QN_OFF;harmony_follow[1]=1;harmony_on=1;harmony_bar=0;
+ CHECK(harmony_mask(&trk[1])!=0);
+ { step_t st;memset(&st,0,sizeof st);st.time=ST_NOTE;st.n=1;st.note[0]=49;st.vel=100;
+   seq_step(&trk[1],&st,0,10000,SEQ_ROLLED);CHECK(trk[1].seq_n==1);CHECK(trk[1].seq_notes[0]==49);       /* was 48 */
+   seq_release(&trk[1]);
+   st.note[0]=38;seq_step(&trk[1],&st,4,10000,SEQ_ROLLED);CHECK(trk[1].seq_notes[0]==38);seq_release(&trk[1]);   /* 38 is no C-major chord tone either */
+   memset(&st,0,sizeof st);st.time=ST_NOTE;st.hit=1;st.vel=100;
+   seq_step(&trk[1],&st,0,10000,SEQ_ROLLED);CHECK(trk[1].seq_notes[0]==DRUM_LANE_NOTE[0]);seq_release(&trk[1]);}   /* grid hit unchanged */
+ CHECK(harmony_snap(&trk[1],49)==49&&harmony_snap(&trk[1],38)==38);
+ CHECK(harmony_snap(&trk[0],61)!=61);                                     /* a pitched track still snaps: C# -> C or E */
+ }
+ if(ux_on("U14a")||ux_on("U14c")){
+ ux_reset();trk[1].eng_req=ENGI_DRUM;run_ms(80);CHECK(drum_track(&trk[1])&&chord_kit(&trk[1]));
+ trk[1].p[P_QUANT]=QN_OFF;harmony_follow[1]=1;harmony_on=1;harmony_bar=0;
+ { uint32_t list[1]={49};
+   trk[1].held[0]=49;trk[1].nheld=1;held_key[1][0]=0;trk[1].p[P_AMODE]=AM_UP;trk[1].p[P_AOCT]=1;trk[1].p[P_APROB]=127;
+   if(ux_on("U14a")){trk[1].arp_note=0;arp_fire(&trk[1],5000);CHECK(trk[1].arp_note==49);arp_off(&trk[1]);}   /* ARP step */
+   if(ux_on("U14c")){trk[1].p[P_AMODE]=AM_CHORD;trk[1].arp_note=0;arp_chord(&trk[1],list,1);CHECK(trk[1].arp_note==49);arp_off(&trk[1]);}   /* ARP CHORD */
+   trk[1].p[P_AMODE]=AM_OFF;trk[1].nheld=0;}
+ }
 }
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);normal_off();pair_disable();
@@ -104,5 +253,6 @@ int main(void){
  clock_packet(0xFC);external_ms(80);p=perf_bars_q16;external_ms(500);CHECK(!song.playing&&perf_bars_q16==p&&harmony_hold&&chord()==1u&&harmony_pending==H_NEXT);
  clock_packet(0xFB);external_ms(100);CHECK(song.playing&&harmony_hold&&harmony_pending==H_NEXT);
  clock_packet(0xFA);external_ms(100);CHECK(chord()==0u&&!harmony_hold);
+ usability_fixes();
  printf("HARMONY PANEL PASS: %u checks.\n",checks);return 0;
 }

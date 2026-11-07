@@ -129,7 +129,7 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
             *v = (int32_t)hdur_get(col);
             return &DD;
         }
-        *v = (int32_t)hroot_get(col);
+        *v = (int32_t)harmony_root_eff(hroot_get(col));       /* the effective root: what sounds and what the name shows */
         return &RD[col];
     }
     if (dd->kind == DK_LINK) {
@@ -139,8 +139,8 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         static const param_desc_t SD = {"SOURCE", F_ENUM, 0, 4, 0, SRC, 0};
         static const param_desc_t RD = {"RETRIG", F_ENUM, 0, 3, 0, RT, 0};
         static const param_desc_t KD = {"KEY", F_NOTE, 0, 11, 0, 0, 0};
-        static const param_desc_t HD = {"HARM", F_ENUM, 0, 1, 0, ONOFF, 0};
-        static const param_desc_t HON = {"HARM", F_ENUM, 0, 1, 0, ONOFF, 0};
+        static const param_desc_t HD = {"FOLLOW", F_ENUM, 0, 1, 0, ONOFF, 0};     /* this track follows the bus */
+        static const param_desc_t HON = {"HARMONY", F_ENUM, 0, 1, 0, ONOFF, 0};   /* the bus itself, for every track */
         if (col >= 4u) return 0;
         if (row) {
             *v = col == 0u ? harmony_on : 0;
@@ -332,6 +332,27 @@ static void chord_block(const track_t *t)
     }
     cv_blit(0, Y_LABEL + 90u);
 }
+/* HARMONY ROOTS card col: val gets the name of the chord the slot PREPARES (its root and that root's own quality, from the
+ * shared description in seq.c, never mixed with the shifted live chord). The returned unit line: nothing, or with SHIFT
+ * "PREP" (and on the slot that sounds now "LIVE" plus the shifted chord) so the names cannot be read as the sounding ones. */
+static const char *harmony_card_text(uint32_t col, char *val)
+{
+    static char u[14];
+    harmony_card_name(col, val, 0);
+    u[0] = 0;
+#if CARAVEL_ACTION_BANKS
+    if (harmony_shift) {
+        if (harmony_on && harmony_chord_at(harmony_bar) == (col & 3u)) {
+            char nm[12];
+            harmony_card_name(col, nm, 1);
+            str_cpy(u, "LIVE ", sizeof u);
+            str_cpy(u + str_len(u), nm, sizeof u - str_len(u));
+        } else
+            str_cpy(u, "PREP", sizeof u);
+    }
+#endif
+    return u;
+}
 static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int active)
 {
     const char *lab = "", *val = "";
@@ -352,12 +373,17 @@ static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int acti
                         (sizeof N_SCALE / sizeof N_SCALE[0])], sizeof buf - str_len(buf));
                 val = buf;
             }
-        } else { lab = "HARM"; val = harmony_follow[song.sel] ? "ON" : "OFF"; }
+        } else { lab = "FOLLOW"; val = harmony_follow[song.sel] ? "ON" : "OFF"; }
     } else {
-        if (col == 0u) { lab = "HARM"; val = harmony_on ? "ON" : "OFF"; }
-        else if (col == 1u) { lab = "ROOTS"; val = "4"; }
-        else if (col == 2u) { lab = "DUR"; val = "1-8"; }
-        else { lab = "NEXT"; val = "SCL"; }
+        if (col == 0u) { lab = "HARMONY"; val = harmony_on ? "ON" : "OFF"; }
+        else {                                       /* K2..K4 do nothing here: a hint, not three cards */
+            if (col == 1u) {
+                cv_text_in(x, y + 31 - AF_S_CAP_Y, 168, &AF_S, "ONLY K1 WORKS HERE", T_DIM, T_SURF);
+                cv_text_in(x, y + 46 - AF_S_CAP_Y, 168, &AF_S, harmony_on ? "ROOTS, DURATIONS:" : "TURN K1 RIGHT FIRST,", T_MID, T_SURF);
+                cv_text_in(x, y + 60 - AF_S_CAP_Y, 168, &AF_S, harmony_on ? "SELECT OR SCL KEY" : "THEN SELECT", T_MID, T_SURF);
+            }
+            return;
+        }
     }
     uint16_t c = active ? T_TEXT : T_MID;
     cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, lab, active ? T_TEXT : T_DIM, T_SURF);
@@ -380,8 +406,15 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             sig = sig * 33u + (dual_card(dd, rps[row], row, col, &v) ? (uint32_t)v : 0x7FFFu);
         }
+    if (dd->kind == DK_HARMONY) {                          /* the names follow T1's scale, the SHIFT and the sounding slot */
+        sig = sig * 33u + harmony_scale_abs() * 7u + harmony_on * 3u;
+#if CARAVEL_ACTION_BANKS
+        sig = sig * 33u + (uint32_t)(int32_t)harmony_shift * 17u + (harmony_on ? harmony_chord_at(harmony_bar) * 977u : 0u);
+#endif
+    }
     if (dd->kind == DK_LINK) {
         uint32_t src = link_src[song.sel];
+        sig = sig * 33u + harmony_follow[song.sel] * 7u + harmony_on * 3u;
         sig = sig * 33u + link_setup_row * 131u + (src && src <= NTRK ? (uint32_t)trk[src - 1u].p[P_SCALE] * 17u : 0u);
     }
 #if CARAVEL_STASIS_EXPAND
@@ -461,7 +494,7 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             const param_desc_t *d = dual_card(dd, rps[row], row, col, &v);
             int32_t x = 6 + (int32_t)col * 58;
-            if (col)
+            if (col && !(dd->kind == DK_LINK && row && col >= 2u))   /* (the SETUP hint spans K2..K4) */
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
 #if CARAVEL_STASIS_EXPAND
             if(rps[row] && rps[row]->graph==GR_STLAYER && col==3u){
@@ -494,10 +527,8 @@ static void lfo_cards(const page_t *pg)
 #endif
             const aafont_t *vf = &AF_M;
             param_format(d, v, val, &unit);
-            if (dd->kind == DK_HARMONY && !row) {  /* the top row: the chord's name, not only its root */
-                chord_name(val, (uint32_t)hroot_get(col), harmony_mask_root(col));
-                unit = "";
-            }
+            if (dd->kind == DK_HARMONY && !row)    /* the top row: the PREPARED chord's name; SHIFT says what sounds */
+                unit = harmony_card_text(col, val);
 #if CARAVEL_STASIS_EXPAND
             /* The generic formatter intentionally limits values to five
              * letters. This view has room for the complete effect name. */

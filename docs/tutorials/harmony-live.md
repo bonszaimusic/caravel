@@ -34,11 +34,19 @@ HARMONY SETUP is always accessible, including when Harmony is OFF. On that
 row, turn **K1** right to enable the bus. The roots and durations become
 available after it; they are hidden while the bus is OFF. SELECT only moves
 the selection. K1–K4 edit the highlighted row. The SCL button also advances
-through the rows and wraps back to SCALE.
+through the rows and wraps back to SCALE. On HARMONY SETUP only **K1** works;
+the rest of the row is a hint.
 
 Enable the bus on **SCL > LINK**, lower HARMONY SETUP row. Set the four roots
-and durations on **HARMONY**. Set FOLLOW on each participating track; enable
-RETRIG CHORD/BOTH for a held CHRD BUS chord to change with the bus.
+and durations on **HARMONY**; a root turn moves along the scale degrees of T1's
+scale, and each name shows the chord built on that root (C, Am, F, G in C major).
+A root stored outside the scale (an older project, or a scale changed later) plays and
+shows as the scale note below it; the stored value is not rewritten. With SHIFT on, the
+roots stay the prepared chords (PREP); the slot that sounds now also shows LIVE.
+On **LINK**, the track switch is **FOLLOW** (K4: turn right ON, left OFF) and the bus
+itself is **HARMONY**. Set FOLLOW on each participating track; enable
+RETRIG CHORD/BOTH for a held CHRD BUS chord to change with the bus. Kits, slices and
+other engines that map the keys themselves are never moved by Harmony.
 
 ## Play the HARM bank
 

@@ -46,9 +46,9 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
 {
     uint32_t n = 0, i;
     if (mode == CH_BUS) {
-        uint16_t bm = harmony_mask(t);
+        uint16_t bm = harmony_mask(t), rel;
         if (bm) {                                     /* the HARMONIC BUS chord, at the octave nearest the key */
-            int32_t br = (int32_t)hroot_live(harmony_chord_at(harmony_bar));
+            int32_t br = (int32_t)harmony_live_desc(harmony_chord_at(harmony_bar), &rel);   /* effective root + relative tones */
             while (br + 12 <= *root + 6)
                 br += 12;
             while (br > *root + 6)
@@ -56,7 +56,7 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
             *root = br;
             iv[n++] = 0;
             for (i = 1; i < 12u && n < CHORD_MAX; i++)
-                if ((bm >> ((hroot_live(harmony_chord_at(harmony_bar)) + i) % 12u)) & 1u)
+                if ((rel >> i) & 1u)
                     iv[n++] = (int32_t)i;
             return n;
         }

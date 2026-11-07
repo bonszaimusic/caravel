@@ -6593,9 +6593,14 @@ static int test_key_link(void)
     ok &= trk[1].p[P_ROOT] == 2 && trk[1].p[P_SCALE] == 1 && trk[1].p[P_QUANT] == 4;
     turn(EN_K2, 2);                                /* RETRIG LINK */
     ok &= link_retrig[1] == 2u;
-    turn(EN_K4, 1);                                /* HARMONY FOLLOW off for T2 */
+    turn(EN_K4, -1);                               /* FOLLOW off for T2: turn left (U04: direction, not a toggle) */
     ok &= harmony_follow[1] == 0u && harmony_mask(&trk[1]) == 0u;
+    turn(EN_K4, -1);
+    ok &= harmony_follow[1] == 0u;
+    turn(EN_K4, 1);                                /* turn right: on, again and in a burst still on */
+    ok &= harmony_follow[1] == 1u;
     turn(EN_K4, 1);
+    turn(EN_K4, 3);
     ok &= harmony_follow[1] == 1u;
     link_src[2] = 1u;                              /* T3 follows T1 too */
     link_src[0] = 2u;                              /* T1 would follow T3: a chain, not followed */
@@ -6624,9 +6629,9 @@ static int test_harmony_page(void)
     for (uint32_t i = 0; i < 4u; i++) hroot_set(i, 0);
     go_title("HARMONY");
     frame();
-    turn(EN_K1, 1);
+    turn(EN_K1, 1);                                /* the roots move along T1's scale (C minor: C D Eb F G Ab Bb) */
     turn(EN_K2, 2);
-    ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
+    ok = hroot_get(0) == 2u && hroot_get(1) == 3u;
     press(B_SCL);                                  /* SCL: the duration row */
     ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
