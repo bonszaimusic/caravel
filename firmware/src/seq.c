@@ -691,9 +691,26 @@ static int lat_sounds(const track_t *t, uint32_t n)
     return 0;
 }
 
+/* Would latch_press end these notes (STACK, no ARP, every one latched and sounding)? chord_build asks this before it replaces chord_last:
+ * a press that only ends latched notes starts no new chord and must not take over the newest chord's identity. */
+static int latch_would_toggle(const track_t *t, const uint8_t *nn, uint32_t n)
+{
+    uint32_t k = trk_index(t), i;
+    if (latch_mode(t) != LT_STACK || t->p[P_AMODE] || !n)
+        return 0;
+    for (i = 0; i < n; i++)
+        if (!lat_get(lat_stay[k], nn[i]) || !lat_sounds(t, nn[i]))
+            return 0;
+    return 1;
+}
+
 /* a press (key, chord, MIDI note) of the n notes nn on track t, before they start: STACK and every one of them latched
  * (the ARP's list: held) ends them, and the press starts nothing (1; the release of each is eaten); NEW without ARP and no
- * key or note held ends the latched set. 0: the press goes on as always */
+ * key or note held ends the latched set. 0: the press goes on as always.
+ * CHRD BUS: the pressed chord is the newest one (chord_last, latched) or an older one. Its tones end unless another latched chord
+ * still holds them: an older chord's by the newest chord, the newest one's by the older ones (lat_bus_other, one bit per pitch: with
+ * three or more overlapping chords an older chord's toggle cannot tell a shared tone of two older ones apart and ends it). The newest
+ * chord stays the one that follows HARMONY when an older chord is pressed again. */
 static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, uint32_t n)
 {
     uint32_t k = trk_index(t), mode = latch_mode(t), i, j;
@@ -714,16 +731,38 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
             return 0;
         }
     }
-    for (i = 0; i < n; i++) {
-        if (t->p[P_AMODE]) {
-            arp_drop(t, nn[i]);
-        } else {
-            lat_put(lat_stay[k], nn[i], 0);
-            lat_put(lat_bus_other[k], nn[i], 0);
-            lat_bus_last[k] = 0;
-            trk_note_off(t, nn[i]);
+    {
+        int bus = !t->p[P_AMODE] && t->p[P_CHRD] == CH_BUS, newest = 0;
+        if (bus && lat_bus_last[k] && n == chord_last[k].n) {
+            newest = 1;
+            for (i = 0; i < n; i++)
+                newest &= nn[i] == chord_last[k].note[i];
         }
-        lat_put(lat_eat[k], nn[i], 1);
+        for (i = 0; i < n; i++) {
+            if (t->p[P_AMODE]) {
+                arp_drop(t, nn[i]);
+            } else {
+                int keep = 0;
+                if (bus) {
+                    if (newest) {
+                        keep = lat_get(lat_bus_other[k], nn[i]);    /* the newest chord ends: an older one may hold the tone */
+                    } else {
+                        lat_put(lat_bus_other[k], nn[i], 0);        /* an older chord ends: the newest one may hold the tone */
+                        for (j = 0; lat_bus_last[k] && j < chord_last[k].n; j++)
+                            keep |= chord_last[k].note[j] == nn[i];
+                    }
+                }
+                if (!keep) {
+                    lat_put(lat_stay[k], nn[i], 0);
+                    trk_note_off(t, nn[i]);
+                }
+            }
+            lat_put(lat_eat[k], nn[i], 1);
+        }
+        if (!bus || newest)
+            lat_bus_last[k] = 0;
+        if (bus)
+            chord_live_sync(k);
     }
     return 1;
 }

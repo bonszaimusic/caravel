@@ -353,6 +353,20 @@ static const char *harmony_card_text(uint32_t col, char *val)
 #endif
     return u;
 }
+/* The key the global HARMONY chords are built in: T1's ROOT and SCALE (harmony_scale_abs), as "C MAJ T1"; where the width w is too narrow
+ * for a long scale name "T1 C" (the scale dropped before the track). */
+static const char *harmony_basis(char *b, uint32_t bs, int32_t w)
+{
+    str_cpy(b, N_NOTE[(uint32_t)trk[0].p[P_ROOT] % 12u], bs);
+    str_cpy(b + str_len(b), " ", bs - str_len(b));
+    str_cpy(b + str_len(b), N_SCALE[(uint32_t)trk[0].p[P_SCALE] % (sizeof N_SCALE / sizeof N_SCALE[0])], bs - str_len(b));
+    str_cpy(b + str_len(b), " T1", bs - str_len(b));
+    if (text_w(&AF_S, b) > w) {
+        str_cpy(b, "T1 ", bs);
+        str_cpy(b + str_len(b), N_NOTE[(uint32_t)trk[0].p[P_ROOT] % 12u], bs - str_len(b));
+    }
+    return b;
+}
 static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int active)
 {
     const char *lab = "", *val = "";
@@ -388,6 +402,10 @@ static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int acti
     uint16_t c = active ? T_TEXT : T_MID;
     cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, lab, active ? T_TEXT : T_DIM, T_SURF);
     cv_text_in(x, y + 44 - AF_M_CAP_Y, 56, &AF_M, val, c, T_SURF);
+    if (row && col == 0u) {                             /* the bus is global: the key it is built in */
+        char kb[20];
+        cv_text_in(x, y + 65 - AF_S_CAP_Y, 56, &AF_S, harmony_basis(kb, sizeof kb, 56), T_MID, T_SURF);
+    }
 }
 static void lfo_cards(const page_t *pg)
 {
@@ -415,6 +433,7 @@ static void lfo_cards(const page_t *pg)
     if (dd->kind == DK_LINK) {
         uint32_t src = link_src[song.sel];
         sig = sig * 33u + harmony_follow[song.sel] * 7u + harmony_on * 3u;
+        sig = sig * 33u + harmony_scale_abs() * 5u;          /* the key shown under the HARMONY switch */
         sig = sig * 33u + link_setup_row * 131u + (src && src <= NTRK ? (uint32_t)trk[src - 1u].p[P_SCALE] * 17u : 0u);
     }
 #if CARAVEL_STASIS_EXPAND
@@ -466,7 +485,7 @@ static void lfo_cards(const page_t *pg)
                 str_cpy(htxt + str_len(htxt), harmony_on ? "ON" : "OFF", sizeof htxt - str_len(htxt));
                 cv_text_r(230, y + 6, &AF_S, htxt, active ? T_INK : T_MID, head);
             } else
-                cv_text_r(230, y + 6, &AF_S, active ? "EDIT K1-4" : "VIEW", active ? T_INK : T_MID, head);
+                cv_text_r(230, y + 6, &AF_S, !active ? "VIEW" : dd->kind == DK_LINK && row ? "EDIT K1" : "EDIT K1-4", active ? T_INK : T_MID, head);   /* (SETUP: only K1 works) */
         }
         if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
             for (uint32_t k = 0; k < NMSLOT; k++) {
@@ -480,12 +499,18 @@ static void lfo_cards(const page_t *pg)
                     cv_rect(px, y + 18, 8, 1, active ? T_INK : T_MID);
             }
         }
-        if (rps[row] || dd->kind == DK_LFO2) {            /* who the group is for: this track, or every track (a global page) */
+        int bus_row = dd->kind == DK_HARMONY || (dd->kind == DK_LINK && row);   /* the bus (progression, durations, its switch) is global, keyed from T1 */
+        if (rps[row] || dd->kind == DK_LFO2 || bus_row) {   /* who the group is for: this track, or every track (a global page) */
             char tag[4];
-            int global = rps[row] && rps[row]->scope == SC_GLOBAL;
+            int global = bus_row || (rps[row] && rps[row]->scope == SC_GLOBAL);
             tag[0] = global ? 'A' : 'T'; tag[1] = global ? 'L' : (char)('1' + song.sel % NTRK); tag[2] = global ? 'L' : 0; tag[3] = 0;
             cv_rrect(144, y + 7, 28, 12, 3, global ? T_ACCENT : active ? T_INK : T_RAISE, head);
             cv_text_in(144, y + 6, 28, &AF_S, tag, global ? T_INK : active ? T_THEME : T_MID, global ? T_ACCENT : active ? T_INK : T_RAISE);
+        }
+        if (dd->kind == DK_HARMONY) {                       /* the key all four chords are in, between the title and the ALL badge */
+            char kb[20];
+            const char *kt = harmony_basis(kb, sizeof kb, 68);
+            cv_text_r(141, y + 6, &AF_S, kt, active ? T_INK : T_MID, head);
         }
         if (dd->kind == DK_ENV && !row)                     /* the envelope's shape beside its title */
             env_icon(76, y + 7, 70, 12, TSEL->p[rps[0]->id[0]], TSEL->p[rps[0]->id[1]], TSEL->p[rps[0]->id[2]],

@@ -6990,6 +6990,109 @@ static int test_harmony_latch_overlap(void)
     return bad;
 }
 
+/* LATCH STACK + CHRD BUS: two overlapping latched chords (low C [36 48 52 55], high C [48 60 64 67]; 48 is shared). Pressing one of
+ * them again toggles only that chord off (STACK): the pitches the other chord owns stay, the shared 48 included, and the newest
+ * chord goes on following HARMONY; an older one stays where it is. Every order, every target, panel / MIDI / mixed. */
+static void latch_toggle_press(int midi, uint32_t key, uint32_t note, int down)
+{
+    if (midi) harmony_owner_midi(down ? 0x90 : 0x80, note, down ? 90 : 0);
+    else harmony_owner_key(key, down);
+}
+static int test_harmony_latch_toggle(void)
+{
+    static const uint8_t low_c[] = {36,48,52,55}, high_c[] = {48,60,64,67};
+    static const uint8_t low_f[] = {41,53,57,60}, high_f[] = {53,65,69,72};
+    int bad = 0;
+    for (uint32_t src = 0; src < 4u; src++)                 /* how the two chords are latched: panel/panel, MIDI/MIDI, high MIDI, low MIDI */
+        for (uint32_t first_low = 0; first_low < 2u; first_low++)
+            for (uint32_t target_first = 0; target_first < 2u; target_first++)
+                for (uint32_t again_midi = 0; again_midi < 2u; again_midi++) {
+                    int low_midi = src == 1u || src == 3u, high_midi = src == 1u || src == 2u, ok, st[7];
+                    /* the chords in latch order, and the one pressed again */
+                    const uint8_t *a = first_low ? low_c : high_c, *b = first_low ? high_c : low_c;
+                    const uint8_t *survivor = target_first ? b : a;
+                    const uint8_t *moved = target_first ? (first_low ? high_f : low_f) : 0;   /* the newest one follows C->F, the older one stays */
+                    uint32_t an = 4, bn = 4, rep_key = target_first ? (first_low ? 7u : 19u) : (first_low ? 19u : 7u), rep_note = rep_key == 7u ? 48u : 60u;
+                    harmony_owner_reset();
+                    trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+                    latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 1);
+                    latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 0);
+                    latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 1);
+                    latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 0);
+                    {   static const uint8_t both[] = {36,48,52,55,60,64,67};
+                        st[0] = harmony_owner_notes(both, NELEM(both)); }
+                    (void)a; (void)b; (void)an; (void)bn;
+                    latch_toggle_press(again_midi, rep_key, rep_note, 1);          /* the chord again: its press ends it */
+                    st[1] = harmony_owner_notes(survivor, 4);                        /* the other chord keeps all four, 48 included */
+                    latch_toggle_press(again_midi, rep_key, rep_note, 0);          /* (its release does nothing) */
+                    st[2] = harmony_owner_notes(survivor, 4);
+                    harmony_owner_boundary();                                      /* C -> F */
+                    st[3] = harmony_bar == 1u && harmony_owner_notes(moved ? moved : survivor, 4);
+                    harmony_owner_boundary();                                      /* F -> C: a further boundary */
+                    st[4] = harmony_bar == 2u && harmony_owner_notes(survivor, 4);
+                    latch_req = 1u; events_block(CTL);                             /* the release gesture: silence */
+                    st[5] = harmony_owner_notes(0, 0) && !lat_any(lat_stay[0]) && !lat_any(lat_bus_other[0]);
+                    harmony_owner_boundary();
+                    st[6] = harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+                    ok = st[0] && st[1] && st[2] && st[3] && st[4] && st[5] && st[6];
+                    printf("ui: LATCH BUS toggle [stages %d%d%d%d%d%d%d] src %u first %s again %s %s: ", st[0], st[1], st[2], st[3], st[4], st[5], st[6], src, first_low ? "low" : "high", target_first ? "first" : "second", again_midi ? "MIDI" : "panel");
+                    bad += check("LATCH BUS toggle: the other chord keeps its pitches (shared 48), follows HARMONY if newest, ends in silence", ok);
+                }
+    usb.config = 0;
+    return bad;
+}
+
+/* The chord pressed again after its toggle starts a fresh latched chord: both sound again, the fresh one is the newest and follows
+ * HARMONY, the other stays; then the release gesture ends everything. */
+static int test_harmony_latch_toggle_relatch(void)
+{
+    static const uint8_t low_c[] = {36,48,52,55}, high_c[] = {48,60,64,67};
+    static const uint8_t low_f[] = {41,53,57,60}, high_f[] = {53,65,69,72};
+    int bad = 0;
+    for (uint32_t src = 0; src < 4u; src++)
+        for (uint32_t first_low = 0; first_low < 2u; first_low++)
+            for (uint32_t target_first = 0; target_first < 2u; target_first++) {
+                int low_midi = src == 1u || src == 3u, high_midi = src == 1u || src == 2u, ok = 1;
+                int tlow = target_first ? first_low : !first_low;        /* the target chord is the low one */
+                const uint8_t *survivor = tlow ? high_c : low_c, *moved = tlow ? low_f : high_f;
+                uint8_t want[8];
+                uint32_t n = 0;
+                harmony_owner_reset();
+                trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+                latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 1);
+                latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 0);
+                latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 1);
+                latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 0);
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 1);       /* toggle the target off */
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 0);
+                ok &= harmony_owner_notes(survivor, 4);
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 1);       /* and again: a fresh chord */
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 0);
+                {   static const uint8_t both[] = {36,48,52,55,60,64,67};
+                    ok &= harmony_owner_notes(both, NELEM(both)); }
+                harmony_owner_boundary();                                    /* C -> F: the fresh chord moves, the other stays */
+                for (uint32_t q = 0; q < 4u; q++) {
+                    uint32_t d;
+                    for (d = 0; d < n && want[d] != survivor[q]; d++) ;
+                    if (d == n) want[n++] = survivor[q];
+                }
+                for (uint32_t q = 0; q < 4u; q++) {
+                    uint32_t d;
+                    for (d = 0; d < n && want[d] != moved[q]; d++) ;
+                    if (d == n) want[n++] = moved[q];
+                }
+                ok &= harmony_bar == 1u && harmony_owner_notes(want, n);
+                latch_req = 1u; events_block(CTL);
+                ok &= harmony_owner_notes(0, 0) && !lat_any(lat_stay[0]) && !lat_any(lat_bus_other[0]);
+                harmony_owner_boundary();
+                ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+                printf("ui: LATCH BUS toggle then fresh press src %u first %s target %s: ", src, first_low ? "low" : "high", target_first ? "first" : "second");
+                bad += check("LATCH BUS toggle, then the chord again: a fresh newest chord, the other stays, silence at the end", ok);
+            }
+    usb.config = 0;
+    return bad;
+}
+
 /* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
  * notes themselves. */
 static int test_latch_retrigger(void)
@@ -11322,6 +11425,8 @@ int main(void)
     bad += test_harmony_owner_lifecycle();
     bad += test_harmony_owner_overlap();
     bad += test_harmony_latch_overlap();
+    bad += test_harmony_latch_toggle();
+    bad += test_harmony_latch_toggle_relatch();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();

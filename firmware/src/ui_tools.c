@@ -638,10 +638,10 @@ static uint32_t tl_degree_note(const track_t *t, uint32_t deg)
 }
 static uint32_t tl_chord_tone(const track_t *t)
 {
-    uint32_t mask = harmony_mask(t), root = (uint32_t)t->p[P_ROOT] % 12u, tones[12], n = 0, i;
+    uint32_t mask = harmony_mask(t), tones[12], n = 0, i;     /* the mask is absolute pitch classes (keyed from T1): no ROOT added */
     for (i = 0; i < 12u; i++)
         if ((mask >> i) & 1u)
-            tones[n++] = 60u + root + i;
+            tones[n++] = 60u + i;
     return n ? tones[(uint32_t)(rng() % n)] : tl_degree_note(t, 0);
 }
 static void tl_generate_notes(track_t *t, uint32_t len)

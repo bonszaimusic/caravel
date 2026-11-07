@@ -155,6 +155,49 @@ static void usability_fixes(void){
  CHECK(harmony_snap(&trk[1],49)==49&&harmony_snap(&trk[1],38)==38);
  CHECK(harmony_snap(&trk[0],61)!=61);                                     /* a pitched track still snaps: C# -> C or E */
  }
+ if(ux_on("U05")){
+ /* U05 (review of 4662c97): the bus rows (HARMONY, DURATION, the SETUP row's switch) are global and keyed from T1: ALL + the key, never the
+  * selected track's T1/T3 badge. The LINK row stays the selected track's. */
+ for(uint32_t sel=0;sel<3u;sel+=2u){
+   char tb[4]={'T',(char)('1'+sel),0};
+   ux_reset();song.sel=sel;ux_page(GR_HARMONY);harmony_edit_dur=0;ux_redraw();
+   if(!(hk_has("ALL")&&!hk_has(tb)&&hk_has("C MAJ T1")))hk_dump("U05 roots");
+   CHECK(hk_has("ALL")&&!hk_has(tb)&&hk_has("C MAJ T1"));
+   harmony_edit_dur=1;ux_redraw();CHECK(hk_has("ALL")&&!hk_has(tb)&&hk_has("C MAJ T1"));
+   ux_page(GR_LINK);link_setup_row=1;ux_redraw();                                  /* SETUP row (bottom): global */
+   if(!(hk_has("ALL")&&hk_has(tb)&&hk_has("C MAJ T1")))hk_dump("U05 setup");
+   CHECK(hk_has("ALL")&&hk_has("C MAJ T1"));                                       /* ALL on the SETUP row, the key under its switch */
+   CHECK(hk_has(tb));                                                              /* the LINK row above keeps the track's badge */
+ }
+ /* the key follows T1's own ROOT and SCALE, and the cache redraws for it */
+ ux_reset();ux_page(GR_HARMONY);trk[0].p[P_ROOT]=2;trk[0].p[P_SCALE]=2;ux_redraw();CHECK(hk_has("D MIN T1"));
+ ux_page(GR_LINK);link_setup_row=1;ux_redraw();CHECK(hk_has("D MIN T1"));trk[0].p[P_ROOT]=5;hk_n=0;run_ms(40);CHECK(hk_has("F MIN T1"));
+ }
+ if(ux_on("P3")){
+ /* P3 (review of 4662c97): on the SETUP row only K1 works, so its header must not claim K1-4 */
+ ux_reset();ux_page(GR_LINK);link_setup_row=1;ux_redraw();
+ if(!(hk_has("EDIT K1")&&!hk_has("EDIT K1-4")))hk_dump("P3");
+ CHECK(hk_has("EDIT K1")&&!hk_has("EDIT K1-4")&&hk_has("ONLY K1 WORKS HERE"));
+ link_setup_row=0;ux_redraw();CHECK(hk_has("EDIT K1-4"));                           /* the LINK row: K1..K4 all work */
+ }
+ if(ux_on("TL")){
+ /* tl_chord_tone (ui_tools.c G5 GENERATE): the strong steps take tones of the bus chord, a pitch-class mask that is absolute (keyed from T1);
+  * the generating track's own ROOT must not be added again. Suspected from the source in round 1, not reproduced until now. */
+ for(uint32_t g=0;g<2u;g++){                           /* g0: T1 itself in D major; g1: T2 with ROOT F under T1's D major */
+   uint32_t tn=g,i,strong=0,bad=0,mask;track_t *t;
+   ux_reset();trk[1].eng_req=trk[0].eng_req;run_ms(80);                   /* (T2 as T1's melodic engine: an earlier group may have made it a kit) */
+   trk[0].p[P_ROOT]=2;trk[0].p[P_SCALE]=1;hroot_set(0,2);hroot_set(1,9);hroot_set(2,7);hroot_set(3,4);   /* D, A, G, E: all in D major */
+   trk[1].p[P_ROOT]=5;trk[1].p[P_SCALE]=1;harmony_follow[1]=1;
+   song.sel=tn;t=&trk[tn];t->p[P_SLEN]=16;harmony_on=1;harmony_bar=0;
+   for(uint32_t r=0;r<8u;r++){
+     for(i=0;i<NSTEP;i++)step_clear(&t->step[i]);
+     CHECK(tl_do(t,TL_GENERATE,0)!=0);
+     mask=harmony_mask(t);CHECK(mask!=0u);
+     for(i=0;i<16u;i+=4u)if(tl_gate(&t->step[i])){strong++;if(!((mask>>(t->step[i].note[0]%12u))&1u)){bad++;if(bad==1)fprintf(stderr,"TL g%u: step %u note %u not in the bus chord mask 0x%x\n",g,i,t->step[i].note[0],mask);}}
+   }
+   CHECK(strong>=8u);CHECK(bad==0u);
+ }
+ }
  if(ux_on("U14a")||ux_on("U14c")){
  ux_reset();trk[1].eng_req=ENGI_DRUM;run_ms(80);CHECK(drum_track(&trk[1])&&chord_kit(&trk[1]));
  trk[1].p[P_QUANT]=QN_OFF;harmony_follow[1]=1;harmony_on=1;harmony_bar=0;
