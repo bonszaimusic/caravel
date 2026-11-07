@@ -26,6 +26,16 @@ Backward selection follows the reverse order.
 
 ## Prepare the progression
 
+Open **SCL** and turn **SELECT** one detent per row:
+**SCALE → CHORD → LINK → HARMONY SETUP → HARMONY ROOTS → DURATIONS**.
+Turn left to follow the same rows backward; the first and last rows stop at
+their endpoints. Fast turns consume every detent, including page transitions.
+HARMONY SETUP is always accessible, including when Harmony is OFF. On that
+row, turn **K1** right to enable the bus. The roots and durations become
+available after it; they are hidden while the bus is OFF. SELECT only moves
+the selection. K1–K4 edit the highlighted row. The SCL button also advances
+through the rows and wraps back to SCALE.
+
 Enable the bus on **SCL > LINK**, lower HARMONY SETUP row. Set the four roots
 and durations on **HARMONY**. Set FOLLOW on each participating track; enable
 RETRIG CHORD/BOTH for a held CHRD BUS chord to change with the bus.

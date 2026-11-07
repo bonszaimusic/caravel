@@ -18,6 +18,22 @@ static void screenshot(void){
 }
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);normal_off();pair_disable();
+ /* Actual target-feature UI, starting with the bus OFF. Every SELECT
+  * detent must reach the next editable row, including across page borders. */
+ web_buttons(1u<<B_SCL);run_ms(70);web_buttons(0);run_ms(70);
+ CHECK(!ui.home&&cur_page()->graph==GR_SCALE&&!harmony_on);
+ web_enc(EN_SELECT,3);run_ms(30);CHECK(cur_page()->graph==GR_LINK&&link_setup_row&&!harmony_on);
+ web_enc(EN_K1,1);run_ms(30);CHECK(harmony_on);
+ web_enc(EN_SELECT,2);run_ms(30);CHECK(cur_page()->graph==GR_HARMONY&&harmony_edit_dur);
+ web_enc(EN_SELECT,-1);run_ms(30);CHECK(cur_page()->graph==GR_HARMONY&&!harmony_edit_dur);
+ web_enc(EN_SELECT,-1);run_ms(30);CHECK(cur_page()->graph==GR_LINK&&link_setup_row);
+ web_enc(EN_SELECT,-1);run_ms(30);CHECK(cur_page()->graph==GR_LINK&&!link_setup_row);
+ web_enc(EN_SELECT,-2);run_ms(30);CHECK(cur_page()->graph==GR_SCALE);
+ web_enc(EN_SELECT,99);run_ms(30);CHECK(cur_page()->graph==GR_HARMONY&&harmony_edit_dur);
+ web_enc(EN_SELECT,99);run_ms(30);CHECK(cur_page()->graph==GR_HARMONY&&harmony_edit_dur);
+ web_enc(EN_SELECT,-99);run_ms(30);CHECK(cur_page()->graph==GR_SCALE);
+ web_enc(EN_SELECT,3);run_ms(30);web_enc(EN_K1,-1);run_ms(30);CHECK(!harmony_on);
+ web_enc(EN_SELECT,99);run_ms(30);CHECK(cur_page()->graph==GR_LINK&&link_setup_row);
  song.sel=0;go_home();action_enabled=1;action_bank=0;action_refresh();
  /* Explicit physical pitches, independent of implementation lookup tables. */
  CHECK(ACT_KEY_MASK==((1u<<20)|(1u<<21)|(1u<<22)|(1u<<23)|(1u<<24)|(1u<<26)));

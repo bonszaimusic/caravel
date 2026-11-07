@@ -7322,6 +7322,93 @@ static int test_fun11_readonly_probe(void)
     return bad;
 }
 
+/* SELECT must walk every editable SCL row in both directions, including the
+ * always-accessible Harmony switch. Drive the panel path, including bursts. */
+static uint32_t scl_test_row(void)
+{
+    switch (cur_page()->graph) {
+    case GR_SCALE: return 0;
+    case GR_CHORD: return 1;
+    case GR_LINK: return 2u + link_setup_row;
+    case GR_HARMONY: return 4u + harmony_edit_dur;
+    default: return 99u;
+    }
+}
+static void scl_test_start(uint32_t on, uint32_t row)
+{
+    ui_power_on();
+    ui_prefs2 = (uint8_t)((ui_prefs2 & ~(PREF_SEL_HI >> 16)) | (PREF_SEL_PAGE >> 16));
+    harmony_on = (uint8_t)on;
+    go_page(row < 1u ? GR_SCALE : row < 2u ? GR_CHORD : row < 4u ? GR_LINK : GR_HARMONY);
+    link_setup_row = row == 3u;
+    harmony_edit_dur = row == 5u;
+    frame();
+}
+static int test_scl_select_rows(void)
+{
+    int bad = 0;
+    for (uint32_t on = 0; on < 2u; on++) {
+        uint32_t last = on ? 5u : 3u;
+        int ok = 1;
+        for (uint32_t row = 0; row <= last; row++) {
+            for (int32_t dir = -1; dir <= 1; dir += 2) {
+                scl_test_start(on, row);
+                turn(EN_SELECT, dir);
+                ok &= scl_test_row() == (uint32_t)clamp((int32_t)row + dir, 0, (int32_t)last);
+                ok &= !ui.home && !ui.lock && harmony_on == on;
+            }
+        }
+        bad += check(on ? "SCL SELECT ON: every adjacent row is reachable both ways" :
+                          "SCL SELECT OFF: Harmony Setup is reachable both ways", ok);
+        ok = 1;
+        for (uint32_t row = 0; row <= last; row++) {
+            for (int32_t delta = -7; delta <= 7; delta++) {
+                scl_test_start(on, row);
+                turn(EN_SELECT, delta);
+                ok &= scl_test_row() == (uint32_t)clamp((int32_t)row + delta, 0, (int32_t)last);
+                ok &= harmony_on == on && song.g[G_BPM] == 120;
+            }
+        }
+        bad += check(on ? "SCL SELECT ON: bursts consume every detent and keep endpoints" :
+                          "SCL SELECT OFF: bursts stop on Setup without changing the bus", ok);
+    }
+    scl_test_start(0, 0);
+    turn(EN_SELECT, 3);
+    {
+        int ok = scl_test_row() == 3u && !harmony_on;
+        uint8_t src = link_src[0], root = hroot_get(0), dur = hdur_get(0);
+        turn(EN_K1, 1);
+        ok &= harmony_on && link_src[0] == src;
+        turn(EN_SELECT, 1);
+        ok &= scl_test_row() == 4u;
+        turn(EN_K1, 1);
+        ok &= hroot_get(0) != root && hdur_get(0) == dur;
+        root = hroot_get(0);
+        turn(EN_SELECT, 1);
+        ok &= scl_test_row() == 5u;
+        turn(EN_K1, 1);
+        ok &= hdur_get(0) != dur && hroot_get(0) == root;
+        turn(EN_SELECT, -2);
+        ok &= scl_test_row() == 3u;
+        turn(EN_K1, -1);
+        ok &= !harmony_on && link_src[0] == src;
+        turn(EN_SELECT, -1);
+        ok &= scl_test_row() == 2u;
+        turn(EN_K1, 1);
+        ok &= link_src[0] != src && !harmony_on;
+        bad += check("SCL SELECT: OFF -> Setup -> ON -> roots -> durations -> Setup -> OFF; correct K1 targets", ok);
+    }
+    /* A bus switched off remotely while on the editor must not trap SELECT. */
+    for (uint32_t row = 4; row <= 5; row++) {
+        scl_test_start(1, row);
+        harmony_on = 0;
+        turn(EN_SELECT, -1);
+        bad += check("SCL SELECT: hidden Harmony editor returns to Setup", scl_test_row() == 3u && !harmony_on);
+    }
+    ui_power_on();
+    return bad;
+}
+
 /* SCL's pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL. A short tap after a knob turn must advance the page,
  * and the page that lands must still edit its own values. */
 static int test_scl_page_tap(void)
@@ -7357,8 +7444,8 @@ static int test_scl_page_tap(void)
     ui_power_on(); ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16); harmony_on = 1; go_page(GR_SCALE); frames(4);
     ok = 1;
     {
-        static const uint8_t cycle[3] = {GR_CHORD, GR_LINK, GR_HARMONY};
-        for (uint32_t i = 0; i < 3u; i++) {
+        static const uint8_t cycle[4] = {GR_CHORD, GR_LINK, GR_LINK, GR_HARMONY};
+        for (uint32_t i = 0; i < 4u; i++) {
             turn(EN_SELECT, 1);
             ok &= cur_page()->graph == cycle[i];
             if (cur_page()->graph == GR_SCALE) {
@@ -7366,7 +7453,11 @@ static int test_scl_page_tap(void)
             } else if (cur_page()->graph == GR_CHORD) {
                 int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
             } else if (cur_page()->graph == GR_LINK) {
-                uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
+                if (link_setup_row) {
+                    turn(EN_K1, 1); ok &= harmony_on != 0u;
+                } else {
+                    uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
+                }
             } else if (cur_page()->graph == GR_HARMONY && !str_eq(cur_page()->title, "HARMONY SETUP")) {
                 if (harmony_edit_dur) {
                     uint8_t b = hdur_get(0); turn(EN_K1, 1); ok &= hdur_get(0) != b;
@@ -7378,7 +7469,7 @@ static int test_scl_page_tap(void)
     }
     turn(EN_SELECT, 1);                          /* SELECT on HARMONY highlights DURATIONS */
     ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur;
-    bad += check("SELECT pages SCL -> CHORD -> LINK -> HARMONY and highlights DURATIONS", ok);
+    bad += check("SELECT walks SCL -> CHORD -> LINK -> Setup -> HARMONY -> DURATIONS", ok);
     /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
     ok = 1;
     for (uint32_t start = 0; start < 4u; start++) {
@@ -11229,6 +11320,7 @@ int main(void)
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();
+    bad += test_scl_select_rows();
     bad += test_fun11_readonly_probe();
     bad += test_screen_off();
     bad += test_screen_wake();
