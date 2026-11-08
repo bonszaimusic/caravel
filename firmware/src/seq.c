@@ -691,15 +691,22 @@ static int lat_sounds(const track_t *t, uint32_t n)
     return 0;
 }
 
+/* A pitch a STACK press may end: latched itself, or kept by an older latched BUS chord while a held key now plays it (input_on takes it out
+ * of lat_stay then), and sounding. */
+static int lat_ends(const track_t *t, uint32_t n)
+{
+    uint32_t k = trk_index(t);
+    return (lat_get(lat_stay[k], n) || lat_get(lat_bus_other[k], n)) && lat_sounds(t, n);
+}
 /* Would latch_press end these notes (STACK, no ARP, every one latched and sounding)? chord_build asks this before it replaces chord_last:
  * a press that only ends latched notes starts no new chord and must not take over the newest chord's identity. */
 static int latch_would_toggle(const track_t *t, const uint8_t *nn, uint32_t n)
 {
-    uint32_t k = trk_index(t), i;
+    uint32_t i;
     if (latch_mode(t) != LT_STACK || t->p[P_AMODE] || !n)
         return 0;
     for (i = 0; i < n; i++)
-        if (!lat_get(lat_stay[k], nn[i]) || !lat_sounds(t, nn[i]))
+        if (!lat_ends(t, nn[i]))
             return 0;
     return 1;
 }
@@ -727,7 +734,7 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
                 ;
             if (j == t->nheld)
                 return 0;
-        } else if (!lat_get(lat_stay[k], nn[i]) || !lat_sounds(t, nn[i])) {
+        } else if (!lat_ends(t, nn[i])) {
             return 0;
         }
     }
@@ -741,6 +748,7 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
         for (i = 0; i < n; i++) {
             if (t->p[P_AMODE]) {
                 arp_drop(t, nn[i]);
+                lat_put(lat_eat[k], nn[i], 1);
             } else {
                 int keep = 0;
                 if (bus) {
@@ -751,13 +759,14 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
                         for (j = 0; lat_bus_last[k] && j < chord_last[k].n; j++)
                             keep |= chord_last[k].note[j] == nn[i];
                     }
+                    keep |= midi_local_held(t, nn[i]) || midi_note_held(t, nn[i]);   /* a key / MIDI note / the sustain still plays it */
                 }
                 if (!keep) {
                     lat_put(lat_stay[k], nn[i], 0);
                     trk_note_off(t, nn[i]);
+                    lat_put(lat_eat[k], nn[i], 1);                  /* its release does nothing; a kept tone's release goes on as ever */
                 }
             }
-            lat_put(lat_eat[k], nn[i], 1);
         }
         if (!bus || newest)
             lat_bus_last[k] = 0;

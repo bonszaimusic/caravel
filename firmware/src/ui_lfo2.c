@@ -426,6 +426,7 @@ static void lfo_cards(const page_t *pg)
         }
     if (dd->kind == DK_HARMONY) {                          /* the names follow T1's scale, the SHIFT and the sounding slot */
         sig = sig * 33u + harmony_scale_abs() * 7u + harmony_on * 3u;
+        sig = sig * 33u + (uint32_t)trk[0].p[P_ROOT] * 131u + (uint32_t)trk[0].p[P_SCALE] * 17u;   /* the key label shows T1's own ROOT and SCALE */
 #if CARAVEL_ACTION_BANKS
         sig = sig * 33u + (uint32_t)(int32_t)harmony_shift * 17u + (harmony_on ? harmony_chord_at(harmony_bar) * 977u : 0u);
 #endif
@@ -434,6 +435,7 @@ static void lfo_cards(const page_t *pg)
         uint32_t src = link_src[song.sel];
         sig = sig * 33u + harmony_follow[song.sel] * 7u + harmony_on * 3u;
         sig = sig * 33u + harmony_scale_abs() * 5u;          /* the key shown under the HARMONY switch */
+        sig = sig * 33u + (uint32_t)trk[0].p[P_ROOT] * 131u + (uint32_t)trk[0].p[P_SCALE] * 17u;   /* (CHR and periodic scales: one mask for several ROOTs) */
         sig = sig * 33u + link_setup_row * 131u + (src && src <= NTRK ? (uint32_t)trk[src - 1u].p[P_SCALE] * 17u : 0u);
     }
 #if CARAVEL_STASIS_EXPAND

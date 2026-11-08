@@ -239,6 +239,24 @@ static void usability_fixes(void){
  harmony_on=0;harmony_hold=0;ux_redraw();CHECK(hk_has("HOME x2: ACTION")&&!hk_has("HARM HOLD"));
  harmony_perf_clear();
  }
+ if(ux_on("R3P3")){      /* (R3P3 is also run as R3P3b: the RESET line and the tutorial) */
+ /* review of dbeac55: the T1 key label's cache signature carries T1's own ROOT and SCALE (CHR and the periodic scales keep one absolute mask
+  * under every root); the persistent RESET line keeps its HARM identity; the tutorial no longer talks of stars */
+ ux_reset();ux_page(GR_HARMONY);trk[0].p[P_SCALE]=0;trk[0].p[P_ROOT]=0;ux_redraw();CHECK(hk_has("C CHR T1"));
+ trk[0].p[P_ROOT]=2;hk_n=0;run_ms(40);CHECK(hk_has("D CHR T1"));                    /* CHR, root C -> D: the mask is 0xFFF both times */
+ trk[0].p[P_SCALE]=13;trk[0].p[P_ROOT]=0;hk_n=0;run_ms(40);CHECK(hk_has("T1 C"));      /* WHOLE at root C: too wide for the line, the scale is dropped, the root stays */
+ trk[0].p[P_ROOT]=2;hk_n=0;run_ms(40);CHECK(hk_has("D WHOLE T1"));   /* WHOLE at D (a narrower root): it fits; one absolute mask at C and D, the label follows either way */
+ ux_page(GR_LINK);link_setup_row=1;trk[0].p[P_SCALE]=0;trk[0].p[P_ROOT]=0;ux_redraw();CHECK(hk_has("C CHR T1"));
+ trk[0].p[P_ROOT]=2;hk_n=0;run_ms(40);CHECK(hk_has("D CHR T1"));                    /* the SETUP row's key line, too */
+ }
+ if(ux_on("R3P3b")){
+ ux_reset();go_home();action_enabled=1;action_bank=0;action_setup=0;action_refresh();harmony_on=1;harmony_pending=H_RESET;ux_redraw();
+ if(!hk_has("HARM RESET: CHORD 1, SHIFT 0"))hk_dump("R3P3 reset");
+ CHECK(hk_has("HARM RESET: CHORD 1, SHIFT 0"));action_enabled=0;ux_redraw();CHECK(hk_has("HARM RESET: CHORD 1, SHIFT 0"));
+ harmony_perf_clear();
+ {FILE *f=fopen("docs/tutorials/harmony-live.md","rb");char b[16384];size_t n=f?fread(b,1,sizeof b-1,f):0;if(f)fclose(f);b[n]=0;
+  CHECK(n>0&&!strstr(b,"starred")&&!strstr(b,"the star "));}
+ }
  if(ux_on("U14a")||ux_on("U14c")){
  ux_reset();trk[1].eng_req=ENGI_DRUM;run_ms(80);CHECK(drum_track(&trk[1])&&chord_kit(&trk[1]));
  trk[1].p[P_QUANT]=QN_OFF;harmony_follow[1]=1;harmony_on=1;harmony_bar=0;

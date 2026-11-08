@@ -79,8 +79,9 @@ before a queued RESUME to cancel that resume. When stopped, changes are applied
 immediately without starting any notes or the transport.
 
 The four displayed chords are the effective live chords, with the current one
-highlighted. HOLD, SHIFT and starred queued actions are shown below them;
-the star means the next bar. The regular HARMONY editor continues to show the
+highlighted. Below them a status line shows what is queued for the next bar
+(PREV BAR, NEXT BAR, RESUME: NEXT BAR, RESET: CHORD 1, SHIFT 0) or the run state
+(RUN, HOLD), and the SHIFT in degrees. The regular HARMONY editor continues to show the
 prepared roots. SHIFT changes scale degrees/pitch classes, not the keyboard's
 octave: C–Am–F–G in C major becomes Dm–Bdim–G–Am at +1. A complete turn around
 the scale repeats the same pitch classes.

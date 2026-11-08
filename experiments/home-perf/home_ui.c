@@ -474,7 +474,7 @@ static void hp_harm_status(char*b,uint32_t n,int brief)
  st=harmony_pending==H_PREV?"PREV BAR":harmony_pending==H_NEXT?"NEXT BAR":harmony_pending==H_RESUME?"RESUME: NEXT BAR":
     harmony_pending==H_RESET?"RESET: CHORD 1":harmony_shift_pending?"SHIFT NEXT BAR":harmony_hold?"HOLD":"RUN";
  if(brief&&!harmony_hold&&!harmony_shift_want&&!harmony_pending&&!harmony_shift_pending){str_cpy(b,"",n);return;}
- if(harmony_pending==H_RESET)perf_format(b,n,"RESET: CHORD 1, SHIFT 0");
+ if(harmony_pending==H_RESET)perf_format(b,n,brief?"HARM RESET: CHORD 1, SHIFT 0":"RESET: CHORD 1, SHIFT 0");
  else if(brief)perf_format(b,n,"HARM %s%s%s",st,harmony_shift_want?" ":"",harmony_shift_want?sh:"");
  else{perf_format(b,n,"%s %s",st,sh);
   if(text_w(&AF_S,b)>154){perf_format(sh,sizeof sh,"%s%d DEG",harmony_shift_want>0?"+":"",harmony_shift_want);perf_format(b,n,"%s %s",st,sh);}}   /* too long for the bank: SHIFT without its word */

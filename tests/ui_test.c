@@ -7042,6 +7042,52 @@ static int test_harmony_latch_toggle(void)
     return bad;
 }
 
+/* Review of f2135f0: the SURVIVING chord is still held (key down, or MIDI note down, or sustained) while the other, latched one is pressed
+ * again. Only the target ends; the shared 48 stays with the held chord; the held chord goes on following HARMONY once it is let go; every
+ * release order ends in silence with balanced MIDI. low C [36 48 52 55] is latched first, high C [48 60 64 67] is held. */
+static int test_harmony_latch_toggle_held(void)
+{
+    static const uint8_t high_c[] = {48,60,64,67}, high_f[] = {53,65,69,72};
+    int bad = 0;
+    /* src: low latched by panel/MIDI x high held by panel/MIDI/sustained-MIDI (6 kinds); again: the re-press of the low root by panel/MIDI;
+     * order: the high chord is let go before / after the re-press key */
+    for (uint32_t low_midi = 0; low_midi < 2u; low_midi++)
+        for (uint32_t hold = 0; hold < 3u; hold++)
+            for (uint32_t again_midi = 0; again_midi < 2u; again_midi++)
+                for (uint32_t high_first = 0; high_first < 2u; high_first++) {
+                    int ok, st[7], hold_midi = hold != 0u;
+                    harmony_owner_reset();
+                    trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+                    latch_toggle_press(low_midi, 7u, 48u, 1);
+                    latch_toggle_press(low_midi, 7u, 48u, 0);                           /* the low chord, latched */
+                    if (hold == 2u) harmony_owner_midi(0xB0, 64, 127);                  /* sustain pedal down: the high chord is held by it after its note-off */
+                    latch_toggle_press(hold_midi, 19u, 60u, 1);                         /* the high chord, held (hold 2: and then let go, sustained) */
+                    if (hold == 2u) latch_toggle_press(1, 19u, 60u, 0);
+                    { static const uint8_t both[] = {36,48,52,55,60,64,67}; st[0] = harmony_owner_notes(both, NELEM(both)); }
+                    latch_toggle_press(again_midi, 7u, 48u, 1);                         /* the low root again: only the low chord ends */
+                    st[1] = harmony_owner_notes(high_c, 4);                             /* the held chord keeps all four, 48 included */
+                    if (!high_first) latch_toggle_press(again_midi, 7u, 48u, 0);
+                    if (hold == 2u) harmony_owner_midi(0xB0, 64, 0);                    /* pedal up: the sustained chord is released by its note-off history */
+                    else latch_toggle_press(hold_midi, 19u, 60u, 0);                    /* the high chord let go: it is latched now */
+                    if (high_first) latch_toggle_press(again_midi, 7u, 48u, 0);
+                    st[2] = harmony_owner_notes(high_c, 4);                             /* the survivor, latched, with 48 */
+                    harmony_owner_boundary();                                           /* C -> F: the survivor is the newest chord, it follows */
+                    st[3] = harmony_bar == 1u && harmony_owner_notes(high_f, 4);
+                    harmony_owner_boundary();                                           /* F -> C */
+                    st[4] = harmony_bar == 2u && harmony_owner_notes(high_c, 4);
+                    latch_req = 1u; events_block(CTL);
+                    st[5] = harmony_owner_notes(0, 0) && !lat_any(lat_stay[0]) && !lat_any(lat_bus_other[0]);
+                    harmony_owner_boundary();
+                    st[6] = harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+                    ok = st[0] && st[1] && st[2] && st[3] && st[4] && st[5] && st[6];
+                    printf("ui: LATCH BUS toggle with the survivor held [stages %d%d%d%d%d%d%d] low %s, high %s, again %s, %s first: ", st[0], st[1], st[2], st[3], st[4], st[5], st[6],
+                           low_midi ? "MIDI" : "panel", hold == 0u ? "panel" : hold == 1u ? "MIDI" : "MIDI+sustain", again_midi ? "MIDI" : "panel", high_first ? "high" : "re-press");
+                    bad += check("LATCH BUS toggle while the other chord is held: only the target ends, shared 48 stays, the held chord follows, silence at the end", ok);
+                }
+    usb.config = 0;
+    return bad;
+}
+
 /* The chord pressed again after its toggle starts a fresh latched chord: both sound again, the fresh one is the newest and follows
  * HARMONY, the other stays; then the release gesture ends everything. */
 static int test_harmony_latch_toggle_relatch(void)
@@ -11427,6 +11473,7 @@ int main(void)
     bad += test_harmony_latch_overlap();
     bad += test_harmony_latch_toggle();
     bad += test_harmony_latch_toggle_relatch();
+    bad += test_harmony_latch_toggle_held();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();
