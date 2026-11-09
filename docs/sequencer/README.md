@@ -13,7 +13,7 @@ User-facing workflows, controls, compatibility and limits:
 
 Host and emulator tests do not establish physical FM-1 acceptance.
 
-## Coupling the four tracks (development build)
+## Coupling the four tracks (0.12.0)
 
 Two performance shortcuts sit in the existing SET layers; neither changes the project format.
 
@@ -24,10 +24,10 @@ Two performance shortcuts sit in the existing SET layers; neither changes the pr
   the top anyway. The message is `RESET NEXT BAR` or `BAR RESET`. In a SONG it says `STOP SONG FIRST`.
 
 Both work on the internal clock and on an external MIDI clock; the bar reset uses the same downbeat path as the
-external-clock resync (`src/seq.c`, `seq_resync`). Host-tested in `tests/ui_test.c` (`SCL + OCT+`, `GLO + OCT+`), not
-yet tried on an FM-1.
+external-clock resync (`src/seq.c`, `seq_resync`). Host-tested in `tests/ui_test.c` (`SCL + OCT+`, `GLO + OCT+`); no itemised
+test on an FM-1.
 
-### Generative layer (development build)
+### Generative layer (0.12.0)
 
 - **SCL > LINK** — the upper row of the LINK / HARMONY SETUP page, per track. `K1 SOURCE` = `OFF` / `T1`..`T4`; the
   follower copies the source's `ROOT`, `SCL` and `QNT`. `TRN`, `CHRD` and `VOIC` stay its own. A linked track is not

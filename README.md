@@ -4,11 +4,14 @@
 
 <p align="center"><strong><a href="https://bonszaimusic.github.io/caravel/tutorials/">Tutorials on the site</a></strong> · <a href="docs/tutorials/start-here.md">Start here: your first ten minutes</a> · <a href="docs/tutorials/README.md">all tutorials</a></p>
 
-**Development:** [Live Harmony and HOME ACTION keys](docs/tutorials/harmony-live.md): C#5 BANK back, D#5 BANK forward, D5/E5/F5/G5 actions; HARM follows JOURNEY with HOLD, PREV, NEXT, RESET and scale-degree SHIFT. Not yet released.
+> [!IMPORTANT]
+> **Newer FM-1 units have a different flash chip.** They carry a UC25HQ80 flash (JEDEC ID `0xB36014`) instead of the Puya P25Q80 (`0x856014`); both are 1 MiB. Caravel up to 0.11.0 accepted only the Puya ID, so on a newer unit nothing was written to flash: saving a project shows `SAVED (RAM)` and the project is gone after power-off, and a firmware update from the installer is not started. **Caravel 0.12.0 accepts both IDs** (the same change as Felucca's [#320](https://github.com/hugelton/Felucca/issues/320)).
+>
+> **We have not tested this on a real UC25HQ80 unit.** It rests on a host test of the ID list and on one user's report for Felucca's 1.8.2 beta, which is not our test. If you have such a unit, please [tell us what happens](https://github.com/bonszaimusic/caravel/issues).
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.11.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.12.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -43,6 +46,14 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 | **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
 | **[HOME, Pair Morph, macros and saving](docs/tutorials/home-and-stasis.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
 | [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
+
+## Caravel 0.12.0 — HARMONY
+
+[Download 0.12.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.12.0) · [What changed and what is tested](docs/release-0120.md) · [HARMONY guide](docs/tutorials/harmony-live.md) · [all tutorials](docs/tutorials/README.md)
+
+- **HARMONY:** one chord progression (four chords of 1, 2, 4 or 8 bars, on the transport's bar clock) that your tracks follow: sequencer strong steps, every ARP step and your live keys move onto the current chord; CHRD = BUS plays the whole chord from one key. **LINK** copies one track's key to another; the **SCL pages** are rebuilt as a family you walk with SELECT.
+- **HOME ACTION:** new key layout (C#5 back, D#5 forward, D5 / E5 / F5 / G5 actions: **the 0.11.0 keys moved**) and a sixth bank, **HARM** (HOLD, PREV, NEXT, RESET, SHIFT in scale degrees).
+- **Back up first. The project format changes (FUN11): 0.11.0 and earlier show a 0.12.0 project as an empty slot.** The flash margin is thin (3,060 B left). Host-tested and run in a local container; the maintainer reports a good device test of an earlier test package without per-item results; the later fixes have not been tested on a device. CHORD EXT is not in this release.
 
 ## Caravel 0.11.0 — ENSEMBLE in stereo
 

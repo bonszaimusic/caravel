@@ -1,10 +1,10 @@
 # FUN11 / Harmony / Link hardware smoke test
 
-Status: prepared for the FM-1; not yet run on hardware.
+Status: prepared for the FM-1. The maintainer reports a good device test of a 0.12.0 test build (2026-11-09) without itemised results; this checklist has not been worked through item by item.
 
 ## Build under test
 
-- `build/caravel-0.11.0.fwsc` (FUN11 build, identity `FM-1_999`)
+- `build/caravel-0.12.0.fwsc` (FUN11 build, identity `FM-1_999`)
 - Keep a **FUN10** project (any 0.11.0 slot) and a backup of the current flash before flashing.
 
 ## 1. Project format
