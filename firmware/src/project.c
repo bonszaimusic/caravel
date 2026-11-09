@@ -1587,12 +1587,16 @@ static uint8_t persist_pending;                 /* 1 requested, 2 waiting after 
 static uint32_t persist_retry_ms;
 #endif
 
+#if FELUCCA_FLASH
+/* The JEDEC IDs of the 1 MiB parts this firmware saves to: the Puya P25Q80 of the first FM-1s and the UC25HQ80 of newer ones (Felucca #320). */
+static int flash_id_known(uint32_t id) { return id == 0x856014u || id == 0xB36014u; }
+#endif
 static void persist_boot(void)                    /* before settings_init / panel_init */
 {
 #if FELUCCA_FLASH
     persist_t p;
     uint32_t f = irq_save();
-    flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;       /* the expected 1 MiB part, else stay RAM-only */
+    flash_ok = flash_id_known(FL_FAR(fl_jedec_ram)());   /* a known 1 MiB part, else stay RAM-only */
     irq_restore(f);
     if (!flash_ok)
         return;
