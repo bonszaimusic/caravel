@@ -464,6 +464,7 @@ static void hp_tracks(int x0,int y)
 static void hp_sea(int y){(void)y;}                   /* no snapshots or journey in this profile: no chart */
 static void hp_tracks(int x,int y){(void)x;(void)y;}
 #endif
+#if CARAVEL_ACTION_BANKS   /* its only callers are the ACTION banks; the legacy profile (backup_test.c, felucca_web.c before seq.c) has no HARMONY state at this point */
 /* The HARMONY performance state in words (U08/U11/U12): the next bar's command when one is queued (what NEXT / RESUME / RESET will do), else
  * the run state, then the SHIFT in scale degrees. brief: the permanent chip on the other banks (nothing while HARMONY is off or nothing is going on). */
 static void hp_harm_status(char*b,uint32_t n,int brief)
@@ -479,6 +480,7 @@ static void hp_harm_status(char*b,uint32_t n,int brief)
  else{perf_format(b,n,"%s %s",st,sh);
   if(text_w(&AF_S,b)>154){perf_format(sh,sizeof sh,"%s%d DEG",harmony_shift_want>0?"+":"",harmony_shift_want);perf_format(b,n,"%s %s",st,sh);}}   /* too long for the bank: SHIFT without its word */
 }
+#endif
 static void hp_draw_home(void)
 {
  hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
