@@ -51,7 +51,8 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 }
 static uint32_t irq_save(void) { return 0; }
 static void irq_restore(uint32_t f) { (void)f; }
-static uint32_t fl_jedec_ram(void) { return 0; }
+static uint32_t jedec_id;                         /* what the flash part answers to 0x9F (the test sets it) */
+static uint32_t fl_jedec_ram(void) { return jedec_id; }
 static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../firmware/src/storage.c"
@@ -531,6 +532,34 @@ static int live_save_test(void)
     return bad;
 }
 
+/* The flash part's JEDEC ID decides at boot whether saving works (persist_boot): the stock Puya P25Q80 (0x856014) and the UC25HQ80 of newer
+ * FM-1s (0xB36014, Felucca issue #320) are the known 1 MiB parts; anything else stays RAM-only. (persist_boot itself cannot run to the end
+ * here: a known part goes on to scan the user sample slots through the XIP window, which this host has not; so the list is tested as
+ * flash_id_known, and persist_boot as far as an unknown part takes it.) */
+static int jedec_test(void)
+{
+    static const struct { uint32_t id; int ok; const char *what; } cases[] = {
+        {0x856014u, 1, "the Puya P25Q80 (0x856014)"}, {0xB36014u, 1, "the UC25HQ80 of newer FM-1s (0xB36014)"},
+        {0u, 0, "no answer (0)"}, {0xFFFFFFu, 0, "a floating bus (0xFFFFFF)"}, {0xEF4014u, 0, "a Winbond W25Q80 (0xEF4014)"},
+        {0xB36015u, 0, "the same maker at another size (0xB36015)"}, {0x856015u, 0, "a Puya of another size (0x856015)"}};
+    int bad = 0;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        char what[112];
+        snprintf(what, sizeof what, "JEDEC ID %s: %s", cases[i].what, cases[i].ok ? "a known part, saving works" : "unknown, RAM-only");
+        bad += check(what, !!flash_id_known(cases[i].id) == cases[i].ok);
+        if (!cases[i].ok) {                           /* the boot with this part answers: flash_ok stays 0 and nothing is read from flash */
+            reset();
+            jedec_id = cases[i].id;
+            flash_ok = 1;
+            persist_boot();
+            bad += check("  persist_boot with it: flash_ok 0, no store touched", flash_ok == 0 && !erases);
+        }
+    }
+    jedec_id = 0;
+    reset();
+    return bad;
+}
+
 int main(void)
 {
     int bad = 0, ok;
@@ -540,6 +569,7 @@ int main(void)
     project_v5_t v5;
     up_bank_t bank;
     up_rec_t r;
+    bad += jedec_test();
     reset();
     settings_init();
     {

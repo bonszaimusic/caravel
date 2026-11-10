@@ -4,7 +4,7 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN journey_tracks_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void tap(uint32_t k){key(1u<<(ACT_KEY_FIRST+k));key(0);}   /* 0 = BANK, 1..4 = A1..A4 */
+static void tap(uint32_t k){key(1u<<(k?action_keys[k-1u]:ACT_BANK_NEXT));key(0);}   /* 0 = BANK, 1..4 = A1..A4 */
 static void sel(uint32_t t){song.sel=t;go_home();action_refresh();run_ms(60);}
 static void seal(hp_store_t*p){p->crc=hp_hash((uint8_t*)p+32,p->size-32);p->reserved[0]=hp_hash(p,20);}
 static int cell_of(uint32_t u,uint32_t track,uint32_t id)         /* the index of engine u's cell for a track's control, -1 none */

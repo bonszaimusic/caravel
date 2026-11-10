@@ -64,6 +64,24 @@ static const char *const SMP_ALL_NAMES[SMP_NALL] = {SMP_SET_NAMES_INIT, "USR1", 
 #define SMP_USER_XIP(k) fm1_xip_ptr(SMP_USER_BASE + (k) * SMP_USER_SIZE)
 #endif
 static const uint8_t *smp_user_xip(uint32_t k) { return SMP_USER_XIP(k); }
+/* Zone offsets span the target's flat 32-bit XIP space, not just the built-in C array.
+ * On a 64-bit host, recover the real slot object from its rebased 32-bit offset. */
+static inline uint32_t smp_data_byte(uint32_t off)
+{
+    if (sizeof(uintptr_t) > sizeof(uint32_t)) {
+        uint32_t k;
+        if (off < sizeof SMP_DATA)
+            return SMP_DATA[off];
+        for (k = 0; k < SMP_USER_SLOTS; k++) {
+            const uint8_t *p = smp_user_xip(k) + SMP_USER_DATA;
+            uint32_t rel = off - ((uint32_t)(uintptr_t)p - (uint32_t)(uintptr_t)SMP_DATA);
+            if (rel < SMP_USER_SIZE - SMP_USER_DATA)
+                return p[rel];
+        }
+        return 0;
+    }
+    return *(const uint8_t *)((uintptr_t)SMP_DATA + off);
+}
 #if FELUCCA_SLICE
 static void slc_user_scan(uint32_t k, int valid);   /* eng_slice.c: SLICE's slice table of the slot */
 #else
@@ -115,7 +133,7 @@ static void smp_sine(int32_t *out, uint32_t n, const vmod_t *m, int32_t d16, int
     int32_t s = *y;
     for (i = 0; i < n; i++, p += inc) {
         s += mulq15((sine_i(p) >> 1) - s, lp);
-        out[i] += voice_amp(s, m, i) << 1;
+        out[i] += voice_amp(s, m, i) * 2;
     }
     *ph = p;
     *y = s;
@@ -138,7 +156,7 @@ static inline const smp_zone_t *smp_zone(uint32_t zi)
  * index, s[2] previous sample, s[3] current sample, s[4] zone, s[5] step Q16 */
 static inline int32_t sample_next(const smp_zone_t *z, voice_t *v, int loop)
 {
-    uint32_t pos = v->ph[0], b = SMP_DATA[z->off + (pos >> 1)];
+    uint32_t pos = v->ph[0], b = smp_data_byte(z->off + (pos >> 1));
     uint32_t code = (pos & 1u) ? (b >> 4) : (b & 15u);
     int32_t step = IMA_STEP[(uint32_t)v->s[1] <= 88u ? v->s[1] : 88], vd = step >> 3;
     if (code & 4u)
@@ -230,11 +248,11 @@ static void sample_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         }
         s = v->s[2] + (((v->s[3] - v->s[2]) * (int32_t)(frac >> 1)) >> 15);
         if (sh)                                       /* BITS: 0 = clean, up to 12 bits removed */
-            s = (s >> sh) << sh;
+            s = (s >> sh) * (int32_t)(1u << sh);
         if (drv)
             s = softclip(s + (((s >> 2) * (drv * 150)) >> 11));   /* = s * drv * 600 / 32768, no overflow */
         v->s[7] += mulq15(s - v->s[7], lp);           /* gentle tone control (CUT) */
-        out[i] += voice_amp(v->s[7], m, i) << 1;
+        out[i] += voice_amp(v->s[7], m, i) * 2;
         if (v->s[6])
             break;
     }

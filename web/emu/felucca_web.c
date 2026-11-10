@@ -290,6 +290,7 @@ static uint32_t web_booted, web_boot_ms, web_last_frame;
 /* main.c fm1_main's boot, up to the main loop (no USB, no UART, no panel setup) */
 static void web_power_on(void)
 {
+    memset(harmony_follow, 1, sizeof harmony_follow);   /* as main.c fm1_main: a cold boot has every track following the bus */
     persist_boot();
     settings_init();
     usb_serial_apply();

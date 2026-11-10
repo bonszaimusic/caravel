@@ -79,7 +79,7 @@ static int midi_local_held(const track_t *t, uint32_t note)
 {
     uint32_t k, i;
     for (k = 0; k < 27u; k++)
-        if (kb_chn[k] && kb_trk[k] == trk_index(t))
+        if (kb_chn[k] && kb_live[k] && kb_trk[k] == trk_index(t))
             for (i = 0; i < kb_chn[k]; i++)
                 if (kb_chord[k][i] == note)
                     return 1;
@@ -93,7 +93,7 @@ static int midi_any_held(const track_t *t)
     if (midi_owners[trk_index(t)])
         return 1;
     for (k = 0; k < 27u; k++)
-        if (kb_chn[k] && kb_trk[k] == trk_index(t))
+        if (kb_chn[k] && kb_live[k] && kb_trk[k] == trk_index(t))
             return 1;
     return 0;
 }
@@ -118,10 +118,13 @@ static void midi_release(uint32_t ch, uint32_t note)
                 nn[i] = m->note[i];
             m->id = 0;
         }
+        latch_bus_release(&trk[id - 1u], nn, n);
         for (i = 0; i < n; i++)
             if (!midi_local_held(&trk[id - 1u], nn[i]))
                 input_off(&trk[id - 1u], nn[i]);  /* input_off also checks other MIDI owners */
     }
+    if (id)
+        chord_live_sync(id - 1u);
 }
 
 /* a MIDI note-on (ch, note) of track t: its chord (chord.c) or the note alone. A note another key or MIDI
@@ -129,22 +132,28 @@ static void midi_release(uint32_t ch, uint32_t note)
 static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
 {
     uint8_t nn[CHORD_MAX];
+    uint32_t src = note;                           /* the MIDI key: release identity, never the snapped note */
+    if (harmony_on && harmony_follow[trk_index(t)] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
+        note = harmony_snap(t, note);              /* live MIDI notes follow HARMONY */
     uint32_t n = chord_build(t, note, nn), i, f = 0, eat;
-    if (n > 1u || nn[0] != note)
+    uint8_t mapped = (uint8_t)(n > 1u || nn[0] != src);
+    if (mapped)
         for (f = 0; f < MCHORD_N && mchord[f].id; f++)
             ;
-    if (f == MCHORD_N) {                          /* no room to keep a chord: the note alone */
+    if (mapped && f == MCHORD_N) {                 /* no mapping room: fall back to the original single key, so the
+                                                    * sounded note and its release identity agree (never write mchord[24]) */
         n = 1;
-        nn[0] = (uint8_t)note;
+        nn[0] = (uint8_t)src;
+        mapped = 0;
     }
     eat = (uint32_t)latch_press(t, nn, n);        /* LATCH STACK: the note again ends its latched notes */
     for (i = 0; i < n; i++)
         if (!eat && !midi_note_held(t, nn[i]) && !midi_local_held(t, nn[i]))
             input_on(t, nn[i], vel);
-    if (n > 1u || nn[0] != note) {
+    if (mapped) {
         mchord_t *m = &mchord[f];
         m->ch = (uint8_t)ch;
-        m->src = (uint8_t)note;
+        m->src = (uint8_t)src;
         m->n = (uint8_t)n;
         for (i = 0; i < n; i++)
             m->note[i] = nn[i];
@@ -203,6 +212,7 @@ static void __attribute__((noinline)) midi_forget_track(uint32_t track)
     }
     midi_owners[track] = 0;
     mchord_forget(track);
+    chord_live_sync(track);
     midi_bend_q8[track] = midi_bend_target[track] = 0;
 }
 
@@ -220,6 +230,8 @@ static void midi_silence_track(uint32_t track)
             voice_kill(&t->v[i]);             /* one-block fade, regardless of RELEASE */
     sl[track].rec = sl[track].loop = 0;       /* do not keep replaying captured sound */
     midi_forget_track(track);
+    chord_panic(track);
+    chord_live_sync(track);
 }
 
 static int midi_track_held(uint32_t track)
@@ -380,6 +392,8 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
             if ((mask & (1u << i)) && !midi_track_held(i)) {
                 trk_all_off(&trk[i]);
                 latch_forget(i);
+                chord_panic(i);
+                chord_live_sync(i);
                 trk[i].nheld = trk[i].arp_phys = trk[i].rh_n = 0;
                 arp_forget(&trk[i]);
             }

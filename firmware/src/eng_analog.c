@@ -105,8 +105,8 @@ static __attribute__((noinline)) void analog_render_x(track_t *t, voice_t *v, in
             s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
         if (drv)
             s = softclip(((s >> 2) * (drive >> 2)) >> 11);
-        s = soft_knee(analog_tap(&flt, fk, s >> 1, &ic1, &ic2, ft), 16000) << 1;
-        out[i] += voice_amp(s, m, i) << 1;
+        s = soft_knee(analog_tap(&flt, fk, s >> 1, &ic1, &ic2, ft), 16000) * 2;
+        out[i] += voice_amp(s, m, i) * 2;
     }
     v->ph[0] = ph0;
     v->ph[1] = ph1;
@@ -175,9 +175,9 @@ static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t
                 a = 16000 + (softclip((a - 16000) * 2) >> 1);
                 y = y < 0 ? -a : a;
             }
-            s = y << 1;
+            s = y * 2;
         }
-        out[i] += voice_amp(s, m, i) << 1;
+        out[i] += voice_amp(s, m, i) * 2;
     }
     v->ph[0] = ph0;
     v->ph[1] = ph1;
@@ -223,7 +223,7 @@ static __attribute__((noinline)) void analog_morph_render(track_t *t, voice_t *v
             s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
         if (drv)
             s = softclip(((s >> 2) * (drive >> 2)) >> 11);
-        out[i] += voice_amp(soft_knee(analog_tap(&flt, kd, s >> 1, &ic1, &ic2, ft), 16000) << 1, m, i) << 1;
+        out[i] += voice_amp(soft_knee(analog_tap(&flt, kd, s >> 1, &ic1, &ic2, ft), 16000) * 2, m, i) * 2;
     }
     v->ph[0] = ph0;
     v->ph[1] = ph1;

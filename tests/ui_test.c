@@ -169,6 +169,12 @@ static void ui_power_on(void)
 {
     uint32_t i;
     memset(trk, 0, sizeof trk);
+    memset(kb_chord, 0, sizeof kb_chord);
+    memset(kb_chn, 0, sizeof kb_chn);
+    memset(kb_midi, 0, sizeof kb_midi);
+    memset(kb_midin, 0, sizeof kb_midin);
+    memset(kb_live, 0, sizeof kb_live);
+    memset(chord_live, 0, sizeof chord_live);
     memset(&song, 0, sizeof song);
     memset(&motion, 0, sizeof motion);
     memset(midi_lit_ms, 0, sizeof midi_lit_ms); midi_seen = 0;   /* (1.5.5: no MIDI IN light) */
@@ -6516,6 +6522,8 @@ static int test_coupling(void)
     trk[0].p[P_TRANS] = 5;
     trn1 = trk[1].p[P_TRANS];
     chrd1 = trk[1].p[P_CHRD];
+    int16_t r0[4], s0[4], q0[4];
+    for (i = 0; i < NTRK; i++) { r0[i] = trk[i].p[P_ROOT]; s0[i] = trk[i].p[P_SCALE]; q0[i] = trk[i].p[P_QUANT]; }
     song.octave = 0;
     btn_down(B_SCL);
     frame();
@@ -6524,6 +6532,16 @@ static int test_coupling(void)
          trk[0].p[P_SCALE] == 2 && trk[1].p[P_SCALE] == 2 && trk[2].p[P_SCALE] == 2 && trk[3].p[P_SCALE] == 2 &&
          trk[0].p[P_QUANT] == 3 && trk[1].p[P_QUANT] == 3 && trk[2].p[P_QUANT] == 3 && trk[3].p[P_QUANT] == 3 &&
          trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1 && song.octave == 0 && msg_is("SCALE TO ALL");
+    {   /* round 7: OCT- (UNDO) puts every track's key, scale and quantize back, not only the selected track's */
+        int okp = 1;
+        trk[0].p[P_SCALE] = 1;                       /* a second ALL in the same hold: the undo is still the state when the layer opened */
+        press(B_OCTUP);
+        press(B_OCTDN);
+        for (i = 0; i < NTRK; i++)
+            okp &= trk[i].p[P_ROOT] == r0[i] && trk[i].p[P_SCALE] == s0[i] && trk[i].p[P_QUANT] == q0[i];
+        okp &= msg_is("SCALE PUT BACK") && trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1;
+        bad += check("SCL + OCT+ then OCT-: all four tracks' ROOT SCL QNT are back (the layer's undo)", okp);
+    }
     btn_up(B_SCL);
     frame();
     bad += check("SCL + OCT+: ROOT SCL QNT to all four tracks, TRN / CHRD kept, no octave shift", ok);
@@ -6587,9 +6605,14 @@ static int test_key_link(void)
     ok &= trk[1].p[P_ROOT] == 2 && trk[1].p[P_SCALE] == 1 && trk[1].p[P_QUANT] == 4;
     turn(EN_K2, 2);                                /* RETRIG LINK */
     ok &= link_retrig[1] == 2u;
-    turn(EN_K4, 1);                                /* HARMONY FOLLOW off for T2 */
+    turn(EN_K4, -1);                               /* FOLLOW off for T2: turn left (U04: direction, not a toggle) */
     ok &= harmony_follow[1] == 0u && harmony_mask(&trk[1]) == 0u;
+    turn(EN_K4, -1);
+    ok &= harmony_follow[1] == 0u;
+    turn(EN_K4, 1);                                /* turn right: on, again and in a burst still on */
+    ok &= harmony_follow[1] == 1u;
     turn(EN_K4, 1);
+    turn(EN_K4, 3);
     ok &= harmony_follow[1] == 1u;
     link_src[2] = 1u;                              /* T3 follows T1 too */
     link_src[0] = 2u;                              /* T1 would follow T3: a chain, not followed */
@@ -6611,23 +6634,29 @@ static int test_harmony_page(void)
     int bad = 0, ok;
     uint16_t mask;
     ui_power_on();
+    harmony_on = 1;
     song.sel = 0;
     trk[0].p[P_ROOT] = 0;
     trk[0].p[P_SCALE] = 2;                             /* C minor */
     for (uint32_t i = 0; i < 4u; i++) hroot_set(i, 0);
-    go_page(GR_HARMONY);
+    go_title("HARMONY");
     frame();
-    turn(EN_K1, 1);
+    turn(EN_K1, 1);                                /* the roots move along T1's scale (C minor: C D Eb F G Ab Bb) */
     turn(EN_K2, 2);
-    ok = hroot_get(0) == 1u && hroot_get(1) == 2u;
-    press(B_OCTDN);                                /* the lower row: K1..K4 edit the durations */
-    ok &= harmony_edit_dur != 0u && msg_is("HARMONY: DURATIONS");
+    ok = hroot_get(0) == 2u && hroot_get(1) == 3u;
+    press(B_SCL);                                  /* SCL: the duration row */
+    ok &= harmony_edit_dur != 0u && cur_page()->graph == GR_HARMONY && msg_is("HARMONY: DURATIONS");
     turn(EN_K1, 1);
     ok &= hdur_get(0) == 1u;
-    press(B_OCTDN);                                /* back to the roots */
-    ok &= harmony_edit_dur == 0u && msg_is("HARMONY: ROOTS");
-    press(B_OCTUP);
-    ok &= harmony_on != 0u && msg_is("HARMONY ON");
+    press(B_SCL);                                  /* the next SCL is a page step */
+    ok &= harmony_edit_dur == 0u;
+    go_title("HARMONY"); frames(4);
+    song.octave = 0;
+    press(B_OCTDN);                                /* OCT- is the ordinary octave-down key again */
+    ok &= song.octave == -1 && harmony_edit_dur == 0u;
+    song.octave = 0;
+    press(B_OCTUP);                                /* and OCT+ the ordinary octave-up key */
+    ok &= song.octave == 1 && harmony_on != 0u;
     hroot_set(0, 0);
     harmony_bar = 0;
     mask = harmony_mask_bar(0);
@@ -6655,9 +6684,773 @@ static int test_harmony_page(void)
         ok &= cn == 3u && cr % 12 == 0 && out[0] % 12 == 0 && out[1] % 12 == 3 && out[2] % 12 == 7;
         trk[0].p[P_CHRD] = CH_OFF;
     }
-    bad += check("HARMONY page: BAR roots, OCT- DUR row, OCT+ on, CHRD BUS and strong-step seq snap", ok);
-    press(B_OCTUP);
-    bad += check("HARMONY page: OCT+ again leaves the bus off", harmony_on == 0u && msg_is("HARMONY OFF"));
+    bad += check("HARMONY page: BAR roots, SELECT DUR row, free OCT-/OCT+, setup-row bus, CHRD BUS and strong-step seq snap", ok);
+    harmony_on = 0;
+    go_page(GR_LINK); frame();
+    {
+        uint32_t hi = NPAGES;
+        for (uint32_t i = 0; i < NPAGES; i++)
+            if (str_eq(PAGES[i].title, "HARMONY")) hi = i;
+        ok = hi < NPAGES && !page_visible(hi) && link_setup_row == 0u;
+        press(B_SCL);                                  /* the lower HARMONY SETUP row */
+        ok &= link_setup_row == 1u && msg_is("HARMONY SETUP");
+        harmony_base_bar = 4; harmony_bar = 6;
+        turn(EN_K1, 1);
+        ok &= harmony_on != 0u && msg_is("HARMONY ON") && page_visible(hi) && harmony_bar == 0u;
+        harmony_base_bar = 4; harmony_bar = 6;
+        turn(EN_K1, 2);                                 /* ON -> ON must not restart the progression */
+        ok &= harmony_on != 0u && harmony_bar == 6u && harmony_base_bar == 4u;
+        turn(EN_K1, -1);
+        ok &= harmony_on == 0u && msg_is("HARMONY OFF") && !page_visible(hi);
+        turn(EN_K1, 1);
+        ok &= harmony_on != 0u && harmony_bar == 0u;
+    }
+    bad += check("LINK lower row: SCL switches to HARMONY SETUP, K1 the bus; roots hidden while off", ok);
+    ui_power_on();
+    return bad;
+}
+
+/* Test-only owner for the direct chord_build cases (production installs one in key_on/midi_play). */
+static void test_bus_owner(void)
+{
+    uint32_t j;
+    kb_chn[0] = chord_last[0].n;
+    kb_trk[0] = 0;
+    kb_live[0] = 1;
+    kb_midin[0] = 0;
+    for (j = 0; j < CHORD_MAX; j++)
+        kb_chord[0][j] = chord_last[0].note[j];
+}
+
+/* Real input/transport regressions for panic-muted keys and a surviving BUS owner. */
+static void harmony_owner_reset(void)
+{
+    uint32_t i;
+    ui_power_on();
+    fm1_in.notes = kb_prev = 0;
+    mo_r = mo_w = 0;
+    usb.config = 1;
+    song.g[G_CLOCK] = 0;
+    song.g[G_ROUTE] = 0;
+    song.octave = 0;
+    for (i = 0; i < NTRK; i++) {
+        track_defaults_steps(&trk[i]);
+        latch_forget(i);
+    }
+    trk[0].p[P_ROOT] = 0;
+    trk[0].p[P_SCALE] = 1;
+    trk[0].p[P_QUANT] = QN_OFF;
+    trk[0].p[P_TRANS] = 0;
+    trk[0].p[P_CHRD] = CH_BUS;
+    trk[0].p[P_VOIC] = VC_CLOSE;
+    trk[0].p[P_VOICE] = V_POLY;
+    trk[0].p[P_AMODE] = 0;
+    trk[0].p[P_LATCH] = LT_OFF;
+    harmony_on = harmony_follow[0] = 1;
+    link_retrig[0] = 1;
+    for (i = 0; i < 4u; i++) { hroot_set(i, i & 1u ? 5u : 0u); hdur_set(i, 0); }
+    seq_start();
+    events_block(CTL);
+}
+
+static void harmony_owner_key(uint32_t k, int down)
+{
+    if (down) fm1_in.notes |= 1u << k;
+    else fm1_in.notes &= ~(1u << k);
+    events_block(CTL);
+}
+
+static void harmony_owner_midi(uint32_t status, uint32_t note, uint32_t value)
+{
+    midi_enqueue((status >> 4) | status << 8 | note << 16 | value << 24, 1);
+    events_block(CTL);
+}
+
+static void harmony_owner_boundary(void)
+{
+    /* Advance to just before the next bar, then let events_block dispatch the real boundary. */
+    harmony_phase = 0;                              /* (the test sets the clock itself: phase 0 = HARM_BAR() is perf_bars_q16 >> 16) */
+    perf_bars_q16 = ((harmony_base_bar + harmony_bar + 1u) << 16) - 1u;
+    perf_bars_rem = 0;
+    events_block(CTL);
+}
+
+static int harmony_owner_notes(const uint8_t *notes, uint32_t n)
+{
+    uint32_t i, j, hit = 0;
+    for (i = 0; i < NVOICE; i++) {
+        const voice_t *v = &trk[0].v[i];
+        if (!v->active || !v->gate) continue;
+        for (j = 0; j < n && v->note != notes[j]; j++) ;
+        if (j == n) return 0;
+        hit++;
+    }
+    return hit == n;
+}
+
+static int harmony_owner_midi_balanced(void)
+{
+    int count[128] = {0};
+    uint32_t q, n;
+    for (q = mo_r; q != mo_w; q++) {
+        uint32_t p = midi_out_q[q % MQ], st = (p >> 8) & 0xF0u;
+        n = (p >> 16) & 127u;
+        if (st == 0x90u && (p >> 24)) count[n]++;
+        if (st == 0x80u || (st == 0x90u && !(p >> 24))) count[n]--;
+        if (count[n] < 0) return 0;
+    }
+    for (n = 0; n < 128u; n++) if (count[n]) return 0;
+    return 1;
+}
+
+static int test_harmony_owner_lifecycle(void)
+{
+    static const uint8_t c60[] = {60, 64, 67}, f60[] = {65, 69, 72};
+    static const uint8_t f48[] = {53, 57, 60};
+    int bad = 0, ok;
+    uint32_t midi;
+    for (midi = 0; midi < 2u; midi++) {
+        harmony_owner_reset();
+        harmony_owner_key(7, 1);                   /* physical C4 */
+        harmony_owner_midi(0xB0, 120, 0);          /* hold the dead key across CC120 */
+        ok = harmony_owner_notes(0, 0);
+        if (midi) harmony_owner_midi(0x90, 62, 90);
+        else harmony_owner_key(9, 1);             /* D4 builds the same C BUS chord */
+        ok &= harmony_owner_notes(c60, 3);        /* no chord change may mask the suppression */
+        if (midi) harmony_owner_midi(0x80, 62, 0);
+        else harmony_owner_key(9, 0);
+        ok &= harmony_owner_notes(0, 0);          /* release while the dead key is still down */
+        harmony_owner_key(7, 0);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+        bad += check(midi ? "panic-muted panel key cannot suppress fresh MIDI input/release" :
+                            "panic-muted panel key cannot suppress fresh panel input/release", ok);
+    }
+    for (midi = 0; midi < 2u; midi++) {
+        harmony_owner_reset();
+        if (midi) {
+            harmony_owner_midi(0x90, 48, 90);
+            harmony_owner_midi(0x90, 72, 110);
+            harmony_owner_midi(0x80, 72, 0);
+        } else {
+            song.octave = -1; harmony_owner_key(7, 1);   /* C3, note 48 */
+            song.octave = 1; harmony_owner_key(19, 1);   /* C6, note 84 */
+            harmony_owner_key(19, 0);
+        }
+        harmony_owner_boundary();
+        ok = harmony_bar == 1u && harmony_owner_notes(f48, 3);
+        if (midi) harmony_owner_midi(0x80, 48, 0);
+        else harmony_owner_key(7, 0);
+        ok &= harmony_owner_notes(0, 0);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+        bad += check(midi ? "surviving MIDI BUS owner follows C->F and releases every old/new tone" :
+                            "surviving panel BUS owner follows C->F and releases every old/new tone", ok);
+    }
+    harmony_owner_reset();
+    harmony_owner_key(7, 1);
+    harmony_owner_boundary();
+    ok = harmony_bar == 1u && harmony_owner_notes(f60, 3);
+    harmony_owner_key(7, 0);
+    ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+    bad += check("single BUS key releases a changed chord through the input/transport path", ok);
+    usb.config = 0;
+    return bad;
+}
+
+/* Different +OCT owners share one pitch; retriggering the newest must retain the other's whole chord. */
+static int test_harmony_owner_overlap(void)
+{
+    static const uint8_t both_c[] = {36, 48, 52, 55, 60, 64, 67};
+    static const uint8_t low_c[] = {36, 48, 52, 55};
+    static const uint8_t high_f[] = {53, 65, 69, 72};
+    static const uint8_t both_cf[] = {36, 48, 52, 55, 53, 65, 69, 72};
+    static const uint8_t high_c[] = {48, 60, 64, 67};
+    uint32_t mode, low_first;
+    int bad = 0;
+    for (mode = 0; mode < 4u; mode++)
+        for (low_first = 0; low_first < 2u; low_first++) {
+            int low_midi = mode == 1u || mode == 3u;
+            int high_midi = mode == 1u || mode == 2u;
+            int ok;
+            harmony_owner_reset();
+            trk[0].p[P_VOIC] = VC_BASS;
+            song.octave = -1;
+            if (low_midi) harmony_owner_midi(0x90, 48, 90);
+            else harmony_owner_key(7, 1);
+            if (high_midi) harmony_owner_midi(0x90, 60, 110);
+            else harmony_owner_key(19, 1);
+            ok = harmony_owner_notes(both_c, NELEM(both_c));
+            harmony_owner_boundary();
+            ok &= harmony_bar == 1u && harmony_owner_notes(both_cf, NELEM(both_cf));
+            if (low_first) {
+                if (low_midi) harmony_owner_midi(0x80, 48, 0);
+                else harmony_owner_key(7, 0);
+                ok &= harmony_owner_notes(high_f, NELEM(high_f));
+            } else {
+                if (high_midi) harmony_owner_midi(0x80, 60, 0);
+                else harmony_owner_key(19, 0);
+                ok &= harmony_owner_notes(low_c, NELEM(low_c));
+            }
+            harmony_owner_boundary();
+            ok &= harmony_bar == 2u && harmony_owner_notes(low_first ? high_c : low_c, 4);
+            if (low_first) {
+                if (high_midi) harmony_owner_midi(0x80, 60, 0);
+                else harmony_owner_key(19, 0);
+            } else {
+                if (low_midi) harmony_owner_midi(0x80, 48, 0);
+                else harmony_owner_key(7, 0);
+            }
+            ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+            harmony_owner_boundary();
+            ok &= harmony_owner_notes(0, 0);
+            printf("ui: overlap source %u, %s released first: ", mode, low_first ? "low" : "high");
+            bad += check("BUS retrigger preserves shared pitch and both release identities", ok);
+        }
+    for (low_first = 0; low_first < 2u; low_first++) {
+        int ok;
+        harmony_owner_reset();
+        trk[0].p[P_VOIC] = VC_BASS;
+        harmony_owner_midi(0xB0, 64, 127);
+        harmony_owner_midi(0x90, 48, 90);
+        harmony_owner_midi(0x90, 48, 0);          /* velocity-zero release, retained by sustain */
+        harmony_owner_midi(0x90, 60, 110);
+        ok = harmony_owner_notes(both_c, NELEM(both_c));
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(both_cf, NELEM(both_cf));
+        if (low_first) {
+            harmony_owner_midi(0xB0, 64, 0);
+            ok &= harmony_owner_notes(high_f, NELEM(high_f));
+            harmony_owner_midi(0x90, 60, 0);
+        } else {
+            harmony_owner_midi(0x80, 60, 0);
+            ok &= harmony_owner_notes(both_cf, NELEM(both_cf));
+            harmony_owner_midi(0xB0, 64, 0);
+        }
+        ok &= harmony_owner_notes(0, 0);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+        bad += check(low_first ? "BUS overlap: pedal-up preserves the held MIDI owner until velocity-zero release" :
+                                "BUS overlap: sustained owners end together on pedal-up", ok);
+    }
+    usb.config = 0;
+    return bad;
+}
+
+/* A newer BUS chord may share a pitch with a previously latched voicing. Moving the newer
+ * chord must preserve the older voicing's ownership, across every panel/MIDI release path. */
+static int test_harmony_latch_overlap(void)
+{
+    static const uint8_t before[] = {36,48,52,55,60,64,67};
+    static const uint8_t after[] = {36,48,52,55,53,65,69,72};
+    int bad = 0;
+    for (uint32_t mode = 0; mode < 4u; mode++) {
+        int low_midi = mode == 1u || mode == 3u, high_midi = mode == 1u || mode == 2u;
+        for (uint32_t release = 0; release < 3u; release++) {
+            int ok;
+            harmony_owner_reset();
+            trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+            if (low_midi) harmony_owner_midi(0x90,48,90); else harmony_owner_key(7,1);
+            if (release != 1u) {
+                if (low_midi) harmony_owner_midi(0x80,48,0); else harmony_owner_key(7,0);
+            }
+            if (high_midi) harmony_owner_midi(0x90,60,110); else harmony_owner_key(19,1);
+            if (release != 2u) {
+                if (high_midi) harmony_owner_midi(0x80,60,0); else harmony_owner_key(19,0);
+            }
+            ok = harmony_owner_notes(before,NELEM(before));
+            harmony_owner_boundary();
+            ok &= harmony_owner_notes(after,NELEM(after));
+            if (release == 1u) {
+                if (low_midi) harmony_owner_midi(0x80,48,0); else harmony_owner_key(7,0);
+            }
+            if (release == 2u) {
+                if (high_midi) harmony_owner_midi(0x80,60,0); else harmony_owner_key(19,0);
+            }
+            ok &= harmony_owner_notes(after,NELEM(after));
+            for (uint32_t bar = 0; bar < 4u; bar++) {
+                harmony_owner_boundary();
+                ok &= harmony_owner_notes(bar & 1u ? after : before, bar & 1u ? NELEM(after) : NELEM(before));
+            }
+            latch_req = 1u; events_block(CTL);
+            ok &= harmony_owner_notes(0,0) && !lat_any(lat_stay[0]);
+            harmony_owner_boundary();
+            ok &= harmony_owner_notes(0,0) && harmony_owner_midi_balanced();
+            bad += check("LATCH BUS overlap: both released / older held / newer held preserve union and clear",ok);
+        }
+    }
+    for (uint32_t finish = 0; finish < 4u; finish++) {
+        int ok;
+        harmony_owner_reset();
+        trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+        harmony_owner_key(7,1);                  /* keep the older panel owner down */
+        harmony_owner_midi(0x90,60,110); harmony_owner_midi(0x80,60,0);
+        harmony_owner_boundary();
+        if (finish == 0u) harmony_owner_midi(0xB0,120,0);
+        else if (finish == 1u) {
+            harmony_owner_key(7,0);             /* CC123 honours panel keys and sustain; now no input is held */
+            harmony_owner_midi(0xB0,123,0);
+        }
+        else if (finish == 2u) seq_stop();
+        else { trk[0].p[P_LATCH] = LT_OFF; events_block(CTL); }
+        harmony_owner_key(7,0);
+        ok = harmony_owner_notes(0,0) && !lat_any(lat_stay[0]);
+        harmony_owner_boundary();
+        ok &= harmony_owner_notes(0,0) && harmony_owner_midi_balanced();
+        bad += check("LATCH BUS cleanup: CC120 / CC123 / STOP / LATCH OFF and old panel release stay silent",ok);
+    }
+    usb.config = 0;
+    return bad;
+}
+
+/* LATCH STACK + CHRD BUS: two overlapping latched chords (low C [36 48 52 55], high C [48 60 64 67]; 48 is shared). Pressing one of
+ * them again toggles only that chord off (STACK): the pitches the other chord owns stay, the shared 48 included, and the newest
+ * chord goes on following HARMONY; an older one stays where it is. Every order, every target, panel / MIDI / mixed. */
+static void latch_toggle_press(int midi, uint32_t key, uint32_t note, int down)
+{
+    if (midi) harmony_owner_midi(down ? 0x90 : 0x80, note, down ? 90 : 0);
+    else harmony_owner_key(key, down);
+}
+static int test_harmony_latch_toggle(void)
+{
+    static const uint8_t low_c[] = {36,48,52,55}, high_c[] = {48,60,64,67};
+    static const uint8_t low_f[] = {41,53,57,60}, high_f[] = {53,65,69,72};
+    int bad = 0;
+    for (uint32_t src = 0; src < 4u; src++)                 /* how the two chords are latched: panel/panel, MIDI/MIDI, high MIDI, low MIDI */
+        for (uint32_t first_low = 0; first_low < 2u; first_low++)
+            for (uint32_t target_first = 0; target_first < 2u; target_first++)
+                for (uint32_t again_midi = 0; again_midi < 2u; again_midi++) {
+                    int low_midi = src == 1u || src == 3u, high_midi = src == 1u || src == 2u, ok, st[7];
+                    /* the chords in latch order, and the one pressed again */
+                    const uint8_t *a = first_low ? low_c : high_c, *b = first_low ? high_c : low_c;
+                    const uint8_t *survivor = target_first ? b : a;
+                    const uint8_t *moved = target_first ? (first_low ? high_f : low_f) : 0;   /* the newest one follows C->F, the older one stays */
+                    uint32_t an = 4, bn = 4, rep_key = target_first ? (first_low ? 7u : 19u) : (first_low ? 19u : 7u), rep_note = rep_key == 7u ? 48u : 60u;
+                    harmony_owner_reset();
+                    trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+                    latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 1);
+                    latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 0);
+                    latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 1);
+                    latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 0);
+                    {   static const uint8_t both[] = {36,48,52,55,60,64,67};
+                        st[0] = harmony_owner_notes(both, NELEM(both)); }
+                    (void)a; (void)b; (void)an; (void)bn;
+                    latch_toggle_press(again_midi, rep_key, rep_note, 1);          /* the chord again: its press ends it */
+                    st[1] = harmony_owner_notes(survivor, 4);                        /* the other chord keeps all four, 48 included */
+                    latch_toggle_press(again_midi, rep_key, rep_note, 0);          /* (its release does nothing) */
+                    st[2] = harmony_owner_notes(survivor, 4);
+                    harmony_owner_boundary();                                      /* C -> F */
+                    st[3] = harmony_bar == 1u && harmony_owner_notes(moved ? moved : survivor, 4);
+                    harmony_owner_boundary();                                      /* F -> C: a further boundary */
+                    st[4] = harmony_bar == 2u && harmony_owner_notes(survivor, 4);
+                    latch_req = 1u; events_block(CTL);                             /* the release gesture: silence */
+                    st[5] = harmony_owner_notes(0, 0) && !lat_any(lat_stay[0]) && !lat_any(lat_bus_other[0]);
+                    harmony_owner_boundary();
+                    st[6] = harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+                    ok = st[0] && st[1] && st[2] && st[3] && st[4] && st[5] && st[6];
+                    printf("ui: LATCH BUS toggle [stages %d%d%d%d%d%d%d] src %u first %s again %s %s: ", st[0], st[1], st[2], st[3], st[4], st[5], st[6], src, first_low ? "low" : "high", target_first ? "first" : "second", again_midi ? "MIDI" : "panel");
+                    bad += check("LATCH BUS toggle: the other chord keeps its pitches (shared 48), follows HARMONY if newest, ends in silence", ok);
+                }
+    usb.config = 0;
+    return bad;
+}
+
+/* Review of f2135f0: the SURVIVING chord is still held (key down, or MIDI note down, or sustained) while the other, latched one is pressed
+ * again. Only the target ends; the shared 48 stays with the held chord; the held chord goes on following HARMONY once it is let go; every
+ * release order ends in silence with balanced MIDI. low C [36 48 52 55] is latched first, high C [48 60 64 67] is held. */
+static int test_harmony_latch_toggle_held(void)
+{
+    static const uint8_t high_c[] = {48,60,64,67}, high_f[] = {53,65,69,72};
+    int bad = 0;
+    /* src: low latched by panel/MIDI x high held by panel/MIDI/sustained-MIDI (6 kinds); again: the re-press of the low root by panel/MIDI;
+     * order: the high chord is let go before / after the re-press key */
+    for (uint32_t low_midi = 0; low_midi < 2u; low_midi++)
+        for (uint32_t hold = 0; hold < 3u; hold++)
+            for (uint32_t again_midi = 0; again_midi < 2u; again_midi++)
+                for (uint32_t high_first = 0; high_first < 2u; high_first++) {
+                    int ok, st[7], hold_midi = hold != 0u;
+                    harmony_owner_reset();
+                    trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+                    latch_toggle_press(low_midi, 7u, 48u, 1);
+                    latch_toggle_press(low_midi, 7u, 48u, 0);                           /* the low chord, latched */
+                    if (hold == 2u) harmony_owner_midi(0xB0, 64, 127);                  /* sustain pedal down: the high chord is held by it after its note-off */
+                    latch_toggle_press(hold_midi, 19u, 60u, 1);                         /* the high chord, held (hold 2: and then let go, sustained) */
+                    if (hold == 2u) latch_toggle_press(1, 19u, 60u, 0);
+                    { static const uint8_t both[] = {36,48,52,55,60,64,67}; st[0] = harmony_owner_notes(both, NELEM(both)); }
+                    latch_toggle_press(again_midi, 7u, 48u, 1);                         /* the low root again: only the low chord ends */
+                    st[1] = harmony_owner_notes(high_c, 4);                             /* the held chord keeps all four, 48 included */
+                    if (!high_first) latch_toggle_press(again_midi, 7u, 48u, 0);
+                    if (hold == 2u) harmony_owner_midi(0xB0, 64, 0);                    /* pedal up: the sustained chord is released by its note-off history */
+                    else latch_toggle_press(hold_midi, 19u, 60u, 0);                    /* the high chord let go: it is latched now */
+                    if (high_first) latch_toggle_press(again_midi, 7u, 48u, 0);
+                    st[2] = harmony_owner_notes(high_c, 4);                             /* the survivor, latched, with 48 */
+                    harmony_owner_boundary();                                           /* C -> F: the survivor is the newest chord, it follows */
+                    st[3] = harmony_bar == 1u && harmony_owner_notes(high_f, 4);
+                    harmony_owner_boundary();                                           /* F -> C */
+                    st[4] = harmony_bar == 2u && harmony_owner_notes(high_c, 4);
+                    latch_req = 1u; events_block(CTL);
+                    st[5] = harmony_owner_notes(0, 0) && !lat_any(lat_stay[0]) && !lat_any(lat_bus_other[0]);
+                    harmony_owner_boundary();
+                    st[6] = harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+                    ok = st[0] && st[1] && st[2] && st[3] && st[4] && st[5] && st[6];
+                    printf("ui: LATCH BUS toggle with the survivor held [stages %d%d%d%d%d%d%d] low %s, high %s, again %s, %s first: ", st[0], st[1], st[2], st[3], st[4], st[5], st[6],
+                           low_midi ? "MIDI" : "panel", hold == 0u ? "panel" : hold == 1u ? "MIDI" : "MIDI+sustain", again_midi ? "MIDI" : "panel", high_first ? "high" : "re-press");
+                    bad += check("LATCH BUS toggle while the other chord is held: only the target ends, shared 48 stays, the held chord follows, silence at the end", ok);
+                }
+    usb.config = 0;
+    return bad;
+}
+
+/* The chord pressed again after its toggle starts a fresh latched chord: both sound again, the fresh one is the newest and follows
+ * HARMONY, the other stays; then the release gesture ends everything. */
+static int test_harmony_latch_toggle_relatch(void)
+{
+    static const uint8_t low_c[] = {36,48,52,55}, high_c[] = {48,60,64,67};
+    static const uint8_t low_f[] = {41,53,57,60}, high_f[] = {53,65,69,72};
+    int bad = 0;
+    for (uint32_t src = 0; src < 4u; src++)
+        for (uint32_t first_low = 0; first_low < 2u; first_low++)
+            for (uint32_t target_first = 0; target_first < 2u; target_first++) {
+                int low_midi = src == 1u || src == 3u, high_midi = src == 1u || src == 2u, ok = 1;
+                int tlow = target_first ? first_low : !first_low;        /* the target chord is the low one */
+                const uint8_t *survivor = tlow ? high_c : low_c, *moved = tlow ? low_f : high_f;
+                uint8_t want[8];
+                uint32_t n = 0;
+                harmony_owner_reset();
+                trk[0].p[P_VOIC] = VC_BASS; trk[0].p[P_LATCH] = LT_STACK; song.octave = -1;
+                latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 1);
+                latch_toggle_press(first_low ? low_midi : high_midi, first_low ? 7u : 19u, first_low ? 48u : 60u, 0);
+                latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 1);
+                latch_toggle_press(first_low ? high_midi : low_midi, first_low ? 19u : 7u, first_low ? 60u : 48u, 0);
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 1);       /* toggle the target off */
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 0);
+                ok &= harmony_owner_notes(survivor, 4);
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 1);       /* and again: a fresh chord */
+                latch_toggle_press(tlow ? low_midi : high_midi, tlow ? 7u : 19u, tlow ? 48u : 60u, 0);
+                {   static const uint8_t both[] = {36,48,52,55,60,64,67};
+                    ok &= harmony_owner_notes(both, NELEM(both)); }
+                harmony_owner_boundary();                                    /* C -> F: the fresh chord moves, the other stays */
+                for (uint32_t q = 0; q < 4u; q++) {
+                    uint32_t d;
+                    for (d = 0; d < n && want[d] != survivor[q]; d++) ;
+                    if (d == n) want[n++] = survivor[q];
+                }
+                for (uint32_t q = 0; q < 4u; q++) {
+                    uint32_t d;
+                    for (d = 0; d < n && want[d] != moved[q]; d++) ;
+                    if (d == n) want[n++] = moved[q];
+                }
+                ok &= harmony_bar == 1u && harmony_owner_notes(want, n);
+                latch_req = 1u; events_block(CTL);
+                ok &= harmony_owner_notes(0, 0) && !lat_any(lat_stay[0]) && !lat_any(lat_bus_other[0]);
+                harmony_owner_boundary();
+                ok &= harmony_owner_notes(0, 0) && harmony_owner_midi_balanced();
+                printf("ui: LATCH BUS toggle then fresh press src %u first %s target %s: ", src, first_low ? "low" : "high", target_first ? "first" : "second");
+                bad += check("LATCH BUS toggle, then the chord again: a fresh newest chord, the other stays, silence at the end", ok);
+            }
+    usb.config = 0;
+    return bad;
+}
+
+/* A LATCH-held chord without CHRD BUS has no chord_last bus path: HARMONY/LINK retrigger must sound the latched
+ * notes themselves. */
+static int test_latch_retrigger(void)
+{
+    int bad = 0, ok = 1;
+    track_t *t = &trk[0];
+    uint32_t i, n, hits = 0;
+    uint16_t mask;
+    static const uint8_t N[3] = {60, 64, 67};
+    ui_power_on();
+    t->p[P_CHRD] = CH_OFF;
+    t->p[P_AMODE] = 0;
+    t->p[P_LATCH] = LT_NEW;
+    t->p[P_VOICE] = V_POLY;
+    memset(lat_stay[0], 0, sizeof lat_stay[0]);
+    for (i = 0; i < 3u; i++) {
+        lat_put(lat_stay[0], N[i], 1);
+        lat_vel[0][N[i]] = (uint8_t)(24u + 24u * i);
+    }
+    link_retrigger(0);
+    for (i = 0; i < NVOICE; i++)
+        if (t->v[i].active && t->v[i].gate)
+            for (n = 0; n < 3u; n++)
+                if (t->v[i].note == N[n]) {
+                    hits++;
+                    ok &= t->v[i].vel == 24u + 24u * n;
+                    break;
+                }
+    ok &= hits == 3u;
+    latch_free(t);
+    bad += check("LATCH chord retrigger without CHRD BUS sounds all three latched notes with their velocities", ok);
+    ui_power_on();
+    /* HARMONY's scale mask is absolute; a pentatonic scale must still yield a third, and CHRD BUS retrigger must
+     * rebuild the bus chord instead of replaying the old root/fifth. */
+    harmony_on = 1;
+    trk[0].p[P_ROOT] = 9; trk[0].p[P_SCALE] = 6;       /* root A, minor pentatonic */
+    hroot_set(0, 9); hdur_set(0, 0);
+    mask = harmony_mask_root(0);
+    ok = ((mask >> 9) & 1u) && (((mask >> 0) & 1u) || ((mask >> 1) & 1u)) && ((mask >> 4) & 1u);
+    trk[0].p[P_CHRD] = CH_BUS; trk[0].p[P_VOICE] = V_POLY;
+    hroot_set(0, 0); harmony_bar = 0;
+    {
+        uint8_t out[CHORD_MAX]; int32_t cr; uint16_t cm;
+        chord_build(&trk[0], 60, out);
+        test_bus_owner();
+        chord_make(&trk[0], 60, out, &cr, &cm);
+        hroot_set(0, 4);                               /* E: a new bus chord */
+        link_retrigger(0);
+        ok &= chord_last[0].mask != cm && (chord_last[0].mask & (1u << ((chord_last[0].root + 3u) % 12u)) ||
+                                           (chord_last[0].mask & (1u << ((chord_last[0].root + 4u) % 12u))));
+    }
+    bad += check("HARMONY mask keeps a third for pentatonic/nonzero roots; CHRD BUS retrigger rebuilds it", ok);
+    /* Repeated four-bar cycles must not walk the bus chord up an octave each time: retain the input key. */
+    ui_power_on(); harmony_on = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS; trk[0].p[P_VOICE] = V_POLY;
+    for (i = 0; i < 4u; i++) { hdur_set(i, 0); hroot_set(i, 0); }
+    hroot_set(1, 7);                                   /* C then G */
+    harmony_bar = 0;
+    {
+        uint8_t out[CHORD_MAX]; int32_t cr; uint16_t cm;
+        uint8_t base;
+        chord_build(&trk[0], 60, out);
+        test_bus_owner();
+        base = chord_last[0].root;
+        ok = 1;
+        for (i = 0; i < 32u; i++) {
+            harmony_bar = (uint8_t)(i & 1u);
+            link_retrigger(0);
+            ok &= chord_last[0].root >= 48u && chord_last[0].root <= 72u && chord_last[0].key == 60u;
+        }
+        ok &= chord_last[0].root <= base + 12u && chord_last[0].root + 12u >= base;
+    }
+    bad += check("CHRD BUS retriggers stay in the input key's octave over repeated cycles", ok);
+    {
+        uint32_t g = 0;
+        seq_stop();
+        for (i = 0; i < NVOICE; i++)
+            if (trk[0].v[i].active && trk[0].v[i].gate) g++;
+        ok = g == 0u;
+    }
+    bad += check("STOP releases a retriggered CHRD BUS chord (no hanging tones)", ok);
+    /* A normal key-up must release the rebuilt bus chord, not only its original notes. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS; trk[0].p[P_VOICE] = V_POLY;
+    hroot_set(0, 0); hroot_set(1, 0); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60;
+    key_on(0, &trk[0]);
+    link_retrigger(0);
+    key_off(0, &trk[0]);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);                              /* released: must not resurrect the cached chord */
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    bad += check("key-up releases a rebuilt CHRD BUS chord and no later harmony step revives it", ok);
+    /* A snapped MIDI note must keep the original MIDI key as its release identity. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    hroot_set(0, 0); hdur_set(0, 0); harmony_bar = 0;
+    midi_play(&trk[0], 0, 61, 100);
+    ok = mchord[0].id == 1u && mchord[0].src == 61u && mchord[0].n == 1u && mchord[0].note[0] == 60u;
+    if (mchord[0].id)
+        input_off(&trk[0], mchord[0].note[0]);
+    bad += check("snapped MIDI keeps its original release identity", ok);
+    /* A mixed held/latched mono stack keeps the physical newer note on top. */
+    ui_power_on();
+    trk[0].p[P_VOICE] = V_MONO; trk[0].p[P_PRIO] = 0; trk[0].p[P_CHRD] = CH_OFF;
+    trk_note_on(&trk[0], 60, 100); trk_note_on(&trk[0], 67, 100);
+    memset(lat_stay[0], 0, sizeof lat_stay[0]);
+    lat_put(lat_stay[0], 60, 1); lat_vel[0][60] = 100;
+    link_retrigger(0);
+    ok = trk[0].nmono == 2u && trk[0].mono_stack[0] == 60u && trk[0].mono_stack[1] == 67u &&
+         trk[0].mono_note == 67u;
+    trk_all_off(&trk[0]);
+    bad += check("mixed latched/held mono retrigger keeps LAST priority", ok);
+    /* CC120 must clear the rebuilt-chord eligibility, even when the later NoteOff has no mapping. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    midi_note_event(0, 60, 100);
+    midi_control(0, 120, 0);                       /* All Sound Off */
+    midi_note_event(0, 60, 0);                     /* no mapping left; must not hurt */
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    bad += check("CC120 leaves no retriggerable cached chord", ok);
+    /* A panel key held across CC120 must not re-arm the cached chord either. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60;
+    key_on(0, &trk[0]);
+    midi_control(0, 120, 0);
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);
+    ok = 1;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate)
+            ok = 0;
+    kb_note[1] = 60;                                /* a fresh key must sound despite the dead owner */
+    key_on(1, &trk[0]);
+    {
+        uint32_t hit = 0;
+        for (i = 0; i < NVOICE; i++)
+            if (trk[0].v[i].active && trk[0].v[i].gate) hit++;
+        ok &= hit > 0u;
+    }
+    key_off(1, &trk[0]);
+    key_off(0, &trk[0]);
+    bad += check("panel key held across CC120 does not block a fresh press", ok);
+    /* Releasing the newest of two octave-separated owners must not revive its cached chord. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 48; kb_note[1] = 72;
+    key_on(0, &trk[0]);
+    key_on(1, &trk[0]);
+    key_off(1, &trk[0]);                           /* leave the low owner */
+    hroot_set(0, 5); harmony_bar = 1;
+    link_retrigger(0);
+    ok = 1;
+    {
+        uint32_t hit = 0, badnote = 0;
+        for (i = 0; i < NVOICE; i++)
+            if (trk[0].v[i].active && trk[0].v[i].gate) {
+                hit++;
+                if (!((harmony_mask(&trk[0]) >> (trk[0].v[i].note % 12u)) & 1u) || trk[0].v[i].note >= 60)
+                    badnote = 1;
+            }
+        ok = hit > 0u && !badnote;                  /* low owner now follows F */
+    }
+    key_off(0, &trk[0]);
+    bad += check("surviving low owner follows the new harmony chord", ok);
+    /* MIDI OUT is a separate ownership list: a retrigger must not change which notes key-up sends off. */
+    ui_power_on(); usb.config = 1;
+    harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60;
+    {
+        uint32_t start = mo_w, on[16], off[16], non = 0, noff = 0;
+        key_on(0, &trk[0]);
+        hroot_set(0, 5); harmony_bar = 1;
+        link_retrigger(0);
+        key_off(0, &trk[0]);
+        for (i = start; i != mo_w; i++) {
+            uint32_t pk = midi_out_q[i % MQ];
+            uint32_t st = (pk >> 8) & 0xF0u, nt = (pk >> 16) & 0x7Fu;
+            if (st == 0x90u && non < 16u) on[non++] = nt;
+            if (st == 0x80u && noff < 16u) off[noff++] = nt;
+        }
+        ok = 1;
+        for (i = 0; i < non; i++) {
+            uint32_t j;
+            for (j = 0; j < noff && off[j] != on[i]; j++)
+                ;
+            if (j == noff) ok = 0;
+        }
+        ok &= non > 0u && noff >= non;
+    }
+    bad += check("MIDI OUT retrigger keeps every NoteOn matched by a NoteOff", ok);
+    /* Overlapping keys: releasing the first must not send NoteOffs still owned by the second. */
+    ui_power_on(); usb.config = 1;
+    harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_BUS;
+    hroot_set(0, 0); hroot_set(1, 5); hdur_set(0, 0); hdur_set(1, 0); harmony_bar = 0;
+    kb_vel = 100; kb_note[0] = 60; kb_note[1] = 60;
+    {
+        uint32_t start = mo_w, off0 = 0, off1 = 0;
+        key_on(0, &trk[0]);
+        key_on(1, &trk[0]);
+        hroot_set(0, 5); harmony_bar = 1;
+        link_retrigger(0);
+        key_off(0, &trk[0]);
+        for (i = start; i != mo_w; i++)
+            if (((midi_out_q[i % MQ] >> 8) & 0xF0u) == 0x80u)
+                off0++;
+        key_off(1, &trk[0]);
+        for (i = start; i != mo_w; i++)
+            if (((midi_out_q[i % MQ] >> 8) & 0xF0u) == 0x80u)
+                off1++;
+        ok = off0 == 0u && off1 > 0u;
+    }
+    bad += check("overlapping keys do not release outgoing notes early", ok);
+    usb.config = 0;
+    /* A full mchord table must not write past its end for a snapped MIDI note. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    hroot_set(0, 0); hdur_set(0, 0); harmony_bar = 0;
+    for (i = 0; i < MCHORD_N; i++) {
+        mchord[i].id = 1; mchord[i].n = 1; mchord[i].src = 60; mchord[i].note[0] = 60;
+    }
+    midi_play(&trk[0], 0, 61, 100);                 /* snapped to 60, but no mapping slot: play original 61 */
+    ok = mchord[MCHORD_N - 1].id == 1u && mchord[MCHORD_N - 1].src == 60u;
+    input_off(&trk[0], 61);
+    bad += check("full mchord table falls back without an out-of-bounds write", ok);
+    /* A live key follows HARMONY on a follower track, too. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF; trk[0].p[P_VOICE] = V_POLY;
+    hroot_set(0, 0); hdur_set(0, 0); harmony_bar = 0; kb_vel = 100;
+    kb_note[0] = 61;                                /* C# -> nearest C-major bus tone */
+    key_on(0, &trk[0]);
+    ok = 0;
+    for (i = 0; i < NVOICE; i++)
+        if (trk[0].v[i].active && trk[0].v[i].gate &&
+            (trk[0].v[i].note == 60u || trk[0].v[i].note == 64u || trk[0].v[i].note == 67u))
+            ok = 1;
+    key_off(0, &trk[0]);
+    bad += check("live key snaps to a HARMONY chord tone", ok);
+    /* TURING must use the harmony chord for every arp step, not only every fourth one. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    trk[0].p[P_AMODE] = AM_TURING; trk[0].p[P_APROB] = 127;
+    trk[0].p[P_AOCT] = 1; trk[0].p[P_AGATE] = 64;
+    hroot_set(0, 2); hdur_set(0, 0); harmony_bar = 0;   /* D: snapped notes are not MIDI 0 */
+    trk[0].nheld = 3; trk[0].held[0] = 62; trk[0].held[1] = 66; trk[0].held[2] = 69;
+    memset(held_key[0], 0, sizeof held_key[0]);
+    memset(held_dt[0], 0, sizeof held_dt[0]);
+    trk[0].arp_idx = 0; trk[0].arp_pos = 0xFFFFFFF;
+    arp_fire(&trk[0], div_samples(2));
+    ok = trk[0].arp_note && ((harmony_mask(&trk[0]) >> (trk[0].arp_note % 12u)) & 1u);
+    arp_off(&trk[0]);
+    bad += check("TURING arp notes follow HARMONY on every step", ok);
+    /* AM_CHORD emits snapped chord tones too. */
+    ui_power_on(); harmony_on = 1; harmony_follow[0] = 1;
+    trk[0].p[P_ROOT] = 0; trk[0].p[P_SCALE] = 1; trk[0].p[P_CHRD] = CH_OFF;
+    trk[0].p[P_AMODE] = AM_CHORD; trk[0].p[P_APROB] = 127;
+    trk[0].p[P_AOCT] = 1; trk[0].p[P_AGATE] = 64;
+    hroot_set(0, 5); hdur_set(0, 0); harmony_bar = 0; /* F bus */
+    trk[0].nheld = 3; trk[0].held[0] = 60; trk[0].held[1] = 64; trk[0].held[2] = 67;
+    memset(held_key[0], 0, sizeof held_key[0]);
+    memset(held_dt[0], 0, sizeof held_dt[0]);
+    trk[0].arp_idx = 0;
+    arp_fire(&trk[0], div_samples(2));
+    ok = trk[0].arp_note != 0u || trk[0].arp_ch[0] != 0u;
+    for (i = 0; i < 3u; i++) {
+        uint32_t nt = i == 0u ? trk[0].arp_note : trk[0].arp_ch[i - 1u];
+        if (nt)
+            ok &= ((harmony_mask(&trk[0]) >> (nt % 12u)) & 1u);
+    }
+    arp_off(&trk[0]);
+    bad += check("ARP CHORD emits HARMONY chord tones", ok);
+    /* A one-bar rate realigns at the bar; 2BAR/4BAR keep their own phase. */
+    ui_power_on();
+    arp_bar_last = 0; harmony_phase = 0; perf_bars_q16 = 1u << 16;
+    trk[0].p[P_ARATE] = 2; trk[0].arp_pos = 123; trk[0].arp_idx = 7;
+    arp_bar_sync();
+    ok = trk[0].arp_pos == 0xFFFFFFFu && trk[0].arp_idx == 0xFFFFFFFFu;
+    trk[0].p[P_ARATE] = 8; trk[0].arp_pos = 123; trk[0].arp_idx = 7;
+    perf_bars_q16 = 2u << 16; arp_bar_sync();
+    ok &= trk[0].arp_pos == 123u && trk[0].arp_idx == 7u;
+    bad += check("ARP bar sync realigns <=1-bar rates and leaves 2BAR/4BAR alone", ok);
     ui_power_on();
     return bad;
 }
@@ -6696,30 +7489,253 @@ static int test_fun11_readonly_probe(void)
     return bad;
 }
 
+/* SELECT must walk every editable SCL row in both directions, including the
+ * always-accessible Harmony switch. Drive the panel path, including bursts. */
+static uint32_t scl_test_row(void)
+{
+    switch (cur_page()->graph) {
+    case GR_SCALE: return 0;
+    case GR_CHORD: return 1;
+    case GR_LINK: return 2u + link_setup_row;
+    case GR_HARMONY: return 4u + harmony_edit_dur;
+    default: return 99u;
+    }
+}
+static void scl_test_start(uint32_t on, uint32_t row)
+{
+    ui_power_on();
+    ui_prefs2 = (uint8_t)((ui_prefs2 & ~(PREF_SEL_HI >> 16)) | (PREF_SEL_PAGE >> 16));
+    harmony_on = (uint8_t)on;
+    go_page(row < 1u ? GR_SCALE : row < 2u ? GR_CHORD : row < 4u ? GR_LINK : GR_HARMONY);
+    link_setup_row = row == 3u;
+    harmony_edit_dur = row == 5u;
+    frame();
+}
+static int test_scl_select_rows(void)
+{
+    int bad = 0;
+    for (uint32_t on = 0; on < 2u; on++) {
+        uint32_t last = on ? 5u : 3u;
+        int ok = 1;
+        for (uint32_t row = 0; row <= last; row++) {
+            for (int32_t dir = -1; dir <= 1; dir += 2) {
+                scl_test_start(on, row);
+                turn(EN_SELECT, dir);
+                ok &= scl_test_row() == (uint32_t)clamp((int32_t)row + dir, 0, (int32_t)last);
+                ok &= !ui.home && !ui.lock && harmony_on == on;
+            }
+        }
+        bad += check(on ? "SCL SELECT ON: every adjacent row is reachable both ways" :
+                          "SCL SELECT OFF: Harmony Setup is reachable both ways", ok);
+        ok = 1;
+        for (uint32_t row = 0; row <= last; row++) {
+            for (int32_t delta = -7; delta <= 7; delta++) {
+                scl_test_start(on, row);
+                turn(EN_SELECT, delta);
+                ok &= scl_test_row() == (uint32_t)clamp((int32_t)row + delta, 0, (int32_t)last);
+                ok &= harmony_on == on && song.g[G_BPM] == 120;
+            }
+        }
+        bad += check(on ? "SCL SELECT ON: bursts consume every detent and keep endpoints" :
+                          "SCL SELECT OFF: bursts stop on Setup without changing the bus", ok);
+    }
+    scl_test_start(0, 0);
+    turn(EN_SELECT, 3);
+    {
+        int ok = scl_test_row() == 3u && !harmony_on;
+        uint8_t src = link_src[0], root = hroot_get(0), dur = hdur_get(0);
+        turn(EN_K1, 1);
+        ok &= harmony_on && link_src[0] == src;
+        turn(EN_SELECT, 1);
+        ok &= scl_test_row() == 4u;
+        turn(EN_K1, 1);
+        ok &= hroot_get(0) != root && hdur_get(0) == dur;
+        root = hroot_get(0);
+        turn(EN_SELECT, 1);
+        ok &= scl_test_row() == 5u;
+        turn(EN_K1, 1);
+        ok &= hdur_get(0) != dur && hroot_get(0) == root;
+        turn(EN_SELECT, -2);
+        ok &= scl_test_row() == 3u;
+        turn(EN_K1, -1);
+        ok &= !harmony_on && link_src[0] == src;
+        turn(EN_SELECT, -1);
+        ok &= scl_test_row() == 2u;
+        turn(EN_K1, 1);
+        ok &= link_src[0] != src && !harmony_on;
+        bad += check("SCL SELECT: OFF -> Setup -> ON -> roots -> durations -> Setup -> OFF; correct K1 targets", ok);
+    }
+    /* A bus switched off remotely while on the editor must not trap SELECT. */
+    for (uint32_t row = 4; row <= 5; row++) {
+        scl_test_start(1, row);
+        harmony_on = 0;
+        turn(EN_SELECT, -1);
+        bad += check("SCL SELECT: hidden Harmony editor returns to Setup", scl_test_row() == 3u && !harmony_on);
+    }
+    ui_power_on();
+    return bad;
+}
+
 /* SCL's pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL. A short tap after a knob turn must advance the page,
  * and the page that lands must still edit its own values. */
 static int test_scl_page_tap(void)
 {
     static const uint8_t order[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
-    int bad, ok = 1;
+    int bad = 0, ok = 1;
     ui_power_on();
+    ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16);
+    harmony_on = 1;
     go_page(GR_SCALE);
-    for (uint32_t i = 0; i < 4u; i++) {
-        uint32_t g = cur_page()->graph;
-        ok &= g == order[i];
-        if (g == GR_SCALE) {
-            int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
-        } else if (g == GR_CHORD) {
-            int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
-        } else if (g == GR_LINK) {
-            uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
-        } else if (g == GR_HARMONY) {
-            uint8_t b = hroot_get(0); turn(EN_K1, 1); ok &= hroot_get(0) != b;
-        }
-        press(B_SCL);
-    }
+    turn(EN_SELECT, 1);
+    ok = cur_page()->graph == GR_CHORD;
+    turn(EN_SELECT, -1);
     ok &= cur_page()->graph == GR_SCALE;
-    bad = check("SCL pages cycle SCL -> CHORD -> LINK -> HARMONY -> SCL, each row edits (no layer lock)", ok);
+    bad += check("SELECT pages SCL -> CHORD -> SCL", ok);
+    /* real row bookkeeping: HOME/another family must recall the last SELECT row */
+    ui_power_on(); ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16); go_page(GR_SCALE); frames(4);
+    press(B_SCL);
+    ok = cur_page()->graph == GR_CHORD;
+    press(B_HOME); frames(4); press(B_SCL);
+    ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    {
+        int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
+    }
+    turn(EN_SELECT, -1);
+    ok &= cur_page()->graph == GR_SCALE;
+    press(B_HOME); frames(4); press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !ui.lock;
+    {
+        int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
+    }
+    bad += check("SCL row is remembered across HOME; CHORD/SCL knobs hit the right row", ok);
+    ui_power_on(); ui_prefs2 |= (uint8_t)(PREF_SEL_PAGE >> 16); harmony_on = 1; go_page(GR_SCALE); frames(4);
+    ok = 1;
+    {
+        static const uint8_t cycle[4] = {GR_CHORD, GR_LINK, GR_LINK, GR_HARMONY};
+        for (uint32_t i = 0; i < 4u; i++) {
+            turn(EN_SELECT, 1);
+            ok &= cur_page()->graph == cycle[i];
+            if (cur_page()->graph == GR_SCALE) {
+                int16_t b = TSEL->p[P_ROOT]; turn(EN_K1, 1); ok &= TSEL->p[P_ROOT] != b;
+            } else if (cur_page()->graph == GR_CHORD) {
+                int16_t b = TSEL->p[P_CHRD]; turn(EN_K1, 1); ok &= TSEL->p[P_CHRD] != b;
+            } else if (cur_page()->graph == GR_LINK) {
+                if (link_setup_row) {
+                    turn(EN_K1, 1); ok &= harmony_on != 0u;
+                } else {
+                    uint8_t b = link_src[song.sel]; turn(EN_K1, 1); ok &= link_src[song.sel] != b;
+                }
+            } else if (cur_page()->graph == GR_HARMONY && !str_eq(cur_page()->title, "HARMONY SETUP")) {
+                if (harmony_edit_dur) {
+                    uint8_t b = hdur_get(0); turn(EN_K1, 1); ok &= hdur_get(0) != b;
+                } else {
+                    uint8_t b = hroot_get(0); turn(EN_K1, 1); ok &= hroot_get(0) != b;
+                }
+            }
+        }
+    }
+    turn(EN_SELECT, 1);                          /* SELECT on HARMONY highlights DURATIONS */
+    ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur;
+    bad += check("SELECT walks SCL -> CHORD -> LINK -> Setup -> HARMONY -> DURATIONS", ok);
+    /* uninterrupted rapid taps from each page: never a layer lock, always an SCL page */
+    ok = 1;
+    for (uint32_t start = 0; start < 4u; start++) {
+        ui_power_on();
+        go_page(order[start]);
+        for (uint32_t j = 0; j < 4u; j++) {
+            press(B_SCL);
+            ok &= !ui.lock && !ui.home && cur_page()->fam == FAM_SCL;
+        }
+    }
+    bad += check("SCL rapid taps from every SCL page: no layer lock, always an SCL page", ok);
+    /* entering from HOME and from SEQ: the first SCL tap opens SCL, the next pages on */
+    ok = 1;
+    ui_power_on(); go_home(); frame();
+    press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !ui.lock && !ui.home;
+    press(B_SCL);
+    ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    ui_power_on(); open_family(FAM_SEQ); frame();
+    press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !ui.lock;
+    press(B_SCL);
+    ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+    bad += check("SCL entry from HOME and SEQ: no lock, SCL then CHORD", ok);
+    /* the same round-trip through the remembered page: go_home() keeps ui.page, fam_last names it */
+    {
+        static const char *const T[4] = {"SCL", "CHORD", "LINK", "HARMONY"};
+        ok = 1;
+        for (uint32_t i = 0; i < 4u; i++) {
+            uint8_t want;
+            ui_power_on(); harmony_on = 1; go_title(T[i]); frames(4);
+            want = ui.page;
+            ui.fam_last[FAM_SCL] = want;
+            press(B_HOME); frames(4);
+            press(B_SCL);
+            ok &= ui.page == want && !ui.lock && !ui.home;
+            press(B_SCL);
+            if (i == 0u) ok &= cur_page()->graph == GR_CHORD && !ui.lock;
+            else if (i == 1u) ok &= cur_page()->graph == GR_LINK && !ui.lock;
+            else if (i == 2u) ok &= cur_page()->graph == GR_LINK && link_setup_row && !ui.lock;
+            else ok &= cur_page()->graph == GR_HARMONY && harmony_edit_dur && !ui.lock;
+        }
+        bad += check("every remembered SCL page recalls its exact page/row, no lock", ok);
+    }
+    /* SCL+OCT+ on HOME must use the visible HOME, not a hidden HARMONY page */
+    ui_power_on(); harmony_on = 1; song.sel = 0;
+    for (uint32_t i = 0; i < NTRK; i++) {
+        trk[i].p[P_ROOT] = (int16_t)(3u + i);
+        trk[i].p[P_SCALE] = (int16_t)((i + 1u) & 3u);
+        trk[i].p[P_QUANT] = (int16_t)(i & 3u);
+        trk[i].p[P_TRANS] = (int16_t)(i - 1);
+        trk[i].p[P_CHRD] = (int16_t)(i == 1u ? CH_MIN : CH_OFF);
+        trk[i].p[P_VOICE] = (int16_t)(i & 1u);
+    }
+    {
+        int16_t trn[NTRK], chrd[NTRK], voic[NTRK], snap[NTRK][P_COUNT];
+        uint8_t on = harmony_on;
+        uint32_t ph = harmony_bar;
+        for (uint32_t i = 0; i < NTRK; i++) {
+            trn[i] = trk[i].p[P_TRANS]; chrd[i] = trk[i].p[P_CHRD]; voic[i] = trk[i].p[P_VOICE];
+        }
+        go_title("HARMONY"); frames(4); go_home(); frames(4);
+        ok = 1;
+        btn_down(B_SCL); frame(); press(B_OCTUP); btn_up(B_SCL); frame();
+        for (uint32_t i = 0; i < NTRK; i++)
+            ok &= trk[i].p[P_ROOT] == 3 && trk[i].p[P_SCALE] == 1 && trk[i].p[P_QUANT] == 0 &&
+                  trk[i].p[P_TRANS] == trn[i] && trk[i].p[P_CHRD] == chrd[i] && trk[i].p[P_VOICE] == voic[i];
+        ok &= harmony_on == on && harmony_bar == ph;
+        /* distinct again: the visible HARMONY gesture must not copy or change anything */
+        for (uint32_t i = 0; i < NTRK; i++) {
+            trk[i].p[P_ROOT] = (int16_t)(5u + i);
+            trk[i].p[P_SCALE] = (int16_t)((i + 2u) & 3u);
+            trk[i].p[P_QUANT] = (int16_t)((i + 1u) & 3u);
+            memcpy(snap[i], trk[i].p, sizeof snap[i]);
+        }
+        go_title("HARMONY"); frames(4);
+        on = harmony_on; ph = harmony_bar;
+        btn_down(B_SCL); frame(); press(B_OCTUP); btn_up(B_SCL); frame();
+        for (uint32_t i = 0; i < NTRK; i++)
+            ok &= !memcmp(snap[i], trk[i].p, sizeof snap[i]);
+        ok &= harmony_on == on && harmony_bar == ph;
+    }
+    bad += check("HOME after HARMONY still copies ROOT/SCL/QNT; visible HARMONY changes no track state", ok);
+    ui_power_on(); harmony_on = 1; go_title("HARMONY");
+    harmony_edit_dur = 1;                          /* stale row state must not swallow the first SCL */
+    go_title("HARMONY"); frames(4);
+    press(B_SCL);
+    ok = cur_page()->graph == GR_HARMONY && harmony_edit_dur;
+    press(B_SCL);
+    ok &= cur_page()->graph == GR_SCALE && !harmony_edit_dur;
+    bad += check("SCL press on HARMONY: first tap opens durations, next pages on", ok);
+    /* double tap from ENV: SCL lock stays on the page the tap opened; a tap closes it */
+    ui_power_on();
+    go_title("ENV"); frame();
+    press(B_SCL); press(B_SCL); frames(100);
+    ok = ui.lock == LAYER_SCL && cur_page()->fam == FAM_SCL && !ui.home;
+    press(B_SCL); frames(16);
+    ok &= !ui.lock && cur_page()->fam == FAM_SCL;
+    bad += check("SCL double tap stays on the SCL page (not back on ENV); a tap closes the lock", ok);
     ui_power_on();
     return bad;
 }
@@ -6735,6 +7751,7 @@ static int test_harmony_clock(void)
     harmony_on = 1;
     harmony_base_bar = 0;
     harmony_bar = 0;
+    harmony_phase = 0;
     perf_bars_q16 = 0;
     perf_bars_rem = 0;
     perf_bars_q16 = 1u << 16;                       /* one transport bar reached */
@@ -6774,6 +7791,16 @@ static int test_fun11_project(void)
     ok &= harmony_follow[1] == 0u;
     ok &= link_src[1] == 1u && link_retrig[1] == 3u;
     bad += check("FUN11 project: roots, durations, bus on/off and LINK/RETRIG round-trip; magic FUNV", ok);
+    /* Unused SONG rows may be all-zero in an imported/cleared runtime. Encoding
+     * repeat 0 must not leak unsigned underflow into Harmony's metadata bits. */
+    project_capture(&dec);
+    memset(&dec.chain, 0, sizeof dec.chain);
+    ok = proj_pack(&st, &dec) && proj_import(&dec, st.raw, sizeof st);
+    for (uint32_t i = 0; i < NTRK; i++)
+        ok &= proj_harmony.link_src[i] == link_src[i] && proj_harmony.link_retrig[i] == link_retrig[i] &&
+              proj_harmony.root[i] == hroot_get(i) && proj_harmony.dur[i] == hdur_get(i) &&
+              proj_harmony.follow[i] == harmony_follow[i];
+    bad += check("FUN11 zero unused SONG rows cannot overwrite Harmony metadata", ok);
     ui_power_on();
     return bad;
 }
@@ -6806,7 +7833,7 @@ static int test_generate(void)
     ok &= notes >= 4u;
     bad += check("G5 GENERATE: a scale-aware phrase, notes in C minor, the rest of the pattern empty", ok);
 
-    harmony_on = 1; harmony_base_bar = perf_bars_q16 >> 16; harmony_bar = 0;
+    harmony_on = 1; harmony_base_bar = HARM_BAR(); harmony_bar = 0;
     frame();
     ok = harmony_on != 0u;
     mask = harmony_mask(t);
@@ -7445,6 +8472,8 @@ static int test_layer_lock(void)
     uint32_t i, pg;
     ok = 1; okk = 1;
     for (i = 0; i < 4u; i++) {                          /* double tap on ENV: locked, ENV under it */
+        if (LL[i] == LAYER_SCL)
+            continue;                                  /* SCL is pages only; its double tap goes on (page test) */
         ui_power_on();
         go_title("ENV"); frame();
         pg = ui.page;
@@ -7528,10 +8557,10 @@ static int test_layer_lock(void)
     go_title("ENV"); frame();
     press(B_SCL); press(B_SCL); frames(100);
     key_down(white(1)); frame(); key_up(white(1)); frame();   /* G3: ROOT G */
-    ok = TSEL->p[P_ROOT] == 7 && !gates();
+    ok = TSEL->p[P_ROOT] == 7 && !gates() && ui.lock == LAYER_SCL && cur_page()->fam == FAM_SCL;
     turn(EN_K2, 1);
-    ok &= TSEL->p[P_SCALE] == 1 && str_eq(cur_page()->title, "ENV");
-    bad += check("  SCL locked: a key sets ROOT, KNOB 2 SCL, the page stays ENV", ok);
+    ok &= TSEL->p[P_SCALE] == 1;
+    bad += check("  SCL locked: a key sets ROOT, KNOB 2 SCL, the lock stays on the SCL page", ok);
     ui_power_on();
     go_title("ENV"); frame();
     press(B_EDIT); press(B_EDIT); frames(100);
@@ -7548,8 +8577,8 @@ static int test_layer_lock(void)
     press(B_GLO); press(B_GLO); frames(100);
     press(B_LFO);
     ok = !ui.lock && !ui.layer && str_eq(cur_page()->title, "LFO");
-    press(B_SCL); press(B_SCL); frames(100);
-    ok &= ui.lock == LAYER_SCL && str_eq(cur_page()->title, "LFO");
+    press(B_SCL); frames(100);
+    ok &= !ui.lock && !ui.layer && cur_page()->fam == FAM_SCL;
     press(B_HOME); frames(16);
     ok &= !ui.lock && !ui.layer && ui.home;
     press(B_GLO); press(B_GLO); frames(100);
@@ -10452,9 +11481,17 @@ int main(void)
     bad += test_arp_turing();
     bad += test_generate();
     bad += test_harmony_page();
+    bad += test_latch_retrigger();
+    bad += test_harmony_owner_lifecycle();
+    bad += test_harmony_owner_overlap();
+    bad += test_harmony_latch_overlap();
+    bad += test_harmony_latch_toggle();
+    bad += test_harmony_latch_toggle_relatch();
+    bad += test_harmony_latch_toggle_held();
     bad += test_fun11_project();
     bad += test_harmony_clock();
     bad += test_scl_page_tap();
+    bad += test_scl_select_rows();
     bad += test_fun11_readonly_probe();
     bad += test_screen_off();
     bad += test_screen_wake();

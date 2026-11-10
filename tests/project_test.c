@@ -193,7 +193,7 @@ int main(void)
     bad += check("FUN2 image is 2552 bytes (as stored)", sizeof v2 == 2552u);
     memcpy(&buf, &v2, sizeof v2);
     ok = proj_import(&q, &buf, (int)sizeof v2);
-    bad += check("FUN2 -> FUN6: converted, valid format 5 slot", ok && proj_ok(&q) && q.magic == PROJ_MAGIC);
+    bad += check("FUN2 -> FUN6: converted, valid format 5 slot", ok && proj_ok(&q) && q.magic == PROJ_MAGIC_V11);
     ok = q.sel == 2;
     for (i = 0; i < G_COUNT; i++)
         ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(500 + i));
@@ -224,7 +224,7 @@ int main(void)
     v3.sum = proj_hash(&v3, sizeof v3 - 4u);
     bad += check("FUN3 image is 2584 bytes (as stored)", sizeof v3 == 2584u);
     memcpy(&buf, &v3, sizeof v3);
-    ok = proj_import(&q, &buf, (int)sizeof v3) && proj_ok(&q) && q.magic == PROJ_MAGIC && q.sel == 3 &&
+    ok = proj_import(&q, &buf, (int)sizeof v3) && proj_ok(&q) && q.magic == PROJ_MAGIC_V11 && q.sel == 3 &&
          q.parts == NPART;
     for (i = 0; i < G_COUNT; i++)
         ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(600 + i));
@@ -300,7 +300,7 @@ int main(void)
     to_v4(&v4, &q);
     bad += check("FUN4 image is 2680 bytes (as stored)", sizeof v4 == 2680u);
     memcpy(&buf, &v4, sizeof v4);
-    ok = proj_import(&q2, &buf, (int)sizeof v4) && proj_ok(&q2) && q2.magic == PROJ_MAGIC && q2.sel == q.sel &&
+    ok = proj_import(&q2, &buf, (int)sizeof v4) && proj_ok(&q2) && q2.magic == PROJ_MAGIC_V11 && q2.sel == q.sel &&
          !memcmp(q2.g, q.g, sizeof q.g);
     for (t = 0; t < NTRK; t++)
         ok &= !memcmp(q2.t[t].p, q.t[t].p, sizeof q.t[t].p) && q2.t[t].engine == q.t[t].engine &&
@@ -422,7 +422,7 @@ int main(void)
                      PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + NTRK * (P_COUNT + 2u + NSTEP * 9u) +
                      sizeof(chain_config_t) + sizeof(motion_store_t) + 4u == PROJ_FM6_OFF);
         memset(&a, 0, sizeof a);
-        a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
+        a.magic = PROJ_MAGIC_V11; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
         a.t[1].p[P_LEVEL] = 99;
         a.sum = proj_sum(&a);
@@ -460,7 +460,7 @@ int main(void)
         static uint8_t v7[PROJ_STORE_V7];
         uint32_t i, k, init = 1, sum;
         memset(&a, 0, sizeof a);
-        a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
+        a.magic = PROJ_MAGIC_V11; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
         for (k = 0; k < NTRK; k++) {
             memcpy(a.fm6[k], FM6_FACTORY[k * 2u], FM6_PACKED);
@@ -469,7 +469,7 @@ int main(void)
         }
         memcpy(a.name, "FM SONG", 7);
         a.sum = proj_sum(&a);
-        ok = proj_pack(&st, &a) && ((uint32_t *)st.raw)[0] == 0x46554E41u && proj_import(&c, &st, sizeof st);
+        ok = proj_pack(&st, &a) && ((uint32_t *)st.raw)[0] == PROJ_MAGIC_V11 && proj_import(&c, &st, sizeof st);
         for (k = 0; k < NTRK; k++)
             ok &= !memcmp(c.fm6[k], FM6_FACTORY[k * 2u], FM6_PACKED) && c.t[k].engine == ENGI_FM6 &&
                   !memcmp(st.raw + PROJ_FM6_OFF + k * FM6_PACKED, FM6_FACTORY[k * 2u], FM6_PACKED);
@@ -571,7 +571,7 @@ int main(void)
         int16_t p[P_COUNT];
         uint32_t i, sum;
         memset(&a, 0, sizeof a);
-        a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
+        a.magic = PROJ_MAGIC_V11; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
         for (t = 0; t < NTRK; t++) {
             for (i = 0; i < P_COUNT; i++)
@@ -645,7 +645,7 @@ int main(void)
         static const int16_t KIT[8] = DRUM_KIT_E;
         uint32_t i;
         memset(&a, 0, sizeof a);
-        a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
+        a.magic = PROJ_MAGIC_V11; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
         for (t = 0; t < NTRK; t++) {
             for (i = 0; i < P_COUNT; i++)

@@ -248,17 +248,20 @@ static int screens_lit(const char *what)          /* every page, HOME, the menu:
 static int custom_palette_ui(void)
 {
     int bad = 0, ok;
+    /* Exercise the menu callback after each palette mutation. GCC 14 can otherwise
+     * reuse the earlier count across cpal_store in this single-translation-unit host fixture. */
+    uint32_t (*volatile color_values)(uint32_t) = menu_n;
     const uint16_t dark[5] = {rgb(8, 16, 40), rgb(24, 32, 64), rgb(240, 240, 255), rgb(120, 200, 255), rgb(255, 160, 40)};
     const uint16_t light[5] = {rgb(250, 246, 235), rgb(230, 224, 208), rgb(20, 24, 40), rgb(30, 90, 160), rgb(200, 60, 40)};
     const uint16_t edge[5] = {rgb(0, 0, 0), rgb(36, 36, 36), rgb(136, 136, 136), rgb(88, 88, 88), rgb(70, 70, 70)};
     ui_power_on();
-    ok = menu_n(MI_COLOR) == NPALETTES && !(ui_cpal_flags & CPAL_STORED);
+    ok = color_values(MI_COLOR) == NPALETTES && !(ui_cpal_flags & CPAL_STORED);
     palette_choose(NPALETTES);                       /* (none stored: nothing changes) */
     ok &= palette_cur() == settings.palette && !cpal_on();
     bad += check("CUSTOM: none stored, COLOR has the 10 built-in values (CUSTOM does nothing)", ok);
     palette_choose(4);
     custom_store(dark, 0);
-    ok = menu_n(MI_COLOR) == NPALETTES + 1u && menu_get(MI_COLOR) == 4u && !strcmp(menu_vname(MI_COLOR, NPALETTES), "CUSTOM") &&
+    ok = color_values(MI_COLOR) == NPALETTES + 1u && menu_get(MI_COLOR) == 4u && !strcmp(menu_vname(MI_COLOR, NPALETTES), "CUSTOM") &&
          cpal_on() == 0u;
     bad += check("CUSTOM: stored (not in use): COLOR has 11 values, the built-in 4 still in use, CUSTOM named last", ok);
     palette_choose(NPALETTES);

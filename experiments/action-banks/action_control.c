@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Experimental HOME action control. UI thread only; no allocations or audio loop work.
- * The five keys are consumed by seq.c's keyboard_block at note-on.
+ * The six keys are consumed by seq.c's keyboard_block at note-on.
  */
 #if CARAVEL_ACTION_BANKS
-/* BANK on piano key 22: short press switches bank on RELEASE, a 500ms
+/* BANK on C#5 / D#5: short press switches bank on RELEASE, a 500ms
  * hold toggles a latched encoder SETUP without switching bank.
  * Poll the physical key level so the gesture is identical in WASM and hardware.
  * All four ACTION keys stay usable in SETUP. No timer in the audio ISR. */
@@ -15,7 +15,7 @@
 static void action_snapshot_poll(uint32_t mask)
 {
 #if FELUCCA_RANDOM_MORPH
- const uint32_t bit=1u<<(ACT_KEY_FIRST+4u);
+ const uint32_t bit=1u<<action_keys[3];
  if((action_bank!=0u&&action_bank!=ACT_BANK_JOURNEY) || !action_enabled || !(mask&bit) || (action_preheld&bit)){
   action_snap_down=0;action_snap_long=0;return;
  }
@@ -61,41 +61,39 @@ static void action_refresh(void)
  }
  if(!ui.home)action_home_tap_ms=0;
  action_snapshot_poll(mask);
- uint32_t bank_bit=1u<<ACT_KEY_FIRST;
- if(!(mask&bank_bit) || (action_preheld&bank_bit)){
-  action_bank_down=0;action_bank_long=0;
-  if(!ui.home || !action_enabled)action_setup=0;
-  return;
- }
- if(fm1_in.notes & bank_bit){
-  if(!action_bank_down){
-   action_bank_down=1;action_bank_long=0;action_bank_started=fm1_ms;
+ for(uint32_t dir=0;dir<2u;dir++){
+  uint32_t bank_bit=1u<<(dir?ACT_BANK_NEXT:ACT_BANK_PREV);
+  if(!(mask&bank_bit) || (action_preheld&bank_bit)){
+   action_bank_down[dir]=action_bank_long[dir]=0;
+   if(!ui.home || !action_enabled)action_setup=0;
+   continue;
   }
-  if(!action_bank_long && fm1_ms-action_bank_started>=ACTION_LONG_MS){
-   action_bank_long=1;
-   action_setup=!action_setup;
+  if(fm1_in.notes&bank_bit){
+   if(!action_bank_down[dir]){action_bank_down[dir]=1;action_bank_long[dir]=0;action_bank_started[dir]=fm1_ms;}
+   if(!action_bank_long[dir] && fm1_ms-action_bank_started[dir]>=ACTION_LONG_MS){
+    action_bank_long[dir]=1;action_setup=!action_setup;
+    /* Two BANK keys held together form one gesture, never two SETUP toggles. */
+    if(fm1_in.notes&(1u<<(dir?ACT_BANK_PREV:ACT_BANK_NEXT)))action_bank_long[dir^1u]=1;
 #if CARAVEL_STASIS_EXPAND
-   if(action_setup && action_bank==1u)action_stasis_grain_page=1u;
+    if(action_setup && action_bank==1u)action_stasis_grain_page=1u;
 #endif
-   ui.force=1;
-   ui_message(action_setup?(
+    ui.force=1;
+    ui_message(action_setup?(action_bank==ACT_BANK_HARMONY?"HARM SETUP: K1 SHIFT":
 #if CARAVEL_STASIS_EXPAND
       action_bank==1u?"STASIS GRAIN: K1-K4":
 #endif
       action_bank==ACT_BANK_JOURNEY?"JOURNEY SETUP: K1-K2":"ACTION SETUP: K1-K4"):"ACTION PERFORM: K1-K4 HOME");
-  }
- }else if(action_bank_down){
-  action_bank_down=0;
-  if(!action_bank_long){
-   {                                                 /* BANK steps RANDOM, JOURNEY, STASIS, PAIR, LIVE (the numbers of the banks did not change) */
-    static const uint8_t order[ACT_BANKS]={0u,ACT_BANK_JOURNEY,1u,2u,3u};
-    uint32_t pos=0;while(pos<ACT_BANKS&&order[pos]!=action_bank)pos++;
-    action_bank=order[(pos+1u)%ACT_BANKS];
    }
-   ui.force=1;
-   ui_message(action_bank_names[action_bank]);
+  }else if(action_bank_down[dir]){
+   action_bank_down[dir]=0;
+   if(!action_bank_long[dir]){
+    static const uint8_t order[ACT_BANKS]={0u,ACT_BANK_JOURNEY,ACT_BANK_HARMONY,1u,2u,3u};
+    uint32_t pos=0;while(pos<ACT_BANKS&&order[pos]!=action_bank)pos++;
+    action_bank=order[(pos+(dir?1u:ACT_BANKS-1u))%ACT_BANKS];
+    ui.force=1;ui_message(action_bank_names[action_bank]);
+   }
+   action_bank_long[dir]=0;
   }
-  action_bank_long=0;
  }
 }
 /* Called only on HOME TAP; never delays the existing first HOME tap. */
@@ -107,7 +105,7 @@ static int action_home_double_tap(void)
  }
  if(action_home_tap_ms && fm1_ms-action_home_tap_ms<=330u){
   action_enabled=!action_enabled;
-  action_setup=0;action_bank_down=0;action_bank_long=0;
+  action_setup=0;memset(action_bank_down,0,sizeof action_bank_down);memset(action_bank_long,0,sizeof action_bank_long);
   action_snap_down=0;action_snap_long=0;
   action_home_tap_ms=0;
   action_refresh();
@@ -136,6 +134,7 @@ static uint32_t action_pair_mod_slot(uint32_t source)
 static int32_t action_setup_value(uint32_t slot)
 {
  if(slot>=4u)return -1;
+ if(action_bank==ACT_BANK_HARMONY)return slot==0u?harmony_shift_want:-1;
 #if HP_JVN
  if(action_bank==ACT_BANK_JOURNEY)return slot==0u?(int32_t)hp_j.scope:slot==1u?(int32_t)hp_j.tp:-1;
 #endif
@@ -183,6 +182,7 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   {"LVL T1","LVL T2","LVL T3","LVL T4"},
   {"SCOPE","TRANSP","--","--"}         /* JOURNEY SETUP: which tracks the keys act on, and the clock its time follows */
  };
+ if(action_bank==ACT_BANK_HARMONY){str_cpy(name,slot?"--":"SHIFT",16);if(!slot)fmt_int(value,harmony_shift_want);else str_cpy(value,"--",24);return;}
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
  if(action_bank==1u && action_stasis_grain_page){
@@ -237,6 +237,10 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
 static void action_setup_turn(uint32_t slot,int32_t steps)
 {
  if(slot>=4u||!steps)return;
+ if(action_bank==ACT_BANK_HARMONY){if(slot==0u){
+  if(ui.ml.on){ml_knob(TSEL,HP_HFIRST+4u);return;}
+  harmony_shift_want=(int8_t)clamp(harmony_shift_want+steps,-7,7);harmony_shift_dirty=1;ui.force=1;
+ }return;}
 #if HP_JVN
  if(action_bank==ACT_BANK_JOURNEY){
   if(slot>1u)return;
@@ -393,10 +397,13 @@ static void action_random(uint32_t action)
 }
 static void action_key(uint32_t key)
 {
- /* BANK press/release/long is handled by action_refresh(), not note-on. */
- if(key==ACT_KEY_FIRST)return;
- if(key<ACT_KEY_FIRST+1u || key>26u)return;
- uint32_t act=key-ACT_KEY_FIRST-1u;
+ uint32_t act=0;while(act<4u && action_keys[act]!=key)act++;
+ if(act==4u)return;
+ if(action_bank==ACT_BANK_HARMONY){
+  if(ui.ml.on){ml_knob(TSEL,HP_HFIRST+act);return;}
+  if(!harmony_on){ui_message("LINK: ENABLE HARMONY");return;}
+  harmony_command=(uint8_t)(act+1u);ui.force=1;return;
+ }
  if(action_bank==0u||action_bank==ACT_BANK_JOURNEY){
 #if HP_JVN
   if(ui.ml.on){if(act<3u)ml_knob(&trk[song.sel],HP_VFIRST+8u+act);return;} /* MIDI LEARN: A1 PLAY, A2 DIR, A3 NEXT */

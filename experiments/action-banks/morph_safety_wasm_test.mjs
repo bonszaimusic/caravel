@@ -34,7 +34,7 @@ assert.equal(e.web_home_assign(0,0,0,1,0,0),1,'LEVEL is a real HOME cell');
 assert.equal(e.web_home_assign(0,0,1,1,0,cut),1,'F_CUTOFF is a real HOME cell');
 e.web_home_row(0);
 tap(6);tap(6);assert.equal(e.web_action_state()&1,1,'physical ACTION ON');
-key(23);assert.equal(e.web_action_random_state(),1,'real Random starts');
+key(21);assert.equal(e.web_action_random_state(),1,'real Random starts');
 let targets=cells();
 assert.ok(targets.length>0,'captured real HOME controls');
 assert.ok(!targets.some(c=>c.kind==1 && c.aux==0 && c.id==0),
@@ -43,7 +43,7 @@ const cutoffCell=()=>cells().find(c=>c.kind==1 && c.track==0 &&
  c.aux==1 && c.id==cut-e.web_action_engine_base());
 assert.ok(cutoffCell(),'engine cutoff eligible for Random');
 for(let i=0;i<24;i++){
- key(23);
+ key(21);
  let c=cutoffCell();
  assert.ok(c && !c.released,'cutoff retains Random eligibility within allowed band');
  const hz=cutoffHz(c.target);
@@ -56,14 +56,14 @@ let c=cutoffCell();assert.equal(c.released,1,'manual K2 turn takes ownership of 
 const manual=e.web_pair_param_get(0,cut);
 render(3500);
 assert.equal(e.web_pair_param_get(0,cut),manual,'morph does not rewrite touched cutoff');
-key(24);assert.equal(e.web_action_random_state(),2,'FREEZE still works');
-key(24);assert.equal(e.web_action_random_state(),1,'RESUME still works');
+key(23);assert.equal(e.web_action_random_state(),2,'FREEZE still works');
+key(23);assert.equal(e.web_action_random_state(),1,'RESUME still works');
 render(550);
 assert.equal(e.web_pair_param_get(0,cut),manual,'RESUME does not reclaim manual cutoff');
-key(25);assert.equal(e.web_action_random_state(),3,'RETURN still works');
+key(24);assert.equal(e.web_action_random_state(),3,'RETURN still works');
 render(1800);
 assert.equal(e.web_pair_param_get(0,cut),manual,'RETURN does not reclaim manual cutoff');
-key(23);assert.equal(e.web_action_random_state(),1,'new explicit RANDOM restarts trajectory');
+key(21);assert.equal(e.web_action_random_state(),1,'new explicit RANDOM restarts trajectory');
 assert.equal(cutoffCell().released,0,'new RANDOM can reacquire manual cutoff');
 // STASIS GRAIN must be discoverable in the actual native FX page table.
 assert.ok(e.web_stasis_grain_page()<1000,'native FX > GRAIN page is registered');
@@ -76,7 +76,7 @@ assert.equal(e.web_stasis_granular_get(0),2,'native FX > GRAIN K1 writes real gr
 e.web_enc(4,11);render(140);
 assert.equal(e.web_stasis_granular_get(1),11,'native FX > GRAIN K2 writes real scan');
 e.web_home_open(0);render(100);
-key(22);key(22);hold(22);                                  // RANDOM, JOURNEY, STASIS
+key(22);key(22);key(22);hold(22);                                  // RANDOM, JOURNEY, HARM, STASIS
 assert.equal((e.web_action_state()>>8)&255,1,'STASIS ACTION bank');
 assert.equal((e.web_action_state()>>1)&1,1,'BANK HOLD opens setup');
 assert.equal(e.web_stasis_granular_get(14),1,'BANK HOLD opens GRAIN directly, no SELECT');

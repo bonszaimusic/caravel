@@ -253,14 +253,14 @@ static int arp_new_modes(void)
     track_t *t;
     ui_power_on();
     t = &trk[0];
-    ok = TP[P_AMODE].max == 14 && str_eq(TP[P_AMODE].names[6], "REPEAT") && str_eq(TP[P_AMODE].names[7], "DNUP") &&
+    ok = TP[P_AMODE].max == 15 && str_eq(TP[P_AMODE].names[6], "REPEAT") && str_eq(TP[P_AMODE].names[7], "DNUP") &&
          str_eq(TP[P_AMODE].names[8], "UP+8") && str_eq(TP[P_AMODE].names[9], "CONV") &&
          str_eq(TP[P_AMODE].names[10], "DIVG") && str_eq(TP[P_AMODE].names[11], "PINKY") &&
          str_eq(TP[P_AMODE].names[12], "THUMB") && str_eq(TP[P_AMODE].names[13], "WALK") &&
-         str_eq(TP[P_AMODE].names[14], "CHORD");
-    for (i = 0; i <= 14u; i++)
+         str_eq(TP[P_AMODE].names[14], "CHORD") && str_eq(TP[P_AMODE].names[15], "TURING");
+    for (i = 0; i <= 15u; i++)
         ok &= strlen(TP[P_AMODE].names[i]) <= 6u;
-    bad += check("ARP modes: OFF..REPEAT keep their numbers, DNUP UP+8 CONV DIVG PINKY THUMB WALK CHORD appended (<= 6 chars)", ok);
+    bad += check("ARP modes: OFF..REPEAT keep their numbers, DNUP UP+8 CONV DIVG PINKY THUMB WALK CHORD TURING appended (<= 6 chars)", ok);
     /* the modes before 1.2 play as they did */
     arp_fresh(t, AM_UP, 1, CEG, 3);   ok = arp_plays(t, (const uint8_t[]){60, 64, 67, 60}, 4);
     arp_fresh(t, AM_DN, 1, CEG, 3);   ok &= arp_plays(t, (const uint8_t[]){67, 64, 60, 67}, 4);

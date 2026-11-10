@@ -23,11 +23,15 @@ static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
 };
 
 static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
+static uint8_t kb_midi[27][CHORD_MAX], kb_midin[27];  /* the notes key k last sent to MIDI OUT: retriggers move
+                                                       * only the local list, so the external NoteOns stay matched */
+static uint8_t kb_live[27];                            /* this press may still retrigger (panic clears it until re-press) */
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: track + 1, 0 = free */
 static mchord_t mchord[MCHORD_N];
 /* the last chord played per track (the CHORD page shows it): its root, notes, and the shape's tones above the
  * root (bit i = i semitones, 0..11) */
-static struct { uint8_t root, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen, vel; } chord_last[NTRK];
+static struct { uint8_t root, key, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen, vel; } chord_last[NTRK];
+static uint8_t chord_live[NTRK];        /* an owner still holds the CHRD BUS chord: eligibility for retrigger */
 
 /* 1 = the track's keys are a kit: no chords */
 static int chord_kit(const track_t *t)
@@ -42,9 +46,9 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
 {
     uint32_t n = 0, i;
     if (mode == CH_BUS) {
-        uint16_t bm = harmony_mask(t);
+        uint16_t bm = harmony_mask(t), rel;
         if (bm) {                                     /* the HARMONIC BUS chord, at the octave nearest the key */
-            int32_t br = (int32_t)hroot_get(harmony_chord_at(harmony_bar));
+            int32_t br = (int32_t)harmony_live_desc(harmony_chord_at(harmony_bar), &rel);   /* effective root + relative tones */
             while (br + 12 <= *root + 6)
                 br += 12;
             while (br > *root + 6)
@@ -52,7 +56,7 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
             *root = br;
             iv[n++] = 0;
             for (i = 1; i < 12u && n < CHORD_MAX; i++)
-                if ((bm >> ((hroot_get(harmony_chord_at(harmony_bar)) + i) % 12u)) & 1u)
+                if ((rel >> i) & 1u)
                     iv[n++] = (int32_t)i;
             return n;
         }
@@ -154,19 +158,25 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
 }
 
 /* chord_make for a note played now: a chord is kept in chord_last (the CHORD page shows it) */
+static void latch_bus_capture(track_t *t);
+static int latch_would_toggle(const track_t *t, const uint8_t *nn, uint32_t n);
 static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
 {
     int32_t r;
     uint16_t mask;
     uint32_t m = chord_make(t, root, out, &r, &mask), i, k = trk_index(t);
-    if (m > 1u) {
+    if (m > 1u && !latch_would_toggle(t, out, m)) {      /* (a LATCH STACK toggle starts no new chord: chord_last stays) */
+        latch_bus_capture(t);
         chord_last[k].root = (uint8_t)clamp(r, 0, 127);
+        chord_last[k].key = (uint8_t)clamp((int32_t)root, 0, 127);
         chord_last[k].mask = mask;
         chord_last[k].n = (uint8_t)m;
         chord_last[k].vel = (uint8_t)(kb_vel ? kb_vel : 96u);
         for (i = 0; i < CHORD_MAX; i++)
             chord_last[k].note[i] = i < m ? out[i] : 0u;
         chord_last[k].gen++;
+        if (t->p[P_CHRD] == CH_BUS)
+            chord_live[k] = 1;
     }
     return m;
 }
@@ -230,19 +240,91 @@ static void mchord_forget(uint32_t track)               /* panic: the track's MI
 }
 
 
+/* STOP/panic: a bus chord started or retriggered by the HARMONY engine is not in the key/sequence owner lists;
+ * release it explicitly so no tone can hang. */
+static int chord_plain_owned(uint32_t i, uint32_t note)   /* a key or MIDI chord of the track still lists the note */
+{
+    uint32_t k, m, j;
+    for (k = 0; k < 27u; k++)
+        if (kb_chn[k] && kb_trk[k] == i)
+            for (j = 0; j < kb_chn[k]; j++)
+                if (kb_chord[k][j] == note)
+                    return 1;
+    for (m = 0; m < MCHORD_N; m++)
+        if (mchord[m].id == i + 1u)
+            for (j = 0; j < mchord[m].n; j++)
+                if (mchord[m].note[j] == note)
+                    return 1;
+    return 0;
+}
+static void chord_panic(uint32_t i);
+static uint32_t lat_eat[NTRK][4];       /* (seq.c: bit n = the press of note n ended it; declared here for chord_stop_all) */
+static void chord_stop_all(void)
+{
+    uint32_t i, j;
+    for (i = 0; i < NTRK; i++) {
+        uint32_t bus = trk[i].p[P_CHRD] == CH_BUS;
+        if (!bus && !chord_live[i] && !chord_last[i].n)
+            continue;                                 /* round 7: a CHRD BUS chord is the engine's: it ends; a plain chord a player still holds (a key or MIDI list names the note) sounds on, as in 0.11.0; a note of the last chord nobody holds any more (an orphan) still ends, so STOP cleans up as before */
+        for (j = 0; j < chord_last[i].n; j++)
+            if (chord_last[i].note[j] && (bus || !chord_plain_owned(i, chord_last[i].note[j])))
+                trk_note_off(&trk[i], chord_last[i].note[j]);
+        if (bus) {
+            chord_last[i].n = 0;
+            memset(lat_eat[i], 0, sizeof lat_eat[i]);   /* (a kept key's 'this press ended it' mark: its release is no longer a live one) */
+            chord_panic(i);
+        }
+    }
+}
+
 /* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
  * chord / the linked scale. Per track; only CHRD BUS has a held chord to follow (the sequencer and ARP retrigger
  * their own steps anyway). */
+static void retrigger_latched(uint32_t i);
+static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn);
+static void chord_live_sync(uint32_t i);
+static void chord_panic(uint32_t i);
+static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn);
+static int chord_owner_fallback(uint32_t i, uint32_t *src, uint8_t *old, uint32_t *oldn);
+static int chord_note_held(uint32_t i, uint32_t note);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
-    uint32_t k = trk_index(t), j;
-    if (t->p[P_CHRD] != CH_BUS || !chord_last[k].n)
+    if (t->p[P_AMODE])
+        return;                                        /* round 7: with the ARP on, the held list is the ARP's and it follows HARMONY on every step; rewriting the key's chord would leave the old notes in that list (an arpeggio that outlives its key) */
+    uint32_t k = trk_index(t), j, nn = 0, oldn = chord_last[k].n, src = chord_last[k].key;
+    uint8_t out[CHORD_MAX], old[CHORD_MAX];
+    int32_t r = 0;
+    uint16_t mask = 0;
+    for (j = 0; j < oldn; j++)
+        old[j] = chord_last[k].note[j];
+    if (!chord_live[k] || !chord_owner_matches(k, old, oldn)) {
+        if (!chord_owner_fallback(k, &src, old, &oldn)) {   /* no real owner: no resurrection */
+            chord_live[k] = 0;
+            retrigger_latched(i);
+            return;
+        }
+        chord_live[k] = 1;
+    }
+    if (t->p[P_CHRD] != CH_BUS || !oldn) {
+        retrigger_latched(i);                          /* LATCH without CHRD BUS */
         return;
-    for (j = 0; j < chord_last[k].n; j++)
-        if (chord_last[k].note[j])
-            trk_note_off(t, chord_last[k].note[j]);
-    for (j = 0; j < chord_last[k].n; j++)
-        if (chord_last[k].note[j])
-            trk_note_on(t, chord_last[k].note[j], chord_last[k].vel ? chord_last[k].vel : 96u);
+    }
+    /* Rebuild the bus chord for the new harmony chord; reusing the old chord_last notes would repeat the old
+     * root/fifth and never sound the new third. */
+    nn = chord_make(t, src, out, &r, &mask);
+    chord_last[k].key = (uint8_t)clamp((int32_t)src, 0, 127);
+    /* Move this chord's owners first. Other voicings may still own one of its old pitches. */
+    retrigger_owners(i, old, oldn, out, nn);
+    for (j = 0; j < oldn; j++)
+        if (!chord_note_held(k, old[j]))
+            trk_note_off(t, old[j]);
+    chord_last[k].n = (uint8_t)nn;
+    chord_last[k].root = (uint8_t)clamp(r, 0, 127);
+    chord_last[k].mask = mask;
+    for (j = 0; j < CHORD_MAX; j++)
+        chord_last[k].note[j] = j < nn ? out[j] : 0u;
+    for (j = 0; j < nn; j++)
+        if (out[j])
+            trk_note_on(t, out[j], chord_last[k].vel ? chord_last[k].vel : 96u);
 }

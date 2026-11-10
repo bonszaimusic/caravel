@@ -4,8 +4,8 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN midi_priority_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void random_press(void){key(1u<<(ACT_KEY_FIRST+1u));key(0);}
-static void return_press(void){key(1u<<(ACT_KEY_FIRST+3u));key(0);}
+static void random_press(void){key(1u<<(action_keys[0]));key(0);}
+static void return_press(void){key(1u<<(action_keys[2]));key(0);}
 static void polls(uint32_t n){for(uint32_t i=0;i<n;i++)hp_rm_poll(hp_rm.stamp+800u);}
 static void finish(void){for(uint32_t i=0;i<80;i++)hp_rm_poll(hp_rm.stamp+1000u);CHECK(hp_rm.state==HP_RM_IDLE||hp_rm.state==HP_RM_DONE);}
 static int cell_of(uint32_t id){

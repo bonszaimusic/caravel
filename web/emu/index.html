@@ -141,7 +141,7 @@ footer small { display: block; font-size: 11px; }
   <span><kbd>↑</kbd> <kbd>↓</kbd> SELECT</span>
   <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
   <span><kbd>Shift</kbd>-click holds a button</span>
-  <span><button id="action" type="button" title="Two HOME taps: ACTION banks on/off">ACTION (HOME ×2)</button></span>
+  <span><button id="action" type="button" title="Two HOME taps: ACTION on/off. C#5/D#5 BANK back/forward; D5/E5/F5/G5 actions; hold either BANK for SETUP">ACTION (HOME ×2)</button></span>
   <span id="midiknobs" hidden><label><input type="checkbox" id="knobson"> MIDI CC 20–27 turn the panel's knobs</label>
   <select id="knobmode" aria-label="How the controller sends CC 20–26" hidden>
     <option value="abs">absolute</option>
@@ -386,7 +386,7 @@ function bindKnob(k) {
       drag.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
     }
     const distance=drag.axis === "x" ? dx : dy;
-    const detents=Math.trunc(distance/(k.role === "master" ? 3 : 8));
+    const detents=Math.trunc(distance/(k.role === "master" ? 3 : k.role === EN.SELECT ? 40 : 8));
     const delta=detents-drag.sent;
     drag.sent=detents;
     if (delta) turn(k,delta);

@@ -279,7 +279,7 @@ static void key_link_sync(void)
             t->p[P_SCALE] = s->p[P_SCALE];
             t->p[P_QUANT] = s->p[P_QUANT];
             if (link_retrig[i] & 2u)
-                link_retrigger(i);
+                link_retrig_req |= (uint8_t)(1u << i);   /* (the audio side retriggers: events_block) */
             ui.force = 1;
         }
     }
@@ -503,6 +503,7 @@ static int more_slot_ok(uint32_t id)
 }
 static int page_visible(uint32_t i)
 {
+    if (str_eq(PAGES[i].title, "HARMONY")) return harmony_on != 0u;
 #if CARAVEL_REVERB_MINIMAL
     if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
 #endif
@@ -642,9 +643,13 @@ static int help_on(void) { return (ui_prefs2 & (PREF_HELP >> 16)) != 0u; }
 static uint32_t midi_lit_ms[NTRK];
 static int midi_lit(uint32_t k) { return midi_lit_ms[k % NTRK] && (fm1_ms | 1u) - midi_lit_ms[k % NTRK] < MLIT_MS; }
 static void help_start(void) { ui.help_t = (uint8_t)(help_on() ? HELP_FRAMES : 0u); }
+extern uint8_t link_setup_row;
+extern uint8_t harmony_edit_dur;
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
+    if (!ui.home && str_eq(pg->title, "LINK")) link_setup_row = 0;
+    if (!ui.home && str_eq(pg->title, "HARMONY")) harmony_edit_dur = 0;   /* first SCL tap opens durations */
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
         ev_enter();
     if (!ui.home && lock_page_ok(ui.page))
@@ -954,11 +959,43 @@ static void home_tap(void)
 #endif
 }
 
+/* SCL has two virtual lower rows as well as ordinary pages. SELECT walks
+ * SCALE, CHORD, LINK, HARMONY SETUP, HARMONY ROOTS, DURATIONS. The bus switch
+ * remains reachable while OFF; only the roots/durations are hidden. */
+static void scl_page_turn(int32_t dir)
+{
+    const page_t *pg = cur_page();
+    int32_t at = pg->graph == GR_SCALE ? 0 : pg->graph == GR_CHORD ? 1 :
+                 pg->graph == GR_LINK ? 2 + !!link_setup_row : 4 + !!harmony_edit_dur;
+    int32_t last = harmony_on ? 5 : 3;
+    int32_t next = clamp(at + (dir > 0 ? 1 : -1), 0, last);
+    uint32_t graph = next == 0 ? GR_SCALE : next == 1 ? GR_CHORD : next < 4 ? GR_LINK : GR_HARMONY;
+    if (at == next) return;                         /* preserve endpoint row and edit state */
+    for (uint32_t i = 0; i < NPAGES; i++) {
+        if (PAGES[i].fam != FAM_SCL || PAGES[i].graph != graph) continue;
+        if (ui.page != i) {
+            ui.page = (uint8_t)i;
+            ui.fam_last[FAM_SCL] = ui.page;
+            page_entered();
+        }
+        link_setup_row = next == 3;
+        harmony_edit_dur = next == 5;
+        if (graph == GR_LINK) ui_message(link_setup_row ? "HARMONY SETUP" : "LINK");
+        if (graph == GR_HARMONY) ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
+        ui.force = 1;
+        return;
+    }
+}
+
 /* MENU > CONTROL > SELECT PAGE (1.5.5, Discussion #188): the SELECT knob steps the pages of the family shown, a detent
  * each: right as a tap of the family's button does, left back, round (the pages that show for the track's engine);
  * HOME, MIXER and CLOCK are one round, as HOME's taps go. A family of one page (GLO's SONG) stays */
 static void page_turn(int32_t dir)
 {
+    if (!ui.home && cur_page()->fam == FAM_SCL) {
+        scl_page_turn(dir);
+        return;
+    }
 #if CARAVEL_STASIS_EXPAND
     if(!ui.home && cur_page()->fam==FAM_FX){
         ui.page=(uint8_t)stasis_fx_page(ui.page,dir>0?1:-1,0);
@@ -990,6 +1027,7 @@ static void page_turn(int32_t dir)
         go_home();
         return;
     }
+    if (!ui.home && i == ui.page) return;                          /* the clamped endpoint is no page entry */
     ui.page = (uint8_t)i;
     ui.fam_last[fam] = ui.page;
     ui.home = 0;

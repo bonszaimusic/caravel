@@ -56,7 +56,7 @@ static __attribute__((noinline)) void drumx_render(track_t *t, voice_t *v, int32
     for (i = 0; i < n; i++) {
         int32_t s = y[i], o;
         if (g) s = (softclip((s * g) >> 12) * mk) >> 15;
-        o = voice_amp(soft_knee(s + (s >> 2), 24000), &amp, i) << 1;
+        o = voice_amp(soft_knee(s + (s >> 2), 24000), &amp, i) * 2; /* keep negative samples defined too */
         out[i] += o;
         if (DX_SIDE(t).on) {
             uint32_t bus = c->send[lane] >> 6;

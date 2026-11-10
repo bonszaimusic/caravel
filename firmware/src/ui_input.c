@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca UI input: LEDs, knobs and buttons, SEQ step entry, panel setup. */
 #include "ui_name.c"                                    /* NAME: naming user presets and projects */
+uint8_t link_setup_row;                              /* LINK page: 0 LINK, 1 HARMONY SETUP */
 /* ----------------------------------------------------------- LEDs --- */
 /* The LED picture is built off-line and copied one byte per column: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker. */
@@ -1035,12 +1036,28 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
     if (pg->graph == GR_LINK) {                       /* K1 SOURCE, K2 RETRIG; K3/K4 show the source */
+        if (link_setup_row) {                         /* the lower HARMONY SETUP row: K1 only */
+            if (slot == 0u) {
+                uint8_t nv = (uint8_t)(steps > 0);           /* positive ON, negative OFF */
+                if (nv != harmony_on) {                      /* idempotent: no phase restart on ON -> ON */
+                    harmony_perf_clear();
+                    harmony_on = nv;
+                    harmony_base_bar = HARM_BAR();
+                    harmony_bar = 0;
+                    ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
+                    ui.force = 1;
+                }
+            }
+            return;
+        }
         if (slot == 0u) {
-            uint32_t cur = link_src[song.sel], n = 0;
+            uint32_t cur = link_src[song.sel], n = 0, is_src = 0, x;
+            for (x = 0; x < NTRK; x++)
+                is_src |= link_src[x] == song.sel + 1u;   /* a track others follow cannot follow one itself (no chains) */
             do {
                 cur = (uint8_t)((cur + (steps > 0 ? 1u : 4u)) % 5u);
                 n++;
-                if (!cur || (cur != song.sel + 1u && !link_src[cur - 1u]))
+                if (!cur || (!is_src && cur != song.sel + 1u && !link_src[cur - 1u]))
                     break;
             } while (n < 5u);
             link_src[song.sel] = (uint8_t)(cur <= NTRK ? cur : 0u);
@@ -1051,9 +1068,9 @@ static void edit_param(uint32_t slot, int32_t steps)
             if (r < 0) r += 4;
             link_retrig[song.sel] = (uint8_t)r;
             ui.force = 1;
-        } else if (slot == 3u) {
-            harmony_follow[song.sel] = (uint8_t)!harmony_follow[song.sel];
-            ui_message(harmony_follow[song.sel] ? "HARMONY: TRACK ON" : "HARMONY: TRACK OFF");
+        } else if (slot == 3u && steps) {            /* FOLLOW: right ON, left OFF, whatever the burst (as the global switch) */
+            harmony_follow[song.sel] = (uint8_t)(steps > 0);
+            ui_message(harmony_follow[song.sel] ? "FOLLOW ON" : "FOLLOW OFF");
             ui.force = 1;
         }
         return;
@@ -1066,10 +1083,7 @@ static void edit_param(uint32_t slot, int32_t steps)
                 d &= 3;
                 hdur_set(slot, (uint8_t)d);
             } else {
-                int32_t r = (int32_t)hroot_get(slot) + steps;
-                if (r < 0) r += 12;
-                if (r > 11) r -= 12;
-                hroot_set(slot, (uint8_t)r);
+                hroot_set(slot, (uint8_t)harmony_root_step(hroot_get(slot), steps));   /* scale degrees of T1's scale only */
             }
             ui.force = 1;
         }
@@ -1567,6 +1581,22 @@ static int page_tap(uint32_t b)
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
+    if (b == B_SCL && !ui.home) {                        /* one row step, then the page step */
+        if (cur_page()->graph == GR_LINK && !link_setup_row) {
+            link_setup_row = 1;
+            ui_message("HARMONY SETUP");
+            ui.force = 1;
+            return 1;
+        }
+        if (cur_page()->graph == GR_HARMONY && !harmony_edit_dur) {
+            harmony_edit_dur = 1;
+            ui_message("HARMONY: DURATIONS");
+            ui.force = 1;
+            return 1;
+        }
+        link_setup_row = 0;
+        harmony_edit_dur = 0;                           /* the next SCL press is a page step */
+    }
     for (f = FAM_HOME + 1u; f < FAM_COUNT; f++)        /* (GLO SEQ SAVE ..: HOME is ui_input's, home_tap) */
         if (FAM_BTN[f] == b && b != B_HOME) {
             open_family(f);
@@ -1785,21 +1815,7 @@ static void ui_input(void)
         else if(g==GR_MACROMAP&&(oct&1u)){hp_open_graph(GR_MACRO);oct=0;}
     }
 #endif
-    if (!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && !layer_held() && oct &&
-        cur_page()->graph == GR_HARMONY) {
-        /* OCT+: the bus on/off; OCT-: K1..K4 edit the DUR row instead of the roots */
-        if (oct & 2u) {
-            harmony_on = (uint8_t)!harmony_on;
-            harmony_base_bar = perf_bars_q16 >> 16;
-            harmony_bar = 0;
-            ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
-        } else if (oct & 1u) {
-            harmony_edit_dur = (uint8_t)!harmony_edit_dur;
-            ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
-        }
-        oct = 0;
-        ui.force = 1;
-    }
+
                       /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();
@@ -2108,7 +2124,7 @@ static void ui_input(void)
         else if(!glo&&!lay&&!kq&&!mom_down()&&!lock_held()&&cur_page()->graph==GR_HOMEEDIT){hp_editor_sync();hp_edit_row=clamp((int32_t)hp_edit_row+s,0,hp.track[song.sel].count-1);ui.force=1;}
         else
 #endif
-        if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
+        if (!glo && sel_mode() >= SEL_MODW) {  /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE) {   /* MENU > SELECT PAGE (1.5.5, #188): the pages, a detent
                                                          * each (ui.c page_turn); the tempo is GLO + SELECT, CLOCK's

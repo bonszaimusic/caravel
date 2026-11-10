@@ -10,7 +10,7 @@ Status: prepared for the FM-1; not yet run on hardware.
 ## 1. Project format
 
 1. Flash the build, power on, open `SAVE > PROJECT`.
-2. Load an existing **FUN10** slot. It must load, and its 0.11 HARMONY roots/on/off (if any) must appear on `SCL > HARMONY`.
+2. Load an existing **FUN10** slot (saved by 0.11.0 or earlier). It must load with HARMONY **off** (only an unreleased development build kept roots there).
 3. Change: four HARMONY roots, four durations, bus on/off, per-track LINK source/retrigger.
 4. Save to another slot; power-cycle; load that slot.
 5. Check every value after the reload. The slot must be `FUN11`; older firmware will show it `EMPTY` (expected).
@@ -18,11 +18,11 @@ Status: prepared for the FM-1; not yet run on hardware.
 
 ## 2. SCL two-group pages
 
-1. `SCL` shows two rows of four cells: `SCL` above, `CHORD` below. The page you tapped is the row `K1..K4` edit.
-2. Tap `SCL` again: the lower row becomes active; its knobs edit `CHRD / VOIC / LATCH`.
-3. Tap `SCL` until `LINK`: `K1 SOURCE`, `K2 RETRIG`; no source that is itself linked may be offered.
-4. Tap `SCL` until `HARMONY`: top row chord names, bottom row durations. `OCT-` switches `K1..K4` between roots and durations; the header shows `ON`/`OFF`.
-5. Turn a knob after every page change; the value and the card must change. Repeat `SCL`-tap and knob turns 20 times.
+1. `SCL` shows two rows of four cells: `SCL` above, `CHORD` below. The SCL button and **SELECT** both step the pages SCL -> CHORD -> LINK -> HARMONY, as ENV/ENV DEST.
+2. On `CHORD`, its knobs edit `CHRD / VOIC / LATCH`; on `SCL`, `ROOT / SCL / QNT / TRN`.
+3. Next opens **LINK / HARMONY SETUP**: upper row `K1 SOURCE`, `K2 RETRIG`, `K3 KEY`, `K4 HARMONY`; on this page the first **SCL** press switches to the lower HARMONY SETUP row, whose `K1` is the bus ON/OFF; the next SCL press steps on. No linked source may be offered.
+4. With HARMONY ON, `SELECT` opens the HARMONY page: top row chord names, bottom row durations. **SELECT** switches ROOT/DURATION and must move the highlighted row; the first **SCL** press also opens durations, the next steps on. The bus switch is on LINK / HARMONY SETUP, not this page.
+5. `OCT-/OCT+` are ordinary octave keys everywhere; they do not switch rows or the bus. Turn a knob after every page/row change; the value and the card must change. Repeat the SELECT page turns and SCL row taps 20 times and from HOME.
 
 ## 3. Clock
 
@@ -35,10 +35,12 @@ Status: prepared for the FM-1; not yet run on hardware.
 ## 4. Harmony / Link sound
 
 1. `CHRD BUS` + `HARMONY ON`: a held key plays the current bus chord; on a bar change with `RETRIG CHORD` it retriggers.
-2. T2 `SOURCE T1`, `RETRIG LINK`: change T1's ROOT/SCL; T2's held `CHRD BUS` chord retriggers.
+2. With `CHRD OFF`, `HARMONY ON` and the track following: a live/mono note snaps to the nearest chord tone (C/E/G).
+3. Play a chord with `LATCH` on and `RETRIG CHORD`: a harmony chord change retriggers the latched notes too.
+3. T2 `SOURCE T1`, `RETRIG LINK`: change T1's ROOT/SCL; T2's held chord retriggers.
 3. Sequencer and ARP strong steps take chord tones; weak steps stay scale notes.
 4. `SEQ TOOLS > G5` GENERATE: strong steps take chord tones while HARMONY is on.
-5. `SCL + OCT+`: one-shot copy still works. `GLO + G4/G5` must do **nothing** (removed setup shortcuts).
+5. `SCL + OCT+` on SCL/CHORD: one-shot copy still works. On visible HARMONY it does nothing; on HOME it still copies the SCL of the selected track even if HARMONY was the hidden last page. `GLO + G4/G5` must do **nothing** (removed setup shortcuts).
 
 ## 5. Regressions
 

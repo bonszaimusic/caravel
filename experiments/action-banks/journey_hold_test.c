@@ -4,8 +4,8 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN journey_hold_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void tap(uint32_t k){key(1u<<(ACT_KEY_FIRST+k));key(0);}   /* 0 = BANK, 1..4 = A1..A4 */
-static void hold(uint32_t k,uint32_t ms){web_keys(1u<<(ACT_KEY_FIRST+k));run_ms(ms);web_keys(0);run_ms(60);}
+static void tap(uint32_t k){key(1u<<(k?action_keys[k-1u]:ACT_BANK_NEXT));key(0);}   /* 0 = BANK, 1..4 = A1..A4 */
+static void hold(uint32_t k,uint32_t ms){web_keys(1u<<(k?action_keys[k-1u]:ACT_BANK_NEXT));run_ms(ms);web_keys(0);run_ms(60);}
 static int32_t absd(int32_t a){return a<0?-a:a;}
 static void sel(uint32_t t){song.sel=t;go_home();action_refresh();run_ms(60);}
 static void set_all(int r1,int p1,int r2,int p2){trk[0].p[P_REV]=(int16_t)r1;trk[0].p[P_PAN]=(int16_t)p1;trk[1].p[P_REV]=(int16_t)r2;trk[1].p[P_PAN]=(int16_t)p2;}

@@ -2,8 +2,8 @@
 #define FELUCCA_HOME_PERF 1
 #define PAIR_TEST_MAIN random_return_baseline_main
 #include "../engine-pair-morph/pair_test.c"
-static void random_press(void){key(1u<<(ACT_KEY_FIRST+1u));key(0);}
-static void return_press(void){key(1u<<(ACT_KEY_FIRST+3u));key(0);}
+static void random_press(void){key(1u<<(action_keys[0]));key(0);}
+static void return_press(void){key(1u<<(action_keys[2]));key(0);}
 static void finish(void){for(uint32_t i=0;i<8;i++)hp_rm_poll(hp_rm.stamp+1000u);CHECK(hp_rm.state==HP_RM_IDLE || hp_rm.state==HP_RM_DONE);}
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);normal_off();pair_disable();

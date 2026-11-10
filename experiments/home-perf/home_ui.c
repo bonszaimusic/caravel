@@ -20,7 +20,16 @@ static const param_desc_t HP_JDESC[HP_JVN]={
  {"JRN WAIT",F_PCT,0,127,0,0,0},{"RM BARS",F_PCT,0,127,0,0,0},
  {"RM DEPTH",F_PCT,0,127,0,0,0},{"RM SCOPE",F_PCT,0,127,0,0,0},{"RM SHAPE",F_PCT,0,127,0,0,0}};
 #endif
+#if CARAVEL_ACTION_BANKS
+static const param_desc_t HP_HDESC[5]={
+ {"HARM HOLD",F_PCT,0,127,0,0,0},{"HARM PREV",F_PCT,0,127,0,0,0},
+ {"HARM NEXT",F_PCT,0,127,0,0,0},{"HARM RESET",F_PCT,0,127,0,0,0},
+ {"HARM SHIFT",F_PCT,0,127,64,0,0}};
+#endif
 static const param_desc_t *hp_vdesc(uint32_t id){
+#if CARAVEL_ACTION_BANKS
+ if(hp_harmony_target(id))return &HP_HDESC[id-HP_HFIRST];
+#endif
 #if HP_JVN
  if(id>=HP_VFIRST+8u)return &HP_JDESC[(id-HP_VFIRST-8u)%HP_JVN];
 #endif
@@ -98,6 +107,14 @@ static void hp_set(hp_ref_t r,int32_t value,int capture)
 #endif
 static void hp_midi(track_t*t,uint32_t id,uint32_t value)
 {
+#if CARAVEL_ACTION_BANKS
+ if(hp_harmony_target(id)){
+  uint32_t k=id-HP_HFIRST;
+  if(k==4u){harmony_shift_want=(int8_t)((value*14u+63u)/127u)-7;harmony_shift_dirty=1;}
+  else {uint8_t hi=value>=64u;if(hi&&!harmony_cc_hi[k]&&harmony_on)harmony_command=(uint8_t)(k+1u);harmony_cc_hi[k]=hi;}
+  return;
+ }
+#endif
 #if HP_JVN
  if(hp_journey_target(id)){hp_journey_cc(id,value);return;} /* (a mailbox: the UI thread acts on it) */
 #endif
@@ -239,7 +256,9 @@ static void hp_source(void)
  if(r.kind==HP_PAIR){hp_open_graph(GR_PAIR);return;}if(r.kind==HP_MACRO){hp_open_graph(GR_MACRO);return;}
  if(r.kind==HP_FM6){fop_op=5-r.id/FP_OP;if(r.aux==FO_RATE||r.aux==FO_ELVL)fop_stg=(r.id%FP_OP)-FO_OFF[r.aux];}
  if(r.kind==HP_DX&&r.id>=DX_SOUND_FIRST){dx_ui_lane=(r.id-DX_SOUND_FIRST)/16;uint32_t field=(r.id-DX_SOUND_FIRST)%16;dx_ui_side=field>=5&&field<10;}
- if(r.page<NPAGES&&page_visible(r.page)){ui.home=0;ui.page=r.page;page_entered();ui.force=1;return;}
+ {int has=r.kind!=HP_TRACK&&r.kind!=HP_GLOBAL;for(uint32_t k=0;r.page<NPAGES&&k<4;k++)has|=PAGES[r.page].id[k]==hp_tid(r);
+  if(r.page<NPAGES&&PAGES[r.page].graph==GR_MOD&&hp_tid(r)>=P_M1SRC&&hp_tid(r)<=P_M4AMT)has=1;   /* (the MOD page shifts its ids by its slot at run time) */   /* round 7: a cell stored before LINK and HARMONY joined PAGES[] names a page that moved: only a page that holds the parameter counts */
+  if(has&&r.page<NPAGES&&page_visible(r.page)){ui.home=0;ui.page=r.page;page_entered();ui.force=1;return;}}
  uint32_t id=hp_tid(r);for(uint32_t i=0;i<NPAGES;i++)for(uint32_t k=0;k<4;k++)if(PAGES[i].id[k]==id&&page_visible(i)&&((r.kind==HP_GLOBAL)==(PAGES[i].scope==SC_GLOBAL))){ui.home=0;ui.page=i;page_entered();ui.force=1;return;}
  ui_message("OPEN SOURCE VIA ITS BUTTON");
 }
@@ -447,6 +466,23 @@ static void hp_tracks(int x0,int y)
 static void hp_sea(int y){(void)y;}                   /* no snapshots or journey in this profile: no chart */
 static void hp_tracks(int x,int y){(void)x;(void)y;}
 #endif
+#if CARAVEL_ACTION_BANKS   /* its only callers are the ACTION banks; the legacy profile (backup_test.c, felucca_web.c before seq.c) has no HARMONY state at this point */
+/* The HARMONY performance state in words (U08/U11/U12): the next bar's command when one is queued (what NEXT / RESUME / RESET will do), else
+ * the run state, then the SHIFT in scale degrees. brief: the permanent chip on the other banks (nothing while HARMONY is off or nothing is going on). */
+static void hp_harm_status(char*b,uint32_t n,int brief)
+{
+ char sh[16];const char*st;
+ if(!harmony_on){str_cpy(b,brief?"":"OFF: SCL > HARMONY SETUP",n);return;}
+ perf_format(sh,sizeof sh,"SHIFT %s%d DEG",harmony_shift_want>0?"+":"",harmony_shift_want);
+ st=harmony_pending==H_PREV?"PREV BAR":harmony_pending==H_NEXT?"NEXT BAR":harmony_pending==H_RESUME?"RESUME: NEXT BAR":
+    harmony_pending==H_RESET?"RESET: CHORD 1":harmony_shift_pending?"SHIFT NEXT BAR":harmony_hold?"HOLD":"RUN";
+ if(brief&&!harmony_hold&&!harmony_shift_want&&!harmony_pending&&!harmony_shift_pending){str_cpy(b,"",n);return;}
+ if(harmony_pending==H_RESET)perf_format(b,n,brief?"HARM RESET: CHORD 1, SHIFT 0":"RESET: CHORD 1, SHIFT 0");
+ else if(brief)perf_format(b,n,"HARM %s%s%s",st,harmony_shift_want?" ":"",harmony_shift_want?sh:"");
+ else{perf_format(b,n,"%s %s",st,sh);
+  if(text_w(&AF_S,b)>154){perf_format(sh,sizeof sh,"%s%d DEG",harmony_shift_want>0?"+":"",harmony_shift_want);perf_format(b,n,"%s %s",st,sh);}}   /* too long for the bank: SHIFT without its word */
+}
+#endif
 static void hp_draw_home(void)
 {
  hp_track_t*h=&hp.track[song.sel];uint32_t first=h->active&~1u;
@@ -486,8 +522,19 @@ static void hp_draw_home(void)
    }else{
     cv_rrect(7,ya+3,60,17,4,T_RAISE,T_SURF);cv_text_in(7,ya+4,60,&AF_S,bank,T_ACCENT,T_RAISE);
    }
-   hp_sea(ya+2);
-   if(!action_setup)hp_tracks(7,ya+22);
+   if(action_bank==ACT_BANK_HARMONY){
+    static const char *const names[12]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+    uint32_t idx=harmony_chord_at(harmony_bar);char status[32];
+    for(uint32_t i=0;i<4u;i++){
+     int x=82+(int)i*37;cv_rrect(x,ya+4,35,14,3,i==idx?T_ACCENT:T_RAISE,T_SURF);
+     uint32_t r=hroot_live(i),mask=harmony_mask_root(i);char cn[8];
+     const char *suf=(mask&(1u<<((r+3u)%12u)))?((mask&(1u<<((r+6u)%12u)))?"dim":"m"):"";
+     perf_format(cn,sizeof cn,"%s%s",names[r],suf);
+     cv_text_in(x,ya+5,35,&AF_S,cn,i==idx?T_INK:T_TEXT,i==idx?T_ACCENT:T_RAISE);
+    }
+    hp_harm_status(status,sizeof status,0);
+    cv_text_in(82,ya+22,155,&AF_S,status,T_TEXT,T_SURF);
+   }else {hp_sea(ya+2);if(!action_setup)hp_tracks(7,ya+22);{char hs[40];hp_harm_status(hs,sizeof hs,1);if(hs[0])cv_free_text(8,ya+74,&AF_S,hs,T_ACCENT,T_BG,230);}}   /* U08: HARMONY goes on in the other banks (under the panel: the strip above is the sea) */
   }
   #if FELUCCA_RANDOM_MORPH
   #endif
@@ -505,6 +552,7 @@ static void hp_draw_home(void)
    }
    #endif
    #endif
+   if(action_bank==ACT_BANK_HARMONY && k==0u && harmony_hold)label=harmony_pending==H_RESUME?"QUEUED":"RESUME";
    int kx=7+(int)k*57;cv_rrect(kx,ky,54,30,4,T_RAISE,T_SURF);
    const aafont_t*f=text_w(&AF_M,label)<=48?&AF_M:&AF_S;
    cv_text_in(kx,ky+(30-(f==&AF_M?15:12))/2,54,f,label,T_TEXT,T_RAISE);
@@ -514,7 +562,10 @@ static void hp_draw_home(void)
    cv_rrect(3,y+3,234,38,5,T_SURF,T_BG);cv_bg=T_SURF;
    cv_rrect(7,y+7,60,22,4,T_RAISE,T_SURF);cv_text_in(7,y+9,60,&AF_S,"ACTION",T_MID,T_RAISE);
    hp_sea(y+5);
-   cv_free_text(5,y+44,&AF_S,ui.msg_t?ui.msg:"HOME x2: ACTION",ui.msg_t?T_ACCENT:T_MID,T_BG,230);
+   {char hs[40];hp_harm_status(hs,sizeof hs,1);
+    if(ui.msg_t)cv_free_text(5,y+44,&AF_S,ui.msg,T_ACCENT,T_BG,230);
+    else if(hs[0])cv_free_text(5,y+44,&AF_S,hs,T_ACCENT,T_BG,230);                 /* U08: the HARMONY state stays in view with ACTION off */
+    else cv_free_text(5,y+44,&AF_S,"HOME x2: ACTION",T_MID,T_BG,230);}
   }
 #endif
  {                                                     /* the common footer: engine, preset (the partner's and the morph for a pair member), page */

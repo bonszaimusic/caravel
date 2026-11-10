@@ -91,7 +91,7 @@ static __attribute__((noinline)) void dx_layer(dx_voice_t *v, int32_t *y, uint32
         for (i = 0; i < n; i++, inc += dinc, ga += dga, ix += dix) {
             int32_t o2;
             o = sine_i(ph + (uint32_t)(sine_i(ph2) * ix) * 512u + (uint32_t)(o * fbk));
-            o2 = dx_tri(ph4 + (uint32_t)(o * lx));
+            o2 = dx_tri(ph4 + (uint32_t)o * (uint32_t)lx); /* phase modulation wraps modulo 2^32 */
             y[i] = mulq15(o + (((o2 - o) * lm) >> 6), ga >> 8);
             ph += (uint32_t)inc << 4;
             ph2 += ((uint32_t)inc >> 8) * ratio;
@@ -101,7 +101,7 @@ static __attribute__((noinline)) void dx_layer(dx_voice_t *v, int32_t *y, uint32
         for (i = 0; i < n; i++, inc += dinc, ga += dga) {
             int32_t o2;
             o = sine_i(ph + (uint32_t)(o * fbk));
-            o2 = dx_tri(ph4 + (uint32_t)(o * lx));
+            o2 = dx_tri(ph4 + (uint32_t)o * (uint32_t)lx);
             y[i] = mulq15(o + (((o2 - o) * lm) >> 6), ga >> 8);
             ph += (uint32_t)inc << 4;
             ph4 += ((uint32_t)inc >> 6) * 1448u;
@@ -280,7 +280,7 @@ static __attribute__((noinline)) void dx_run(const dx_lane_t *L, dx_voice_t *v, 
             v2 = ic2 + ((c.a2 * ic1 + c.a3 * v3) >> 13);                                                           \
             ic1 = clamp(2 * v1 - ic1, -150000, 150000);                                                            \
             ic2 = clamp(2 * v2 - ic2, -150000, 150000);                                                            \
-            y[i] += mulq15(clamp((OUT) << 1, -32767, 32767), gn >> 8);                                            \
+            y[i] += mulq15(clamp((OUT) * 2, -32767, 32767), gn >> 8);                                             \
         }
         if (flt == DXF_LP)
             DX_NOISE(v2)

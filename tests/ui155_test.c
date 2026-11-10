@@ -198,6 +198,7 @@ static int select_page(void)
     bad += check("  PAGE: HOME -> MIXER -> CLOCK -> HOME (as HOME's taps), back too; CLOCK's KNOB 1 still the tempo", ok);
 
     go_title("EDIT 1"); frame();
+    ok = 1;
     for (i = 0; i < 12u && ok; i++) {                   /* EDIT's pages: only the ones the engine shows */
         turn(EN_SELECT, 1);
         ok &= !ui.home && cur_page()->fam == FAM_EDIT && page_visible(ui.page);

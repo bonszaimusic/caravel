@@ -211,11 +211,15 @@ static void layer_opened(uint32_t l);
 /* #83: the second tap of a double tap: the page the first one left comes back, and the layer locks open over it */
 static void layer_lock(uint32_t l, uint32_t now)
 {
-    ui.home = lys.nv.home;
-    ui.page = lys.nv.page;
-    memcpy(ui.fam_last, lys.nv.fam, sizeof ui.fam_last);
-    ui.act = lys.nv.act;
-    song.seq_mode = lys.nv.seq;
+    if (l != LAYER_SCL) {                               /* #83: back over the page the first tap left. SCL is
+                                                         * pages only: do not jump back from the page the tap
+                                                         * opened (the "SCL hangs" path); the lock stays over it. */
+        ui.home = lys.nv.home;
+        ui.page = lys.nv.page;
+        memcpy(ui.fam_last, lys.nv.fam, sizeof ui.fam_last);
+        ui.act = lys.nv.act;
+        song.seq_mode = lys.nv.seq;
+    }
     ui.entry_open = 0;
     if (lys.dt_hint || l == LAYER_REC)
         ui.msg_t = 0;                                   /* (the first tap's "HOLD [..] QUICK", REC's) */
@@ -344,10 +348,11 @@ static void layer_tap(uint32_t l)
         lys.dt_hint = 1;
     }
     if (!acted && !name_on() && !ui.confirm && !ui.menu &&
-        !(l == LAYER_SCL && page_before < NPAGES && PAGES[page_before].fam == FAM_SCL &&
-          page_before != ui.page)) {
-        /* A page-changing SCL tap must stay a page step, or two quick SCL taps jump back and lock (the
-         * "SCL hangs"). Other families keep #83's second-tap lock. */
+        !(l == LAYER_SCL &&
+          (lys.nv.home || (page_before < NPAGES &&
+                           (PAGES[page_before].fam == FAM_SCL || PAGES[page_before].fam == FAM_SEQ))))) {
+        /* A page-changing SCL tap from SCL itself, HOME or SEQ must stay a page step, or two quick taps
+         * lock/jump back (the "SCL hangs"). SCL from ENV keeps #83's second-tap lock. */
         lys.dt_l = (uint8_t)l;
         lys.dt_ms = fm1_ms;
     } else {
@@ -790,8 +795,13 @@ static void layer_oct_open(uint32_t pressed)
 static void ly_scale_all(void)
 {
     track_t *s = &trk[lys.trk % NTRK];
-    uint32_t i;
+    uint32_t i, o = 0;
     for (i = 0; i < NTRK; i++) {
+        if (i != lys.trk % NTRK && o < 3u) {          /* (round 7) the other tracks' key, scale and quantize, packed into the layer's spare values (v[6..8]), so OCT- can put them back; bit 15 marks 'taken'; the FIRST ALL of a hold is the one OCT- undoes */
+            if (!((uint16_t)lys.v[6u + o] & 0x8000u))
+            lys.v[6u + o] = (int16_t)(0x8000u | (trk[i].p[P_ROOT] & 15u) | (uint32_t)(trk[i].p[P_SCALE] & 63u) << 4 | (uint32_t)(trk[i].p[P_QUANT] & 31u) << 10);
+            o++;
+        }
         trk[i].p[P_ROOT] = s->p[P_ROOT];
         trk[i].p[P_SCALE] = s->p[P_SCALE];
         trk[i].p[P_QUANT] = s->p[P_QUANT];
@@ -815,7 +825,7 @@ static void ly_bar_reset(void)
 /* OCT- / OCT+ in a SET layer: no octave; OCT- let go puts back what the layer changed. Returns the taps left */
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 {
-    uint32_t dn = panel.btn[B_OCTDN], up = panel.btn[B_OCTUP], k, mine;
+    uint32_t dn = panel.btn[B_OCTDN], up = panel.btn[B_OCTUP], k, j, mine;
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
@@ -826,8 +836,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         mine = 0;
     }
     if (mine & 2u) {                                    /* OCT+ let go: SCL puts its scale on all, GLO arms the bar reset */
-        if (lys.l == LAYER_SCL)
-            ly_scale_all();
+        if (lys.l == LAYER_SCL && (ui.home || cur_page()->graph != GR_HARMONY))
+            ly_scale_all();                            /* HOME keeps SCALE TO ALL; visible HARMONY has no combo */
         else if (lys.l == LAYER_GLO)
             ly_bar_reset();
         mine &= ~2u;                                    /* (no other meaning in a SET layer) */
@@ -880,6 +890,16 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 trk[lys.trk % NTRK].p[P_ROOT + k] = lys.v[k];
             trk[lys.trk % NTRK].p[P_CHRD] = lys.v[4];
             trk[lys.trk % NTRK].p[P_VOIC] = lys.v[5];
+            for (k = 0, j = 0; k < NTRK; k++)         /* after SCL + OCT+ (ALL): the other tracks' key, scale and quantize too */
+                if (k != lys.trk % NTRK && j < 3u) {
+                    uint16_t w = (uint16_t)lys.v[6u + j++];
+                    if (w & 0x8000u) {
+                        trk[k].p[P_ROOT] = (int16_t)(w & 15u);
+                        trk[k].p[P_SCALE] = (int16_t)((w >> 4) & 63u);
+                        trk[k].p[P_QUANT] = (int16_t)((w >> 10) & 31u);
+                    }
+                }
+            lys.v[6] = lys.v[7] = lys.v[8] = 0;
             ui_message("SCALE PUT BACK");
         }
     }

@@ -59,12 +59,32 @@ static void link_retrigger(uint32_t i);
  * that use the bus (sequencer strong steps, ARP strong steps, the G5 generator, CHRD BUS) take chord tones there. */
 static uint8_t harmony_on;
 static volatile uint32_t harmony_bar;
-static uint32_t harmony_base_bar;                 /* perf_bars_q16 >> 16 at Start / bar reset */
+static uint32_t harmony_base_bar;                 /* HARM_BAR() at Start / bar reset */
+static uint16_t harmony_phase;                    /* perf_bars_q16's fraction at the last Start / bar reset: HARMONY (and the ARP's bar sync) count bars from there,
+                                                   * so a start is a bar line for them; perf_bars_q16 itself (JOURNEY's clock) is never moved (round 7) */
+#define HARM_BAR() ((perf_bars_q16 - harmony_phase) >> 16)
 static uint8_t harmony_root[4], harmony_dur[4];
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
 static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
-static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes) */
+static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes); felucca_init sets it on, as INIT and every load do (round 7: an initializer would cost 64 B of RAM against the guard) */
+#if CARAVEL_ACTION_BANKS
+/* Transient performance overlay. Only events_block moves the musical playhead. */
+enum {H_NONE,H_HOLD,H_PREV,H_NEXT,H_RESET,H_RESUME};
+static volatile uint8_t harmony_command, harmony_pending, harmony_hold;
+static volatile int8_t harmony_shift_want;
+static int8_t harmony_shift;
+static volatile uint8_t harmony_shift_pending, harmony_shift_dirty;
+static uint8_t harmony_cc_hi[4];
+static void harmony_perf_clear(void)
+{
+ harmony_command=harmony_pending=harmony_hold=harmony_shift_pending=harmony_shift_dirty=0;
+ harmony_shift=harmony_shift_want=0;
+ memset(harmony_cc_hi,0,sizeof harmony_cc_hi);
+}
+#else
+static void harmony_perf_clear(void) {}
+#endif
 static uint8_t hroot_get(uint32_t i) { return harmony_root[i & 3u] % 12u; }
 static void hroot_set(uint32_t i, uint8_t r) { harmony_root[i & 3u] = (uint8_t)(r % 12u); }
 static uint8_t hdur_get(uint32_t i) { return harmony_dur[i & 3u] & 3u; }
@@ -83,31 +103,116 @@ static uint32_t harmony_chord_at(uint32_t bar)
     }
     return 3u;
 }
-static uint16_t harmony_mask_root(uint32_t idx)
+/* T1's scale as absolute pitch classes (its scale mask turned by T1's ROOT): what every bus root and chord is built from. */
+static uint32_t harmony_scale_abs(void)
 {
     const track_t *k = &trk[0];
-    uint32_t mask = scale_mask(k), notes[12], n = 0, i, at = 0, root = hroot_get(idx);
-    uint16_t out = 0;
+    uint32_t sm = scale_mask(k), abs = 0, i;
+    if (sm == 0xFFFu)
+        sm = SCALE_MASK[1];                           /* CHR has no key of its own: the major scale of ROOT, as CHRD DIA3 builds on it (round 7) */
+    for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
+        if ((sm >> i) & 1u)
+            abs |= 1u << ((k->p[P_ROOT] + (int32_t)i + 120) % 12);
+    return abs;
+}
+/* The one effective root of a bus chord, for tone generation, the editor and the display: a root inside T1's scale is
+ * itself; a stored root outside it (a project from before roots were limited to the scale, or a scale changed after the
+ * roots were set) is the scale note below it, wrapping to the highest one. The stored value is never rewritten. */
+static uint32_t harmony_root_eff(uint32_t root)
+{
+    uint32_t abs = harmony_scale_abs(), d;
+    root %= 12u;
+    for (d = 0; abs && d < 12u; d++)
+        if ((abs >> ((root + 12u - d) % 12u)) & 1u)
+            return (root + 12u - d) % 12u;
+    return root;
+}
+/* The next root from `root` along T1's scale, `steps` scale degrees (+ up, - down, wrapping at the octave); a chromatic
+ * scale (or one with fewer than three notes) steps by semitones. The start is the effective root: what the card shows. */
+static uint32_t harmony_root_step(uint32_t root, int32_t steps)
+{
+    uint32_t abs = harmony_scale_abs(), notes[12], n = 0, i, at = 0;
+    root = harmony_root_eff(root);
+    if (__builtin_popcount(abs) < 3)
+        abs = 0xFFFu;
     for (i = 0; i < 12u; i++)
-        if ((mask >> i) & 1u)
+        if ((abs >> i) & 1u) {
+            if (i == root)
+                at = n;
+            notes[n++] = i;
+        }
+    {
+        int32_t pos = ((int32_t)at + steps) % (int32_t)n;
+        if (pos < 0)
+            pos += (int32_t)n;
+        return notes[pos];
+    }
+}
+/* Root edits/store remain the prepared progression; SHIFT moves its scale degree. */
+static uint8_t hroot_live(uint32_t idx)
+{
+ uint8_t root=hroot_get(idx);
+#if CARAVEL_ACTION_BANKS
+ if(harmony_shift){
+  uint32_t abs=harmony_scale_abs(),n=0,at=0;uint8_t notes[12];
+  for(uint32_t i=0;i<12u;i++)if(abs&(1u<<i))notes[n++]=(uint8_t)i;
+  if(n){at=n-1u;for(uint32_t i=0;i<n;i++)if(notes[i]<=root)at=i;
+   int32_t pos=((int32_t)at+harmony_shift)%(int32_t)n;if(pos<0)pos+=(int32_t)n;root=notes[pos];}
+ }
+#endif
+ return (uint8_t)harmony_root_eff(root);
+}
+static uint16_t harmony_mask_pitch(uint32_t root)
+{
+    uint32_t abs = harmony_scale_abs(), notes[12], n = 0, i, at = 0;
+    uint16_t out;
+    for (i = 0; i < 12u; i++)
+        if ((abs >> i) & 1u)
             notes[n++] = i;
     if (n < 3u)
         return 0;
+    root = harmony_root_eff(root);
     for (i = 0; i < n; i++)
         if (notes[i] == root) {
             at = i;
             break;
         }
-    if (i == n) {                                  /* outside T1's scale: the scale note below it */
-        at = n - 1u;
-        for (i = 0; i < n; i++)
-            if (notes[i] < root)
-                at = i;
+    out = (uint16_t)(1u << notes[at]);              /* a third and a fifth, not "every other scale note":
+                                                     * a pentatonic scale would otherwise give no third */
+    {
+        static const int8_t third[] = {3, 4, 2, 5};
+        static const int8_t fifth[] = {7, 6, 8};
+        uint32_t want = notes[at];
+        for (i = 0; i < sizeof third; i++)
+            if ((abs >> ((want + (uint32_t)third[i]) % 12)) & 1u) {
+                out |= (uint16_t)(1u << ((want + (uint32_t)third[i]) % 12));
+                break;
+            }
+        for (i = 0; i < sizeof fifth; i++)
+            if (!((out >> ((want + (uint32_t)fifth[i]) % 12)) & 1u) &&
+                ((abs >> ((want + (uint32_t)fifth[i]) % 12)) & 1u)) {
+                out |= (uint16_t)(1u << ((want + (uint32_t)fifth[i]) % 12));
+                break;
+            }
     }
-    for (i = 0; i < 3u; i++)
-        out |= (uint16_t)(1u << notes[(at + 2u * i) % n]);
     return out;
 }
+/* One description of a bus chord for tone generation (chord.c), the editor and the live display: its effective root (a
+ * pitch class) and its tones relative to that root (bit i: i semitones above it, the form chord_name() takes; 0: the
+ * scale has no triad). The editor names the PREPARED chord of a slot, the sounding one is the LIVE chord. */
+static uint32_t harmony_chord_desc(uint32_t root, uint16_t *rel)
+{
+    uint32_t r = harmony_root_eff(root), i;
+    uint16_t abs = harmony_mask_pitch(r), m = 0;
+    for (i = 0; i < 12u; i++)
+        if ((abs >> ((r + i) % 12u)) & 1u)
+            m |= (uint16_t)(1u << i);
+    *rel = m;
+    return r;
+}
+static uint32_t harmony_prepared_desc(uint32_t idx, uint16_t *rel) { return harmony_chord_desc(hroot_get(idx), rel); }
+static uint32_t harmony_live_desc(uint32_t idx, uint16_t *rel) { return harmony_chord_desc(hroot_live(idx), rel); }
+static uint16_t harmony_mask_root(uint32_t idx) { return harmony_mask_pitch(hroot_live(idx)); }
 static uint16_t harmony_mask_bar(uint32_t bar) { return harmony_mask_root(harmony_chord_at(bar)); }
 static uint16_t harmony_mask(const track_t *t)
 {
@@ -116,11 +221,12 @@ static uint16_t harmony_mask(const track_t *t)
         return 0;
     return harmony_mask_bar(harmony_bar);
 }
+static int chord_kit(const track_t *t);                /* chord.c: the track's keys are a kit / slices / hits */
 static uint32_t harmony_snap(const track_t *t, uint32_t n)
 {
     uint16_t mask = harmony_mask(t);
     uint32_t d;
-    if (!mask)
+    if (!mask || chord_kit(t))                      /* a note that picks a drum / slice is not a pitch to move */
         return n;
     for (d = 0; d <= 6u; d++) {
         if ((mask >> ((n + d) % 12u)) & 1u)
@@ -130,6 +236,26 @@ static uint32_t harmony_snap(const track_t *t, uint32_t n)
     }
     return n;
 }
+#if CARAVEL_ACTION_BANKS
+static uint32_t harmony_chord_start(uint32_t idx)
+{
+ uint32_t bar=0;for(uint32_t i=0;i<idx;i++)bar+=1u<<hdur_get(i);return bar;
+}
+/* Called at the audio control boundary, stopped immediately or playing at a bar line. */
+static void harmony_perf_apply(uint32_t bar)
+{
+ uint32_t idx=harmony_chord_at(harmony_bar),cmd=harmony_pending;
+ if(cmd){
+  if(cmd==H_PREV)idx=(idx+3u)&3u;
+  else if(cmd==H_NEXT||cmd==H_RESUME)idx=(idx+1u)&3u;
+  else if(cmd==H_RESET){idx=0;harmony_hold=0;harmony_shift=harmony_shift_want=0;harmony_shift_pending=0;}
+  if(cmd==H_RESUME)harmony_hold=0;
+  harmony_bar=harmony_chord_start(idx);harmony_base_bar=(bar-harmony_bar)&0xFFFFu;
+  harmony_pending=H_NONE;
+ }
+ if(harmony_shift_pending){harmony_shift=harmony_shift_want;harmony_shift_pending=0;}
+}
+#endif
 static void midi_resync_cancel(void);
 static volatile uint8_t step_record_mask; /* transient per-track STEP REC; never live-write at the playhead */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
@@ -252,6 +378,18 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 }
 
 #include "chord.c"
+/* A bus chord's name for the editor and the display: "C", "Am", "F", "G" ... from the shared description (an
+ * effective root with root-relative tones); the bare note when the scale has no triad. live: the chord as it sounds now
+ * (SHIFT applied), else the one the slot prepares. b: 12 bytes. */
+static void harmony_card_name(uint32_t slot, char *b, int live)
+{
+    uint16_t rel;
+    uint32_t r = live ? harmony_live_desc(slot, &rel) : harmony_prepared_desc(slot, &rel);
+    if (rel)
+        chord_name(b, r, rel);
+    else
+        str_cpy(b, N_NOTE[r % 12u], 12);
+}
 
 /* ----------------------------------------------------------- latch --- */
 /* LATCH (P_LATCH, CHORD page; Caravel): the notes the keys and MIDI IN play go on sounding after their release, per track.
@@ -264,6 +402,12 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 enum { LT_OFF, LT_NEW, LT_STACK };
 static uint32_t lat_stay[NTRK][4];       /* bit n: note n was let go and sounds on */
 static uint32_t lat_eat[NTRK][4];        /* bit n: the press of note n ended it (STACK): its release does nothing */
+/* Older STACK voicings keep their pitches when the newest BUS chord moves. One bit per
+ * pitch is sufficient: only chord_last follows Harmony; earlier voicings stay in place. */
+static uint32_t lat_bus_other[NTRK][4];
+static uint8_t lat_bus_last[NTRK];
+static uint8_t lat_vel[NTRK][128];       /* the input velocity of a latched note (retrigger keeps the dynamics) */
+static volatile uint8_t link_retrig_req;  /* bit per track: a LINK key change asks the audio side to retrigger that track's held bus chord (round 7: the UI no longer touches voices) */
 static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
 
 static uint32_t latch_mode(const track_t *t)
@@ -287,20 +431,247 @@ static int arp_replace(const track_t *t)
     return m == LT_NEW || (t->p[P_AHOLD] && m != LT_STACK);
 }
 
+static int midi_note_held(const track_t *t, uint32_t note);
+static int midi_local_held(const track_t *t, uint32_t note);
+/* Before a fresh input replaces chord_last, its released pitches become older owners. */
+static void latch_bus_capture(track_t *t)
+{
+    uint32_t k = trk_index(t), j;
+    if (t->p[P_CHRD] == CH_BUS && !t->p[P_AMODE] && latch_mode(t) != LT_OFF)
+        for (j = 0; j < 4u; j++)
+            lat_bus_other[k][j] |= lat_stay[k][j];
+    lat_bus_last[k] = 0;
+}
+/* A released BUS input remains an owner even when another held chord shares a pitch
+ * (input_off is deliberately skipped for those shared pitches). Inspect the whole list
+ * before input_off consumes STACK's lat_eat bits. Sustain reaches this on pedal-up. */
+static void latch_bus_release(track_t *t, const uint8_t *notes, uint32_t n)
+{
+    uint32_t k = trk_index(t), j;
+    int matches = n == chord_last[k].n;
+    if (t->p[P_CHRD] != CH_BUS || t->p[P_AMODE] || latch_mode(t) == LT_OFF || !n)
+        return;
+    for (j = 0; j < n; j++) {
+        if (lat_get(lat_eat[k], notes[j])) return;
+        if (j >= chord_last[k].n || notes[j] != chord_last[k].note[j]) matches = 0;
+    }
+    if (matches)
+        lat_bus_last[k] = 1;
+    else
+        for (j = 0; j < n; j++)
+            lat_put(lat_bus_other[k], notes[j], 1);
+}
+
+static void chord_live_sync(uint32_t i);
 /* the latched notes end (LATCH off, ARP on, a new set, the release gesture; the notes a key holds are not among them) */
 static __attribute__((noinline)) void latch_free(track_t *t)
 {
     uint32_t k = trk_index(t), n;
     for (n = 0; n < 128u; n++)
-        if (lat_get(lat_stay[k], n))
-            trk_note_off(t, n);
+        if (lat_get(lat_stay[k], n) || lat_get(lat_bus_other[k], n)) {
+            if (!midi_local_held(t, n) && !midi_note_held(t, n))
+                trk_note_off(t, n);
+            lat_vel[k][n] = 0;
+        }
+    memset(lat_bus_other[k], 0, sizeof lat_bus_other[k]);
+    lat_bus_last[k] = 0;
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
+    chord_live_sync(k);
 }
 /* the track's latch state is gone (a panic ended every note; trk_all_off) */
 static void latch_forget(uint32_t k)
 {
+    memset(lat_bus_other[k], 0, sizeof lat_bus_other[k]);
+    lat_bus_last[k] = 0;
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
+    memset(lat_vel[k], 0, sizeof lat_vel[k]);
+    chord_live_sync(k);
+}
+/* A rebuilt CHRD BUS chord must stay eligible only while some owner still holds it. */
+static void chord_live_sync(uint32_t i)
+{
+    uint32_t k, m;
+    for (k = 0; k < 27u; k++)
+        if (kb_chn[k] && kb_live[k] && kb_trk[k] == i) {
+            chord_live[i] = 1;
+            return;
+        }
+    for (m = 0; m < MCHORD_N; m++)
+        if (mchord[m].id == i + 1u) {
+            chord_live[i] = 1;
+            return;
+        }
+    if (lat_any(lat_stay[i]) || lat_any(lat_bus_other[i]) || lat_bus_last[i])
+        chord_live[i] = 1;
+    else
+        chord_live[i] = 0;
+}
+
+/* Panic/CC120: no held panel key may re-arm the cached bus chord until a fresh press. The key's outgoing
+ * NoteOff list stays intact; only its retrigger eligibility is gone. */
+static void chord_panic(uint32_t i)
+{
+    uint32_t k;
+    for (k = 0; k < 27u; k++)
+        if (kb_trk[k] == i)
+            kb_live[k] = 0;
+    chord_live[i] = 0;
+}
+
+/* Is there a real owner whose note list is exactly the cached chord? An unrelated remaining key (different
+ * octave/voicing) must not resurrect chord_last. */
+static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn)
+{
+    uint32_t k, m, j;
+    for (k = 0; k < 27u; k++) {
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i || kb_chn[k] != oldn)
+            continue;
+        for (j = 0; j < oldn && kb_chord[k][j] == old[j]; j++)
+            ;
+        if (j == oldn)
+            return 1;
+    }
+    for (m = 0; m < MCHORD_N; m++) {
+        mchord_t *c = &mchord[m];
+        if (c->id != i + 1u || c->n != oldn)
+            continue;
+        for (j = 0; j < oldn && c->note[j] == old[j]; j++)
+            ;
+        if (j == oldn)
+            return 1;
+    }
+    return oldn && lat_bus_last[i];
+}
+
+/* The cached chord no longer belongs to any owner: select a surviving live owner and rebuild from its own input
+ * key. This keeps a held low chord following HARMONY after the newest owner was released. */
+static int chord_owner_fallback(uint32_t i, uint32_t *src, uint8_t *old, uint32_t *oldn)
+{
+    uint32_t k, m, j;
+    for (k = 0; k < 27u; k++) {
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i)
+            continue;
+        *src = kb_note[k];
+        *oldn = kb_chn[k];
+        for (j = 0; j < *oldn; j++)
+            old[j] = kb_chord[k][j];
+        return 1;
+    }
+    for (m = 0; m < MCHORD_N; m++) {
+        mchord_t *c = &mchord[m];
+        if (c->id != i + 1u)
+            continue;
+        *src = c->src;
+        *oldn = c->n;
+        for (j = 0; j < *oldn; j++)
+            old[j] = c->note[j];
+        return 1;
+    }
+    return 0;
+}
+
+/* HARMONY/LINK RETRIG for a LATCH-held chord that is not CHRD BUS: retrigger every latched note.
+ * MONO/LEGATO/UNISON keep the full logical stack (a physically held newer note must stay newer) and every note
+ * keeps the velocity it was played with. */
+static void retrigger_latched(uint32_t i)
+{
+    track_t *t = &trk[i];
+    uint32_t k = trk_index(t), n, j, nl = 0, nf = 0;
+    uint8_t full[8], vel[8], order[8];
+    if (trk_vmode(t) != V_POLY) {
+        for (j = 0; j < t->nmono && nf < 8u; j++)
+            full[nf++] = t->mono_stack[j];
+        for (j = 0; j < nf; j++)
+            if (lat_get(lat_stay[k], full[j])) {
+                order[nl] = full[j];
+                vel[nl] = lat_vel[k][order[nl]] ? lat_vel[k][order[nl]] : 100u;
+                nl++;
+            }
+        for (j = 0; j < nl; j++)
+            trk_note_off(t, order[j]);
+        for (j = 0; j < nl; j++)
+            trk_note_on(t, order[j], vel[j]);
+        for (j = 0; j < nf; j++)                        /* restore the complete stack order, held notes included */
+            t->mono_stack[j] = full[j];
+        t->nmono = (uint8_t)nf;
+        {
+            uint32_t want = mono_pick(t), v = t->v[0].vel ? t->v[0].vel : 100u;
+            if (want && want != t->mono_note)
+                mono_play(t, want, v, 0, 0);
+        }
+        return;
+    }
+    for (n = 0; n < 128u; n++) {
+        if (!lat_get(lat_stay[k], n))
+            continue;
+        uint8_t v = lat_vel[k][n] ? lat_vel[k][n] : 100u;
+        trk_note_off(t, n);
+        trk_note_on(t, n, v);
+    }
+}
+
+/* A CHRD BUS retrigger replaces the notes in chord_last. The physical key and MIDI mchord still own the old
+ * notes, so move those owners to the new list; a LATCH bit moves too. Without this a key-up would release only
+ * the old chord and the new notes would hang. */
+static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn)
+{
+    uint32_t k, j, m;
+    int was_latched = lat_bus_last[i];
+    uint8_t lv = 100u;
+    for (j = 0; j < oldn; j++)
+        if (lat_get(lat_stay[i], old[j])) {
+            lv = lat_vel[i][old[j]] ? lat_vel[i][old[j]] : 100u;
+            break;
+        }
+    for (k = 0; k < 27u; k++) {
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i || kb_chn[k] != oldn)
+            continue;
+        for (j = 0; j < oldn && kb_chord[k][j] == old[j]; j++)
+            ;
+        if (j != oldn)
+            continue;
+        for (j = 0; j < newn; j++)
+            kb_chord[k][j] = new[j];
+        kb_chn[k] = (uint8_t)newn;
+    }
+    for (m = 0; m < MCHORD_N; m++) {
+        mchord_t *c = &mchord[m];
+        if (c->id != i + 1u || c->n != oldn)
+            continue;
+        for (j = 0; j < oldn && c->note[j] == old[j]; j++)
+            ;
+        if (j != oldn)
+            continue;
+        for (j = 0; j < newn; j++)
+            c->note[j] = new[j];
+        c->n = (uint8_t)newn;
+    }
+    if (was_latched) {
+        for (j = 0; j < oldn; j++) {
+            if (!lat_get(lat_bus_other[i], old[j])) {
+                lat_put(lat_stay[i], old[j], 0);
+                lat_vel[i][old[j]] = 0;
+            }
+            lat_put(lat_eat[i], old[j], 0);
+        }
+        for (j = 0; j < newn; j++) {
+            lat_put(lat_stay[i], new[j], 1);
+            lat_put(lat_eat[i], new[j], 0);
+            lat_vel[i][new[j]] = lv;
+        }
+    }
+    for (j = 0; j < oldn; j++)                        /* round 7: a moved chord's stale 'this press ended it' marks go with it, or its release would swallow a later NoteOff */
+        lat_put(lat_eat[i], old[j], 0);
+    for (j = 0; j < newn; j++)
+        lat_put(lat_eat[i], new[j], 0);
+}
+
+static int midi_note_held(const track_t *t, uint32_t note);
+static int midi_local_held(const track_t *t, uint32_t note);
+static int chord_note_held(uint32_t i, uint32_t note)
+{
+    return midi_local_held(&trk[i], note) || midi_note_held(&trk[i], note) || lat_get(lat_stay[i], note) || lat_get(lat_bus_other[i], note);
 }
 
 static int midi_any_held(const track_t *t);
@@ -330,9 +701,33 @@ static int lat_sounds(const track_t *t, uint32_t n)
     return 0;
 }
 
+/* A pitch a STACK press may end: latched itself, or kept by an older latched BUS chord while a held key now plays it (input_on takes it out
+ * of lat_stay then), and sounding. */
+static int lat_ends(const track_t *t, uint32_t n)
+{
+    uint32_t k = trk_index(t);
+    return (lat_get(lat_stay[k], n) || lat_get(lat_bus_other[k], n)) && lat_sounds(t, n);
+}
+/* Would latch_press end these notes (STACK, no ARP, every one latched and sounding)? chord_build asks this before it replaces chord_last:
+ * a press that only ends latched notes starts no new chord and must not take over the newest chord's identity. */
+static int latch_would_toggle(const track_t *t, const uint8_t *nn, uint32_t n)
+{
+    uint32_t i;
+    if (latch_mode(t) != LT_STACK || t->p[P_AMODE] || !n)
+        return 0;
+    for (i = 0; i < n; i++)
+        if (!lat_ends(t, nn[i]))
+            return 0;
+    return 1;
+}
+
 /* a press (key, chord, MIDI note) of the n notes nn on track t, before they start: STACK and every one of them latched
  * (the ARP's list: held) ends them, and the press starts nothing (1; the release of each is eaten); NEW without ARP and no
- * key or note held ends the latched set. 0: the press goes on as always */
+ * key or note held ends the latched set. 0: the press goes on as always.
+ * CHRD BUS: the pressed chord is the newest one (chord_last, latched) or an older one. Its tones end unless another latched chord
+ * still holds them: an older chord's by the newest chord, the newest one's by the older ones (lat_bus_other, one bit per pitch: with
+ * three or more overlapping chords an older chord's toggle cannot tell a shared tone of two older ones apart and ends it). The newest
+ * chord stays the one that follows HARMONY when an older chord is pressed again. */
 static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, uint32_t n)
 {
     uint32_t k = trk_index(t), mode = latch_mode(t), i, j;
@@ -349,18 +744,44 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
                 ;
             if (j == t->nheld)
                 return 0;
-        } else if (!lat_get(lat_stay[k], nn[i]) || !lat_sounds(t, nn[i])) {
+        } else if (!lat_ends(t, nn[i])) {
             return 0;
         }
     }
-    for (i = 0; i < n; i++) {
-        if (t->p[P_AMODE]) {
-            arp_drop(t, nn[i]);
-        } else {
-            lat_put(lat_stay[k], nn[i], 0);
-            trk_note_off(t, nn[i]);
+    {
+        int bus = !t->p[P_AMODE] && t->p[P_CHRD] == CH_BUS, newest = 0;
+        if (bus && lat_bus_last[k] && n == chord_last[k].n) {
+            newest = 1;
+            for (i = 0; i < n; i++)
+                newest &= nn[i] == chord_last[k].note[i];
         }
-        lat_put(lat_eat[k], nn[i], 1);
+        for (i = 0; i < n; i++) {
+            if (t->p[P_AMODE]) {
+                arp_drop(t, nn[i]);
+                lat_put(lat_eat[k], nn[i], 1);
+            } else {
+                int keep = 0;
+                if (bus) {
+                    if (newest) {
+                        keep = lat_get(lat_bus_other[k], nn[i]);    /* the newest chord ends: an older one may hold the tone */
+                    } else {
+                        lat_put(lat_bus_other[k], nn[i], 0);        /* an older chord ends: the newest one may hold the tone */
+                        for (j = 0; lat_bus_last[k] && j < chord_last[k].n; j++)
+                            keep |= chord_last[k].note[j] == nn[i];
+                    }
+                    keep |= midi_local_held(t, nn[i]) || midi_note_held(t, nn[i]);   /* a key / MIDI note / the sustain still plays it */
+                }
+                if (!keep) {
+                    lat_put(lat_stay[k], nn[i], 0);
+                    trk_note_off(t, nn[i]);
+                    lat_put(lat_eat[k], nn[i], 1);                  /* its release does nothing; a kept tone's release goes on as ever */
+                }
+            }
+        }
+        if (!bus || newest)
+            lat_bus_last[k] = 0;
+        if (bus)
+            chord_live_sync(k);
     }
     return 1;
 }
@@ -487,13 +908,20 @@ static __attribute__((noinline)) void arp_chord_off(track_t *t, int rec)   /* th
 
 static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list, uint32_t n)
 {
-    uint32_t i, nt, top = 0, o = t->arp_idx % (uint32_t)(t->p[P_AOCT] > 0 ? t->p[P_AOCT] : 1);
+    uint32_t i, j, nt, o = t->arp_idx % (uint32_t)(t->p[P_AOCT] > 0 ? t->p[P_AOCT] : 1);
+    uint8_t used[CHORD_MAX], nu = 0;
     if (n > 4u)
         n = 4u;
-    for (i = 0; i < n; i++) {                       /* the held notes (sorted or as played), o octaves up */
+    for (i = 0; i < n; i++) {
         nt = (uint32_t)clamp((int32_t)list[i] + 12 * (int32_t)o, 0, 127);
-        if (nt == 127u && top++)
-            continue;                               /* (notes clamped onto the top one: once) */
+        nt = harmony_snap(t, nt);                   /* AM_CHORD follows HARMONY like every other ARP mode */
+        for (j = 0; j < nu && used[j] != nt; j++)
+            ;
+        if (j == nu && nu < CHORD_MAX)
+            used[nu++] = (uint8_t)nt;
+    }
+    for (i = 0; i < nu; i++) {
+        nt = used[i];
         if (!t->arp_note)
             t->arp_note = (uint8_t)nt;
         else
@@ -526,6 +954,7 @@ static void arp_off(track_t *t)                  /* the sounding arp note(s) end
  * maximal-length polynomial; one random bit flips now and then so the loop does not lock. No new parameter: the
  * register is the mode's own state, and a mode change leaves it where it is. */
 static uint16_t arp_turing[NTRK];
+static uint32_t arp_bar_last;                   /* the transport bar the ARP was last aligned to */
 
 /* the place in the note list (len notes) the step arp_idx plays (not inlined, as arp_chord); UP+8 adds its note */
 static __attribute__((noinline)) uint32_t arp_pick(track_t *t, uint32_t *list, uint32_t len)
@@ -675,7 +1104,7 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
             arp_chord(t, list, cnt);
             return;
         }
-        t->arp_note = (uint8_t)(harmony_on && (t->arp_idx & 3u) == 0u ? harmony_snap(t, list[j]) : list[j]);
+        t->arp_note = (uint8_t)harmony_snap(t, list[j]);   /* every ARP step, TURING included */
         if (rec_on(t))
             rec_note(t, t->arp_note, 100);           /* recording: what the arp plays */
         trk_note_on(t, t->arp_note, 100);
@@ -731,6 +1160,21 @@ static void arp_step(track_t *t, uint32_t n, uint32_t gate_n)
 }
 
 static void arp_tick(track_t *t, uint32_t n) { arp_step(t, n, n); }
+/* ARP SYNC: realign the free-running arp phase at every transport bar. RATE 2BAR/4BAR are longer than the bar
+ * and would be cut, so they keep their own cycle. */
+static void arp_bar_sync(void)
+{
+    uint32_t now = HARM_BAR(), i;
+    if (now == arp_bar_last)
+        return;
+    arp_bar_last = now;
+    for (i = 0; i < NTRK; i++) {
+        if ((uint32_t)trk[i].p[P_ARATE] >= 8u)          /* 2BAR / 4BAR: not reset by a one-bar boundary */
+            continue;
+        trk[i].arp_pos = 0xFFFFFFF;
+        trk[i].arp_idx = 0xFFFFFFFFu;
+    }
+}
 
 /* -------------------------------------------------------- note input --- */
 /* the length of step idx in samples: SWING (the track's + the global, at most 100) makes the even steps longer
@@ -904,6 +1348,7 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
     last_note = (uint8_t)note;
+    lat_vel[trk_index(t)][note & 127u] = (uint8_t)clamp((int32_t)vel, 1, 127);
     lat_put(lat_stay[trk_index(t)], note, 0);       /* (LATCH: a latched note pressed again is held by the key again) */
     lat_put(lat_eat[trk_index(t)], note, 0);
     if (cin_left)
@@ -999,21 +1444,42 @@ static __attribute__((noinline)) void perf_key_remap(void)
     }
 }
 
+/* outgoing MIDI ownership: a NoteOff may only be sent when no other key on this track still owns the note */
+static int midi_out_held(uint32_t ignore, uint32_t trk, uint32_t note)
+{
+    uint32_t j, i;
+    for (j = 0; j < 27u; j++) {
+        if (j == ignore || !kb_midin[j] || kb_trk[j] != trk)
+            continue;
+        for (i = 0; i < kb_midin[j]; i++)
+            if (kb_midi[j][i] == note)
+                return 1;
+    }
+    return 0;
+}
+
 /* key k plays kb_note[k] on track t: its chord (chord.c; the note alone with CHRD OFF). A note another key
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
+    if (harmony_on && harmony_follow[trk_index(t)] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
+        kb_note[k] = (uint8_t)harmony_snap(t, kb_note[k]);   /* live single notes follow HARMONY */
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
     kb_chn[k] = 0;
+    kb_live[k] = 1;                                 /* a fresh press is eligible for retrigger */
+    kb_midin[k] = (uint8_t)n;
+    for (i = 0; i < n; i++)
+        kb_midi[k][i] = kb_chord[k][i];
     eat = (uint32_t)latch_press(t, kb_chord[k], n);   /* LATCH STACK: the key again ends its latched notes */
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
-        if (midi_local_held(t, x))
-            continue;
-        if (!eat)
-            input_on(t, x, vel);
-        midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
+        if (!midi_local_held(t, x)) {
+            if (!eat)
+                input_on(t, x, vel);
+        }
+        if (!midi_out_held(k, (uint32_t)kb_trk[k], x))
+            midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
     }
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
@@ -1023,15 +1489,29 @@ static void key_on(uint32_t k, track_t *t)
 /* key k is up: the notes it started end, but those another key still holds */
 static void key_off(uint32_t k, track_t *t)
 {
-    uint32_t n = kb_chn[k], i, mc = trk_midi_ch(trk_index(t));
+    uint32_t n = kb_chn[k], mn = kb_midin[k], live = kb_live[k], i, mc = trk_midi_ch(trk_index(t));
     kb_chn[k] = 0;
+    kb_live[k] = 0;
+    kb_midin[k] = 0;
+    if (live) latch_bus_release(t, kb_chord[k], n);
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
-        if (midi_local_held(t, x))
-            continue;
-        input_off(t, x);
-        midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+        if (!midi_local_held(t, x)) {
+            if (live)
+                input_off(t, x);
+            else {
+                arp_remove(t, x);                /* round 7: a key let go after STOP/panic leaves the ARP's list too */
+                if (!chord_note_held(trk_index(t), x))
+                    trk_note_off(t, x);          /* STOP/panic: release any old gate without creating a fresh LATCH */
+            }
+        }
     }
+    for (i = 0; i < mn; i++) {
+        uint32_t x = kb_midi[k][i];
+        if (!midi_out_held(k, (uint32_t)kb_trk[k] % NTRK, x))
+            midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+    }
+    chord_live_sync(trk_index(t));
 }
 
 #ifdef FM1_INPUT_LAT
@@ -1162,16 +1642,21 @@ static void seq_start(void)
         t->rat_left = 0;
         t->nd_late = t->nd_early = ND_NONE;
         t->nd_fired = 0;
+        t->arp_pos = 0xFFFFFFF;                    /* ARP phrase starts with the sequencer */
+        t->arp_idx = 0xFFFFFFFFu;
         if (t->p[P_LTRIG] && t->p[P_LSYNC])        /* LFO 2 FREE + SYNC: in time with the bars from PLAY */
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
         lfo2_trigger(t, 1);
     }
     song.tick = 0;
-    harmony_base_bar = perf_bars_q16 >> 16;        /* HARMONY BAR 1 with the transport, on either clock */
+    harmony_perf_clear();
+    harmony_phase = (uint16_t)perf_bars_q16;       /* round 7: a start is a bar line for HARMONY (the clock kept the phase of the last stop) */
+    harmony_base_bar = HARM_BAR();                 /* HARMONY BAR 1 with the transport, on either clock */
     harmony_bar = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
     clk_pos = CLK_START;                           /* the metronome's first beat with step 0 */
     song.playing = 1;
+    arp_bar_last = HARM_BAR();
 #if FELUCCA_PERF_HW
     perf_starts++;
 #endif
@@ -1224,6 +1709,7 @@ static __attribute__((noinline)) void seq_stop(void)
         trk[i].nd_late = trk[i].nd_early = ND_NONE;   /* (a nudged step not played yet: not after the stop) */
         trk[i].nd_fired = 0;
     }
+    chord_stop_all();                              /* a retriggered bus chord is not in any holder list */
     chain_stop();
     motion_end();
 }
@@ -1621,6 +2107,7 @@ static __attribute__((noinline)) void seq_resync(void)
         arp_step(t, 0, 0);
     }
     song.tick = 0;
+    arp_bar_last = HARM_BAR();
     beat_pos = beat_n = clk_step = 0;
     clk_pos = 0;
     if (click_wanted()) click_req = 2;              /* retain queued-clock progress after the downbeat */
@@ -1716,6 +2203,8 @@ static __attribute__((noinline)) void project_sound_apply(void)
         arp_silence(t);
         trk_all_off(t);
         latch_forget(k);
+        chord_panic(k);
+        chord_live_sync(k);
         for (uint32_t i = 0; i < NVOICE; i++) active |= t->v[i].active;
         t->nheld = t->arp_phys = 0;
         arp_forget(t);
@@ -1790,7 +2279,7 @@ static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
 
 static void events_block(uint32_t n)
 {
-    uint32_t i, pr, lr, seq_n = n;
+    uint32_t i, pr, lr, lq, seq_n = n;
     voice_policy_sync();
 #if FELUCCA_PAIR_MORPH
     pair_validate();
@@ -1848,6 +2337,8 @@ static void events_block(uint32_t n)
 #endif
 
     latch_req = 0;
+    lq = link_retrig_req;
+    link_retrig_req = 0;
     if (midi_in_overflow) {                            /* a lost note-off must never leave a held note */
         midi_resync_cancel();
         midi_clock.bar_valid = 0;                    /* lost clocks also lose the counted bar */
@@ -1874,8 +2365,12 @@ static void events_block(uint32_t n)
             t->arp_phys = 0;
             arp_forget(t);
             latch_forget(i);
+            chord_panic(i);
+            chord_live_sync(i);
         }
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
+        if ((lq >> i) & 1u)
+            link_retrigger(i);                        /* LINK RETRIG after a key change (asked by key_link_sync in the UI) */
         if ((lr >> i) & 1u) {                         /* OCT- + OCT+: let go of everything latched */
             latch_free(t);
             if (arp_hold(t) && t->nheld) {
@@ -1892,7 +2387,8 @@ static void events_block(uint32_t n)
             if (t->arp_note)
                 arp_silence(t);
         }
-        if (lat_any(lat_stay[i]) && (t->p[P_AMODE] || latch_mode(t) == LT_OFF))
+        if ((lat_any(lat_stay[i]) || lat_any(lat_bus_other[i]) || lat_bus_last[i]) &&
+            (t->p[P_AMODE] || latch_mode(t) == LT_OFF))
             latch_free(t);                            /* LATCH turned off, or ARP on: the latched notes end */
         t->armp = t->p[P_AMODE];
         t->aholdp = arp_hold(t);
@@ -1929,6 +2425,21 @@ static void events_block(uint32_t n)
     }
     /* The beat's share of this block, advanced once (the ARP LED and the bar reset below use it). */
     uint32_t beat_n_samples = clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n;
+#if CARAVEL_ACTION_BANKS
+    if(!harmony_on){
+        if(harmony_command||harmony_pending||harmony_hold||harmony_shift||harmony_shift_pending||harmony_shift_dirty)harmony_perf_clear();
+    }
+    else {
+        uint8_t cmd=harmony_command,shift_dirty=harmony_shift_dirty;
+        harmony_command=H_NONE;harmony_shift_dirty=0;
+        if(shift_dirty)harmony_shift_pending=1;
+        if(cmd==H_HOLD){
+            if(harmony_hold){harmony_pending=harmony_pending==H_RESUME?H_NONE:H_RESUME;}
+            else {harmony_hold=1;harmony_pending=H_NONE;}
+        }else if(cmd)harmony_pending=cmd;
+        if(!song.playing && (cmd||shift_dirty)){uint8_t keep=cmd?H_NONE:harmony_pending;harmony_pending=cmd?harmony_pending:H_NONE;harmony_perf_apply(HARM_BAR());if(keep)harmony_pending=keep;}   /* a SHIFT edit while stopped leaves a queued PREV / NEXT / RESET queued */
+    }
+#endif
     if (bar_reset_req) {
         /* Stopped: reset at once. Playing: at the first bar line that falls in this block. A whole-block
          * quantisation, as the external resync is; seq_resync enters step 0 before the ordinary step clocks. */
@@ -1936,23 +2447,38 @@ static void events_block(uint32_t n)
             /* Stopped: PLAY starts every track at step 0 anyway. Only put the beat display back; no seq_resync,
              * whose arp step could sound a held chord while the transport is stopped. */
             bar_reset_req = 0;
-            harmony_base_bar = perf_bars_q16 >> 16;
+            harmony_perf_clear();
+            harmony_base_bar = HARM_BAR();
             harmony_bar = 0;
             beat_pos = beat_n = 0;
         } else if (beat_n == 3u && beat_pos + beat_n_samples >= beat_samples()) {
             bar_reset_req = 0;
-            harmony_base_bar = (perf_bars_q16 >> 16) + 1u;
+            harmony_perf_clear();
+            harmony_phase = (uint16_t)perf_bars_q16;   /* round 7: this bar line IS a bar line for HARMONY */
+            harmony_base_bar = HARM_BAR();
             harmony_bar = 0;
             seq_resync();
         }
     }
     if (song.playing && seq_n) {
         uint32_t bar = 4u * (clock_mode ? MIDI_CLOCK_GRID : beat_samples()), num = (seq_n << 16) + perf_bars_rem;
-        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb);
+        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb), prev_bar=HARM_BAR();
         perf_bars_q16 += num / bar;
         perf_bars_rem = num % bar;
-        harmony_bar = (perf_bars_q16 >> 16) - harmony_base_bar;
-        if (harmony_bar != hb && harmony_on && old_chord != harmony_chord_at(harmony_bar))
+        uint32_t boundary=HARM_BAR()!=prev_bar;
+        uint16_t old_mask=boundary&&harmony_on?harmony_mask_bar(hb):0;
+#if CARAVEL_ACTION_BANKS
+        if(harmony_hold)harmony_base_bar=(harmony_base_bar+HARM_BAR()-prev_bar)&0xFFFFu;
+#endif
+        harmony_bar = (HARM_BAR() - harmony_base_bar) & 0xFFFFu;   /* (the bar count is 16 bits: the difference wraps with it) */
+#if CARAVEL_ACTION_BANKS
+        if(boundary){
+            if(harmony_pending)harmony_bar=hb; /* a queued NEXT advances once, not once plus the natural change */
+            harmony_perf_apply(HARM_BAR());
+        }
+#endif
+        arp_bar_sync();
+        if (boundary && harmony_on && (old_chord != harmony_chord_at(harmony_bar) || old_mask != harmony_mask_bar(harmony_bar)))
             for (i = 0; i < NTRK; i++)
                 if ((link_retrig[i] & 1u) && harmony_follow[i])
                     link_retrigger(i);

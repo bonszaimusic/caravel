@@ -113,6 +113,7 @@ static void fm1_main(void)
 #if FELUCCA_CPU2
     uint8_t c1_told = 0;                                /* 2ND CORE MISREAD shown (and ON cleared) */
 #endif
+    memset(harmony_follow, 1, sizeof harmony_follow);   /* a cold boot: every track follows the HARMONY bus, as after INIT and every load */
     persist_boot();
 #if FELUCCA_OTA
     if (flash_ok)

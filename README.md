@@ -1,5 +1,7 @@
 # Caravel
 
+**Development:** [Live Harmony and HOME ACTION keys](docs/tutorials/harmony-live.md): C#5 BANK back, D#5 BANK forward, D5/E5/F5/G5 actions; HARM follows JOURNEY with HOLD, PREV, NEXT, RESET and scale-degree SHIFT. Not yet released.
+
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
 Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.11.0**.

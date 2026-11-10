@@ -131,7 +131,7 @@ static inline int32_t slc_dec_next(const slc_src_t *s, slc_dec_t *d)
         d->pred = 0;
         d->idx = 0;
     }
-    b = SMP_DATA[g->off + (rel >> 1)];
+    b = smp_data_byte(g->off + (rel >> 1));
     code = (rel & 1u) ? (b >> 4) : (b & 15u);
     step = IMA_STEP[d->idx];
     vd = step >> 3;
