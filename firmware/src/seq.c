@@ -59,12 +59,15 @@ static void link_retrigger(uint32_t i);
  * that use the bus (sequencer strong steps, ARP strong steps, the G5 generator, CHRD BUS) take chord tones there. */
 static uint8_t harmony_on;
 static volatile uint32_t harmony_bar;
-static uint32_t harmony_base_bar;                 /* perf_bars_q16 >> 16 at Start / bar reset */
+static uint32_t harmony_base_bar;                 /* HARM_BAR() at Start / bar reset */
+static uint16_t harmony_phase;                    /* perf_bars_q16's fraction at the last Start / bar reset: HARMONY (and the ARP's bar sync) count bars from there,
+                                                   * so a start is a bar line for them; perf_bars_q16 itself (JOURNEY's clock) is never moved (round 7) */
+#define HARM_BAR() ((perf_bars_q16 - harmony_phase) >> 16)
 static uint8_t harmony_root[4], harmony_dur[4];
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
 static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
-static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes) */
+static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes); felucca_init sets it on, as INIT and every load do (round 7: an initializer would cost 64 B of RAM against the guard) */
 #if CARAVEL_ACTION_BANKS
 /* Transient performance overlay. Only events_block moves the musical playhead. */
 enum {H_NONE,H_HOLD,H_PREV,H_NEXT,H_RESET,H_RESUME};
@@ -105,6 +108,8 @@ static uint32_t harmony_scale_abs(void)
 {
     const track_t *k = &trk[0];
     uint32_t sm = scale_mask(k), abs = 0, i;
+    if (sm == 0xFFFu)
+        sm = SCALE_MASK[1];                           /* CHR has no key of its own: the major scale of ROOT, as CHRD DIA3 builds on it (round 7) */
     for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
         if ((sm >> i) & 1u)
             abs |= 1u << ((k->p[P_ROOT] + (int32_t)i + 120) % 12);
@@ -245,7 +250,7 @@ static void harmony_perf_apply(uint32_t bar)
   else if(cmd==H_NEXT||cmd==H_RESUME)idx=(idx+1u)&3u;
   else if(cmd==H_RESET){idx=0;harmony_hold=0;harmony_shift=harmony_shift_want=0;harmony_shift_pending=0;}
   if(cmd==H_RESUME)harmony_hold=0;
-  harmony_bar=harmony_chord_start(idx);harmony_base_bar=bar-harmony_bar;
+  harmony_bar=harmony_chord_start(idx);harmony_base_bar=(bar-harmony_bar)&0xFFFFu;
   harmony_pending=H_NONE;
  }
  if(harmony_shift_pending){harmony_shift=harmony_shift_want;harmony_shift_pending=0;}
@@ -402,6 +407,7 @@ static uint32_t lat_eat[NTRK][4];        /* bit n: the press of note n ended it 
 static uint32_t lat_bus_other[NTRK][4];
 static uint8_t lat_bus_last[NTRK];
 static uint8_t lat_vel[NTRK][128];       /* the input velocity of a latched note (retrigger keeps the dynamics) */
+static volatile uint8_t link_retrig_req;  /* bit per track: a LINK key change asks the audio side to retrigger that track's held bus chord (round 7: the UI no longer touches voices) */
 static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
 
 static uint32_t latch_mode(const track_t *t)
@@ -655,6 +661,10 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
             lat_vel[i][new[j]] = lv;
         }
     }
+    for (j = 0; j < oldn; j++)                        /* round 7: a moved chord's stale 'this press ended it' marks go with it, or its release would swallow a later NoteOff */
+        lat_put(lat_eat[i], old[j], 0);
+    for (j = 0; j < newn; j++)
+        lat_put(lat_eat[i], new[j], 0);
 }
 
 static int midi_note_held(const track_t *t, uint32_t note);
@@ -1154,7 +1164,7 @@ static void arp_tick(track_t *t, uint32_t n) { arp_step(t, n, n); }
  * and would be cut, so they keep their own cycle. */
 static void arp_bar_sync(void)
 {
-    uint32_t now = perf_bars_q16 >> 16, i;
+    uint32_t now = HARM_BAR(), i;
     if (now == arp_bar_last)
         return;
     arp_bar_last = now;
@@ -1489,8 +1499,11 @@ static void key_off(uint32_t k, track_t *t)
         if (!midi_local_held(t, x)) {
             if (live)
                 input_off(t, x);
-            else if (!chord_note_held(trk_index(t), x))
-                trk_note_off(t, x);              /* STOP/panic: release any old gate without creating a fresh LATCH */
+            else {
+                arp_remove(t, x);                /* round 7: a key let go after STOP/panic leaves the ARP's list too */
+                if (!chord_note_held(trk_index(t), x))
+                    trk_note_off(t, x);          /* STOP/panic: release any old gate without creating a fresh LATCH */
+            }
         }
     }
     for (i = 0; i < mn; i++) {
@@ -1637,12 +1650,13 @@ static void seq_start(void)
     }
     song.tick = 0;
     harmony_perf_clear();
-    harmony_base_bar = perf_bars_q16 >> 16;        /* HARMONY BAR 1 with the transport, on either clock */
+    harmony_phase = (uint16_t)perf_bars_q16;       /* round 7: a start is a bar line for HARMONY (the clock kept the phase of the last stop) */
+    harmony_base_bar = HARM_BAR();                 /* HARMONY BAR 1 with the transport, on either clock */
     harmony_bar = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
     clk_pos = CLK_START;                           /* the metronome's first beat with step 0 */
     song.playing = 1;
-    arp_bar_last = perf_bars_q16 >> 16;
+    arp_bar_last = HARM_BAR();
 #if FELUCCA_PERF_HW
     perf_starts++;
 #endif
@@ -2093,7 +2107,7 @@ static __attribute__((noinline)) void seq_resync(void)
         arp_step(t, 0, 0);
     }
     song.tick = 0;
-    arp_bar_last = perf_bars_q16 >> 16;
+    arp_bar_last = HARM_BAR();
     beat_pos = beat_n = clk_step = 0;
     clk_pos = 0;
     if (click_wanted()) click_req = 2;              /* retain queued-clock progress after the downbeat */
@@ -2265,7 +2279,7 @@ static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
 
 static void events_block(uint32_t n)
 {
-    uint32_t i, pr, lr, seq_n = n;
+    uint32_t i, pr, lr, lq, seq_n = n;
     voice_policy_sync();
 #if FELUCCA_PAIR_MORPH
     pair_validate();
@@ -2323,6 +2337,8 @@ static void events_block(uint32_t n)
 #endif
 
     latch_req = 0;
+    lq = link_retrig_req;
+    link_retrig_req = 0;
     if (midi_in_overflow) {                            /* a lost note-off must never leave a held note */
         midi_resync_cancel();
         midi_clock.bar_valid = 0;                    /* lost clocks also lose the counted bar */
@@ -2353,6 +2369,8 @@ static void events_block(uint32_t n)
             chord_live_sync(i);
         }
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
+        if ((lq >> i) & 1u)
+            link_retrigger(i);                        /* LINK RETRIG after a key change (asked by key_link_sync in the UI) */
         if ((lr >> i) & 1u) {                         /* OCT- + OCT+: let go of everything latched */
             latch_free(t);
             if (arp_hold(t) && t->nheld) {
@@ -2419,7 +2437,7 @@ static void events_block(uint32_t n)
             if(harmony_hold){harmony_pending=harmony_pending==H_RESUME?H_NONE:H_RESUME;}
             else {harmony_hold=1;harmony_pending=H_NONE;}
         }else if(cmd)harmony_pending=cmd;
-        if(!song.playing && (cmd||shift_dirty))harmony_perf_apply(perf_bars_q16>>16);
+        if(!song.playing && (cmd||shift_dirty)){uint8_t keep=cmd?H_NONE:harmony_pending;harmony_pending=cmd?harmony_pending:H_NONE;harmony_perf_apply(HARM_BAR());if(keep)harmony_pending=keep;}   /* a SHIFT edit while stopped leaves a queued PREV / NEXT / RESET queued */
     }
 #endif
     if (bar_reset_req) {
@@ -2430,32 +2448,33 @@ static void events_block(uint32_t n)
              * whose arp step could sound a held chord while the transport is stopped. */
             bar_reset_req = 0;
             harmony_perf_clear();
-            harmony_base_bar = perf_bars_q16 >> 16;
+            harmony_base_bar = HARM_BAR();
             harmony_bar = 0;
             beat_pos = beat_n = 0;
         } else if (beat_n == 3u && beat_pos + beat_n_samples >= beat_samples()) {
             bar_reset_req = 0;
             harmony_perf_clear();
-            harmony_base_bar = (perf_bars_q16 >> 16) + 1u;
+            harmony_phase = (uint16_t)perf_bars_q16;   /* round 7: this bar line IS a bar line for HARMONY */
+            harmony_base_bar = HARM_BAR();
             harmony_bar = 0;
             seq_resync();
         }
     }
     if (song.playing && seq_n) {
         uint32_t bar = 4u * (clock_mode ? MIDI_CLOCK_GRID : beat_samples()), num = (seq_n << 16) + perf_bars_rem;
-        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb), prev_bar=perf_bars_q16>>16;
+        uint32_t hb = harmony_bar, old_chord = harmony_chord_at(hb), prev_bar=HARM_BAR();
         perf_bars_q16 += num / bar;
         perf_bars_rem = num % bar;
-        uint32_t boundary=(perf_bars_q16>>16)!=prev_bar;
+        uint32_t boundary=HARM_BAR()!=prev_bar;
         uint16_t old_mask=boundary&&harmony_on?harmony_mask_bar(hb):0;
 #if CARAVEL_ACTION_BANKS
-        if(harmony_hold)harmony_base_bar+=(perf_bars_q16>>16)-prev_bar;
+        if(harmony_hold)harmony_base_bar=(harmony_base_bar+HARM_BAR()-prev_bar)&0xFFFFu;
 #endif
-        harmony_bar = (perf_bars_q16 >> 16) - harmony_base_bar;
+        harmony_bar = (HARM_BAR() - harmony_base_bar) & 0xFFFFu;   /* (the bar count is 16 bits: the difference wraps with it) */
 #if CARAVEL_ACTION_BANKS
         if(boundary){
             if(harmony_pending)harmony_bar=hb; /* a queued NEXT advances once, not once plus the natural change */
-            harmony_perf_apply(perf_bars_q16>>16);
+            harmony_perf_apply(HARM_BAR());
         }
 #endif
         arp_bar_sync();

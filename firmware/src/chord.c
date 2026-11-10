@@ -242,17 +242,39 @@ static void mchord_forget(uint32_t track)               /* panic: the track's MI
 
 /* STOP/panic: a bus chord started or retriggered by the HARMONY engine is not in the key/sequence owner lists;
  * release it explicitly so no tone can hang. */
+static int chord_plain_owned(uint32_t i, uint32_t note)   /* a key or MIDI chord of the track still lists the note */
+{
+    uint32_t k, m, j;
+    for (k = 0; k < 27u; k++)
+        if (kb_chn[k] && kb_trk[k] == i)
+            for (j = 0; j < kb_chn[k]; j++)
+                if (kb_chord[k][j] == note)
+                    return 1;
+    for (m = 0; m < MCHORD_N; m++)
+        if (mchord[m].id == i + 1u)
+            for (j = 0; j < mchord[m].n; j++)
+                if (mchord[m].note[j] == note)
+                    return 1;
+    return 0;
+}
+static void chord_panic(uint32_t i);
+static uint32_t lat_eat[NTRK][4];       /* (seq.c: bit n = the press of note n ended it; declared here for chord_stop_all) */
 static void chord_stop_all(void)
 {
     uint32_t i, j;
     for (i = 0; i < NTRK; i++) {
+        uint32_t bus = trk[i].p[P_CHRD] == CH_BUS;
+        if (!bus && !chord_live[i] && !chord_last[i].n)
+            continue;                                 /* round 7: a CHRD BUS chord is the engine's: it ends; a plain chord a player still holds (a key or MIDI list names the note) sounds on, as in 0.11.0; a note of the last chord nobody holds any more (an orphan) still ends, so STOP cleans up as before */
         for (j = 0; j < chord_last[i].n; j++)
-            if (chord_last[i].note[j])
+            if (chord_last[i].note[j] && (bus || !chord_plain_owned(i, chord_last[i].note[j])))
                 trk_note_off(&trk[i], chord_last[i].note[j]);
-        chord_last[i].n = 0;
-        chord_live[i] = 0;
+        if (bus) {
+            chord_last[i].n = 0;
+            memset(lat_eat[i], 0, sizeof lat_eat[i]);   /* (a kept key's 'this press ended it' mark: its release is no longer a live one) */
+            chord_panic(i);
+        }
     }
-    memset(kb_live, 0, sizeof kb_live);
 }
 
 /* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
@@ -268,6 +290,8 @@ static int chord_note_held(uint32_t i, uint32_t note);
 static void link_retrigger(uint32_t i)
 {
     track_t *t = &trk[i];
+    if (t->p[P_AMODE])
+        return;                                        /* round 7: with the ARP on, the held list is the ARP's and it follows HARMONY on every step; rewriting the key's chord would leave the old notes in that list (an arpeggio that outlives its key) */
     uint32_t k = trk_index(t), j, nn = 0, oldn = chord_last[k].n, src = chord_last[k].key;
     uint8_t out[CHORD_MAX], old[CHORD_MAX];
     int32_t r = 0;

@@ -279,7 +279,7 @@ static void key_link_sync(void)
             t->p[P_SCALE] = s->p[P_SCALE];
             t->p[P_QUANT] = s->p[P_QUANT];
             if (link_retrig[i] & 2u)
-                link_retrigger(i);
+                link_retrig_req |= (uint8_t)(1u << i);   /* (the audio side retriggers: events_block) */
             ui.force = 1;
         }
     }

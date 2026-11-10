@@ -11,10 +11,13 @@ static void hk_text(const char *s) { if (hk_n < 96u && s) { unsigned i = 0; whil
 #define GFX_HOOK_BEGIN() ((void)0)
 #define GFX_HOOK_PIXELS(n) ((void)0)
 #include "../engine-pair-morph/pair_test.c"
+#ifndef HARM_BAR
+#define HARM_BAR() (perf_bars_q16 >> 16)   /* (the sources before round 7 count HARMONY bars with perf_bars_q16 itself: the groups run against them as negative controls) */
+#endif
 static void hit(uint32_t k){key(1u<<k);key(0);}
 static void bank_hold(uint32_t mask){web_keys(mask);run_ms(650);web_keys(0);run_ms(70);}
 static uint32_t chord(void){return harmony_chord_at(harmony_bar);}
-static void next_bar(void){uint32_t b=perf_bars_q16>>16,g=0;while((perf_bars_q16>>16)==b&&g++<5000u)run_ms(1);CHECK(g<5000u);}
+static void next_bar(void){uint32_t b=HARM_BAR(),g=0;while(HARM_BAR()==b&&g++<5000u)run_ms(1);CHECK(g<5000u);}
 static void roots(void){const uint8_t r[4]={0,9,5,7};for(uint32_t i=0;i<4;i++){hroot_set(i,r[i]);hdur_set(i,0);}}
 static uint32_t note_mask(uint32_t t){uint32_t n=0;for(uint32_t v=0;v<NVOICE;v++)if(trk[t].v[v].gate)n|=1u<<(trk[t].v[v].note%12);return n;}
 static void clock_packet(uint32_t st){midi_enqueue(15u|st<<8,1);}
@@ -38,7 +41,9 @@ static void ux_reset(void){
  harmony_bar=0;harmony_edit_dur=0;link_setup_row=0;ui_prefs2|=(uint8_t)(PREF_SEL_PAGE>>16);
 }
 static uint32_t ux_pcs(const uint8_t *nn,uint32_t n){uint32_t m=0;for(uint32_t i=0;i<n;i++)m|=1u<<(nn[i]%12u);return m;}
-static int ux_on(const char *g){const char *o=getenv("UX_GROUP");return !o||!strcmp(o,g);}   /* UX_GROUP=U02: one group only (negative controls) */
+static int ux_on(const char *g){const char *o=getenv("UX_GROUP");size_t n=strlen(g);if(!o)return 1;   /* UX_GROUP=U02 or a comma list U02,R7g */
+ for(const char *p=o;*p;){const char *e=strchr(p,',');size_t l=e?(size_t)(e-p):strlen(p);if(l==n&&!strncmp(p,g,n))return 1;if(!e)break;p=e+1;}
+ return 0;}   /* UX_GROUP=U02: one group only (negative controls) */
 static void usability_fixes(void){
  if(ux_on("U01")){
  /* U01: C - Am - F - G in C major reads C, Am, F, G (the editor passed an absolute mask where a root-relative one belongs) */
@@ -267,8 +272,208 @@ static void usability_fixes(void){
    trk[1].p[P_AMODE]=AM_OFF;trk[1].nheld=0;}
  }
 }
+
+/* ---- Round 7: the findings of the internal review of b8152a6. Every group fails on b8152a6 and passes now. ---- */
+static uint32_t r7_gates(uint32_t t){uint32_t n=0;for(uint32_t v=0;v<NVOICE;v++)n+=trk[t].v[v].gate;return n;}
+static uint32_t r7_until_bar_change(uint32_t lim){uint32_t b=harmony_bar,g=0;while(harmony_bar==b&&g<lim){run_ms(1);g++;}return g;}
+/* every round-7 group starts from the same clean panel, so it also runs alone (UX_GROUP=R7x) and in any order */
+static void r7_clean(void){web_keys(0);web_buttons(0);run_ms(20);transport_req=2;run_ms(30);transport_req=0;panic_req=(1u<<NTRK)-1u;run_ms(60);normal_off();pair_disable();go_home();ui.menu=0;ui.layer=0;ui.confirm=0;ui.msg_t=0;song.sel=0;song.g[G_BPM]=120;song.g[G_CLOCK]=0;
+ for(uint32_t t=0;t<NTRK;t++){memset(trk[t].step,0,sizeof trk[t].step);trk[t].nheld=0;trk[t].arp_phys=0;trk[t].p[P_AMODE]=AM_OFF;arp_forget(&trk[t]);trk_all_off(&trk[t]);}
+ memset(held_key,0,sizeof held_key);for(uint32_t t=1;t<NTRK;t++)trk[t].eng_req=trk[0].eng_req;   /* (an earlier group made a track a DRUM kit) */
+ latch_req=(1u<<NTRK)-1u;run_ms(40);for(uint32_t t=0;t<NTRK;t++){latch_forget(t);chord_panic(t);chord_live_sync(t);memset(&chord_last[t],0,sizeof chord_last[t]);}   /* LATCH and chord ownership of an earlier group */
+ run_ms(100);ux_reset();}
+static void round7_fixes(void){
+ if(ux_on("R7a")){   /* A-F1: a start is a bar line of the HARMONY clock, whatever the stop left behind */
+  r7_clean();song.g[G_BPM]=120;hdur_set(3,0);
+  seq_start();CHECK(r7_until_bar_change(5000)>=1950u);   /* (the fresh start: a whole bar) */
+  run_ms(500);seq_stop();run_ms(10);seq_start();
+  { uint32_t g=r7_until_bar_change(5000);CHECK(g>=1950u&&g<=2060u);CHECK(beat_n==0u);}   /* after a stop mid-bar: again a whole bar, and the change is on the pattern's bar line */
+  seq_stop();
+ }
+ if(ux_on("R7b")){   /* A-F1: BAR RESET while playing lands chord 1 on the pattern's bar line; never the last chord, never an underflowed bar */
+  r7_clean();song.g[G_BPM]=120;
+  seq_start();run_ms(2500);seq_stop();run_ms(10);seq_start();run_ms(100);bar_reset_req=1;
+  { uint32_t g=0,under=0;while(bar_reset_req&&g++<2600u){run_ms(1);under+=harmony_bar>=0x10000u;}
+    CHECK(!bar_reset_req&&!under);CHECK(chord()==0u&&beat_n==0u);
+    CHECK(r7_until_bar_change(5000)>=1950u);}
+  seq_stop();run_ms(10);
+  ux_reset();song.g[G_BPM]=120;seq_start();run_ms(700);song.g[G_BPM]=100;run_ms(300);bar_reset_req=1;   /* a tempo change first */
+  { uint32_t g=0,under=0;while(bar_reset_req&&g++<3000u){run_ms(1);under+=harmony_bar>=0x10000u;}
+    CHECK(!bar_reset_req&&!under);CHECK(chord()==0u&&beat_n==0u);
+    { uint32_t d=r7_until_bar_change(5000);CHECK(d>=2330u&&d<=2470u);}}   /* (a bar at 100 BPM: 2400 ms) */
+  seq_stop();song.g[G_BPM]=120;
+ }
+ if(ux_on("R7c")){   /* A-F2: STOP leaves a plain chord a player still holds (as 0.11.0); a CHRD BUS chord is the engine's and ends */
+  r7_clean();harmony_on=0;trk[0].p[P_CHRD]=CH_MAJ;trk[0].p[P_AMODE]=0;trk[0].p[P_LATCH]=LT_OFF;
+  seq_start();run_ms(50);key(1u<<7);
+  CHECK(note_mask(0)!=0u);seq_stop();run_ms(60);CHECK(note_mask(0)!=0u);   /* the held MAJ chord sounds on */
+  key(0);run_ms(100);CHECK(note_mask(0)==0u);
+  r7_clean();harmony_on=0;trk[0].p[P_CHRD]=CH_MAJ;trk[0].p[P_AMODE]=0;trk[0].p[P_LATCH]=LT_OFF;   /* two keys: A, A+B, B: the chord of B is still held when A is let go (chord_live counts it) */
+  seq_start();run_ms(50);key(1u<<7);key((1u<<7)|(1u<<10));key(1u<<10);
+  { uint32_t before=note_mask(0);CHECK(before!=0u);seq_stop();run_ms(60);CHECK(note_mask(0)==before);}
+  key(0);run_ms(100);CHECK(note_mask(0)==0u);
+  ux_reset();harmony_on=1;seq_start();run_ms(50);key(1u<<7);CHECK(note_mask(0)!=0u);seq_stop();run_ms(60);CHECK(note_mask(0)==0u);   /* a held BUS chord ends with the transport */
+  key(0);run_ms(60);
+ }
+ if(ux_on("R7q")){   /* STOP still ends a note of the last plain chord that nobody holds any more (an orphan), as before round 7 */
+  r7_clean();harmony_on=0;trk[0].p[P_CHRD]=CH_MAJ;trk[0].p[P_AMODE]=0;trk[0].p[P_LATCH]=LT_OFF;
+  seq_start();run_ms(50);
+  trk_note_on(&trk[0],60,100);run_ms(20);CHECK(note_mask(0)!=0u);
+  memset(&chord_last[0],0,sizeof chord_last[0]);chord_last[0].n=1;chord_last[0].note[0]=60;   /* chord_last names it; no key list, MIDI chord or latch holds it */
+  seq_stop();run_ms(60);CHECK(note_mask(0)==0u);
+ }
+ if(ux_on("R7r")){   /* CHRD BUS + ARP: a key let go after STOP, or after a retrigger moved its chord, leaves the ARP's list too (the arpeggio must not outlive its key) */
+  r7_clean();harmony_on=0;trk[0].p[P_AMODE]=AM_UP;trk[0].p[P_LATCH]=LT_OFF;trk[0].p[P_CHRD]=CH_BUS;
+  seq_start();run_ms(50);key(1u<<7);CHECK(trk[0].nheld>0u);
+  seq_stop();run_ms(60);key(0);run_ms(100);
+  CHECK(trk[0].nheld==0u&&trk[0].arp_phys==0u);
+  r7_clean();song.g[G_BPM]=240;harmony_on=1;memset(link_retrig,0,4);link_retrig[0]=1;   /* RETRIG CHORD */
+  trk[0].p[P_AMODE]=AM_UP;trk[0].p[P_LATCH]=LT_OFF;trk[0].p[P_CHRD]=CH_BUS;
+  seq_start();run_ms(50);key(1u<<7);CHECK(trk[0].nheld>0u);next_bar();run_ms(40);   /* the bus chord changes while the key is held */
+  key(0);run_ms(150);
+  CHECK(trk[0].nheld==0u&&trk[0].arp_phys==0u);
+  seq_stop();trk[0].p[P_AMODE]=AM_OFF;memset(link_retrig,0,4);song.g[G_BPM]=120;
+ }
+ if(ux_on("R7d")){   /* A-F3 / B-B1: a slot without a performance capsule loads its own HARMONY / LINK state, and a probe changes nothing */
+  r7_clean();harmony_on=1;
+  { const uint8_t r[4]={7,9,5,0};for(uint32_t i=0;i<4;i++){hroot_set(i,r[i]);hdur_set(i,(uint8_t)i);} }
+  link_src[1]=1;link_retrig[1]=3;harmony_follow[2]=0;
+  { project_t cap;project_capture(&cap);project_store_t st;CHECK(proj_pack(&st,&cap));proj_slot[1]=st;}
+  CHECK(hp_slot(1)==NULL);
+  harmony_on=0;for(uint32_t i=0;i<4;i++){hroot_set(i,2);hdur_set(i,0);}link_src[1]=0;link_retrig[1]=0;harmony_follow[2]=1;
+  { char nb[24];uint16_t l48[NTRK];uint32_t den[NTRK];uint8_t nn[NTRK];(void)project_used(1);(void)project_info(1,nb,l48,den,nn);
+    CHECK(!harmony_on&&hroot_get(0)==2&&link_src[1]==0&&harmony_follow[2]==1);}   /* the probes leave the live state alone */
+  project_load(1);run_ms(100);
+  CHECK(harmony_on==1&&hroot_get(0)==7&&hroot_get(1)==9&&hroot_get(2)==5&&hroot_get(3)==0);
+  CHECK(hdur_get(0)==0&&hdur_get(1)==1&&hdur_get(2)==2&&hdur_get(3)==3&&link_src[1]==1&&link_retrig[1]==3&&harmony_follow[2]==0);
+  harmony_on=1;harmony_follow[2]=1;link_src[1]=0;link_retrig[1]=0;
+ }
+ if(ux_on("R7e")){   /* B-B2: a HARMONY-only edit is autosaved and comes back with RESTORE LAST */
+  static uint8_t before[0x100000];uint32_t i;
+  r7_clean();song.g[G_RTYPE]=2;trk[0].step[3].n=1;trk[0].step[3].note[0]=60;trk[0].step[3].time=ST_NOTE;
+  run_ms(25000);run_ms(90000);memcpy(before,nor,sizeof nor);   /* (the autosave of everything the group itself changed has been written by now) */
+  { uint32_t sg=autosave_sig(),sg2;   /* every HARMONY / LINK field is part of what the autosave watches (the transient bar and SHIFT are not) */
+    harmony_on=!harmony_on;sg2=autosave_sig();CHECK(sg2!=sg);harmony_on=!harmony_on;
+    harmony_root[1]^=1u;CHECK(autosave_sig()!=sg);harmony_root[1]^=1u;harmony_dur[2]^=1u;CHECK(autosave_sig()!=sg);harmony_dur[2]^=1u;
+    link_src[1]^=1u;CHECK(autosave_sig()!=sg);link_src[1]^=1u;link_retrig[2]^=1u;CHECK(autosave_sig()!=sg);link_retrig[2]^=1u;harmony_follow[3]^=1u;CHECK(autosave_sig()!=sg);harmony_follow[3]^=1u;
+    CHECK(autosave_sig()==sg);harmony_bar+=1u;harmony_shift_want=1;CHECK(autosave_sig()==sg);harmony_bar-=1u;harmony_shift_want=0;}
+  harmony_on=1;for(i=0;i<4;i++){harmony_root[i]=(uint8_t)(2+i);harmony_dur[i]=(uint8_t)i;link_src[i]=i?1:0;link_retrig[i]=3;harmony_follow[i]=0;}
+  run_ms(300000);
+  CHECK(memcmp(before,nor,sizeof nor)!=0);   /* an autosave was written */
+  harmony_on=0;memset(harmony_root,0,4);memset(harmony_dur,0,4);memset(link_src,0,4);memset(link_retrig,0,4);memset(harmony_follow,1,4);
+  hp_pending_mask=0;hp_init();CHECK(hp_autosave_boot(1)==1);
+  CHECK(harmony_on==1&&harmony_root[0]==2&&harmony_root[3]==5&&harmony_dur[2]==2&&link_src[1]==1&&link_retrig[3]==3&&harmony_follow[0]==0);
+  harmony_on=1;memset(harmony_follow,1,4);memset(link_src,0,4);memset(link_retrig,0,4);song.g[G_RTYPE]=0;
+ }
+ if(ux_on("R7g")){   /* A-F4 / D-F2: the UI only asks; the audio side retriggers a held bus chord after a LINK key change */
+  r7_clean();harmony_on=0;memset(link_src,0,4);memset(link_retrig,0,4);link_src[1]=1;link_retrig[1]=2;
+  trk[0].p[P_SCALE]=1;trk[1].p[P_SCALE]=1;trk[0].p[P_ROOT]=0;trk[1].p[P_ROOT]=0;trk[1].p[P_QUANT]=QN_OFF;trk[1].p[P_CHRD]=CH_BUS;trk[1].p[P_VOIC]=VC_CLOSE;trk[1].p[P_VOICE]=V_POLY;trk[1].p[P_LATCH]=LT_OFF;trk[1].p[P_AMODE]=0;trk[1].p[P_MUTE]=0;
+  song.sel=1;key(1u<<7);
+  { uint8_t before[CHORD_MAX];memcpy(before,chord_last[1].note,sizeof before);CHECK(chord_last[1].n>0u);
+    trk[0].p[P_SCALE]=2;key_link_sync();
+    CHECK(memcmp(before,chord_last[1].note,sizeof before)==0);   /* the UI call touched no voice or ownership list */
+    run_ms(40);CHECK(memcmp(before,chord_last[1].note,sizeof before)!=0);}   /* the audio side did, at its next block */
+  key(0);run_ms(100);CHECK(r7_gates(1)==0u);memset(link_src,0,4);memset(link_retrig,0,4);song.sel=0;
+ }
+ if(ux_on("R7h")){   /* D-F3: a stale 'this press ended it' mark must not swallow a later NoteOff (a stuck note) */
+  r7_clean();normal_off();song.g[G_CLOCK]=0;song.g[G_BPM]=240;song.sel=0;
+  { const uint8_t r[4]={0,5,7,9};for(uint32_t i=0;i<4;i++){hroot_set(i,r[i]);hdur_set(i,0);} }
+  harmony_on=1;for(uint32_t i=0;i<4;i++){harmony_follow[i]=1;link_src[i]=0;link_retrig[i]=0;}link_retrig[0]=1;
+  { track_t*t=&trk[0];t->p[P_SCALE]=1;t->p[P_ROOT]=0;t->p[P_QUANT]=QN_OFF;t->p[P_CHRD]=CH_BUS;t->p[P_VOIC]=VC_CLOSE;t->p[P_VOICE]=V_POLY;t->p[P_LATCH]=LT_STACK;t->p[P_AMODE]=0;t->p[P_MUTE]=0;
+    { const char*ph=getenv("R7_PHASE");run_ms(ph?(uint32_t)atoi(ph):0u); }   /* (the audio block phase: the group must hold for any) */
+    transport_req=1;run_ms(30);
+    key(1u<<7);key(0);key(1u<<8);next_bar();run_ms(3);key(0);
+    t->p[P_LATCH]=LT_OFF;run_ms(50);t->p[P_LATCH]=LT_STACK;run_ms(50);
+    next_bar();next_bar();run_ms(3);key(1u<<7);next_bar();run_ms(3);key(0);
+    t->p[P_LATCH]=LT_OFF;run_ms(100);
+    if(r7_gates(0)){fprintf(stderr,"R7h gated:");for(uint32_t v=0;v<NVOICE;v++)if(trk[0].v[v].gate)fprintf(stderr," %u",trk[0].v[v].note);fprintf(stderr," harmony_on=%u hb=%u kb:",harmony_on,harmony_bar);for(uint32_t k=0;k<27;k++)if(kb_chn[k])fprintf(stderr," k%u(n%u,trk%u,live%u)",k,kb_chn[k],kb_trk[k],kb_live[k]);fprintf(stderr," lat_bus_last=%u stay=%x nheld=%u arp_note=%d arp_phys=%u amode=%u chord_n=%u live=%u seq_n=%u mute=%u latch=%u chrd=%u voice=%u eng=%u\n",lat_bus_last[0],(unsigned)lat_stay[0][0],(unsigned)t->nheld,(int)t->arp_note,(unsigned)t->arp_phys,(unsigned)t->p[P_AMODE],(unsigned)chord_last[0].n,(unsigned)chord_live[0],(unsigned)t->seq_n,(unsigned)t->p[P_MUTE],(unsigned)t->p[P_LATCH],(unsigned)t->p[P_CHRD],(unsigned)t->p[P_VOICE],(unsigned)t->eng_req);}
+    CHECK(r7_gates(0)==0u);   /* nothing keeps sounding with no key, latch, arp or sequence owning it */
+    transport_req=2;run_ms(800);t->p[P_LATCH]=LT_OFF;t->p[P_CHRD]=CH_OFF;}
+ }
+ if(ux_on("R7i")){   /* A-F5: a fresh project (T1 scale CHR) builds the bus on the major scale of ROOT, as CHRD DIA3 does */
+  r7_clean();trk[0].p[P_SCALE]=0;trk[0].p[P_ROOT]=0;ux_page(GR_HARMONY);
+  if(!(hk_has("C")&&hk_has("Am")&&hk_has("F")&&hk_has("G")&&!hk_has("Cm")))hk_dump("R7i");
+  CHECK(hk_has("C")&&hk_has("Am")&&hk_has("F")&&hk_has("G")&&!hk_has("Cm")&&!hk_has("Fm"));
+  trk[0].p[P_SCALE]=1;
+ }
+ if(ux_on("R7k")){   /* B-B3: a HOME cell stored before LINK and HARMONY joined PAGES[] names a page that moved: SOURCE must still open a page that holds the parameter */
+  uint32_t ci=0,pi,tested=0;   /* (up to six different pages behind CHORD) */
+  r7_clean();normal_off();hp_apply(0,2);
+  for(pi=0;pi<NPAGES;pi++)if(PAGES[pi].graph==GR_CHORD)ci=pi;
+  for(pi=ci+3;pi<NPAGES;pi++){
+   uint32_t id=PAGES[pi].id[0];
+   if(id==0xFFu||!page_visible(pi)||PAGES[pi].scope==SC_GLOBAL)continue;
+   if(!web_home_assign(0,0,0,HP_TRACK,0,id))continue;
+   { uint32_t stale=pi-2,k,has=0;hp_ref_t*c=&hp.track[0].cell[0][0];c->page=(uint16_t)stale;
+     for(k=0;k<4;k++)has|=PAGES[stale].id[k]==id;
+     if(has)continue;                                                    /* (need a stale page that does not hold it) */
+     song.sel=0;hp_open_editor();hp_edit_row=0;hp_edit_col=0;hp_edit_action=0;hp_source();
+     for(k=0,has=0;k<4;k++)has|=PAGES[ui.page].id[k]==id;
+     CHECK(!ui.home&&has);tested++;go_home();if(tested>=6)break;}
+  }
+  CHECK(tested>=3);go_home();
+  /* a cell of each mod slot: the MOD page holds its ids at run time (its table lists slot 1's; slots 2..4 are shifted), SOURCE must open it */
+  { uint32_t mp=0;for(pi=0;pi<NPAGES;pi++)if(PAGES[pi].graph==GR_MOD)mp=pi;
+    for(uint32_t sl=0;sl<4;sl++){
+      mod_ui_slot=0;
+      if(mp&&web_home_assign(0,0,0,HP_TRACK,0,P_M1SRC+3u*sl)){hp_ref_t*c=&hp.track[0].cell[0][0];c->page=(uint16_t)mp;song.sel=0;hp_open_editor();hp_edit_row=0;hp_edit_col=0;hp_edit_action=0;hp_source();
+        CHECK(!ui.home&&PAGES[ui.page].graph==GR_MOD&&mod_ui_slot==sl);go_home();}
+      else CHECK(0);}}
+ }
+ if(ux_on("R7l")){   /* A-F9: a track that others follow cannot follow one itself (no chains) */
+  r7_clean();memset(link_src,0,4);link_src[1]=1;song.sel=0;ux_page(GR_LINK);link_setup_row=0;
+  web_enc(EN_K1,1);run_ms(30);web_enc(EN_K1,1);run_ms(30);web_enc(EN_K1,-1);run_ms(30);
+  CHECK(link_src[0]==0u&&link_src[1]==1u);memset(link_src,0,4);
+ }
+ if(ux_on("R7m")){   /* A-F10: a SHIFT edit while stopped leaves a queued PREV / NEXT / RESET queued */
+  r7_clean();seq_stop();run_ms(20);harmony_pending=H_NEXT;harmony_shift_want=2;harmony_shift_dirty=1;run_ms(40);
+  CHECK(harmony_shift==2&&harmony_pending==H_NEXT);
+  harmony_pending=H_NONE;harmony_shift_want=0;harmony_shift=0;harmony_shift_pending=0;
+ }
+ if(ux_on("R7n")){   /* A-F7: the bar counter is 16 bits; the chord position must not jump when it wraps */
+  r7_clean();song.g[G_BPM]=240;hdur_set(0,0);hdur_set(1,0);hdur_set(2,0);hdur_set(3,2);
+  seq_stop();run_ms(10);perf_bars_q16=65534u<<16;perf_bars_rem=0;seq_start();
+  { uint32_t g=0,big=0,wrapped=0,last=perf_bars_q16>>16;
+    while(g++<2600u){run_ms(1);if((perf_bars_q16>>16)<last)wrapped=1;last=perf_bars_q16>>16;big+=harmony_bar>=0x10000u;}
+    CHECK(wrapped&&!big);}
+  seq_stop();hdur_set(3,0);song.g[G_BPM]=120;
+ }
+ if(ux_on("R7p")){   /* the ARP's bar sync runs on the same bars as HARMONY: after a real STOP / PLAY mid-bar its steps stay evenly spaced (no realign at a drifted bar line) */
+  r7_clean();harmony_on=0;trk[0].p[P_AMODE]=AM_UP;trk[0].p[P_CHRD]=CH_OFF;trk[0].p[P_VOICE]=V_POLY;song.g[G_BPM]=120;
+  key((1u<<7)|(1u<<9)|(1u<<11));
+  seq_start();run_ms(2300);seq_stop();run_ms(10);seq_start();   /* stopped mid-bar, started again */
+  { uint32_t last_idx=trk[0].arp_idx,last_t=0,n=0,lo=1000,hi=0;
+    for(uint32_t ms=0;ms<4400u;ms++){run_ms(1);
+      if(trk[0].arp_idx!=last_idx){if(last_t){uint32_t d=ms-last_t;n++;if(d<lo)lo=d;if(d>hi)hi=d;}last_t=ms;last_idx=trk[0].arp_idx;}}
+    if(!(n>20u&&lo>=118u&&hi<=132u))fprintf(stderr,"R7p: %u steps, intervals %u..%u ms\n",n,lo,hi);
+    CHECK(n>20u&&lo>=118u&&hi<=132u);}   /* 1/16 at 120 BPM: 125 ms */
+  seq_stop();key(0);trk[0].p[P_AMODE]=AM_OFF;
+  /* the same through a BAR RESET in the middle of a bar, and at another tempo */
+  r7_clean();harmony_on=0;trk[0].p[P_AMODE]=AM_UP;trk[0].p[P_CHRD]=CH_OFF;trk[0].p[P_VOICE]=V_POLY;song.g[G_BPM]=120;
+  key((1u<<7)|(1u<<9)|(1u<<11));seq_start();run_ms(1300);bar_reset_req=1;
+  { uint32_t last_idx=trk[0].arp_idx,last_t=0,n=0,lo=1000,hi=0;
+    for(uint32_t ms=0;ms<4400u;ms++){run_ms(1);
+      if(trk[0].arp_idx!=last_idx){if(last_t){uint32_t d=ms-last_t;if(ms>200u){n++;if(d<lo)lo=d;if(d>hi)hi=d;}}last_t=ms;last_idx=trk[0].arp_idx;}}
+    if(!(n>20u&&lo>=118u&&hi<=132u))fprintf(stderr,"R7p reset: %u steps, intervals %u..%u ms\n",n,lo,hi);
+    CHECK(n>20u&&lo>=118u&&hi<=132u);}
+  seq_stop();run_ms(10);song.g[G_BPM]=100;seq_start();run_ms(1900);seq_stop();run_ms(10);seq_start();
+  { uint32_t last_idx=trk[0].arp_idx,last_t=0,n=0,lo=1000,hi=0;
+    for(uint32_t ms=0;ms<4800u;ms++){run_ms(1);
+      if(trk[0].arp_idx!=last_idx){if(last_t){uint32_t d=ms-last_t;n++;if(d<lo)lo=d;if(d>hi)hi=d;}last_t=ms;last_idx=trk[0].arp_idx;}}
+    if(!(n>20u&&lo>=143u&&hi<=158u))fprintf(stderr,"R7p 100bpm: %u steps, intervals %u..%u ms\n",n,lo,hi);
+    CHECK(n>20u&&lo>=143u&&hi<=158u);}   /* 1/16 at 100 BPM: 150 ms */
+  seq_stop();key(0);trk[0].p[P_AMODE]=AM_OFF;song.g[G_BPM]=120;
+ }
+ if(ux_on("R7o")){   /* B-B5: an import of a format without a Harmony block leaves the staged state off, not stale */
+  r7_clean();harmony_on=1;{project_t cap;project_capture(&cap);}   /* (stages the live state: on) */
+  (void)proj_import(&proj_scratch,"\0\0\0\0",4);                   /* not a project: the staged state is reset first */
+  CHECK(proj_harmony.on==0&&proj_harmony.root[0]==0&&proj_harmony.follow[0]==1&&proj_harmony.follow[3]==1);
+ }
+}
 int main(void){
  web_nor_erase();web_boot();run_ms(1400);normal_off();pair_disable();
+ /* B-B4: a cold boot has every track following the bus, as INIT and every load do (the first autosave stored the zeros) */
+ if(ux_on("R7f"))CHECK(harmony_follow[0]==1u&&harmony_follow[1]==1u&&harmony_follow[2]==1u&&harmony_follow[3]==1u);   /* R7f */
  /* Actual target-feature UI, starting with the bus OFF. Every SELECT
   * detent must reach the next editable row, including across page borders. */
  web_buttons(1u<<B_SCL);run_ms(70);web_buttons(0);run_ms(70);
@@ -356,5 +561,6 @@ int main(void){
  clock_packet(0xFB);external_ms(100);CHECK(song.playing&&harmony_hold&&harmony_pending==H_NEXT);
  clock_packet(0xFA);external_ms(100);CHECK(chord()==0u&&!harmony_hold);
  usability_fixes();
+ round7_fixes();
  printf("HARMONY PANEL PASS: %u checks.\n",checks);return 0;
 }

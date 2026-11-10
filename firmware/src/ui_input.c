@@ -1042,7 +1042,7 @@ static void edit_param(uint32_t slot, int32_t steps)
                 if (nv != harmony_on) {                      /* idempotent: no phase restart on ON -> ON */
                     harmony_perf_clear();
                     harmony_on = nv;
-                    harmony_base_bar = perf_bars_q16 >> 16;
+                    harmony_base_bar = HARM_BAR();
                     harmony_bar = 0;
                     ui_message(harmony_on ? "HARMONY ON" : "HARMONY OFF");
                     ui.force = 1;
@@ -1051,11 +1051,13 @@ static void edit_param(uint32_t slot, int32_t steps)
             return;
         }
         if (slot == 0u) {
-            uint32_t cur = link_src[song.sel], n = 0;
+            uint32_t cur = link_src[song.sel], n = 0, is_src = 0, x;
+            for (x = 0; x < NTRK; x++)
+                is_src |= link_src[x] == song.sel + 1u;   /* a track others follow cannot follow one itself (no chains) */
             do {
                 cur = (uint8_t)((cur + (steps > 0 ? 1u : 4u)) % 5u);
                 n++;
-                if (!cur || (cur != song.sel + 1u && !link_src[cur - 1u]))
+                if (!cur || (!is_src && cur != song.sel + 1u && !link_src[cur - 1u]))
                     break;
             } while (n < 5u);
             link_src[song.sel] = (uint8_t)(cur <= NTRK ? cur : 0u);

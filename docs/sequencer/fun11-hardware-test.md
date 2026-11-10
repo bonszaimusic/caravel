@@ -10,7 +10,7 @@ Status: prepared for the FM-1; not yet run on hardware.
 ## 1. Project format
 
 1. Flash the build, power on, open `SAVE > PROJECT`.
-2. Load an existing **FUN10** slot. It must load, and its 0.11 HARMONY roots/on/off (if any) must appear on `SCL > HARMONY`.
+2. Load an existing **FUN10** slot (saved by 0.11.0 or earlier). It must load with HARMONY **off** (only an unreleased development build kept roots there).
 3. Change: four HARMONY roots, four durations, bus on/off, per-track LINK source/retrigger.
 4. Save to another slot; power-cycle; load that slot.
 5. Check every value after the reload. The slot must be `FUN11`; older firmware will show it `EMPTY` (expected).

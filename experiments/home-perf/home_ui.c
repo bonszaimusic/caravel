@@ -256,7 +256,9 @@ static void hp_source(void)
  if(r.kind==HP_PAIR){hp_open_graph(GR_PAIR);return;}if(r.kind==HP_MACRO){hp_open_graph(GR_MACRO);return;}
  if(r.kind==HP_FM6){fop_op=5-r.id/FP_OP;if(r.aux==FO_RATE||r.aux==FO_ELVL)fop_stg=(r.id%FP_OP)-FO_OFF[r.aux];}
  if(r.kind==HP_DX&&r.id>=DX_SOUND_FIRST){dx_ui_lane=(r.id-DX_SOUND_FIRST)/16;uint32_t field=(r.id-DX_SOUND_FIRST)%16;dx_ui_side=field>=5&&field<10;}
- if(r.page<NPAGES&&page_visible(r.page)){ui.home=0;ui.page=r.page;page_entered();ui.force=1;return;}
+ {int has=r.kind!=HP_TRACK&&r.kind!=HP_GLOBAL;for(uint32_t k=0;r.page<NPAGES&&k<4;k++)has|=PAGES[r.page].id[k]==hp_tid(r);
+  if(r.page<NPAGES&&PAGES[r.page].graph==GR_MOD&&hp_tid(r)>=P_M1SRC&&hp_tid(r)<=P_M4AMT)has=1;   /* (the MOD page shifts its ids by its slot at run time) */   /* round 7: a cell stored before LINK and HARMONY joined PAGES[] names a page that moved: only a page that holds the parameter counts */
+  if(has&&r.page<NPAGES&&page_visible(r.page)){ui.home=0;ui.page=r.page;page_entered();ui.force=1;return;}}
  uint32_t id=hp_tid(r);for(uint32_t i=0;i<NPAGES;i++)for(uint32_t k=0;k<4;k++)if(PAGES[i].id[k]==id&&page_visible(i)&&((r.kind==HP_GLOBAL)==(PAGES[i].scope==SC_GLOBAL))){ui.home=0;ui.page=i;page_entered();ui.force=1;return;}
  ui_message("OPEN SOURCE VIA ITS BUTTON");
 }

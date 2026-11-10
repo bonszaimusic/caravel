@@ -90,8 +90,9 @@
  * LINK sources (3 bits: 0 OFF, 1..4 T1..T4) + the four RETRIG modes (2 bits: OFF CHORD LINK BOTH) in the high bits of
  * the first section row (the slot bytes keep their low 3 bits, the repeat its low 4). The runtime chain never carries
  * those high bits: project.c encodes/decodes at the save/load boundary. A FUN11 has its own magic; firmware before it
- * shows the slot EMPTY, and this firmware reads every FUN10 (its 0.11 HARMONY roots/on-off in the chain reserved bytes
- * migrate to the new block; the other new values start OFF / 1 bar). No sound, step or parameter byte moved.
+ * shows the slot EMPTY, and this firmware reads every FUN10 (every published 0.x writer leaves the chain reserved bytes 0, so
+ * HARMONY comes up off; an unreleased development build kept roots and on/off there, and those migrate to the new block; the
+ * other new values start OFF / 1 bar). No sound, step or parameter byte moved.
  *
  * A step's RATCH (core.h SF_RATCH, the hits - 1, 0..3) is in bit 7 of its velocity byte (bit 0) and of its chance
  * byte (bit 1) of FUN7 / FUN8: bits every firmware before wrote 0, so every older project loads with its steps x1,
@@ -504,6 +505,7 @@ static void proj_fm6_init(project_t *q)
 }
 static int proj_import_old(project_t *q, const void *b, int n);
 static int proj_import_any(project_t *q, const void *b, int n);
+static void proj_harmony_off(void);
 /* every track's engine one this firmware has (DIGITAL, 1, is one: it converts): a project of another number
  * is not one (it never was: no engine number past the last was ever stored) */
 static int proj_engines_ok(const project_t *q)
@@ -526,6 +528,7 @@ static int proj_import(project_t *q, const void *b, int n)
 }
 static int proj_import_any(project_t *q, const void *b, int n)
 {
+    proj_harmony_off();                             /* a format without a Harmony block (FUN1..FUN6, a raw project_t) comes up with it off */
     if (n == PROJ_STORE_SIZE && (((const uint32_t *)b)[0] == PROJ_MAGIC_V11 || ((const uint32_t *)b)[0] == PROJ_MAGIC || ((const uint32_t *)b)[0] == PROJ_MAGIC_DX || ((const uint32_t *)b)[0] == PROJ_MAGIC_L2))
         return proj_unpack(q, b, PROJ_STORE_SIZE);
     if (n == PROJ_STORE_SIZE && ((const uint32_t *)b)[1] >= 8u && ((const uint32_t *)b)[1] < PROJ_STORE_SIZE)
@@ -639,6 +642,11 @@ typedef struct {
     uint32_t bar, base;
 } harmony_saved_t;
 static harmony_saved_t proj_harmony;             /* the decoded/staged project's Harmony/Link state */
+static void proj_harmony_off(void)
+{
+    memset(&proj_harmony, 0, sizeof proj_harmony);
+    memset(proj_harmony.follow, 1, sizeof proj_harmony.follow);
+}
 /* FUN11 stores its new state in the 84-byte chain block, not in a new project_t field: the four roots and the four
  * durations in the chain's three reserved bytes, and the 21 bits of on/off + LINK source (3 per track) + RETRIG
  * (2 per track) in the high bits of the first section row (the slot bytes' low 3 bits and the repeat's low 4 keep
@@ -1025,9 +1033,10 @@ static void proj_bound(project_t *q)
     q->sum = proj_sum(q);
 }
 
-/* Read-only project inspection and in-place rename must not make the live Harmony/Link state follow the slot
- * they decode. A decode writes the runtime arrays; these save/restore them around such a probe. A rename packs
- * while the decoded state is live, so the slot keeps its own values, then restores the music's state. */
+/* A decode fills the staged proj_harmony only (never the live arrays), so a read-only probe or an in-place rename
+ * cannot make the live Harmony/Link state follow the slot it decodes. harmony_save stages the live state for a
+ * pack; harmony_restore installs a staged state in a committed load. (Round 7: the save/restore pairs around the
+ * probes are gone: they wrote a stale state, and the ISR-owned bar clock, back over the live one.) */
 static void harmony_save(harmony_saved_t *s)
 {
     memcpy(s->root, harmony_root, sizeof s->root);
@@ -1056,9 +1065,7 @@ static void harmony_restore(const harmony_saved_t *s)
 static void proj_fetch(uint32_t slot)
 {
     project_store_t *q = &proj_slot[slot & 3u];
-    harmony_saved_t hs;
     int n;
-    harmony_save(&hs);
     proj_wire_gen++;
     n = st_load(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire);
     if (!proj_import(&proj_scratch, &proj_wire, n))
@@ -1068,7 +1075,6 @@ static void proj_fetch(uint32_t slot)
         if (!proj_pack(q, &proj_scratch))
             memset(q->raw, 0, 4);
     }
-    harmony_restore(&hs);
 }
 #endif
 
@@ -1239,8 +1245,6 @@ static uint32_t proj_density(const proj_trk_t *t, uint8_t *n)
 static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, uint8_t *n)
 {
     uint32_t k;
-    harmony_saved_t hs;
-    harmony_save(&hs);
     b[0] = 0;
     if (len48)
         memset(len48, 0, NTRK * sizeof *len48);
@@ -1249,7 +1253,6 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
         memset(n, 0, NTRK);
     }
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) {
-        harmony_restore(&hs);
         return 0;
     }
     proj_name_get(b, (const uint8_t *)proj_scratch.name);
@@ -1257,7 +1260,6 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
         len48[k] = (uint16_t)len48_of(proj_scratch.t[k].p[P_SLEN], proj_scratch.t[k].p[P_SDIV]);
     for (k = 0; den && k < NTRK; k++)
         den[k] = proj_density(&proj_scratch.t[k], &n[k]);
-    harmony_restore(&hs);
     return 1;
 }
 
@@ -1266,41 +1268,37 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
  * an empty slot), 2 failed (the slot as it was) */
 static int project_rename(uint32_t slot, const char *name)
 {
-    harmony_saved_t hs;
-    harmony_save(&hs);
 #if FELUCCA_PERF_HW
     int hp_rc=hp_project_rename(slot&3u,name);
-    if(hp_rc>=0){harmony_restore(&hs);return hp_rc;} /* Legacy native slots use the original rename below. */
+    if(hp_rc>=0)return hp_rc; /* Legacy native slots use the original rename below. */
 #endif
     project_t *p = &proj_scratch;
     if (transport_busy()) {
         ui_message("STOP TO SAVE");
-        harmony_restore(&hs);
         return 1;
     }
     if (!proj_import(p, &proj_slot[slot & 3u], sizeof(project_store_t))) {
         ui_message("EMPTY SLOT");
-        harmony_restore(&hs);
         return 1;
     }
     memset(p->name, 0, sizeof p->name);
     memcpy(p->name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
     proj_wire_gen++;
-    if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); harmony_restore(&hs); return 2; }
+    if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
 #if FELUCCA_FLASH
     if (flash_ok && st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire)) {
         ui_message("SAVE ERROR");
-        harmony_restore(&hs); return 2;
+        return 2;
     }
 #endif
     memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
     if (proj_cur == (slot & 3u))
         proj_name_get(proj_name, (const uint8_t *)p->name);
 #if FELUCCA_FLASH
-    if (flash_ok) { ui_message("RENAMED"); harmony_restore(&hs); return 0; }
+    if (flash_ok) { ui_message("RENAMED"); return 0; }
 #endif
     ui_message("RENAMED (RAM)");
-    harmony_restore(&hs); return 0;
+    return 0;
 }
 
 /* Initialize the working project; persistent slots, pending saves and device
@@ -1339,7 +1337,7 @@ static void project_init_runtime(void)
     harmony_perf_clear();
     harmony_on = 0;
     harmony_bar = 0;
-    harmony_base_bar = perf_bars_q16 >> 16;
+    harmony_base_bar = HARM_BAR();
     memset(harmony_root, 0, sizeof harmony_root);
     memset(harmony_dur, 0, sizeof harmony_dur);
     memset(link_src, 0, sizeof link_src);
@@ -1464,7 +1462,7 @@ static int project_restore_runtime(const project_t *input)
     harmony_restore(&proj_harmony);
     harmony_perf_clear();
     harmony_bar = 0;
-    harmony_base_bar = perf_bars_q16 >> 16;
+    harmony_base_bar = HARM_BAR();
                                                        /* the FUN11 block already set harmony_on / roots / durations /
                                                        * link sources / retrigger in the import */
     motion = p->motion;
@@ -1544,28 +1542,21 @@ static int project_restore_runtime(const project_t *input)
 }
 static void project_load(uint32_t slot)
 {
-    harmony_saved_t hs;
-    harmony_save(&hs);
 #if FELUCCA_HOME_PERF
     if(hp_project_load(slot)) return;
-    harmony_restore(&hs);                              /* a failed performance load must not leave its state */
 #endif
 
 #if FELUCCA_FLASH
     if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
 #endif
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) {
-        harmony_restore(&hs);
         ui_message("EMPTY SLOT");
         return;
     }
-    if (project_compat_request(&proj_scratch, slot & 3u)) {
-        harmony_restore(&hs);
+    if (project_compat_request(&proj_scratch, slot & 3u))
         return;
-    }
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
     if (!project_restore_runtime(&proj_scratch)) {
-        harmony_restore(&hs);
 #if FELUCCA_HOME_PERF
         hp_init();
         for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);
@@ -1629,12 +1620,7 @@ static void persist_boot(void)                    /* before settings_init / pane
 
 static int project_used(uint32_t slot)
 {
-    harmony_saved_t hs;
-    int used;
-    harmony_save(&hs);
-    used = proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t));
-    harmony_restore(&hs);
-    return used;
+    return proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t));
 }
 
 /* Main loop only: no flash access or copies when the ISR changes rows. */
@@ -1872,6 +1858,12 @@ static uint32_t autosave_sig(void)
     h = as_mix(h, song.mch, sizeof song.mch);           /* (1.5.5: MIDI IN TRACK's channels, the project's) */
     h = as_mix(h, &motion, sizeof motion);
     h = as_mix(h, &chain_config, sizeof chain_config);
+    h = as_mix(h, harmony_root, sizeof harmony_root);    /* (round 7: FUN11 puts HARMONY / LINK in the project; the transient bar and SHIFT stay out) */
+    h = as_mix(h, harmony_dur, sizeof harmony_dur);
+    h = as_mix(h, link_src, sizeof link_src);
+    h = as_mix(h, link_retrig, sizeof link_retrig);
+    h = as_mix(h, harmony_follow, sizeof harmony_follow);
+    h = as_mix(h, &harmony_on, sizeof harmony_on);
     return as_mix(h, proj_name, sizeof proj_name);
 }
 

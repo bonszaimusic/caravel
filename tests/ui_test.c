@@ -6522,6 +6522,8 @@ static int test_coupling(void)
     trk[0].p[P_TRANS] = 5;
     trn1 = trk[1].p[P_TRANS];
     chrd1 = trk[1].p[P_CHRD];
+    int16_t r0[4], s0[4], q0[4];
+    for (i = 0; i < NTRK; i++) { r0[i] = trk[i].p[P_ROOT]; s0[i] = trk[i].p[P_SCALE]; q0[i] = trk[i].p[P_QUANT]; }
     song.octave = 0;
     btn_down(B_SCL);
     frame();
@@ -6530,6 +6532,16 @@ static int test_coupling(void)
          trk[0].p[P_SCALE] == 2 && trk[1].p[P_SCALE] == 2 && trk[2].p[P_SCALE] == 2 && trk[3].p[P_SCALE] == 2 &&
          trk[0].p[P_QUANT] == 3 && trk[1].p[P_QUANT] == 3 && trk[2].p[P_QUANT] == 3 && trk[3].p[P_QUANT] == 3 &&
          trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1 && song.octave == 0 && msg_is("SCALE TO ALL");
+    {   /* round 7: OCT- (UNDO) puts every track's key, scale and quantize back, not only the selected track's */
+        int okp = 1;
+        trk[0].p[P_SCALE] = 1;                       /* a second ALL in the same hold: the undo is still the state when the layer opened */
+        press(B_OCTUP);
+        press(B_OCTDN);
+        for (i = 0; i < NTRK; i++)
+            okp &= trk[i].p[P_ROOT] == r0[i] && trk[i].p[P_SCALE] == s0[i] && trk[i].p[P_QUANT] == q0[i];
+        okp &= msg_is("SCALE PUT BACK") && trk[1].p[P_TRANS] == trn1 && trk[1].p[P_CHRD] == chrd1;
+        bad += check("SCL + OCT+ then OCT-: all four tracks' ROOT SCL QNT are back (the layer's undo)", okp);
+    }
     btn_up(B_SCL);
     frame();
     bad += check("SCL + OCT+: ROOT SCL QNT to all four tracks, TRN / CHRD kept, no octave shift", ok);
@@ -6757,6 +6769,7 @@ static void harmony_owner_midi(uint32_t status, uint32_t note, uint32_t value)
 static void harmony_owner_boundary(void)
 {
     /* Advance to just before the next bar, then let events_block dispatch the real boundary. */
+    harmony_phase = 0;                              /* (the test sets the clock itself: phase 0 = HARM_BAR() is perf_bars_q16 >> 16) */
     perf_bars_q16 = ((harmony_base_bar + harmony_bar + 1u) << 16) - 1u;
     perf_bars_rem = 0;
     events_block(CTL);
@@ -7430,7 +7443,7 @@ static int test_latch_retrigger(void)
     bad += check("ARP CHORD emits HARMONY chord tones", ok);
     /* A one-bar rate realigns at the bar; 2BAR/4BAR keep their own phase. */
     ui_power_on();
-    arp_bar_last = 0; perf_bars_q16 = 1u << 16;
+    arp_bar_last = 0; harmony_phase = 0; perf_bars_q16 = 1u << 16;
     trk[0].p[P_ARATE] = 2; trk[0].arp_pos = 123; trk[0].arp_idx = 7;
     arp_bar_sync();
     ok = trk[0].arp_pos == 0xFFFFFFFu && trk[0].arp_idx == 0xFFFFFFFFu;
@@ -7738,6 +7751,7 @@ static int test_harmony_clock(void)
     harmony_on = 1;
     harmony_base_bar = 0;
     harmony_bar = 0;
+    harmony_phase = 0;
     perf_bars_q16 = 0;
     perf_bars_rem = 0;
     perf_bars_q16 = 1u << 16;                       /* one transport bar reached */
@@ -7819,7 +7833,7 @@ static int test_generate(void)
     ok &= notes >= 4u;
     bad += check("G5 GENERATE: a scale-aware phrase, notes in C minor, the rest of the pattern empty", ok);
 
-    harmony_on = 1; harmony_base_bar = perf_bars_q16 >> 16; harmony_bar = 0;
+    harmony_on = 1; harmony_base_bar = HARM_BAR(); harmony_bar = 0;
     frame();
     ok = harmony_on != 0u;
     mask = harmony_mask(t);
