@@ -176,7 +176,7 @@ Target builds default to `CARAVEL_REVERB_MINIMAL=1` and `FELUCCA_SLICE=0`: HALL/
 with HOME, Pair, macros and performance storage. The public emulator explicitly
 uses the same effect/engine profile. Native legacy goldens retain their separate
 full ROOM/SPRING/SLICE reference. STASIS shares the ordinary delay allocation;
-tempo DELAY cannot run with it. See [the STASIS guide](docs/tutorials/README.md)
+tempo DELAY cannot run with it. See [the STASIS guide](docs/tutorials/home-and-stasis.md)
 for controls, safe project substitutions and the remaining hardware checks.
 
 ## Prerelease DSP in executable RAM

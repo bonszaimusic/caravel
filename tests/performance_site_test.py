@@ -48,13 +48,13 @@ class PerformanceSiteTest(unittest.TestCase):
     def test_landing_pill_of_every_supported_release_is_accepted(self):
         # a release the pill pattern does not know stops the Pages workflow at the performance step (0.10.1 did, 2026-11-03)
         look = make_site.look_css((ROOT / "web/index_pkg.html").read_text())
-        for version in ("0.6.0", "0.7.0", "0.7.1", "0.7.2", "0.8.0", "0.9.0", "0.10.0", "0.10.1", "0.11.0"):
+        for version in ("0.6.0", "0.7.0", "0.7.1", "0.7.2", "0.8.0", "0.9.0", "0.10.0", "0.10.1", "0.11.0", "0.12.0"):
             with self.subTest(version=version):
                 for name in ("caravel-%s-source.tar.gz" % version, "caravel-%s.fwsc" % version):
                     (self.site / "firmware" / name).write_bytes(b"TEST ONLY unchanged release inventory fixture: " + name.encode())
                 (self.site / "index.html").write_text(make_site.landing(look, version, True, "firmware/caravel-%s-source.tar.gz" % version))
                 performance.build(self.site)
-        (self.site / "index.html").write_text(make_site.landing(look, "0.12.0", True, "firmware/caravel-0.6.0-source.tar.gz"))
+        (self.site / "index.html").write_text(make_site.landing(look, "0.13.0", True, "firmware/caravel-0.6.0-source.tar.gz"))
         with self.assertRaisesRegex(ValueError, "requires a verified"):
             performance.build(self.site)
 
@@ -67,8 +67,9 @@ class PerformanceSiteTest(unittest.TestCase):
         self.assertEqual((self.site / "performance" / performance.PACKAGE).read_bytes(),
                          (performance.ASSETS / performance.PACKAGE).read_bytes())
         self.assertIn('href="performance/"', (self.site / "index.html").read_text())
-        for name in ("tutorials", "sounds"):
+        for name in ("tutorials/stasis", "sounds"):
             self.assertIn("Download the performance setup", (self.site / name / "index.html").read_text())
+        self.assertIn('href="../performance/"', (self.site / "tutorials/index.html").read_text())
         initial = {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob("*") if p.is_file()}
         performance.build(self.site)
         self.assertEqual(initial, {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob("*") if p.is_file()})
@@ -100,13 +101,17 @@ class PerformanceSiteTest(unittest.TestCase):
         self.assertIn('href="tutorials/random-morph-journey/"', landing.read_text())
         morph = (self.site / 'tutorials/random-morph-journey/index.html').read_text()
         self.assertIn('https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz', morph)
-        self.assertIn('href="random-morph-journey/"', (self.site / 'tutorials/index.html').read_text())
-        for name in ('performance', 'tutorials', 'sounds', 'changelog'):
+        self.assertIn('href="../tutorials/random-morph-journey/"', (self.site / 'tutorials/index.html').read_text())
+        self.assertIn('href="../tutorials/stasis/"', (self.site / 'tutorials/index.html').read_text())
+        for name in ('performance', 'tutorials/stasis', 'sounds', 'changelog'):
             text = (self.site / name / 'index.html').read_text()
             self.assertIn('v0.6.0', text)
             self.assertIn('https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz', text)
         self.assertEqual((self.site / 'performance' / performance.PROJECT).read_bytes(),
                          (performance.ASSETS / performance.PROJECT).read_bytes())
+        # the header of every generated page names the version of the site, not the 0.6.0 the lessons are about
+        for name in ('performance', 'tutorials', 'tutorials/start-here', 'tutorials/stasis', 'tutorials/random-morph-journey', 'sounds', 'changelog'):
+            self.assertIn('<span class="pill">v0.7.0</span>', (self.site / name / 'index.html').read_text(), name)
         initial = {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob('*') if p.is_file()}
         performance.build(self.site)
         self.assertEqual(initial, {p.relative_to(self.site): p.read_bytes() for p in self.site.rglob('*') if p.is_file()})
