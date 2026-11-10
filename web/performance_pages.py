@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Preserve versioned 0.6.0 performance content on a verified 0.6.0/0.7.0/0.7.1/0.7.2/0.8.0/0.9.0/0.10.0/0.10.1/0.11.0 site.
+"""Preserve versioned 0.6.0 performance content on a verified 0.6.0/0.7.0/0.7.1/0.7.2/0.8.0/0.9.0/0.10.0/0.10.1/0.11.0/0.12.0 site.
 
 This never builds, replaces or relabels firmware, emulator or release files.
 The Pages workflow first builds from the published tag, then applies this
@@ -79,16 +79,18 @@ python3 caravel_backup.py import D {PROJECT}</code></pre>The tool asks before wr
 def build(site, source=ASSETS):
     import make_site
     import stasis_pages
+    import tutorial_pages
     site = Path(site)
     # Verify the destination profile before writing any website content.
     installer = site / "webapp/installer/index.html"
     landing = site / "index.html"
-    version = re.search(r'<span class="pill">v(0\.6\.0|0\.7\.[012]|0\.8\.0|0\.9\.0|0\.10\.[01]|0\.11\.0)</span>', landing.read_text())
+    version = re.search(r'<span class="pill">v(0\.6\.0|0\.7\.[012]|0\.8\.0|0\.9\.0|0\.10\.[01]|0\.11\.0|0\.12\.0)</span>', landing.read_text())
     if '"release_verified": true' not in installer.read_text() or not version:
-        raise ValueError("Performance content requires a verified Caravel 0.6.0/0.7.0/0.7.1/0.7.2/0.8.0/0.9.0/0.10.0/0.10.1/0.11.0 site")
+        raise ValueError("Performance content requires a verified Caravel 0.6.0/0.7.0/0.7.1/0.7.2/0.8.0/0.9.0/0.10.0/0.10.1/0.11.0/0.12.0 site")
     manifest, data = load_assets(source)
     look = make_site.look_css(installer.read_text())
-    historical = version[1] in ('0.7.0','0.7.1','0.7.2','0.8.0','0.9.0','0.10.0','0.10.1','0.11.0')
+    site_version = version[1]
+    historical = version[1] in ('0.7.0','0.7.1','0.7.2','0.8.0','0.9.0','0.10.0','0.10.1','0.11.0','0.12.0')
     source_url = 'https://github.com/bonszaimusic/caravel/releases/download/v0.6.0/caravel-0.6.0-source.tar.gz'
     if historical:
         # Keep established tutorial/audio URLs, explicitly labelled 0.6.0.
@@ -96,14 +98,16 @@ def build(site, source=ASSETS):
         # and strict firmware inventory remain byte-for-byte unchanged.
         with tempfile.TemporaryDirectory(prefix='caravel-historical-content-') as temp:
             stage = Path(temp)
-            stasis_pages.build(stage, look, make_site.SHIP_PATH, ROOT)
+            stasis_pages.build(stage, look, make_site.SHIP_PATH, ROOT, site_version)
             for name in ('tutorials', 'sounds', 'changelog'):
                 for path in (stage / name).rglob('index.html'):
                     depth = '../' * len(path.parent.relative_to(stage).parts)
                     path.write_text(path.read_text().replace(depth + 'firmware/caravel-0.6.0-source.tar.gz', source_url))
                 shutil.copytree(stage / name, site / name, dirs_exist_ok=True)
-    # The Random Morph / Journey tutorial comes from this source tree for every site, whichever release built it.
-    stasis_pages.add_morph_tutorial(site, look, make_site.SHIP_PATH, ROOT)
+    # The Random Morph / Journey tutorial, the STASIS lessons and the tutorials overview come from this source tree for every site, whichever release built it.
+    stasis_pages.add_morph_tutorial(site, look, make_site.SHIP_PATH, ROOT, site_version)
+    stasis_pages.add_lessons_page(site, look, make_site.SHIP_PATH, ROOT, site_version, source=source_url if historical else None)
+    tutorial_pages.add_tutorials(site, look, make_site.SHIP_PATH, site_version, ROOT)
     if historical:
         morph = site / 'tutorials/random-morph-journey/index.html'
         morph.write_text(morph.read_text().replace('../../firmware/caravel-0.6.0-source.tar.gz', source_url))
@@ -113,7 +117,7 @@ def build(site, source=ASSETS):
         (target / name).write_bytes(raw)
     (target / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     page = stasis_pages.page("Load the performance. Make it yours.", performance_body(),
-                             look, make_site.SHIP_PATH)
+                             look, make_site.SHIP_PATH, version=site_version, up="../", current="")
     if historical:
         page = page.replace('../firmware/caravel-0.6.0-source.tar.gz', source_url)
     page = page.replace("</style>", ".table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--raise);white-space:nowrap}pre{overflow-x:auto;padding:12px;background:var(--bg);border:1px solid var(--raise);border-radius:4px;font-size:13px}li{margin:12px 0}</style>")
@@ -128,18 +132,21 @@ def build(site, source=ASSETS):
     text = text.replace("</section>", "</section>" + marked(card), 1)
     text = text.replace("</nav>", marked('<a href="performance/">PERFORMANCE</a>') + "</nav>", 1)
     landing.write_text(text)
-    for relative in ("tutorials/index.html", "sounds/index.html", "changelog/index.html"):
-        path = site / relative
+    callout = '<section class="chapter"><h2>Replay the feature Short.</h2><p>Load STASIS 060: the complete HOME project, MIDI notes and the individual moves.</p><div class="actions"><a href="../performance/">Download the performance setup</a></div></section>'
+    pages = [site / "sounds/index.html", site / "changelog/index.html", *sorted((site / "tutorials").rglob("index.html"))]
+    for path in pages:
+        relative = path.relative_to(site).as_posix()
         if not path.is_file():
             raise ValueError("Missing release page: " + relative)
         text = clean(path.read_text())
-        text = text.replace("</nav>", marked('<a href="../performance/">PERFORMANCE</a>') + "</nav>", 1)
-        if relative != "changelog/index.html":
-            callout = '<section class="chapter"><h2>Replay the feature Short.</h2><p>Load STASIS 060: the complete HOME project, MIDI notes and the individual moves.</p><div class="actions"><a href="../performance/">Download the performance setup</a></div></section>'
-            text = text.replace("<footer>", marked(callout) + "<footer>", 1)
+        depth = len(path.relative_to(site).parts) - 1
+        text = text.replace("</nav>", marked('<a href="' + "../" * depth + 'performance/">PERFORMANCE</a>') + "</nav>", 1)
+        if relative in ("sounds/index.html", "tutorials/stasis/index.html"):
+            text = text.replace("<footer>", marked(callout.replace('href="../', 'href="' + "../" * depth)) + "<footer>", 1)
         path.write_text(text)
     # All release installers, firmware and emulator files remain byte-for-byte intact.
     stasis_pages.check_site(site)
+    tutorial_pages.check_site(site, ROOT)
     print("Performance site PASS: local downloads, HOME setup and play guides")
 
 

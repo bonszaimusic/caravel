@@ -1,5 +1,9 @@
 # Caravel
 
+<p align="center"><a href="https://bonszaimusic.github.io/caravel/tutorials/"><img src="docs/tutorials/img/tutorials-banner.png" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a></p>
+
+<p align="center"><strong><a href="https://bonszaimusic.github.io/caravel/tutorials/">Tutorials on the site</a></strong> · <a href="docs/tutorials/start-here.md">Start here: your first ten minutes</a> · <a href="docs/tutorials/README.md">all tutorials</a></p>
+
 **Development:** [Live Harmony and HOME ACTION keys](docs/tutorials/harmony-live.md): C#5 BANK back, D#5 BANK forward, D5/E5/F5/G5 actions; HARM follows JOURNEY with HOLD, PREV, NEXT, RESET and scale-degree SHIFT. Not yet released.
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
@@ -10,7 +14,7 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.11.0**.
 
 **[Troubleshooting & FAQ](docs/faq.md)** — USB detection, switching firmware, stock-return error -5, UBOOT and recovery tools.
 
-**Tutorials:** [Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md) · [STASIS: HOLD, ADD, BLEND](https://bonszaimusic.github.io/caravel/tutorials/) · [HOME, Pair Morph, macros and saving](docs/tutorials/README.md) · [all tutorials](#tutorials)
+**Tutorials:** [Start here](docs/tutorials/start-here.md) · [Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md) · [STASIS: HOLD, ADD, BLEND](https://bonszaimusic.github.io/caravel/tutorials/) · [HOME, Pair Morph, macros and saving](docs/tutorials/home-and-stasis.md) · [all tutorials](docs/tutorials/README.md)
 
 Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
 [Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
@@ -37,7 +41,7 @@ Every screenshot comes from the actual firmware renderer. Start with the one tha
 | --- | --- |
 | **[Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md)** | Save sounds into S1–S4, morph between them, and let a journey chain the morphs hands-free (0.9.0; [reference](docs/morph-journey.md)) |
 | **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
-| **[HOME, Pair Morph, macros and saving](docs/tutorials/README.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
+| **[HOME, Pair Morph, macros and saving](docs/tutorials/home-and-stasis.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
 | [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
 
 ## Caravel 0.11.0 — ENSEMBLE in stereo
@@ -142,7 +146,7 @@ load and long-term stability remain separate hardware checks.
 
 ## Performance controls retained from 0.5.0
 
-**[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
+**[Illustrated tutorials](docs/tutorials/home-and-stasis.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
 
 **Deep HADES bass. Drifting DRONE atmospheres. Warm SEM pads. Shimmering FM bells.
 Now explore what happens between them.**
@@ -165,7 +169,7 @@ Free and open source for the M-VAVE FM-1.
 
 <a href="docs/tutorials/img/home-active-1.png"><img src="docs/tutorials/img/home-active-1.png" width="300" alt="Performance HOME with paired presets, morph position and large active controls"></a>
 
-**[Illustrated tutorials](docs/tutorials/README.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
+**[Illustrated tutorials](docs/tutorials/home-and-stasis.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
 
 [Release notes](RELEASE-NOTES.md)
 

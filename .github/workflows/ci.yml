@@ -25,3 +25,5 @@ jobs:
         run: |
           python3 tests/site_release_test.py
           python3 tests/performance_site_test.py
+          python3 tests/tutorial_pages_test.py
+          python3 web/tutorial_pages.py --check-readme

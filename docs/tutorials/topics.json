@@ -1,0 +1,196 @@
+{
+  "version": "0.12.0",
+  "banner": "tutorials-banner.png",
+  "hero_device": "device-hero.svg",
+  "groups": [
+    {
+      "id": "start",
+      "title": "Start",
+      "blurb": "New to the FM-1 or to Caravel? Begin here."
+    },
+    {
+      "id": "engines",
+      "title": "Engines",
+      "blurb": "Four engines, each with what to do first, then how the sound is made."
+    },
+    {
+      "id": "play",
+      "title": "Play and perform",
+      "blurb": "Sequence, arpeggiate, perform and follow a chord progression."
+    },
+    {
+      "id": "shape",
+      "title": "Shape and connect",
+      "blurb": "Filter, effects, modulation, and the outside world."
+    },
+    {
+      "id": "help",
+      "title": "Help",
+      "blurb": "When something does not work, and the way back."
+    }
+  ],
+  "topics": [
+    {
+      "id": "start-here",
+      "num": "1",
+      "group": "start",
+      "title": "Start here",
+      "minutes": 10,
+      "md": "start-here.md",
+      "thumb": "card-start.png",
+      "status": "ready",
+      "tagline": "Back up, install, make a first sound and sequence, save it, and know the way back to the stock firmware."
+    },
+    {
+      "id": "basics",
+      "num": "2",
+      "group": "start",
+      "title": "Basics",
+      "minutes": 10,
+      "md": "basics.md",
+      "thumb": "card-basics.png",
+      "status": "ready",
+      "tagline": "Tracks, engine versus preset, the pages and how to move between them, saving projects and presets."
+    },
+    {
+      "id": "sem",
+      "num": "3.1",
+      "group": "engines",
+      "title": "SEM",
+      "minutes": 10,
+      "md": "engine-sem.md",
+      "thumb": "card-sem.png",
+      "status": "ready",
+      "tagline": "Warm pads, brass, strings and notch sweeps."
+    },
+    {
+      "id": "hades",
+      "num": "3.2",
+      "group": "engines",
+      "title": "HADES",
+      "minutes": 10,
+      "md": "engine-hades.md",
+      "thumb": "card-hades.png",
+      "status": "ready",
+      "tagline": "Basses, sub layers and dark leads."
+    },
+    {
+      "id": "drone",
+      "num": "3.3",
+      "group": "engines",
+      "title": "DRONE",
+      "minutes": 10,
+      "md": "engine-drone.md",
+      "thumb": "card-drone.png",
+      "status": "ready",
+      "tagline": "Evolving drones, beds, bells and slow textures (experimental).",
+      "links": [
+        {
+          "title": "Watch: DRONE engine demo (YouTube)",
+          "href": "https://www.youtube.com/watch?v=N08Vx3x7fLE"
+        }
+      ]
+    },
+    {
+      "id": "ensemble",
+      "num": "3.4",
+      "group": "engines",
+      "title": "ENSEMBLE",
+      "minutes": 10,
+      "md": "engine-ensemble.md",
+      "thumb": "card-ensemble.png",
+      "status": "ready",
+      "tagline": "Strings, choirs and dark pads with a built-in three-tap ensemble, in stereo."
+    },
+    {
+      "id": "seq-arp",
+      "num": "4",
+      "group": "play",
+      "title": "Sequencer and arpeggiator",
+      "minutes": 12,
+      "md": "seq-arp.md",
+      "thumb": "card-seq-arp.png",
+      "status": "ready",
+      "tagline": "Step entry, timing, recording while it plays, parts A to D, and the arpeggiator."
+    },
+    {
+      "id": "home",
+      "num": "5",
+      "group": "play",
+      "title": "HOME performance functions",
+      "minutes": 15,
+      "md": "home-performance.md",
+      "thumb": "journey-play.png",
+      "status": "ready",
+      "tagline": "The ACTION banks: Random Morph and Journey, STASIS hold, Pair Morph and macros.",
+      "links": [
+        {
+          "title": "Random Morph and Journey",
+          "href": "@site:tutorials/random-morph-journey/"
+        },
+        {
+          "title": "STASIS: HOLD, ADD and BLEND",
+          "href": "@site:tutorials/stasis/"
+        },
+        {
+          "title": "Pair Morph, macros and saving",
+          "href": "@github:docs/tutorials/home-and-stasis.md"
+        },
+        {
+          "title": "Download the STASIS performance setup",
+          "href": "@site:performance/"
+        }
+      ]
+    },
+    {
+      "id": "harmony",
+      "num": "6",
+      "group": "play",
+      "title": "HARMONY",
+      "minutes": 15,
+      "md": "harmony-live.md",
+      "thumb": "card-harmony.png",
+      "status": "ready",
+      "tagline": "Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH."
+    },
+    {
+      "id": "filter-fx",
+      "num": "7",
+      "group": "shape",
+      "title": "Filter, FX and modulation",
+      "minutes": 12,
+      "md": "filter-fx.md",
+      "thumb": "card-filter-fx.png",
+      "status": "ready",
+      "tagline": "The per-track filter, reverb, delay and insert effects, LFO and envelope."
+    },
+    {
+      "id": "midi-sync",
+      "num": "8",
+      "group": "shape",
+      "title": "MIDI and sync",
+      "minutes": 8,
+      "md": "midi-sync.md",
+      "thumb": "card-midi.png",
+      "status": "ready",
+      "tagline": "MIDI Learn, clock and start over USB and TRS."
+    },
+    {
+      "id": "help",
+      "num": "9",
+      "group": "help",
+      "title": "Help",
+      "minutes": 5,
+      "md": "help.md",
+      "thumb": "card-help.png",
+      "status": "ready",
+      "tagline": "The FAQ, backup, update and the way back, and the known limits.",
+      "links": [
+        {
+          "title": "Troubleshooting & FAQ",
+          "href": "@github:docs/faq.md"
+        }
+      ]
+    }
+  ]
+}
