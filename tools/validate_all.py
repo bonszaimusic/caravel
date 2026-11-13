@@ -59,8 +59,8 @@ def main():
     if a.shard == "engines_samples":
         if not (Path(os.environ["DAISYSP"])/"Source/PhysicalModeling").is_dir():
             raise SystemExit("Required DaisySP reference checkout missing")
-        if '{"PIANO", 0, 5},' not in (ROOT/"build/gen/felucca_samples.h").read_text():
-            raise SystemExit("Required five-zone CC0 PIANO fixture missing")
+        if '{"PIANO", 0, 3},' not in (ROOT/"build/gen/felucca_samples.h").read_text():
+            raise SystemExit("Required three-zone V1+V3 factory PIANO fixture missing")
     if a.shard == "engines_samples":
         subprocess.run([sys.executable,"tools/gen_waves.py","build/genwav"],cwd=ROOT,check=True)
     # The original suite creates these before sanitizers; each shard gets its own.

@@ -2,7 +2,7 @@
 // Real Caravel 0.6.0 C/WASM integration, including keyboard ISR and LCD renderer.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const bytes=fs.readFileSync('build/home-perf/felucca.wasm');
+const bytes=fs.readFileSync(process.argv[2]||'build/home-perf/felucca.wasm');
 const {instance}=await WebAssembly.instantiate(bytes,{});
 const e=instance.exports;
 e._initialize();e.web_nor_erase();e.web_boot();
@@ -33,7 +33,12 @@ assert.equal(key(22),255,'bank key never sounds');
 assert.equal((state()>>8)&255,4,'bank switch selects JOURNEY, right after RANDOM');
 assert.equal(key(22),255);assert.equal((state()>>8)&255,5,'HARM follows JOURNEY');
 key(22);assert.equal((state()>>8)&255,1,'STASIS bank');
-key(22);assert.equal((state()>>8)&255,2,'PAIR bank');
+key(22);
+if(typeof e.web_p13_bounce_track==='function'){
+ assert.equal((state()>>8)&255,6,'ELASTIC follows STASIS in the P1.4 profile');
+ key(22);
+}
+assert.equal((state()>>8)&255,2,'PAIR bank');
 key(22);assert.equal((state()>>8)&255,3,'LIVE bank');
 const beforeMute=e.web_action_mute(0);
 key(21);assert.notEqual(e.web_action_mute(0),beforeMute,'LIVE action actually toggles T1 mute');
@@ -58,4 +63,4 @@ tap(6);tap(6);
 assert.notEqual(e.web_action_key_note(21),255,'already held note stays a note');
 release();
 assert.equal(key(21),255,'after release the key becomes ACTION');
-console.log('ACTION 0.6.0 C/WASM PASS: HOME double tap, six banks, live mute, Random/Freeze/Resume/Return, third LCD row, LEDs, six silent keys, 21 playable keys, held-note safety, OFF.');
+console.log('ACTION 0.6.0 C/WASM PASS: HOME double tap, complete profile bank order, live mute, Random/Freeze/Resume/Return, third LCD row, LEDs, six silent keys, 21 playable keys, held-note safety, OFF.');

@@ -35,7 +35,11 @@ static int hp_capsule_ok(const hp_store_t*p)
 {
  if(p->magic!=HP_MAGIC||p->reserved[0]!=hp_hash(p,20))return 0;
 #if HP_SNAPSHOT_STORE
- if(p->version==2||p->version==3){
+ if(p->version==2||p->version==3
+#if HP_EL_PROJECT
+ ||p->version==4||p->version==5
+#endif
+ ){
   uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
   return p->size==HP_V2_SIZE&&p->crc==hp_hash((const uint8_t*)p+32,HP_V2_SIZE-32)&&hp_v2_decode(p,raw);
  }
@@ -53,7 +57,13 @@ static int hp_capture(hp_store_t*p)
 #if HP_SNAPSHOT_STORE
  p->reserved[1]=hp_v2_encode((uint8_t*)&p->model,&hp,0,hp_rm_snap);
  if(!p->reserved[1]){p->magic=0;return 0;}
- p->version=3;p->size=HP_V2_SIZE;p->reserved[2]=HP_RAW_META;
+ p->version=
+#if HP_EL_PROJECT
+ 5;
+#else
+ 3;
+#endif
+ p->size=HP_V2_SIZE;p->reserved[2]=HP_RAW_META;
 #else
  uint32_t irq=perf_irq_save();p->model=hp;for(uint32_t t=0;t<NTRK;t++)p->model.track[t].pad[0]=trk[t].user;hp_pair_capture(&p->pair);perf_irq_restore(irq);
 #endif
@@ -64,7 +74,11 @@ static int hp_restore(const hp_store_t*p)
  if(!hp_capsule_ok(p))return 0;
 #if HP_SNAPSHOT_STORE
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
- int v2=p->version==2||p->version==3;if(v2&&!hp_v2_decode(p,raw))return 0;
+ int v2=p->version==2||p->version==3
+#if HP_EL_PROJECT
+ ||p->version==4||p->version==5
+#endif
+ ;if(v2&&!hp_v2_decode(p,raw))return 0;
 #endif
  if(p!=&hp_io)memcpy(&hp_io,p,p->size);
 #if HP_SNAPSHOT_STORE
@@ -86,9 +100,21 @@ static int hp_restore(const hp_store_t*p)
 #if HP_SNAPSHOT_STORE
  hp_rm_reset_all();hp_rm_snapshot_clear();action_snap_slot=0;
  uint32_t dropped=0;
- if(p->version==3)memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap);
+ if(p->version==3
+#if HP_EL_PROJECT
+    ||p->version==4||p->version==5
+#endif
+ )memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap); /* v4 retains ALL v3 snapshot slots/settings */
  else if(p->version==2)dropped=hp_snapshots_migrate((const void*)(raw+HP_HW_META));   /* the old four slots, sorted into the tracks' own sets */
  hp_ps_apply(v2?hp_rm_snap:0);                  /* stored settings, or the defaults of a project made before them; a journey starts stopped */
+#if HP_EL_PROJECT
+ /* project_restore_runtime calls hp_init() (defaults + no active arms).
+  * v4 restores legacy BOUNCE counts; v5 uses tagged tempo subdivisions.
+  * Historical untagged values remain valid and keep their original sound.
+  * v1/v2/v3 load safe new defaults rather than guessing missing bytes. */
+ if(p->version==4u||p->version==5u)hp_el_persist_apply(raw+HP_RAW_META_V3);
+ else{uint8_t defaults[HP_EL_PERSIST_BYTES];hp_el_persist_pack(defaults,0u);hp_el_persist_apply(defaults);}
+#endif
 #endif
  perf_irq_restore(irq);hp_dirty=0;ui.force=1;
 #if HP_SNAPSHOT_STORE
@@ -108,7 +134,13 @@ static uint32_t hp_signature(void)
 #if HP_SNAPSHOT_STORE
  ^hp_hash(hp_rm_snap,sizeof hp_rm_snap)^hp_hash(&ps,sizeof ps)
 #endif
- ^hp_hash(&hp,sizeof hp)^hp_hash(&p,sizeof p)^((uint32_t)trk[0].user|(uint32_t)trk[1].user<<8|(uint32_t)trk[2].user<<16|(uint32_t)trk[3].user<<24);
+ ^hp_hash(&hp,sizeof hp)^hp_hash(&p,sizeof p)^((uint32_t)trk[0].user|(uint32_t)trk[1].user<<8|(uint32_t)trk[2].user<<16|(uint32_t)trk[3].user<<24)
+#if HP_EL_PROJECT
+ /* Settings changes also trigger the existing quiet 10s RESTORE LAST
+  * autosave; never include live coil positions or continuous phase ticks. */
+ ^hp_el_persist_sig()
+#endif
+ ;
 }
 
 /* Canonical sound comparison; no flags, snapshots, flash writes or DSP changes. */

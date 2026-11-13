@@ -11,6 +11,8 @@
  * holds the hashes of 1.4 (the engines' own arrays, before the shared region): any difference fails. The 380
  * sequences that play SAMPLE's PIANO (SAMPLE presets 0 / 1, GRAIN's FROZEN / SHIMMER) were rewritten in 1.5, when
  * PIANO went back to the full piano of 1.1.5; the other 340 are 1.4's.
+ * 0.13.0 V1+V3: 576 sample-dependent sequences remeasured; 144 hashes retained.
+ * The same current code with the original five-zone samples reproduces all 720 old hashes.
  * env: GOLDEN_UPDATE=1 rewrites GOLDEN_FILE (only with a reason: a switch is to sound as it did). */
 #define main hostsim_main
 #include "hostsim.c"
@@ -138,6 +140,6 @@ int main(int argc, char **argv)
         }
     }
     fclose(f);
-    printf("union_test: %u engine switch sequences, %u differ from 1.4: %s\n", n, bad, bad ? "FAIL" : "ok");
+    printf("union_test: %u engine switch sequences, %u differ from the retained/sample-profile baseline: %s\n", n, bad, bad ? "FAIL" : "ok");
     return bad != 0;
 }

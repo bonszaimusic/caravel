@@ -50,6 +50,20 @@
 #ifndef FELUCCA_RANDOM_MORPH
 #define FELUCCA_RANDOM_MORPH 0
 #endif
+/* Developer-only ELASTIC P1. Production/release profiles remain unchanged. */
+#ifndef CARAVEL_ELASTIC_P1
+#define CARAVEL_ELASTIC_P1 0
+#endif
+/* P1.2 four-visible-cell pilot; keep existing P1.1 unchanged by default. */
+#ifndef CARAVEL_ELASTIC_PLAYABLE
+#define CARAVEL_ELASTIC_PLAYABLE 0
+#endif
+#if CARAVEL_ELASTIC_PLAYABLE && !CARAVEL_ELASTIC_P1
+#error "ELASTIC playable pilot requires CARAVEL_ELASTIC_P1=1"
+#endif
+#if CARAVEL_ELASTIC_P1 && (!CARAVEL_ACTION_BANKS || !FELUCCA_HOME_PERF)
+#error "ELASTIC P1 prototype needs HOME performance and ACTION banks"
+#endif
 #ifndef CARAVEL_REVERB_MINIMAL
 #define CARAVEL_REVERB_MINIMAL 0
 #endif
@@ -84,6 +98,16 @@ static struct {
                                             * second core (mod.c, voice.c SPREAD, eng_formant.c): one each with two cores,
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
+/* Scratch a part's render writes and reads again inside ONE mix_part_inner call (fx.c: dx_sides, pd_scratch, spread_buf, mod_w) is
+ * written before it is read in every call and not read in the next one, so it needs one copy per core that renders at the same time,
+ * not one per part: C1_NS copies, picked by C1_CI(t), the core that renders part t this block (track_t.c1i, set by fx.c mix_block). */
+#if FELUCCA_CPU2
+#define C1_NS 2
+#define C1_CI(t) ((uint32_t)(t)->c1i)
+#else
+#define C1_NS 1
+#define C1_CI(t) 0u
+#endif
 #define ENGI_SEM 14u             /* append-only; 13 stays reserved when SLICE is disabled */
 #define ENGI_HADES 15u           /* appended; stable across optional builds */
 #define ENGI_DRONE 16u           /* experimental coupled drone; append-only */
@@ -402,7 +426,7 @@ typedef struct track {
     uint8_t lfo_wrap;            /* the LFO's phase wrapped this block: its S&H is drawn after the parts (voice.c) */
     uint32_t esync_k[3];         /* ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
     uint8_t spread_on;           /* SPREAD this block (fx.c mix_part, voice.c track_render) */
-    uint8_t rsv_sz[1];           /* (sizeof(track_t) a multiple of 16: below) */
+    uint8_t c1i;                 /* the core that renders the part this block (0 this one, 1 the second: fx.c mix_block), which copy of the scratch C1_NS it uses */
 #else
     uint8_t rsv_sz[1];          /* (sizeof(track_t) a multiple of 16: below) */
 #endif

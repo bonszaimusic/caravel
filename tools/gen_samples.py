@@ -11,8 +11,9 @@ The ADPCM state at the loop start is stored so loops restart exactly.
 Libraries:
   cc0        assets/samples-cc0/ (tools/fetch_cc0.py, Versilian Studios, CC0):
              PIANO, FLUTE (set 1, once TRANH, set 3, once SAX, and set 4, once PERC, are aliases of PIANO).
-             PIANO is the 5-zone piano of 1.0 .. 1.1.5 (1.2 .. 1.4.1 built a reduced 2-zone
-             one at 11,025 Hz; 1.5 went back to the full one, the same bytes as 1.1.5)
+             0.13.0 factory PIANO selects full-length C1/C3/C5 recordings (3 zones);
+             FLUTE selects C4/C6 (2 zones). Unselected recordings remain in assets
+             and --user-slot PIANO HD continues to export all five piano zones.
 SAMPLE's factory presets end before set 4 (SMP_PERC_SLOT); every sample set and SET / USR
 index stays in its original place.
 A retired set keeps its index as an alias: the original's name and zones (no data), and a
@@ -40,7 +41,8 @@ Without the CC0 library (no PIANO set) it has no material (SLICE plays a sine th
                   a CC0 set as built from its own files (PIANO: the 5 zones of 1.0 .. 1.1.5, 1.5) as a user slot:
                   PREFIX.hdr / .bin (the editor's SMP_END header / SMP_WRITE data), PREFIX.slot (as in flash).
                   Kept for reference and tests only (1.2's PIANO HD file, which old users may hold in USR1..3:
-                  it plays as the built-in PIANO does); nothing in the build or the app depends on it.
+                  it is independently compatible, but no longer bit-identical to the reduced factory set);
+                  nothing in the build or the app depends on it.
 
 The header is cached (build/gen_samples.cache) under a hash of every
 input file, this script, sampleio.py and the Python version, so unchanged
@@ -73,6 +75,9 @@ TR = 22050                                   # stored sample rate
 # PIANO too (PERC_SLOT; its sounds load as the DRUM engine). The SAX recordings stay in assets/samples-cc0
 # (and its ATTRIBUTION); nothing in the build reads them any more.
 CC0_SETS = [("PIANO", "oneshot"), ("PIANO", "alias"), ("FLUTE", "sus"), ("PIANO", "alias"), ("PIANO", "alias")]
+# 0.13.0 V1+V3 (owner approved after listening): factory ROM only.
+# Do not modify cc0_entries() or --user-slot: old PIANO HD stays a full five-zone user sample.
+BUILTIN_ROOTS = {"PIANO": (36, 60, 84), "FLUTE": (72, 96)}
 PERC_SLOT = 4                                # core.h SMP_SET_PERC: SAMPLE's factory presets end before it
 MEASURED_TUNING = ()                         # sets whose recordings are not at A440 (was TRANH, ~+35 ct)
 
@@ -318,9 +323,21 @@ class Builder:
         self.alias[len(self.sets)] = orig
         self.sets.append(self.sets[orig])
 
-    def cc0_set(self, name, kind):
+    def cc0_set(self, name, kind, factory=True):
+        # Reduce factory ROM zone count only; full WAV sources and the legacy
+        # --user-slot PIANO HD export remain unchanged. Validate roots loudly
+        # so a future sample update cannot silently drop or remap a zone.
+        sources = cc0_entries(name, kind)
+        wanted = BUILTIN_ROOTS.get(name) if factory else None
+        if wanted is not None:
+            have = [int(round(root)) for _, _, _, root in sources]
+            chosen = [entry for entry in sources if int(round(entry[3])) in wanted]
+            selected = tuple(sorted(int(round(entry[3])) for entry in chosen))
+            if selected != wanted or len(have) != len(set(have)):
+                raise ValueError(f"{name}: expected factory roots {wanted}, found {have}")
+            sources = chosen
         entries = []
-        for k, (_, s, loop, root) in enumerate(cc0_entries(name, kind)):
+        for k, (_, s, loop, root) in enumerate(sources):
             ls, le = loop if loop else (len(s), len(s))
             off, st = self.add(s, ls)
             entries.append(dict(off=off, n=len(s), ls=ls, le=le, looped=bool(loop), sr=TR,
@@ -471,15 +488,16 @@ def user_slot_file(setname, slotname, prefix):
     """a one-shot CC0 set as built from all of its own files (PIANO: the 5 zones of 1.0 .. 1.1.5, 1.5) as a
     user sample slot: PREFIX.hdr (the 480-byte header SMP_END takes), PREFIX.bin (the ADPCM SMP_WRITE takes; as
     tools/fm1_sample_upload.py build writes them) and PREFIX.slot (the slot as stored in flash: header at 0, data at
-    512). Each zone's ADPCM bytes, length, rate, root and key range are checked against that set as Builder.cc0_set
-    builds it: from USR1..3 it plays the same (one-shot zones there; the slot has no loop)"""
+    512). Each zone's ADPCM bytes, length, rate, root and key range are checked against a full
+    five-zone Builder (factory=False); this is intentionally NOT bit-identical to the reduced
+    built-in PIANO except where both use the same source recording/root."""
     kind = next((k for n, k in CC0_SETS if n == setname and k != "alias"), None)
     if kind != "oneshot":
         raise SystemExit(f"{setname}: not a one-shot CC0 set")
     ent = cc0_entries(setname, kind)
     hdr, data = sio.user_slot(slotname, [(s, int(round(root)), None, None) for _, s, _, root in ent])
     b = Builder()
-    b.cc0_set(setname, kind)
+    b.cc0_set(setname, kind, factory=False)  # keep original five-zone PIANO HD file
     zl = sorted(b.zones, key=lambda z: z["root16"])
     for k, z in enumerate(zl):
         off, n, ls, le, rate, root16, pred, idx, lo, hi, looped = struct.unpack_from("<5I2h4B", hdr, 32 + 28 * k)

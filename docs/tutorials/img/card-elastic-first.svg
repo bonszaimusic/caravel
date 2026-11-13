@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="ELASTIC first steps — conceptual preview, not a firmware screenshot">
+<title>ELASTIC first steps — concept preview</title><desc>Editorial illustration only. Replace with a verified 0.13.0 firmware renderer capture before release.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#091821"/><stop offset="1" stop-color="#102d38"/></linearGradient></defs>
+<rect x="0" y="0" width="240" height="240" rx="12" fill="url(#bg)"/>
+<rect x="11" y="11" width="218" height="218" rx="10" fill="none" stroke="#39616a" stroke-width="1.5"/>
+<text x="24" y="34" fill="#80ead7" font-size="11" font-family="sans-serif" font-weight="700" letter-spacing="2">ELASTIC</text>
+<text x="24" y="53" fill="#d9e6eb" font-size="10" font-family="sans-serif" letter-spacing="1">ONE SPRING</text>
+<path d="M23 68 H217" stroke="#40616b" stroke-width="1"/>
+
+<path d="M26 130 H45 C55 130 58 92 70 92 S88 167 100 167 S119 105 132 105 S149 149 161 149 S183 118 194 118 S208 130 215 130" fill="none" stroke="#63d6c1" stroke-width="4" stroke-linecap="round"/>
+<path d="M26 130 H215" stroke="#8aa8b9" stroke-width="1.5" stroke-dasharray="4 7" opacity=".45"/>
+<circle cx="70" cy="92" r="5" fill="#f5ba78"/><circle cx="161" cy="149" r="5" fill="#63d6c1"/>
+<rect x="28" y="183" width="184" height="20" rx="5" fill="#102c37" stroke="#2c5e67"/><text x="120" y="197" text-anchor="middle" fill="#cfe5ec" font-size="10" font-family="sans-serif" letter-spacing="2">PULL · RETURN</text><text x="120" y="222" text-anchor="middle" fill="#7babb9" font-size="8" font-family="sans-serif" letter-spacing="1">CONCEPT • PREVIEW</text></svg>

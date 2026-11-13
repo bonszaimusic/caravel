@@ -2,6 +2,8 @@
 name: ACTION banks Android emulator
 
 on:
+  push:
+    branches: [release/0.13.0]
   pull_request:
     paths:
       - 'experiments/action-banks/**'

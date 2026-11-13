@@ -5,7 +5,7 @@ Caravel is free firmware for the M-VAVE FM-1. This page takes you from a stock F
 
 > **In 60 seconds**
 >
-> 1. **Back up** what is on the FM-1 (`caravel_backup.py save`, or the web editor's *Complete backup*).
+> 1. **Back up** what is on the FM-1 (`caravel_backup.py save`, or the web editor's *Complete backup*; for 0.13.0 projects see [Help](help.md)).
 > 2. **Install**: open the web installer in Chrome or Edge, connect the FM-1 over USB, press Install.
 > 3. **Play**: press keys, turn `PRESETS` for another sound, turn `KNOB 1` to `KNOB 4` to change it.
 > 4. **Sequence**: `SEQ`, then `REC`, play four keys, `REC` again, `PLAY`.
@@ -22,8 +22,8 @@ Caravel and the stock firmware do not share projects: a project saved by Caravel
 
 Two ways to save a **complete backup** (the current project, the saved projects A to D, sound banks, user samples and settings) of a device that runs Caravel:
 
-- the [web editor](https://bonszaimusic.github.io/caravel/webapp/editor/): *Complete backup*, then *Save backup*;
-- or in a terminal: `python3 tools/caravel_backup.py save session.zip` (needs Python 3 with `mido` and `python-rtmidi`; close other MIDI programs first).
+- the [web editor](https://bonszaimusic.github.io/caravel/webapp/editor/): *Complete backup*, then *Save backup* (it has not been tried on a device that holds projects saved by 0.13.0; see [Help](help.md));
+- or in a terminal: `python3 tools/caravel_backup.py save session.zip` (needs Python 3 with `mido` and `python-rtmidi`; close other MIDI programs first). Use the copy of the tool that comes with 0.13.0: it also saves projects written by 0.13.0 (HPM1 version 5), which earlier copies of the tool do not; see [Help](help.md).
 
 The backup button is greyed out when the connected firmware does not report backup support. Keep the backup file on your computer, not on the FM-1, and keep M-VAVE's official `FM-1.fwsc` (download page: [m-vave.com/download](https://www.m-vave.com/download)) next to it: it is your way back.
 

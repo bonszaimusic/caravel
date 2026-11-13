@@ -8,7 +8,8 @@ for everything here unless a guide says otherwise; host tests are not hardware m
 
 - **[Tutorials](tutorials/README.md)**: start here, engines, sequencer, HOME performance, HARMONY, MIDI and help, with real firmware screens (illustrated version: [tutorials on the site](https://bonszaimusic.github.io/caravel/tutorials/)).
 - **[Tutorial: Random Morph and Morph Journey](tutorials/random-morph-journey.md)**: save sounds, morph between them and chain the morphs, step by step with real firmware screens.
-- **[0.12.0 release: HARMONY](release-0120.md)**: the chord bus, LINK, the SCL pages, the HOME ACTION keys and the HARM bank, the FUN11 project format, what is and is not tested. ([0.11.0](release-0110.md))
+- **[0.13.0 release: ELASTIC P1.4](release-0130.md)**: tempo-synced springs on HOME, the HPM1 v5 project format, the smaller PIANO / FLUTE set, the MOD DST fix, what is and is not tested. ([0.12.0](release-0120.md))
+- [0.12.0 release: HARMONY](release-0120.md): the chord bus, LINK, the SCL pages, the HOME ACTION keys and the HARM bank, the FUN11 project format, what is and is not tested. ([0.11.0](release-0110.md))
 - [0.11.0 release: ENSEMBLE in stereo](release-0110.md): the width, the pad presets, Pair Morph with a width, what is and is not tested. ([0.10.1](release-0101.md))
 - **[0.10.1 release: a fix for the ship on the RANDOM sea chart](release-0101.md)**: what changed, what is and is not tested. ([0.10.0](release-0100.md))
 - **[0.10.0 release: the ENSEMBLE engine](release-0100.md)**: what changed, project compatibility, what is and is not tested. ([0.9.0](release-090.md))

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="ELASTIC linked springs — conceptual preview, not a firmware screenshot">
+<title>ELASTIC linked springs — concept preview</title><desc>Editorial illustration only. Replace with a verified 0.13.0 firmware renderer capture before release.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#091821"/><stop offset="1" stop-color="#102d38"/></linearGradient></defs>
+<rect x="0" y="0" width="240" height="240" rx="12" fill="url(#bg)"/>
+<rect x="11" y="11" width="218" height="218" rx="10" fill="none" stroke="#39616a" stroke-width="1.5"/>
+<text x="24" y="34" fill="#80ead7" font-size="11" font-family="sans-serif" font-weight="700" letter-spacing="2">ELASTIC</text>
+<text x="24" y="53" fill="#d9e6eb" font-size="10" font-family="sans-serif" letter-spacing="1">FOUR SPRINGS</text>
+<path d="M23 68 H217" stroke="#40616b" stroke-width="1"/>
+
+<g fill="none" stroke-width="3" opacity=".9"><path d="M68 103 L172 103" stroke="#65dcc3"/><path d="M68 103 L68 163" stroke="#d89a8b"/><path d="M172 103 L172 163" stroke="#65dcc3"/><path d="M68 163 L172 163" stroke="#d89a8b"/><path d="M68 103 L172 163 M172 103 L68 163" stroke="#6695ac" stroke-dasharray="4 6"/></g>
+<g stroke="#b1dde0" stroke-width="2"><circle cx="68" cy="103" r="13" fill="#245864"/><circle cx="172" cy="103" r="13" fill="#255064"/><circle cx="68" cy="163" r="13" fill="#245864"/><circle cx="172" cy="163" r="13" fill="#255064"/></g>
+<g fill="#ecf8f4" font-family="sans-serif" font-size="10" font-weight="700" text-anchor="middle"><text x="68" y="107">K1</text><text x="172" y="107">K2</text><text x="68" y="167">K3</text><text x="172" y="167">K4</text></g>
+<text x="120" y="211" text-anchor="middle" fill="#aacdd6" font-size="11" font-family="sans-serif" letter-spacing="2">SEED · COUPLE</text><text x="120" y="222" text-anchor="middle" fill="#7babb9" font-size="8" font-family="sans-serif" letter-spacing="1">CONCEPT • PREVIEW</text></svg>

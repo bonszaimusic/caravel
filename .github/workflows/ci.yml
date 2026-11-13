@@ -2,7 +2,7 @@
 name: Source and release metadata
 on:
   push:
-    branches: [main]
+    branches: [main, release/0.13.0]
   pull_request:
 permissions:
   contents: read

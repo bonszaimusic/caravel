@@ -52,7 +52,7 @@ A track whose CHRD is BUS but which has no bus (HARMONY off, or FOLLOW off) play
 
 ## 4. Play the HARM bank
 
-Double-tap `HOME` to switch ACTION on. Tap `D#5` (next bank) until the chip reads **HARM**. The four chords are shown with the current one highlighted; below them a status line shows what is queued for the next bar or the run state.
+Double-tap `HOME` to switch ACTION on. Tap `D#5` (next bank) until the chip reads **HARM**. (In 0.13.0 there are seven banks: ELASTIC sits between STASIS and PAIR, and HARM stays right after JOURNEY.) The four chords are shown with the current one highlighted; below them a status line shows what is queued for the next bar or the run state.
 
 ![Diagram: D#5 to the HARM bank, D5 E5 F5 G5 are the four actions](img/device-action.svg)
 

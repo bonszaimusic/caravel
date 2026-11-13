@@ -10,9 +10,21 @@
  * (run_tests.sh TSAN=1), nothing two parts share may be touched by both at once.
  *   build/host/dualcore_test          SCENE=text: only the scenes whose name holds it */
 #include "c1_host.h"
+#include "../experiments/home-perf/home_elastic_overlay.h"
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
+
+#if defined(ELASTIC_DUALCORE_TEST) && ELASTIC_DUALCORE_TEST
+/* The ownership gate compiles the DSP TU without home_ui.c. These hooks are
+ * no-ops because this test installs its own overlay bracket around mix_block;
+ * the actual HOME macro/MOTION path is covered by the integration test. */
+static void hp_begin(track_t *t) { (void)t; }
+static void hp_end(track_t *t) { (void)t; }
+static void hp_motion_step(track_t *t, uint32_t step, uint32_t play) { (void)t; (void)step; (void)play; }
+static void hp_motion_stop(void) {}
+static void hp_midi_touch(uint32_t kind, uint32_t track, uint32_t id) { (void)kind; (void)track; (void)id; }
+#endif
 
 #define SECS 3u
 
@@ -82,6 +94,23 @@ static uint64_t render(const scen_t *sc, int dual, const char *mask)
         host_preset(&trk[k], sc->eng[k], sc->pre[k]);
         part_setup(&trk[k], k, sc->eng[k]);
     }
+    hp_elo_frame_t elastic_frame[NPART][2];
+    int16_t elastic_base[NPART][2];
+#if defined(ELASTIC_DUALCORE_TEST) && ELASTIC_DUALCORE_TEST
+    /* Direct two-overlay render bracket on EACH part, under every one-core/
+     * two-core scheduling split. This is the overlay/restore invariant, not
+     * the UI publication or project_capture; the P1.2 integration test owns
+     * those. It cannot reproduce an ISR interrupted between two publications.
+     */
+    for(k=0;k<NPART;k++){
+        const param_desc_t *d0=track_desc(&trk[k],P_FILT);
+        const param_desc_t *d1=track_desc(&trk[k],P_REV);
+        elastic_base[k][0]=trk[k].p[P_FILT];
+        elastic_base[k][1]=trk[k].p[P_REV];
+        hp_elo_begin(&trk[k].p[P_FILT],(int16_t)(5+k),d0->min,d0->max,&elastic_frame[k][0]);
+        hp_elo_begin(&trk[k].p[P_REV],(int16_t)(8+k),d1->min,d1->max,&elastic_frame[k][1]);
+    }
+#endif
     for (f = 0; f < SECS * FS; f += CTL) {
         uint32_t ms = f / (FS / 1000u);
         for (k = 0; k < NPART; k++) {
@@ -93,9 +122,25 @@ static uint64_t render(const scen_t *sc, int dual, const char *mask)
                 for (i = 0; i < 3u; i++)
                     trk_note_off(&trk[k], base + CH[i]);
         }
+        if (ms == 900u || ms == 2000u)              /* PHASE: FOLD on, then off under sounding notes (phase_xfade: pd_scratch, one copy per core) */
+            for (k = 0; k < NPART; k++)
+                if (sc->eng[k] == 2u)
+                    trk[k].p[P_E7] = ms == 900u ? 90 : 0;
         if (sc->morph && ms == 600u)                /* PHYS: MODEL changed under a sounding note (phys_render) */
             trk[0].p[P_E0] = (int16_t)((trk[0].p[P_E0] + 1) % PM_COUNT);
         mix_block(o, CTL);
+#if defined(ELASTIC_DUALCORE_TEST) && ELASTIC_DUALCORE_TEST
+        /* Both overlays must restore before the next block/SAVE observation.
+         * This checks the post-barrier render state, not the project format.
+         */
+        for(k=0;k<NPART;k++){
+            hp_elo_end(&trk[k].p[P_FILT],&elastic_frame[k][0]);
+            hp_elo_end(&trk[k].p[P_REV],&elastic_frame[k][1]);
+            if(trk[k].p[P_FILT]!=elastic_base[k][0] ||
+               trk[k].p[P_REV]!=elastic_base[k][1])
+                _exit(7);
+        }
+#endif
         for (k = 0; k < NPART; k++)
             if (trk[k].peak > peak[k])
                 peak[k] = trk[k].peak;

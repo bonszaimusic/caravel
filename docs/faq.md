@@ -27,6 +27,8 @@ USB or switch off during writing. Recovery can change or erase stored data.
 | After going back to 0.9.0 a project slot that uses ENSEMB is empty | [Projects that use ENSEMBLE](#projects-that-use-ensemble) |
 | A Pair with SPRD above 0 on a member: what happens (0.11.0 and before) | [Pair Morph and SPRD](#pair-morph-and-sprd) |
 | After going back to 0.10.x a project with a stereo ENSEMBLE pad plays mono | [Stereo ENSEMBLE pads in older firmware](#stereo-ensemble-pads-in-older-firmware) |
+| A project saved by 0.13.0 does not load after going back to 0.12.0, or an earlier copy of `caravel_backup.py` says `Invalid HPM1 capsule` on a 0.13.0 device | [Things to know in 0.13.0](#things-to-know-in-0130) |
+| PIANO or FLUTE sound different after updating to 0.13.0 | [Things to know in 0.13.0](#things-to-know-in-0130) |
 | On 0.9.0 the journey stops at one slot, or `caravel_backup.py` says `Invalid HPM1 capsule` | [Two known problems in 0.9.0](#two-known-problems-in-090) |
 | You need to understand OCT-/OCT+, M-Flasher or m-bootloader | [Recovery tools](#recovery-tools) |
 
@@ -130,6 +132,14 @@ The upstream M-Flasher guide describes the download-mode device as **WL82 UBOOT1
 Holding both octave buttons **during power-on** opens Caravel's hardware
 calibration instead. The running-firmware shortcut cannot help if Caravel never
 reaches its main loop. A blank screen alone does not confirm UBOOT or a permanent failure.
+
+## Things to know in 0.13.0
+
+**Projects saved by 0.13.0 do not load on 0.12.0 and earlier.** *Cause:* every project you save with 0.13.0 carries an HPM1 **version 5** HOME capsule (it holds the ELASTIC settings, nine bytes per track), whether or not you use ELASTIC. 0.12.0 reads HPM1 versions 1 to 3 only and does not accept version 5: in a host test it boots normally, the HOME project slot looks empty, and a USB write of the capsule is refused. *What to do:* make a backup before you update and keep it. Updating to 0.13.0 is safe, and 0.13.0 reads the projects of 0.7.1 to 0.12.0; going back is not safe for projects saved by 0.13.0, and reinstalling older firmware does not turn them back into an older format.
+
+**`caravel_backup.py` stops with `Invalid HPM1 capsule`.** *Symptom:* an earlier copy of the command-line backup tool stops while reading a device that holds projects saved by 0.13.0 (HPM1 version 5) and writes no backup, the same kind of problem as in 0.9.0. *Cause:* those copies accept HPM1 versions 1 to 3 only. *What to do:* use `tools/caravel_backup.py` of 0.13.0 (or later): it saves and restores HPM1 capsule versions 4 and 5 byte for byte without interpreting the capsule; that is tested on the host, not on a device. The backup of the web installer and editor checks sizes only, not the capsule version, and has not been tried on a device that holds version 5 projects.
+
+**PIANO and FLUTE sound different in some registers.** *Cause:* 0.13.0 ships a smaller factory sample set: PIANO uses three recordings (before: five), FLUTE two (before: three). Each recording covers a wider key range and is transposed further, so the timbre changes in some registers, and a one-shot that is transposed upwards can end earlier. Projects that play SAMPLE PIANO or FLUTE, or GRAIN or SLICE from PIANO, sound a little different. The PIANO HD user sample keeps all five zones. *What to do:* nothing is broken; this is a documented change of the factory set.
 
 ## Two known problems in 0.9.0
 

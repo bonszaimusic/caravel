@@ -146,10 +146,10 @@
 # SLICE (tests/slice_test.c): slice tables, AUTO onsets of a user-slot loop, reverse, keys, modes, the MAN slices
 #                   (SLICES page) and their store in the slot (src/slice_store.c); the presets and the loop;
 #                   demos in build/slice_demo/.
-# SAMPLE (tests/sample_test.c, 1.5): PIANO is the 5-zone piano of 1.0 .. 1.1.5 again: zones, splits, pitch over the
-#                   keyboard (YIN), 0.75 s at a root, the aliases, GRAIN SRC 0; SLICE's PIANO its middle C zone (shared);
-#                   1.2's PIANO HD user-slot file (gen_samples.py --user-slot: build/piano_hd/PIANO_HD), as old users may
-#                   have installed it: valid in USR1 and bit for bit as SET 0.
+# SAMPLE (tests/sample_test.c, 0.13.0 V1+V3): factory PIANO 3 full-length zones and FLUTE 2 looped zones;
+#                   fixed MIDI boundaries, tuning (YIN), original root duration/loop, GRAIN and SLICE middle C
+#                   sharing, aliases; 5-zone legacy PIANO HD exports remain usable in USR1 but are no longer
+#                   byte-identical to factory PIANO at notes remapped to a different root.
 # INPUT (tests/input_test.c): the key / button debounce of hal/fm1_input.h against the TIMER5 scan and bouncing
 #                   contacts: a press within 2 scans (<= 2.3 ms), one note per bouncy press, no early or hanging
 #                   release, stray samples ignored, fast repeats, the encoders' detents; the LED scan: lit LEDs every
@@ -216,6 +216,23 @@ CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 fail=0
 run() { label=$1; echo "== $label"; shift; "$@" || { rc=$?; echo "FAILED (exit $rc): $label"; fail=1; }; }
 
+$CC -std=c11 -Wextra -Werror -o "$OUT/home_elastic_core_test" tests/home_elastic_core_test.c
+run "ELASTIC P0: bounded spring, raw gesture speed, oscillation, hold and anchor" "$OUT/home_elastic_core_test"
+$CC -std=c11 -Wextra -Werror -o "$OUT/home_elastic_overlay_test" tests/home_elastic_overlay_test.c
+run "ELASTIC P1: transient render bracket restores base values" "$OUT/home_elastic_overlay_test"
+$CC -std=c11 -Wextra -Werror -Wno-unused-function -o "$OUT/home_elastic_p1_shim_test" tests/home_elastic_p1_shim_test.c
+run "ELASTIC P1: actual controller header with mocked HOME/render" "$OUT/home_elastic_p1_shim_test"
+$CC -std=c11 -Wextra -Werror -o "$OUT/home_elastic_row_test" tests/home_elastic_row_test.c
+run "ELASTIC P1.2: four visible independent springs and bounded PULSE" "$OUT/home_elastic_row_test"
+$CC -std=c11 -Wextra -Werror -o "$OUT/home_elastic_visual_test" tests/home_elastic_visual_test.c
+run "ELASTIC P1.2: armed cell coil geometry and 100k bounded display samples" "$OUT/home_elastic_visual_test"
+$CC -std=c11 -Wextra -Werror -o "$OUT/home_elastic_trajectory_test" tests/home_elastic_trajectory_test.c
+run "ELASTIC P1.2: independent PULL/RETURN 16ms–45s timing, HOLD and long-duration safety" "$OUT/home_elastic_trajectory_test"
+$CC -std=c11 -O1 -Wextra -Werror -o "$OUT/home_elastic_p13_test" tests/home_elastic_p13_test.c
+run "ELASTIC P1.3: 1..1000 bounces, alias guard, wall reflection, 100k seeded ROW coupling fuzz" "$OUT/home_elastic_p13_test"
+$CC -std=c11 -O1 -Wextra -Werror -o "$OUT/home_elastic_sync_test" tests/home_elastic_sync_test.c
+run "ELASTIC P1.4: tempo-synced BOUNCE detents 1/16..64 BAR, exact 32-bit phase accumulator" "$OUT/home_elastic_sync_test"
+
 run "release artifacts: offline synthetic fixture checks" python3 -B tests/release_artifacts_test.py
 run "site: exact release source, notices and navigation" python3 -B tests/site_release_test.py
 
@@ -276,6 +293,17 @@ $CC -o "$OUT/ldr_test" tests/ldr_test.c
 run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/caravel.fwsc
 
 if [ -f build/gen/felucca_tables.h ]; then
+    $CC -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+        -DCARAVEL_ELASTIC_P1=1 -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 \
+        -DFELUCCA_HOME_PERF=1 -DFELUCCA_PERF_HW=1 -DFELUCCA_SLICE=0 -DCARAVEL_REVERB_MINIMAL=1 \
+        experiments/action-banks/elastic_p1_test.c -o "$OUT/elastic_p1_test" -lm
+    run "ELASTIC P1.1: ACTION bank, generic continuous target, audio bracket, HOLD/RESUME/RESET and ownership on the real firmware path" "$OUT/elastic_p1_test"
+    $CC -O2 -w -ffp-contract=off -Ibuild/gen -Ifirmware/src \
+        -DCARAVEL_ELASTIC_P1=1 -DCARAVEL_ELASTIC_PLAYABLE=1 -DCARAVEL_ACTION_BANKS=1 \
+        -DFELUCCA_RANDOM_MORPH=1 -DFELUCCA_HOME_PERF=1 -DFELUCCA_PERF_HW=1 \
+        -DFELUCCA_SLICE=0 -DCARAVEL_REVERB_MINIMAL=1 \
+        experiments/action-banks/elastic_p12_test.c -o "$OUT/elastic_p12_test" -lm
+    run "ELASTIC P1.2: UI/audio integration with four DRONE cards and exact restore" "$OUT/elastic_p12_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/scale_test" tests/scale_test.c -lm
     run "scales: white-key mapping and note lifecycle" "$OUT/scale_test"
@@ -432,6 +460,10 @@ if [ -f build/gen/felucca_tables.h ]; then
         env MENU_JSON="$OUT/menu.json" "$OUT/editor_test"
     $CC -w -DFELUCCA_CPU2=0 -Ibuild/gen -Ifirmware/src -o "$OUT/editor_test_c1" tests/editor_test.c -lm
     run "editor, a FELUCCA_CPU2=0 build: MENU settings without 2ND CORE (ids 0..31)" "$OUT/editor_test_c1"
+    for eo in "" "-DCARAVEL_REVERB_MINIMAL=1" "-DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1"; do
+        $CC -w -g -fsanitize=address,undefined -Ibuild/gen -Ifirmware/src $eo -o "$OUT/enum_order_test" tests/enum_order_test.c -lm
+        ASAN_OPTIONS=detect_leaks=0 run "enum knobs' shown-order tables: a permutation of every name, no read past the end under ASan [${eo:-default}] (MOD DST with STASIS_EXPAND: SCAN was missing)" "$OUT/enum_order_test"
+    done
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/robust_test" tests/robust_test.c -lm
     run "robustness: crafted sample slots, engine numbers, retained old projects, preset patterns, malformed requests" \
         "$OUT/robust_test"
@@ -506,7 +538,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     "$OUT/fe_host" > "$OUT/fe_renders.txt" || fail=1
     run "Felucca-Engines with Felucca's tables: the engines' golden renders" diff -u firmware/engines/tests/golden.txt "$OUT/fe_renders.txt"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/union_test" tests/union_test.c -lm
-    run "engine memory (1.5): every switch between the engines with per-part state sounds as in 1.4 (720 sequences)" \
+    run "engine memory: every switch matches the retained/V1+V3 sample-profile baseline (720 sequences)" \
         "$OUT/union_test" tests/union_golden.txt
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/descdump" tests/descdump.c -lm
     echo "== parameter and engine tables as JSON (for the editor mock test)"
@@ -546,12 +578,14 @@ if [ -f build/gen/felucca_tables.h ]; then
         echo "== SLICE: build/ was made with FELUCCA_SLICE=0 (no BREAK); run ./build.sh without it first"
         fail=1
     fi
-    # SAMPLE's PIANO (1.5: as 1.1.5), SLICE's PIANO (its middle C zone), 1.2's PIANO HD in a user slot
-    if grep -q '^    {"PIANO", 0, 5},' build/gen/felucca_samples.h; then
+    run "SAMPLE: synthetic factory zone selection, full HD export and alias compatibility" python3 -B tests/sample_zone_policy_test.py
+    # Always exercise present PIANO data, regardless of its zone count.
+    # The test itself checks 3 PIANO / 2 FLUTE and rejects a stale generator.
+    if grep -q '^    {"PIANO", 0, ' build/gen/felucca_samples.h; then
         mkdir -p build/sample_demo build/piano_hd
         python3 tools/gen_samples.py --user-slot PIANO "PIANO HD" build/piano_hd/PIANO_HD >/dev/null
         $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/sample_test" tests/sample_test.c -lm
-        run "SAMPLE: PIANO (5 zones as 1.1.5: splits, pitch, length, GRAIN), SLICE's PIANO, a PIANO HD slot" "$OUT/sample_test" \
+        run "SAMPLE: factory PIANO 3 / FLUTE 2 zones (splits, pitch, loops, GRAIN, SLICE), legacy PIANO HD 5-zone slot" "$OUT/sample_test" \
             build/piano_hd/PIANO_HD build/sample_demo
     else
         echo "== skip SAMPLE's PIANO (no CC0 library: assets/samples-cc0, tools/fetch_cc0.py)"

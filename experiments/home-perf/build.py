@@ -176,7 +176,7 @@ font=json.dumps(base64.b64encode((out/'fonts/DotGothic16-subset.woff').read_byte
 single=single.replace('const SANS =','const hpFont=new FontFace("DotGothic16",Uint8Array.from(atob('+font+'),c=>c.charCodeAt(0)).buffer);document.fonts.add(hpFont);hpFont.load();\nconst SANS =')
 assert 'import ' not in single[single.index('<script>'):]
 assert 'fetch("felucca.wasm")' not in single
-if os.environ.get('ACTION_EMU_VERSION','').startswith('v0.7.'):
+if os.environ.get('ACTION_EMU_VERSION','').startswith('v'):
     single=single.replace('0.6.0',os.environ['ACTION_EMU_VERSION'].removeprefix('v'))
 if 'CARAVEL_ACTION_BANKS=1' in extra:
     (out/'Caravel-ACTION-BANKS-0.6.0-Android.html').write_text(single)

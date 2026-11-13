@@ -111,11 +111,15 @@ def main(src, dst):
             audio -= {n for n in audio if n.endswith(("_init", "_reset", "_note_on", "_note_off")) or n in {"drone_cell_seed","drone_motion_values","drone_motion_load"}}
         names = {m.group(2) for m in IR_DEF.finditer(ir)} - audio
 
+    # The cold UI/store/editor functions below are never inlined into each other in the dual-core build; the one-core
+    # build (FELUCCA_CPU2=0) needs the same policy (about -2.6 KB there). Functions an interrupt reaches are excluded.
+    cold_noinline = os.environ.get("CARAVEL_DUALCORE_D1") == "1" or os.environ.get("FELUCCA_CPU2") == "0"
+
     def mark(m):
         if m.group(2) not in names:
             return m.group(0)
         hit.add(m.group(2))
-        extra = " noinline" if os.environ.get("CARAVEL_DUALCORE_D1")=="1" and m.group(2) not in isr and (m.group(2) == "sound_name" or m.group(2).startswith(("ui_", "draw_", "gfx_", "menu_", "ed_", "proj_", "settings_", "storage_", "hp_", "up_", "con_", "upf_", "fvb_", "layer_", "lcell", "pat_", "cv_", "text_"))) else ""
+        extra = " noinline" if cold_noinline and m.group(2) not in isr and (m.group(2) == "sound_name" or m.group(2).startswith(("ui_", "draw_", "gfx_", "menu_", "ed_", "proj_", "settings_", "storage_", "hp_", "up_", "con_", "upf_", "fvb_", "layer_", "lcell", "pat_", "cv_", "text_"))) else ""
         return m.group(1) + " minsize" + extra + m.group(3)
     Path(dst).write_text(IR_DEF.sub(mark, ir))
     print(f"size: {len(hit)} functions explicitly built for size ({len(names) - len(hit)} not in this build; "

@@ -570,14 +570,6 @@ static void span_param(const card_span_t *sp, int32_t v, char *val)
     param_format((const param_desc_t *)sp->p, v, val, &u);
     fmt_named = named;
 }
-static void span_names(const card_span_t *sp, int32_t v, char *val)
-{
-    str_cpy(val, ((const char *const *)sp->p)[v], 16);
-}
-static void span_mod_dst(const card_span_t *sp, int32_t v, char *val)   /* MOD's DST: the track's (its engine's) names */
-{
-    str_cpy(val, mod_dst_name((const track_t *)sp->p, v), 16);
-}
 static void span_fop(const card_span_t *sp, int32_t v, char *val)       /* FM6's operator pages: card ctx's byte = v */
 {
     const char *l, *u;
@@ -1096,38 +1088,6 @@ static void draw_columns(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_LINK) {             /* per track: SOURCE, RETRIG, the source's key, the status */
-        uint32_t sel = song.sel, src = link_src[sel], rt = link_retrig[sel];
-        static const char *const RT[4] = {"OFF", "CHORD", "LINK", "BOTH"};
-        str_cpy(val, !src ? "OFF" : src == 1u ? "T1" : src == 2u ? "T2" : src == 3u ? "T3" : "T4", sizeof val);
-        draw_column(0, "SOURCE", val, "", src ? VAL(0u) : T_DIM, -1, ICON_X_SONG);
-        draw_column(1, "RETRIG", RT[rt & 3u], "", VAL(1u), -1, ICON_AUTO);
-        if (!src || src > NTRK) {
-            draw_column(2, "KEY", "--", "", T_DIM, -1, ICON_SCALE);
-        } else {
-            const track_t *s = &trk[src - 1u];
-            char key[12];
-            str_cpy(key, N_NOTE[(uint32_t)s->p[P_ROOT] % 12u], sizeof key);
-            str_cpy(key + str_len(key), " ", 2);
-            str_cpy(key + str_len(key), N_SCALE[(uint32_t)s->p[P_SCALE] % (sizeof N_SCALE / sizeof N_SCALE[0])], sizeof key - str_len(key));
-            draw_column(2, "KEY", key, "", link_src[src - 1u] ? T_DIM : VAL(2u), -1, ICON_SCALE);
-        }
-        draw_column(3, "FOLLOW", harmony_follow[sel] ? "ON" : "OFF", "",
-                    harmony_follow[sel] ? VAL(3u) : T_DIM, -1, ICON_X_SONG);
-        return;
-    }
-    if (cur_page()->graph == GR_HARMONY) {          /* K1..K4: BAR roots, and their DUR row */
-        for (c = 0; c < 4u; c++) {
-            uint32_t d = (uint32_t)hdur_get(c) + 1u;
-            char du[10];
-            harmony_card_name(c, val, 0);               /* the prepared chord's name, as the two-line editor shows it */
-            fmt_int(du, (int32_t)(1u << (d - 1u)));
-            str_cpy(du + str_len(du), d == 1u ? " BAR" : " BARS", sizeof du - str_len(du));
-            draw_column(c, c == 0u ? "CHORD 1" : c == 1u ? "CHORD 2" : c == 2u ? "CHORD 3" : "CHORD 4", val, du,
-                        harmony_on || harmony_edit_dur ? VAL(c) : T_DIM, -1, ICON_X_SONG);
-        }
-        return;
-    }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
         int used = row < chain_config.count;
@@ -1344,21 +1304,6 @@ static void draw_columns(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_MOD) {                   /* SLOT, then that slot's SRC DST AMT */
-        const track_t *t = TSEL;
-        uint32_t id = P_M1SRC + 3u * mod_ui_slot;
-        int32_t s = t->p[id], d = t->p[id + 1u], a = t->p[id + 2u];
-        fmt_int(val, (int32_t)mod_ui_slot + 1);
-        draw_column(0, "SLOT", val, "/4", VAL(0u), (int32_t)mod_ui_slot * 1000 / 3, mod_src_icon(MS_OFF));   /* (the mod icon) */
-        card_span_by(span_names, N_MSRC, 0, MS_N - 1, 0);
-        draw_column(1, "SRC", N_MSRC[clamp(s, 0, MS_N - 1)], "", s ? VAL(1u) : T_DIM, -1, mod_src_icon(s));
-        card_span_by(span_mod_dst, t, 0, MD_N - 1, 0);
-        draw_column(2, "DST", mod_dst_name(t, d), "", d ? VAL(2u) : T_DIM, -1, mod_dst_icon(t, d));
-        param_format(&TP[id + 2u], a, val, &unit);
-        card_span_of(&TP[id + 2u]);
-        draw_column(3, "AMT", val, unit, a ? VAL(3u) : T_DIM, RATIO(&TP[id + 2u], a), mod_src_icon(MS_OFF));
-        return;
-    }
     if (detail_on()) {                                  /* DETAIL (1.5.1, #199): the cursor step's CHANCE RATCH NUDGE VEL;
                                                          * DIM where they do not play (ui_input.c sd_turn) */
         static const char *const SD_LABEL[4] = {"CHANCE", "RATCH", "NUDGE", "VEL"};
@@ -1501,10 +1446,6 @@ static void draw_columns(void)
 #endif
         card_mot_of(vp);                                /* (a global: never) */
         card_span_of(d);
-        if (vp == &TSEL->p[P_LRATE] && TSEL->p[P_LSYNC]) {   /* LFO 2 SYNC on: RATE does nothing, DIM (1.2) */
-            draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), param_icon(d, *vp));
-            continue;
-        }
         draw_column(c, d->label, val, unit, VAL(c), d->fmt == F_ENUM && d->max < 2 ? -1 : RATIO(d, enum_rank(d, *vp)),
                     param_icon(d, *vp));
     }

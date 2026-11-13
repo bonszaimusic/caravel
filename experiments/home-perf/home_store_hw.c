@@ -30,10 +30,22 @@ static uint32_t hp_hw_addr(uint32_t slot,uint32_t copy){return HP_HW_BASE+slot*4
 static uint32_t hp_hw_piece(uint32_t logical){return 256u+(logical/3584u)*4096u+logical%3584u;}
 static int hp_hw_read(uint32_t base,uint32_t off,void*dst,uint32_t n){uint8_t*d=dst;while(n){uint32_t k=3584u-off%3584u;if(k>n)k=n;if(st_read(base+hp_hw_piece(off),d,k))return -1;off+=k;d+=k;n-=k;}return 0;}
 static int hp_hw_size_ok(const hp_hw_header_t*h){
- if(h->flags)return h->size==0&&(h->version==1||h->version==2||h->version==3);
+ if(h->flags)return h->size==0&&(h->version==1||h->version==2||h->version==3
+#if HP_EL_PROJECT
+ ||h->version==4||h->version==5
+#endif
+ );
  if(h->version==1)return h->size==HP_HW_DATA;
 #if HP_SNAPSHOT_STORE
- if(h->version==2||h->version==3)return h->size>sizeof(project_store_t)&&h->size<=sizeof(project_store_t)+HP_V2_META&&h->rsv==(h->version==2?HP_RAW_META_V2:HP_RAW_META);   /* 2: 0.7.1 .. 0.8.0's shared slots, 3: a set per track */
+ if(h->version==2||h->version==3
+#if HP_EL_PROJECT
+ ||h->version==4||h->version==5
+#endif
+ )return h->size>sizeof(project_store_t)&&
+ h->size<=sizeof(project_store_t)+HP_V2_META&&
+ h->rsv==(h->version==2?HP_RAW_META_V2:
+          h->version==3?HP_RAW_META_V3:HP_RAW_META); /* v4 ELASTIC extension */
+
 #endif
  return 0;
 }
@@ -50,7 +62,11 @@ static int hp_pending_pack(uint8_t*out,const hp_store_t*p){
  uint8_t temp[HP_V2_META];
  uint32_t n=p->version>=2?p->reserved[1]:hp_v2_encode(temp,&p->model,&p->pair,0);
  if(!n||n>HP_V2_META)return 0;
- memcpy(out+2,p->version>=2?(const uint8_t*)&p->model:temp,n);hp_put(out,n|(p->version==2?0x8000u:0u),2);   /* bit 15: an old (version 2) capsule, migrated when it is loaded */
+ /* Pending bytes 15..14: 10=v2, 00=v3, 01=v4, 11=v5; payload <4096.
+  * Existing v2/v3 pending blobs remain decodable; no extra RAM staging. */
+ uint32_t version_tag=p->version==2?0x8000u:p->version==4?0x4000u:p->version==5?0xC000u:0u;
+ memcpy(out+2,p->version>=2?(const uint8_t*)&p->model:temp,n);
+ hp_put(out,n|version_tag,2);
 #else
  hp_meta_pack(out,&p->model,&p->pair);
 #endif
@@ -58,7 +74,11 @@ static int hp_pending_pack(uint8_t*out,const hp_store_t*p){
 }
 static void hp_pending_unpack(const uint8_t*in){
 #if HP_SNAPSHOT_STORE
- uint32_t w=hp_take(in,2),n=w&0x7FFFu,old=(w&0x8000u)!=0u;hp_io.version=old?2:3;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=old?HP_RAW_META_V2:HP_RAW_META;
+ uint32_t w=hp_take(in,2),n=w&0x3FFFu,tag=w&0xC000u;
+ hp_io.version=tag==0x8000u?2:tag==0x4000u?4:tag==0xC000u?5:tag==0u?3:255;
+ hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;
+ hp_io.reserved[2]=hp_io.version==2?HP_RAW_META_V2:
+                   hp_io.version==3?HP_RAW_META_V3:HP_RAW_META;
  if(n<=HP_V2_META)memcpy(&hp_io.model,in+2,n);
 #else
  hp_io.version=1;hp_io.size=sizeof hp_io;hp_meta_unpack(&hp_io.model,&hp_io.pair,in);
@@ -74,7 +94,11 @@ static const hp_store_t*hp_slot_disk(uint32_t slot){
   if(hp_hw_read(hp_hw_addr(slot,copy),0,&hp_io.native,sizeof hp_io.native)||hp_hw_read(hp_hw_addr(slot,copy),sizeof hp_io.native,&hp_io.model,n))continue;
   hp_io.version=1;hp_io.size=sizeof hp_io;
 #if HP_SNAPSHOT_STORE
-  if(h.version==2||h.version==3){hp_io.version=h.version;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=h.rsv;}
+  if(h.version==2||h.version==3
+#if HP_EL_PROJECT
+  ||h.version==4||h.version==5
+#endif
+  ){hp_io.version=h.version;hp_io.size=HP_V2_SIZE;hp_io.reserved[1]=n;hp_io.reserved[2]=h.rsv;}
   else
 #endif
   hp_meta_unpack(&hp_io.model,&hp_io.pair,(const uint8_t*)&hp_io.model);
@@ -89,7 +113,12 @@ static int hp_hw_commit(uint32_t slot,const uint8_t*meta,const project_store_t*n
  for(uint32_t off=0;off<h.size;off++){uint8_t v=off<sizeof*native?((const uint8_t*)native)[off]:meta[off-sizeof*native];h.crc=(h.crc^v)*16777619u;}
 #endif
 #if HP_SNAPSHOT_STORE
- if(!erase){uint32_t w=hp_take(meta,2),n=w&0x7FFFu,old=(w&0x8000u)!=0u;if(!n||n>HP_V2_META)return 0;meta+=2;h.version=old?2:3;h.size=sizeof*native+n;h.rsv=old?HP_RAW_META_V2:HP_RAW_META;
+ if(!erase){uint32_t w=hp_take(meta,2),n=w&0x3FFFu,tag=w&0xC000u;
+  if(!n||n>HP_V2_META)return 0;
+  meta+=2;h.version=tag==0x8000u?2:tag==0x4000u?4:tag==0xC000u?5:3;
+  h.size=sizeof*native+n;
+  h.rsv=h.version==2?HP_RAW_META_V2:
+        h.version==3?HP_RAW_META_V3:HP_RAW_META;
   h.crc=2166136261u;for(uint32_t off=0;off<h.size;off++){uint8_t v=off<sizeof*native?((const uint8_t*)native)[off]:meta[off-sizeof*native];h.crc=(h.crc^v)*16777619u;}
  }
 #endif
@@ -118,13 +147,21 @@ static int hp_project_save(uint32_t slot,const char*name){
 }
 static int hp_project_load(uint32_t slot){const hp_store_t*p=hp_slot(slot);if(!p)return 0;
  if(!proj_import(&proj_scratch,&p->native,sizeof p->native))return 1;
- if(project_compat_request(&proj_scratch,slot))return 1;if(!hp_restore(p)){ui_message("PERF PROJECT INVALID");return 1;}proj_cur=slot;pat_from_set(slot+1);go_home();ui_message(project_compat_state.trial?"TEST LOADED / SAVE A COPY":"LOADED: SOUND + HOME + PAIR");return 1;}
+ if(project_compat_request(&proj_scratch,slot))return 1;
+#if CARAVEL_ELASTIC_P1
+ hp_elastic_p1_clear();
+#endif
+ if(!hp_restore(p)){ui_message("PERF PROJECT INVALID");return 1;}proj_cur=slot;pat_from_set(slot+1);go_home();ui_message(project_compat_state.trial?"TEST LOADED / SAVE A COPY":"LOADED: SOUND + HOME + PAIR");return 1;}
 /* USB restore writes a validated saved project, without replacing the working sound. */
 static int hp_project_import(uint32_t slot,const hp_store_t*p){
  if(slot>=4||transport_busy()||!flash_ok||project_compat_save_blocked(slot))return 0;
  if(!hp_capsule_ok(p)||!proj_import(&proj_scratch,&p->native,sizeof p->native)||!proj_engines_ok(&proj_scratch))return 0;
 #if HP_SNAPSHOT_STORE
- if(p->version==2||p->version==3){
+ if(p->version==2||p->version==3
+#if HP_EL_PROJECT
+ ||p->version==4||p->version==5
+#endif
+ ){
   uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));if(!hp_v2_decode(p,raw))return 0;
   const hp_pair_store_t*q=(const void*)(raw+HP_HW_PAIR);
   if(q->on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?q->b:q->a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}

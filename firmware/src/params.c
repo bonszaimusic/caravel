@@ -383,7 +383,15 @@ static const uint8_t MDST_ORDER[] = {0, 1, 2, 3, 4, 5, 23, 24, 10, 11, 20,
                                       , 25, 26, 27
 #endif
 #endif
+#if CARAVEL_STASIS_EXPAND
+                                      , (uint8_t)(sizeof N_MDST / sizeof N_MDST[0] - 1u)   /* SCAN, the last name (it was missing: a knob turned to the end read one byte past the table) */
+#endif
 };
+_Static_assert(sizeof MSRC_ORDER == sizeof N_MSRC / sizeof N_MSRC[0] && sizeof MDST_ORDER == sizeof N_MDST / sizeof N_MDST[0],
+               "MSRC_ORDER / MDST_ORDER list every name once (param_turn indexes them up to max - min)");
+_Static_assert(sizeof DIV_ORDER == sizeof N_DIV / sizeof N_DIV[0] && sizeof SLDIV_ORDER == sizeof N_SLDIV / sizeof N_SLDIV[0] &&
+               sizeof DTIME_ORDER == sizeof N_DTIME / sizeof N_DTIME[0],
+               "DIV_ORDER / SLDIV_ORDER / DTIME_ORDER list every name once");
 static const uint8_t *enum_order(const param_desc_t *d)
 {
     return d->names == N_MSRC ? MSRC_ORDER : d->names == N_MDST ? MDST_ORDER :

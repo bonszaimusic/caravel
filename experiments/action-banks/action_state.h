@@ -12,7 +12,10 @@
 #define ACT_BANK_NEXT 22u
 static const uint8_t action_keys[4]={21u,23u,24u,26u};
 #define ACT_KEY_MASK ((1u<<20)|(1u<<21)|(1u<<22)|(1u<<23)|(1u<<24)|(1u<<26))
-#define ACT_BANKS 6u
+#define ACT_BANKS (6u + (CARAVEL_ELASTIC_P1 ? 1u : 0u))
+#if CARAVEL_ELASTIC_P1
+#define ACT_BANK_ELASTIC 6u
+#endif
 #define ACT_BANK_HARMONY 5u
 #define ACT_BANK_JOURNEY 4u   /* numbered after LIVE so the other banks keep their numbers; BANK steps RANDOM, JOURNEY, HARM, STASIS, PAIR, LIVE */
 static volatile uint8_t action_enabled, action_bank, action_setup;
@@ -29,6 +32,9 @@ static volatile uint32_t action_capture_mask, action_preheld;
 static uint32_t action_home_tap_ms;
 static const char *const action_bank_names[ACT_BANKS] = {
  "RANDOM", "STASIS", "PAIR", "LIVE", "JOURNEY", "HARM"
+#if CARAVEL_ELASTIC_P1
+ ,"ELASTIC"
+#endif
 };
 static const char *const action_labels[ACT_BANKS][4] = {
  {"RANDOM","FREEZE","RETURN","SNAP"},
@@ -37,6 +43,9 @@ static const char *const action_labels[ACT_BANKS][4] = {
  {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"},
  {"PLAY","DIR","NEXT","WAIT"},
  {"HOLD","PREV","NEXT","RESET"}
+#if CARAVEL_ELASTIC_P1
+ ,{"ARM","EXCITE","HOLD","RESET"}
+#endif
 };
 /* The UI renderer is compiled before action_control.c in the FM-1 amalgamation. */
 static void action_setup_caption(uint32_t slot,char *name,char *value);

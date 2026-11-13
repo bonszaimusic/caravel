@@ -46,15 +46,15 @@ class PerformanceSiteTest(unittest.TestCase):
         return {p.relative_to(self.site).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
     def test_landing_pill_of_every_supported_release_is_accepted(self):
-        # a release the pill pattern does not know stops the Pages workflow at the performance step (0.10.1 did, 2026-11-03)
+        # Unknown releases stop at the performance overlay; 0.13.0 is accepted only after exact published-release verification. (0.10.1 initially failed here.)
         look = make_site.look_css((ROOT / "web/index_pkg.html").read_text())
-        for version in ("0.6.0", "0.7.0", "0.7.1", "0.7.2", "0.8.0", "0.9.0", "0.10.0", "0.10.1", "0.11.0", "0.12.0"):
+        for version in ("0.6.0", "0.7.0", "0.7.1", "0.7.2", "0.8.0", "0.9.0", "0.10.0", "0.10.1", "0.11.0", "0.12.0", "0.13.0"):
             with self.subTest(version=version):
                 for name in ("caravel-%s-source.tar.gz" % version, "caravel-%s.fwsc" % version):
                     (self.site / "firmware" / name).write_bytes(b"TEST ONLY unchanged release inventory fixture: " + name.encode())
                 (self.site / "index.html").write_text(make_site.landing(look, version, True, "firmware/caravel-%s-source.tar.gz" % version))
                 performance.build(self.site)
-        (self.site / "index.html").write_text(make_site.landing(look, "0.13.0", True, "firmware/caravel-0.6.0-source.tar.gz"))
+        (self.site / "index.html").write_text(make_site.landing(look, "0.14.0", True, "firmware/caravel-0.6.0-source.tar.gz"))
         with self.assertRaisesRegex(ValueError, "requires a verified"):
             performance.build(self.site)
 

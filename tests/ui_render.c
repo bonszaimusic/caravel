@@ -2250,6 +2250,27 @@ static void align_sweeps(void)
 
 /* the keycaps' labels in their pills (tools/gen_aa_keycaps.py), from the data: the label's ink (nibbles 6..15) in the
  * pill (KC_H rows, its width) */
+/* a pill's nibbles from KC_DATA (canonical Huffman symbols (count - 1) << 4 | value, MSB first; tools/gen_aa_font.py huff_unpack) */
+static void kc_nibbles(const kc_t *k, uint8_t *out, uint32_t n)
+{
+    const uint8_t *d = KC_DATA + k->off;
+    uint32_t pos = 0, got = 0;
+    while (got < n) {
+        uint32_t code = 0, first = 0, idx = 0, ln, s, r;
+        for (ln = 0; ln < 15u; ln++) {
+            code |= (d[pos >> 3] >> (7u - (pos & 7u))) & 1u;
+            pos++;
+            if (code - first < KC_HC[ln])
+                break;
+            idx += KC_HC[ln];
+            first = (first + KC_HC[ln]) << 1;
+            code <<= 1;
+        }
+        s = KC_HC[15u + idx + code - first];
+        for (r = 0; r <= (s >> 4) && got < n; r++)
+            out[got++] = (uint8_t)(s & 15u);
+    }
+}
 static void al_keycaps(void)
 {
     uint32_t id;
@@ -2258,9 +2279,11 @@ static void al_keycaps(void)
         const kc_t *k = &KC[id];
         int32_t x, y, x0 = 999, y0 = 999, x1 = -1, y1 = -1, w = k->w;
         uint32_t i = 0;
+        uint8_t nib[64 * KC_H];
+        kc_nibbles(k, nib, (uint32_t)w * KC_H);
         for (y = 0; y < KC_H; y++)
             for (x = 0; x < w; x++, i++)
-                if (((KC_DATA[k->off + (i >> 1)] >> ((i & 1u) ? 0 : 4)) & 15u) >= 6u) {
+                if (nib[i] >= 6u) {
                     if (x < x0) x0 = x;
                     if (y < y0) y0 = y;
                     if (x + 1 > x1) x1 = x + 1;

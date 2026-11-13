@@ -54,7 +54,16 @@ With the internal clock, `GLO` + `PLAY` restarts from the top and F4 is tap temp
 > [!NOTE]
 > Timing is covered by host simulations (twenty-minute runs at several tempos stayed within 2 ms of the incoming pulse count). Hardware timing and listening acceptance on a real FM-1 is pending.
 
-## 4. Where next
+## 4. ELASTIC and the clock (0.13.0)
+
+The ELASTIC bank's **BOUNCE** is a musical period (1/16 to 64 BAR, see [ELASTIC first steps](elastic-first-steps.md), section 6), so a spring follows the **tempo**: the internal BPM, or, with CLK set to USB or TRS, the tempo the firmware estimates from the incoming clock.
+
+- A spring is **tempo-synchronous, not locked to the grid.** A gesture or PULSE starts at once with its own phase; it does not wait for the next step or bar, and it does not advance directly from the 24-per-quarter clock pulses, only from the tempo estimate.
+- The tempo a spring uses is limited to **20 to 300 BPM**. A running spring keeps its phase when the tempo changes.
+- **ELASTIC cannot be MIDI-learned** in 0.13.0 (the display says `ELASTIC: NO MIDI LEARN YET`); the learnable controls of the other banks keep working while ELASTIC is visible.
+- Not covered: drift over a long time with an external clock, Stop / Start / Continue behavior on a device, and whether a 1/16 spring at 240 to 300 BPM sounds smooth. The [release notes](../release-0130.md) list the clock checks that were run (on the host).
+
+## 5. Where next
 
 - [HARMONY](harmony-live.md) and [HOME performance functions](home-performance.md) can be driven by learned controllers.
 - Trouble with USB or MIDI ports: [Help](help.md).

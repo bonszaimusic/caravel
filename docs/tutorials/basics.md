@@ -81,7 +81,7 @@ Hold `HOME` for the menu. `ALGORITHM` changes the tab (DISPLAY, CONTROL, AUDIO, 
 - **A user sound** keeps one track's sound: on USER choose a slot with `KNOB 1`, then `OCT+` saves (`EDIT` names it).
 - **A project** keeps the whole piece: all four tracks with sounds, sequences, timing, automation and effects. Slots A to D; see [Start here](start-here.md).
 - **Undo:** holding `SAVE` after a load gives back the previous sound (hold again to redo).
-- **A complete backup** of everything on the device is made with the web editor or `tools/caravel_backup.py`; see [Help](help.md).
+- **A complete backup** of everything on the device is made with the web editor or `tools/caravel_backup.py`; see [Help](help.md), which also says what to know about projects saved by 0.13.0 (the terminal tool of 0.13.0 saves them, older copies of the tool do not, and the web editor's backup has not been tried with them).
 
 ![SAVE, first page: user sounds](img/start-save-user.png)
 

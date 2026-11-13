@@ -15,7 +15,7 @@
 #define NS (SECS * 44100u)
 static float L[NS];
 typedef struct { const char *name; uint8_t ens, eng, other; int16_t morph; const char *role; } recipe_t;
-/* the second track's engine and preset: SAMPLE 0 = PIANO (the five-zone set), FM6 1 = BELL, FM6 0 = TINE EP, FM6 5 = MARIMBA, DRONE 11 = SUB FOG (TOPO 4), DRONE 0 = STILL AIR (TOPO 0).
+/* the second track's engine and preset: SAMPLE 0 = PIANO (the factory sample profile), FM6 1 = BELL, FM6 0 = TINE EP, FM6 5 = MARIMBA, DRONE 11 = SUB FOG (TOPO 4), DRONE 0 = STILL AIR (TOPO 0).
  * morph: 0 .. 32767 (0 = the ENSEMBLE alone, 32767 = the second engine alone) */
 static const recipe_t RECIPES[] = {
     {"PIANO UNDER STRINGS", 5, ENGI_SAMPLE, 0, 22937, "STRING MACHINE + the PIANO set, MORPH 70 % toward the piano"},
@@ -141,9 +141,14 @@ int main(void)
         mch_set(1, 1);                                                   /* T2 on channel 2: one keyboard, two channels */
         run_ms(60);
         for (uint32_t i = 0; i < 4u; i++) { midi(0x90, CHORD[0][i], 100); midi(0x91, CHORD[0][i], 100); }
-        run_ms(300);
-        if (pr) printf("two channels: T1 %u voices, T2 %u voices (%u of %u)\n", voices_on(&trk[0]), voices_on(&trk[1]), total_on(), NVOICE);
+        /* midi() advances 30 ms after each message. Test dispatch before
+         * transposed one-shot samples can finish naturally (V1+V3 uses wider
+         * root ranges); sample lifetime is not a routing/voice-steal failure. */
+        run_ms(40);
+        if (pr) printf("two channels after dispatch: T1 %u voices, T2 %u voices (%u of %u)\n", voices_on(&trk[0]), voices_on(&trk[1]), total_on(), NVOICE);
         CHECK(voices_on(&trk[0]) == 4u && voices_on(&trk[1]) == 4u && total_on() == NVOICE);
+        run_ms(260);
+        CHECK(voices_on(&trk[0]) == 4u && voices_on(&trk[1]) > 0u && total_on() <= NVOICE);
         for (uint32_t i = 0; i < 4u; i++) { midi(0x80, CHORD[0][i], 0); midi(0x81, CHORD[0][i], 0); }
         run_ms(1500);
         song.g[G_ROUTE] = 0; mch_set(0, 0); mch_set(1, 0);

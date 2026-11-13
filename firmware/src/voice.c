@@ -18,7 +18,9 @@
 #endif
 static uint32_t vage;                                   /* voice ages: one clock for every part */
 static uint32_t voice_policy_active;                   /* applied at an audio control boundary */
-static int32_t lfo_wave(track_t *t, uint32_t ph)
+/* (noinline: ui_graph.c's graph_lfo, its third caller, is gone; without this the optimizer would inline the switch into the
+ * audio ISR's two call sites and change that code, which nothing here is meant to do) */
+static __attribute__((noinline)) int32_t lfo_wave(track_t *t, uint32_t ph)
 {
     switch (t->p[P_LWAVE]) {
     case 1:
@@ -729,11 +731,11 @@ static int32_t env_tick(track_t *t, voice_t *v)
 /* SPREAD (#148, fx.c mix_spread): while T_SPREAD(t) (mix_part sets it for the part it renders), track_render renders
  * the voices of side 0 into the part's spread_buf and the others into out, then adds spread_buf to out: out is every
  * voice, as always (the engines add into either the same way), spread_buf the left ones. A cost per block, none per
- * voice. A buffer per part (the two cores render parts at once, fx.c mix_block) */
+ * voice. A buffer per core (the two cores render parts at once, fx.c mix_block; C1_CI) */
 #if FELUCCA_CPU2
 #define T_SPREAD(t) ((t)->spread_on)
-static int32_t spread_buf[NTRK][CTL];
-#define SPREAD_BUF(t) spread_buf[C1_PI(t)]
+static int32_t spread_buf[C1_NS][CTL];
+#define SPREAD_BUF(t) spread_buf[C1_CI(t)]
 #define SPREAD_CLEAR(t) spread_clear(SPREAD_BUF(t))
 #define SPREAD_SUM(out, t) spread_sum(out, SPREAD_BUF(t))
 static __attribute__((noinline)) void spread_clear(int32_t *sb)

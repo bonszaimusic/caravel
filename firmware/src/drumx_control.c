@@ -161,8 +161,8 @@ static const param_desc_t *drumx_desc(const track_t *t, uint32_t e)
     return e == 4u ? &noise : e == 5u ? &fm : e == 6u ? &fold : 0;
 }
 typedef struct { int32_t sl[CTL], sr[CTL], send[3][CTL]; uint8_t on; } dx_side_t;
-static dx_side_t dx_sides[C1_NP];
-#define DX_SIDE(t) dx_sides[C1_PI(t)]
+static dx_side_t dx_sides[C1_NS];
+#define DX_SIDE(t) dx_sides[C1_CI(t)]
 static void dx_side_begin(track_t *t, uint32_t n)
 {
     uint32_t i, l, k = (uint32_t)(t - trk);

@@ -1,15 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* SAMPLE's PIANO (1.5: the full piano of 1.0 .. 1.1.5 again) on the Mac (same sources as the firmware, through
- * hostsim.c; run_tests.sh):
- *   build/host/sample_test PIANO_HD DEMO_DIR
- * 1. PIANO (SET 0; 1 and 4 its aliases) is the 5-zone one-shot set of 1.0 .. 1.1.5 (22,050 Hz, roots 36 .. 84, 0.75 s;
- *    1.2 .. 1.4.1 had a reduced 2-zone one): SAMPLE plays the right zone, at the note's pitch (YIN on the render)
- *    over the keyboard, for 0.75 s at a root; GRAIN's SRC 0 plays it. Renders into DEMO_DIR.
- * 2. SLICE's PIANO is SAMPLE PIANO's middle C zone itself again (no copy; 1.2 .. 1.4.1 kept one of its own).
- * 3. PIANO HD (PIANO_HD.hdr / .bin: gen_samples.py --user-slot PIANO "PIANO HD", the file 1.2 offered for the old
- *    piano): a user who installed it keeps it; in USR1 it is valid and renders bit for bit as SET 0 at every key.
- * (Bit identity with 1.1.5.1 itself: tests/golden.txt's SAMPLE / GRAIN PIANO renders are 1.1.5.1's hashes.) */
+/* SAMPLE's reduced factory sets (0.13.0 V1+V3), rendered by the real host path.
+ * 1. PIANO (SET 0; aliases 1/3/4) uses unshortened C1/C3/C5 samples:
+ *    three zones, 22,050 Hz, 0.75 s at root; GRAIN SRC 0 shares them.
+ * 2. FLUTE (SET 2) uses C4/C6, two looped zones with original loop points.
+ * 3. SLICE PIANO references the factory middle-C zone (no duplicate data).
+ * 4. PIANO HD user export stays five zones as before and plays in USR1.
+ *    Only notes choosing the same root as factory PIANO remain bit-identical;
+ *    this change intentionally invalidates old affected SAMPLE/GRAIN golden hashes. */
 #include <stdint.h>
 static uint32_t host_slots[3u * 0x14000u / 4u];          /* USR1..3, as the flash at 0xA0000 */
 #define SMP_USER_XIP(k) ((const uint8_t *)host_slots + (k) * SMP_USER_SIZE)
@@ -184,29 +182,28 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    /* 1: PIANO, the 5 zones of 1.0 .. 1.1.5 */
+    /* 1: PIANO factory V1, three full-length recordings */
     {
-        static const uint8_t ROOT[5] = {36, 48, 60, 72, 84}, LO[5] = {0, 43, 55, 67, 79}, HI[5] = {42, 54, 66, 78, 127};
+        static const uint8_t ROOT[3] = {36, 60, 84}, LO[3] = {0, 49, 73}, HI[3] = {48, 72, 127};
         const smp_set_t *s = &SMP_SETS[0];
         const smp_zone_t *z = &SMP_ZONES[s->z0];
-        uint32_t bytes = 0, ok = s->nz == 5u;
+        uint32_t bytes = 0, ok = s->nz == 3u;
         check("PIANO: SET 0, its aliases 1, 3 (once SAX) and 4 the same zones; FLUTE 2, USR1..3 5..7; 4 presets",
               SMP_NSETS == 5u && str_eq(SMP_SETS[0].name, "PIANO") && SMP_SETS[1].z0 == s->z0 && SMP_SETS[3].z0 == s->z0 &&
               SMP_SETS[4].z0 == s->z0 && SMP_SETS[1].nz == s->nz && SMP_SETS[3].nz == s->nz && SMP_SETS[4].nz == s->nz &&
               str_eq(SMP_SETS[2].name, "FLUTE") && str_eq(SMP_SETS[3].name, "PIANO") && SMP_SET_ORIG[3] == 0u && SMP_NALIAS == 2 && str_eq(SMP_ALL_NAMES[5], "USR1") && ENG_SAMPLE.edit[0].max == 7 &&
               ENG_SAMPLE.npresets == 4u);
-        for (i = 0; ok && i < 5u; i++) {
+        for (i = 0; ok && i < 3u; i++) {
             bytes += (z[i].n + 1u) / 2u;
             ok &= z[i].rate == 32768u && z[i].root16 == ROOT[i] * 16u && z[i].lo == LO[i] && z[i].hi == HI[i] &&
                   !z[i].looped && z[i].n == 16537u;
         }
-        snprintf(m, sizeof m, "PIANO: 5 one-shot zones at 22,050 Hz, roots 36 48 60 72 84, 0.75 s (%u B ADPCM, as 1.1.5)",
-                 bytes);
-        check(m, ok && bytes == 41345u);
-        render(ENGI_SAMPLE, 0, 54, 0, &zone);
-        render(ENGI_SAMPLE, 0, 55, 0, &zone2);
-        check("PIANO: note 54 plays the zone of root 48, 55 the zone of root 60 (a split)",
-              zone == (int32_t)s->z0 + 1 && zone2 == (int32_t)s->z0 + 2);
+        snprintf(m, sizeof m, "PIANO: 3 full-length zones at 22,050 Hz, roots 36 60 84, 0.75 s (%u B ADPCM)", bytes);
+        check(m, ok && bytes == 24807u);
+        render(ENGI_SAMPLE, 0, 48, 0, &zone);
+        render(ENGI_SAMPLE, 0, 49, 0, &zone2);
+        check("PIANO: note 48 uses root 36 and note 49 uses root 60 (new split)",
+              zone == (int32_t)s->z0 && zone2 == (int32_t)s->z0 + 1);
         for (i = 0; i < sizeof NOTES; i++) {
             render(ENGI_SAMPLE, 0, NOTES[i], 0, 0);
             pitch_ok("PIANO", NOTES[i]);
@@ -220,15 +217,41 @@ int main(int argc, char **argv)
                  rms(FS * 73u / 100u, FS * 75u / 100u) < 0.05 * rms(FS / 5u, FS / 4u));
         render(8u, 0, 60, 0, &zone);
         check("PIANO: GRAIN SRC 0 takes its zones (the middle C zone for note 60, not the sine)",
-              zone == 2 && rms(FS / 2u, FS) > 100.0);
+              zone == 1 && rms(FS / 2u, FS) > 100.0);
     }
 
-    /* 2: SLICE's PIANO, SAMPLE PIANO's middle C zone itself */
-    check("SLICE PIANO: SAMPLE PIANO's middle C zone itself (16537 samples at 22,050 Hz, no copy)",
-          SLC_PIANO.len == 16537u && SLC_PIANO.rate == 32768u && SLC_PIANO.seg[0].off == SMP_ZONES[2].off &&
-          SLC_PIANO.len == SMP_ZONES[2].n);
+    /* 2: FLUTE factory V3, original full-length looping samples. */
+    {
+        static const uint8_t ROOT[2] = {72, 96}, LO[2] = {0, 85}, HI[2] = {84, 127};
+        const smp_set_t *s = &SMP_SETS[2];
+        const smp_zone_t *z = &SMP_ZONES[s->z0];
+        uint32_t bytes = 0, ok = s->nz == 2u;
+        for (i = 0; ok && i < 2u; i++) {
+            bytes += (z[i].n + 1u) / 2u;
+            ok &= z[i].rate == 32768u && z[i].root16 == ROOT[i] * 16u &&
+                  z[i].lo == LO[i] && z[i].hi == HI[i] && z[i].looped &&
+                  z[i].n == 20947u && z[i].ls == 8820u && z[i].le == 20946u;
+        }
+        check("FLUTE: 2 zones at C4/C6, original lengths/loops and MIDI boundaries",
+              ok && bytes == 20948u);
+        render(ENGI_SAMPLE, 2, 84, 0, &zone);
+        render(ENGI_SAMPLE, 2, 85, 0, &zone2);
+        check("FLUTE: note 84 uses root 72 and note 85 uses root 96 (new split)",
+              zone == (int32_t)s->z0 && zone2 == (int32_t)s->z0 + 1);
+    }
 
-    /* 3: PIANO HD (1.2's file of the old piano), from a user slot: as SET 0, bit for bit */
+    /* 3: SLICE's PIANO shares the retained factory middle C zone. */
+    check("SLICE PIANO: retained SAMPLE middle C zone, 16537 samples, no copy",
+          SLC_PIANO.len == 16537u && SLC_PIANO.rate == 32768u &&
+          SLC_PIANO.seg[0].off == SMP_ZONES[SMP_SETS[0].z0 + 1u].off &&
+          SLC_PIANO.len == SMP_ZONES[SMP_SETS[0].z0 + 1u].n);
+
+    /* All source ADPCM bytes: 3 * 8270 (PIANO padded) + 2 * 10474 (FLUTE). */
+    check("factory PIANO+FLUTE ends after 45758 bytes, aliases have no separate data",
+          SMP_ZONES[SMP_SETS[2].z0 + 1u].off +
+          (SMP_ZONES[SMP_SETS[2].z0 + 1u].n + 1u) / 2u == 45758u);
+
+    /* 4: PIANO HD user file keeps all 5 original zones; no forced factory identity. */
     snprintf(path, sizeof path, "%s.hdr", argv[1]);
     if (load(path, host_slots, SMP_USER_DATA) != (long)sizeof(smp_user_hdr_t)) {
         printf("sample: no %s (gen_samples.py --user-slot PIANO \"PIANO HD\" ...)\n", path);
@@ -242,7 +265,8 @@ int main(int argc, char **argv)
         /* both from the same state (a fork each: the mix keeps state from render to render) */
         int32_t *ref = mmap(0, 2u * sizeof buf, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0), *usr = ref + FS * SECS;
         const smp_zone_t *z = &usr_zone[0][2];
-        uint32_t same = 0;
+        static const uint8_t SAME_ROOT[] = {1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1};
+        uint32_t same = 0, common = 0;
         check("PIANO HD: USR1 holds 5 zones (roots 36 .. 84, 22,050 Hz, 0.75 s), 41 KB of a 79.5 KB slot",
               usr_nz[0] == 5u && usr_zone[0][0].root16 == 36 * 16 && usr_zone[0][4].root16 == 84 * 16 &&
               z->root16 == 60 * 16 && z->rate == 32768u && z->n == 16537u);
@@ -252,13 +276,16 @@ int main(int argc, char **argv)
             render_child(0, NOTES[i], ref);
             render_child((int16_t)SMP_NSETS, NOTES[i], usr);
             memcpy(buf, usr, sizeof buf);
-            same += !memcmp(ref, usr, sizeof buf) && rms(0, FS / 2u) > 100.0;
+            if (SAME_ROOT[i]) {
+                common++;
+                same += !memcmp(ref, usr, sizeof buf) && rms(0, FS / 2u) > 100.0;
+            }
             snprintf(path, sizeof path, "piano_hd_%02u", NOTES[i]);
             wav_out(dir, path);
         }
-        snprintf(m, sizeof m, "PIANO HD in USR1 (installed under 1.2 .. 1.4.1) plays as SET 0, bit for bit (%u of %u keys)",
-                 same, (uint32_t)sizeof NOTES);
-        check(m, same == sizeof NOTES);
+        snprintf(m, sizeof m, "PIANO HD: 5-zone user file remains byte-identical where factory and user select the same recording (%u/%u)",
+                 same, common);
+        check(m, common == 8u && same == common);
     }
     printf("sample: %s\n", fails ? "FAILED" : "all checks ok");
     return fails != 0;

@@ -1434,6 +1434,9 @@ static int project_restore_runtime(const project_t *input)
         ui_message("LOAD FROM SLOT FIRST");
         return 1; /* USB/current-session restores cannot bypass the dialog. */
     }
+#if CARAVEL_ELASTIC_P1 && FELUCCA_HOME_PERF
+    hp_elastic_p1_clear();
+#endif
 #if FELUCCA_PAIR_MORPH
     pair_disable();
 #endif

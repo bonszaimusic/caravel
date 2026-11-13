@@ -4,7 +4,7 @@
 
 <a href="https://bonszaimusic.github.io/caravel/tutorials/"><img src="img/tutorials-banner.png" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a>
 
-**[Open the tutorials on the Caravel site](https://bonszaimusic.github.io/caravel/tutorials/)** for the illustrated version with a map of all lessons, or read them here. Every screen is the actual firmware renderer; figures of the FM-1 are drawings. Sound examples are native DSP renders, not device recordings: [listen](https://bonszaimusic.github.io/caravel/sounds/).
+**[Open the tutorials on the Caravel site](https://bonszaimusic.github.io/caravel/tutorials/)** for the illustrated version with a map of all lessons, or read them here. Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: [listen](https://bonszaimusic.github.io/caravel/sounds/).
 
 ### Start
 
@@ -35,6 +35,9 @@ Sequence, arpeggiate, perform and follow a chord progression.
 | <img src="img/card-seq-arp.png" width="120" alt="Firmware display: Sequencer and arpeggiator"> | **[4 Sequencer and arpeggiator](seq-arp.md)** · about 12 min | Step entry, timing, recording while it plays, parts A to D, and the arpeggiator. |
 | <img src="img/journey-play.png" width="120" alt="Firmware display: HOME performance functions"> | **[5 HOME performance functions](home-performance.md)** · about 15 min | The ACTION banks: Random Morph and Journey, STASIS hold, Pair Morph and macros.<br>[Random Morph and Journey](https://bonszaimusic.github.io/caravel/tutorials/random-morph-journey/)<br>[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/stasis/)<br>[Pair Morph, macros and saving](home-and-stasis.md)<br>[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/) |
 | <img src="img/card-harmony.png" width="120" alt="Firmware display: HARMONY"> | **[6 HARMONY](harmony-live.md)** · about 15 min | Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH. |
+| <img src="img/elastic-cell-armed.png" width="120" alt="Firmware display: ELASTIC · First steps"> | **[6.1 ELASTIC · First steps](elastic-first-steps.md)** · about 10 min | Make one HOME control breathe, bounce and return using the ELASTIC action bank. |
+| <img src="img/elastic-row-coupled.png" width="120" alt="Firmware display: ELASTIC · Linked springs"> | **[6.2 ELASTIC · Linked springs](elastic-linked-springs.md)** · about 12 min | Connect four ROW springs with COUPLE and a reproducible SEED network. |
+| <img src="img/elastic-four-track-hud.png" width="120" alt="Firmware display: ELASTIC · Ambient recipes"> | **[6.3 ELASTIC · Ambient recipes](elastic-ambient-recipes.md)** · about 12 min | Three starting recipes for breathing drones, moving textures and two-track tides. |
 
 ### Shape and connect
 

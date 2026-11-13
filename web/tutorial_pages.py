@@ -54,6 +54,13 @@ def load_topics(root=ROOT):
         ids.add(t["id"]); nums.add(t["num"])
         if t["group"] not in groups or t["status"] not in ("ready", "planned"):
             raise ValueError("Bad tutorial topic: " + t["id"])
+        kind = t.get("thumb_kind", "firmware")
+        if kind not in ("firmware", "illustration"):
+            raise ValueError("Unknown tutorial image kind: " + t["id"])
+        if kind == "illustration" and not t["thumb"].endswith(".svg"):
+            raise ValueError("Concept illustration must be a marked SVG: " + t["id"])
+        if t.get("preview") and t["status"] != "ready":
+            raise ValueError("Preview chapters must link to real source pages: " + t["id"])
         if not (root / TUT / "img" / t["thumb"]).is_file():
             raise ValueError("Missing tutorial card image: " + t["thumb"])
         if t["status"] == "ready" and not (root / TUT / t["md"]).is_file():
@@ -333,7 +340,9 @@ def topic_page(topic, data, look, ship, version, root=ROOT):
     body = [f'<p class="crumbs"><a href="../">TUTORIALS</a> / {e(topic["num"])}</p>', topic_strip(data, topic["id"]),
             f'<div class="eyebrow">TUTORIAL {e(topic["num"])} · CARAVEL {e(version)}</div><h1>{e(title)}</h1>',
             f'<div class="lead">{lead}</div>',
-            f'<div class="meta"><span class="chip">ABOUT {topic["minutes"]} MINUTES</span><span class="chip">REAL FIRMWARE SCREENS</span></div>', sixty]
+            (f'<div class="meta"><span class="chip">ABOUT {topic["minutes"]} MINUTES</span>'
+             + ('<span class="chip">0.13.0 PREVIEW · FIRMWARE CAPTURES PENDING</span>'
+                if topic.get("preview") else '<span class="chip">REAL FIRMWARE SCREENS</span>') + '</div>'), sixty]
     if steps:
         body.append(f'<nav class="steps" aria-label="Steps">{steps}</nav>')
     for n, heading, text, figs in sections:
@@ -373,7 +382,7 @@ def overview_page(data, look, ship, version, root=ROOT):
              '<a href="#play"><small>I want to perform</small><b>Perform</b><span>Sequencer, HOME, HARMONY.</span></a>'
              '<a href="#shape"><small>I use a controller</small><b>Connect</b><span>MIDI Learn, clock, sync.</span></a></nav>')
     sixty = ('<aside class="sixty"><h2>In 60 seconds</h2><ul><li>Every lesson starts with an <strong>In 60 seconds</strong> box and ends with what to try next.</li>'
-             '<li>Screens are the actual firmware renderer, not drawings. Figures of the FM-1 are drawings with the controls to press highlighted.</li>'
+             '<li>Firmware screens are captured from the actual renderer; FM-1 figures are drawings. The ELASTIC lessons include real renderer screenshots; conceptual diagrams are explicitly marked as illustrations.</li>'
              '<li>Sound examples are labelled: a <em>native DSP render</em> is firmware audio from a computer, <strong>not</strong> a recording of a device.</li></ul></aside>')
     sections = []
     res = Resolver(data, 0)
@@ -381,16 +390,19 @@ def overview_page(data, look, ship, version, root=ROOT):
         cards = []
         for t in [t for t in topics if t["group"] == g["id"]]:
             ok = t["status"] == "ready"
-            thumb = f'<div class="shot"><img src="img/{e(t["thumb"])}" width="240" height="240" alt="Firmware display: {e(t["title"])}" loading="lazy"></div>'
+            alt_kind = "Concept illustration (not a firmware screen)" if t.get("thumb_kind") == "illustration" else "Firmware display"
+            thumb = f'<div class="shot"><img src="img/{e(t["thumb"])}" width="240" height="240" alt="{e(alt_kind)}: {e(t["title"])}" loading="lazy"></div>'
             href = f'{t["id"]}/' if ok else ""
             title = f'<span class="cn">{e(t["num"])}</span><a href="{href}">{e(t["title"])}</a>' if ok else f'<span class="cn">{e(t["num"])}</span>{e(t["title"])}'
             more = "".join(f'<a href="{e(res.link(l["href"]))}">{e(l["title"])}</a>' for l in t.get("links", []))
-            foot = ('' if ok else '<span class="pill">IN PREPARATION</span>') + f'<span>~{t["minutes"]} MIN</span>'
+            foot = ('<span class="pill">0.13.0 PREVIEW</span>' if t.get("preview") else
+                    '' if ok else '<span class="pill">IN PREPARATION</span>') + f'<span>~{t["minutes"]} MIN</span>'
             feature = ok and t["id"] == first["id"]
             if feature:
                 cards.append(f'<article class="card feature">{thumb}<div class="body"><h3>{title}</h3><p>{e(t["tagline"])}</p><div class="foot" style="margin:0;padding:0">{foot}</div></div></article>')
             else:
-                cards.append(f'<article class="card{"" if ok else " planned"}">{thumb}<h3>{title}</h3><p>{e(t["tagline"])}</p>'
+                card_cls = " preview" if t.get("preview") else "" if ok else " planned"
+                cards.append(f'<article class="card{card_cls}">{thumb}<h3>{title}</h3><p>{e(t["tagline"])}</p>'
                              + (f'<div class="more">{more}</div>' if more else "") + f'<div class="foot">{foot}</div></article>')
         sections.append(f'<section class="group" id="{g["id"]}"><h2>{e(g["title"])} <small>{e(g["blurb"])}</small></h2><div class="cards">{"".join(cards)}</div></section>')
     sounds = ('<section class="sounds" id="sounds"><h2>Listen</h2><p>The <a href="../sounds/">sound examples</a> are <strong>native DSP renders</strong>: audio from the firmware\'s own code, computed on a computer, not recordings of an FM-1. '
@@ -457,12 +469,15 @@ def readme_text(data):
         for t in [t for t in data["topics"] if t["group"] == g["id"]]:
             ok = t["status"] == "ready"
             name = f"**[{t['num']} {t['title']}]({t['md']})**" if ok else f"**{t['num']} {t['title']}** (in preparation)"
+            if t.get("preview"):
+                name += " (0.13.0 preview)"
+            thumb_alt = "Concept illustration" if t.get("thumb_kind") == "illustration" else "Firmware display"
             extra = "".join(f"<br>[{l['title']}]({readme_link(l['href'])})" for l in t.get("links", []))
-            rows.append(f'| <img src="img/{t["thumb"]}" width="120" alt="Firmware display: {t["title"]}"> | {name} · about {t["minutes"]} min | {t["tagline"]}{extra} |')
+            rows.append(f'| <img src="img/{t["thumb"]}" width="120" alt="{thumb_alt}: {t["title"]}"> | {name} · about {t["minutes"]} min | {t["tagline"]}{extra} |')
     return (f"{README_MARK}\n<!-- SPDX-License-Identifier: GPL-3.0-only -->\n# Caravel tutorials\n\n"
             f'<a href="{SITE_URL}"><img src="img/{data["banner"]}" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a>\n\n'
             f"**[Open the tutorials on the Caravel site]({SITE_URL})** for the illustrated version with a map of all lessons, or read them here. "
-            "Every screen is the actual firmware renderer; figures of the FM-1 are drawings. Sound examples are native DSP renders, not device recordings: "
+            "Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: "
             "[listen](https://bonszaimusic.github.io/caravel/sounds/).\n"
             + "\n".join(rows) +
             "\n\n### Earlier tutorials\n\n[HOME, Pair Morph, macros, saving and STASIS (0.5.0 and 0.6.0)](home-and-stasis.md) · "

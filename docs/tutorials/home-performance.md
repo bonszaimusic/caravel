@@ -6,7 +6,7 @@ HOME is the performance page: four big cards you choose, and underneath them the
 > **In 60 seconds**
 >
 > 1. **Double-tap `HOME`** to switch ACTION on. The four keys D5, E5, F5, G5 are now **A1 to A4**.
-> 2. **C#5** steps to the previous bank, **D#5** to the next: RANDOM, JOURNEY, HARM, STASIS, PAIR, LIVE, then round again.
+> 2. **C#5** steps to the previous bank, **D#5** to the next: RANDOM, JOURNEY, HARM, STASIS, **ELASTIC**, PAIR, LIVE, then round again.
 > 3. Hold either bank key for half a second for the bank's **SETUP**.
 > 4. Everything else stays playable: F#5 and all other keys play normally. With ACTION off, all keys play.
 
@@ -26,11 +26,11 @@ Double-tap `HOME`: the bank chip and four action keys appear under the cards. Th
 | D#5 | next bank |
 | D5, E5, F5, G5 | A1, A2, A3, A4 |
 
-The forward order is **RANDOM, JOURNEY, HARM, STASIS, PAIR, LIVE**. Tap a bank key to change bank; hold it for 500 ms to open that bank's SETUP. A held note keeps its normal release when you switch ACTION on.
+The bank order in 0.13.0 is **RANDOM, JOURNEY, HARM, STASIS, ELASTIC, PAIR, LIVE** (seven banks; 0.12.0 has six, ELASTIC is new). Tap a bank key to change bank; hold it for 500 ms to open that bank's SETUP. A held note keeps its normal release when you switch ACTION on.
 
 ![Diagram: C#5 and D#5 step through the banks, D5 E5 F5 G5 are A1 to A4](img/device-action.svg)
 
-## 3. The six banks
+## 3. The seven banks
 
 ![RANDOM: RANDOM, FREEZE, RETURN, S1](img/home-bank-random.png)
 
@@ -48,6 +48,8 @@ The forward order is **RANDOM, JOURNEY, HARM, STASIS, PAIR, LIVE**. Tap a bank k
 
 **STASIS** has the labels HOLD, ADD, BLEND and RELEASE. STASIS itself lives in the reverb: a captured texture of your REV send that can be held, added to and blended into a new one. The lessons with real screens are [STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/stasis/) and the [sound examples](https://bonszaimusic.github.io/caravel/sounds/). Not checked for this page: exactly what each STASIS bank key triggers; follow the lessons.
 
+**ELASTIC**, new in 0.13.0, is the bank for temporary spring movement of supported HOME controls: A1 ARM/OFF, A2 PULSE, A3 HOLD/RESUME and A4 RESET. Hold a bank key for TIMES (SCOPE/PULL/RETURN/RANGE). While SETUP is open, A4 switches to PHYSICS (BOUNCE/REFLECT/COUPLE/SEED). See [ELASTIC first steps](elastic-first-steps.md), [linked springs](elastic-linked-springs.md), and [ambient recipes](elastic-ambient-recipes.md). BOUNCE uses musical periods from 1/16 to 64 BAR (eleven steps); RETURN also offers INF. Projects saved by 0.13.0 use the HPM1 v5 format, which 0.12.0 does not read: back up first.
+
 ![PAIR: A 0 %, MID 50 %, B 100 %, MOTION](img/home-bank-pair.png)
 
 **PAIR** has A 0 %, MID 50 %, B 100 % and MOTION: Pair Morph plays two engines from the same notes and blends between them. The setup (partner, enable, morph, motion) is on the ENV page; see [Pair Morph in HOME, Pair Morph, macros](home-and-stasis.md). The key labels are as printed; their exact effect was not checked for this page.
@@ -58,15 +60,15 @@ The forward order is **RANDOM, JOURNEY, HARM, STASIS, PAIR, LIVE**. Tap a bank k
 
 ## 4. Control it from a controller
 
-Any ACTION key or setup knob can be learned by MIDI Learn (`GLO` + D4): see [MIDI and sync](midi-sync.md). The learned control keeps working while another bank is on screen.
+Most existing ACTION banks and their setup knobs can be learned by MIDI Learn (`GLO` + D4): see [MIDI and sync](midi-sync.md). **ELASTIC does not support MIDI Learn in 0.13.0.** Existing learned controls keep working while another bank is visible.
 
 ## 5. A ready-made performance
 
 The [STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/) is a downloadable HOME project from the feature Short: two paired SEM tracks, a driven DRONE, MIDI notes and a play guide.
 
 > [!NOTE]
-> HOME ACTION and HARM are new in 0.12.0. They are validated on the host; the maintainer reported a good first device test of an earlier test package on 2026-11-09 without itemised results (not an itemised acceptance, and the later 0.12.0 fixes have not been tested on a device). Details in [HARMONY](harmony-live.md).
+> HOME ACTION and HARM were introduced in 0.12.0. The maintainer reported a good device test of an earlier 0.12.0 test package, but later release changes were not exercised on that device. **ELASTIC is new in 0.13.0**; the maintainer reports a successful test of the 0.13.0-rc1 package on an FM-1, without itemised results. Details in [HARMONY](harmony-live.md) and [ELASTIC first steps](elastic-first-steps.md).
 
 ## 6. Where next
 
-- [Random Morph and Morph Journey](random-morph-journey.md), [STASIS lessons](home-and-stasis.md), [HARMONY](harmony-live.md).
+- [Random Morph and Morph Journey](random-morph-journey.md), [STASIS lessons](home-and-stasis.md), [HARMONY](harmony-live.md), [ELASTIC first steps](elastic-first-steps.md) and [linked springs](elastic-linked-springs.md).

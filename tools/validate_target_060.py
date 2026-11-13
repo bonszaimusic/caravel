@@ -6,22 +6,28 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"build/validation"; OUT.mkdir(parents=True,exist_ok=True)
 results=[]
-def command(name,args,env=None):
+def command(name,args,env=None,stdout_path=None):
     log=OUT/(re.sub(r"[^a-zA-Z0-9_-]","_",name)+".log")
     start=time.monotonic()
     with log.open("w") as f:
-        p=subprocess.run(args,cwd=ROOT,env={**os.environ,**(env or {})},
-                         stdout=f,stderr=subprocess.STDOUT)
+        if stdout_path is None:
+            p=subprocess.run(args,cwd=ROOT,env={**os.environ,**(env or {})},
+                             stdout=f,stderr=subprocess.STDOUT)
+        else:
+            # Compare only audio hashes, never interleaved stderr counters.
+            with stdout_path.open("w") as audio:
+                p=subprocess.run(args,cwd=ROOT,env={**os.environ,**(env or {})},
+                                 stdout=audio,stderr=f)
     results.append({"case":name,"exit_code":p.returncode,
                     "seconds":round(time.monotonic()-start,2),"log":log.name})
     print(name, "PASS" if not p.returncode else "FAIL",flush=True)
     if p.returncode: print(log.read_text(errors="replace")[-12000:],flush=True)
     return not p.returncode
-def ccase(name,path,flags=(),args=()):
+def ccase(name,path,flags=(),args=(),stdout_path=None):
     exe=OUT/name
     cc=[*shlex.split(os.environ.get("CC","cc")),"-O2","-w","-ffp-contract=off",
         "-Ibuild/gen","-Ifirmware/src",*flags,path,"-lm","-o",str(exe)]
-    if command(name+"-compile",cc):return command(name,[str(exe),*args])
+    if command(name+"-compile",cc):return command(name,[str(exe),*args],stdout_path=stdout_path)
     return False
 minimal=["-DCARAVEL_REVERB_MINIMAL=1","-DFELUCCA_SLICE=0"]
 ccase("stasis-expanded-continuity","tests/stasis_continuity_test.c",
@@ -62,8 +68,12 @@ reg=[]
 for mode,flags in [("off",[]),("home",["-DFELUCCA_HOME_PERF=1","-DFELUCCA_PAIR_MORPH=1"]),
                    ("hardware",["-DFELUCCA_HOME_PERF=1","-DFELUCCA_PAIR_MORPH=1","-DFELUCCA_PERF_HW=1"])]:
     name="audio-reference-"+mode
-    if ccase(name,"experiments/home-perf/audio_regression_test.c",flags):
-        text=(OUT/(name+".log")).read_text()
+    audio=OUT/(name+".stdout")
+    if ccase(name,"experiments/home-perf/audio_regression_test.c",flags,stdout_path=audio):
+        text=audio.read_text()
+        lines=text.splitlines()
+        if len(lines)!=128 or any(not re.fullmatch(r"mix=[01] mode=[0-3] drone=\d+ hash=[0-9a-f]{16}",line) for line in lines):
+            raise SystemExit("Incomplete/malformed audio hash trace: "+name)
         reg.append(text)
         if mode!="off":command(name+"-macros",[str(OUT/name),"macros"])
 if len(reg)==3:

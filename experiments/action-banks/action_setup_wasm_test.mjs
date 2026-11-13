@@ -2,7 +2,7 @@
 // Real Caravel C/WASM firmware input, not simulated JavaScript state.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const {instance}=await WebAssembly.instantiate(fs.readFileSync('build/home-perf/felucca.wasm'),{});
+const {instance}=await WebAssembly.instantiate(fs.readFileSync(process.argv[2]||'build/home-perf/felucca.wasm'),{});
 const e=instance.exports;
 e._initialize();e.web_nor_erase();e.web_boot();
 function render(ms){for(let n=Math.ceil(ms*44.1);n>0;){const x=Math.min(n,128);e.web_render(x);n-=x;}}
@@ -53,7 +53,14 @@ assert.equal(setup(),1,'SETUP stays enabled across banks');
 const strength=val(0);
 e.web_action_setup_knob(0,1);
 assert.equal(val(0),strength,'STASIS settings refuse writing unless TYPE is STASIS');
-key(22);assert.equal(bank(),2,'PAIR bank');
+key(22);
+if(typeof e.web_p13_bounce_track==='function'){
+ assert.equal(bank(),6,'ELASTIC SETUP follows STASIS in the P1.4 profile');
+ assert.equal(setup(),1,'ELASTIC keeps the shared SETUP open');
+ assert.equal(e.web_p12_scope_track(0),0,'ELASTIC starts with CELL scope');
+ key(22);
+}
+assert.equal(bank(),2,'PAIR bank');
 assert.equal(val(0),-1,'PAIR view shows unpaired condition');
 key(22);assert.equal(bank(),3,'LIVE bank');
 const level=val(0);

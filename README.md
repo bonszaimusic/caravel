@@ -5,13 +5,13 @@
 <p align="center"><strong><a href="https://bonszaimusic.github.io/caravel/tutorials/">Tutorials on the site</a></strong> · <a href="docs/tutorials/start-here.md">Start here: your first ten minutes</a> · <a href="docs/tutorials/README.md">all tutorials</a></p>
 
 > [!IMPORTANT]
-> **Newer FM-1 units have a different flash chip.** They carry a UC25HQ80 flash (JEDEC ID `0xB36014`) instead of the Puya P25Q80 (`0x856014`); both are 1 MiB. Caravel up to 0.11.0 accepted only the Puya ID, so on a newer unit nothing was written to flash: saving a project shows `SAVED (RAM)` and the project is gone after power-off, and a firmware update from the installer is not started. **Caravel 0.12.0 accepts both IDs** (the same change as Felucca's [#320](https://github.com/hugelton/Felucca/issues/320)).
+> **Newer FM-1 units have a different flash chip.** They carry a UC25HQ80 flash (JEDEC ID `0xB36014`) instead of the Puya P25Q80 (`0x856014`); both are 1 MiB. Caravel up to 0.11.0 accepted only the Puya ID, so on a newer unit nothing was written to flash: saving a project shows `SAVED (RAM)` and the project is gone after power-off, and a firmware update from the installer is not started. **Caravel 0.12.0 and later (including 0.13.0) accept both IDs** (the same change as Felucca's [#320](https://github.com/hugelton/Felucca/issues/320)).
 >
 > **We have not tested this on a real UC25HQ80 unit.** It rests on a host test of the ID list and on one user's report for Felucca's 1.8.2 beta, which is not our test. If you have such a unit, please [tell us what happens](https://github.com/bonszaimusic/caravel/issues).
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.12.0**.
+Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.13.0**.
 
 **[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
 
@@ -38,14 +38,24 @@ More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
 
 ## Tutorials
 
-Every screenshot comes from the actual firmware renderer. Start with the one that matches what you want to do:
+Firmware screenshots come from the actual firmware renderer; explicitly labelled diagrams are illustrations. Start with the one that matches what you want to do:
 
 | Tutorial | What you learn |
 | --- | --- |
 | **[Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md)** | Save sounds into S1–S4, morph between them, and let a journey chain the morphs hands-free (0.9.0; [reference](docs/morph-journey.md)) |
 | **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
 | **[HOME, Pair Morph, macros and saving](docs/tutorials/home-and-stasis.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
+| **[ELASTIC: first steps](docs/tutorials/elastic-first-steps.md)** | Make a HOME control swing like a spring: arm, bounce in musical periods, return (0.13.0; [linked springs](docs/tutorials/elastic-linked-springs.md), [ambient recipes](docs/tutorials/elastic-ambient-recipes.md)) |
 | [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
+
+## Caravel 0.13.0 — ELASTIC P1.4
+
+[Download 0.13.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.13.0) · [What changed and what is tested](docs/release-0130.md) · [ELASTIC first steps](docs/tutorials/elastic-first-steps.md) · [Linked springs](docs/tutorials/elastic-linked-springs.md) · [Ambient recipes](docs/tutorials/elastic-ambient-recipes.md)
+
+- **ELASTIC:** a seventh HOME ACTION bank (between STASIS and PAIR) that makes supported HOME controls swing like temporary springs and return, without changing the stored value. Per track: SCOPE CELL / ROW, PULL, RETURN (up to 5 minutes, or **INF**), RANGE, REFLECT, ROW coupling (COUPLE, SEED). **BOUNCE is a musical period, 1/16 note to 64 BAR**, following the internal tempo or the external MIDI clock. No MIDI Learn for ELASTIC yet.
+- **Smaller factory SAMPLE set:** PIANO has 3 zones instead of 5 and FLUTE 2 instead of 3, **27,014 B less flash**; some PIANO and FLUTE notes **sound different**. The five-zone PIANO HD user export is kept. Also in: the One-Core flash fix and a fix for the MOD slots' DST knob (it read past its table at the right end in 0.12.0).
+- **Back up first. Projects saved by 0.13.0 carry HPM1 v5: 0.12.0 reads only v1 to v3 and does not accept them. Upgrading is safe, going back is not.** `tools/caravel_backup.py` of 0.13.0 saves and restores v4/v5 projects byte for byte (older copies of the tool do not); the web backup has not been verified on a device with v5 projects.
+- **Tested:** host tests and three SDK layouts on the RC1 source, internally reviewed, not independently. The 0.13.0-rc1 package was **tested successfully on an FM-1 by the maintainer (RC1, no individual results)**; the final 0.13.0 differs from it by the version text and the MOD DST table fix, and that build has not been tried on a device. 28,548 B of the app slot are free in the default layout of the final build (553,016 B image).
 
 ## Caravel 0.12.0 — HARMONY
 

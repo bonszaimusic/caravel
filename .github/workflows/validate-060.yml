@@ -2,7 +2,7 @@
 name: Caravel Complete Validation
 on:
   push:
-    branches: [main, experiment/stasis-texture-v0]
+    branches: [main, experiment/stasis-texture-v0, release/0.13.0]
     paths-ignore:
       - '**/*.md'
       - 'docs/**'

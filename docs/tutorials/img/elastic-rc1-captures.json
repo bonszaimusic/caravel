@@ -1,0 +1,63 @@
+{
+  "version": "0.13.0-rc1",
+  "kind": "actual WASM firmware renderer, not FM-1 hardware",
+  "wasm_sha256": "a1cbee57dc4a82407e013664b35d8ee0c98ec9d4197b8e37e4aa74fcba4791bd",
+  "sources": {
+    "firmware/src/felucca.c": "ee10811870bbb9435cd6255745b31b79b0de50cb46d550e10ce930235abab92c",
+    "web/emu/felucca_web.c": "9b8467de976fe99c1854a0235f84532904e2e7cb9b900888173e554995138679",
+    "experiments/home-perf/home_elastic_p1.h": "fd753a3b628175c6c87e1dae9fca03741a81c77a1f60a58fdba956931d7eab61",
+    "experiments/home-perf/home_elastic_trajectory.h": "7b35b89dacde8a4b5560d7cd78c0331c84cbbe35dccc63e4d748f362ca26b092"
+  },
+  "captures": [
+    {
+      "name": "elastic-bank-idle",
+      "ppm_sha256": "fbc6ce28af9621dce5acf6d1ef84072ad2fdb7ced3930ef3ea0f5a24c51f585f",
+      "png_sha256": "de05520845a5e30d18344b073058ea9805d14e9df93f09d62c86b66b08a418a2"
+    },
+    {
+      "name": "elastic-times-cell",
+      "ppm_sha256": "9dcca3527768ec81fe52afc2736cc127b427dfb015e3fa715d6085e0e22373d3",
+      "png_sha256": "97cc4a223c4a577781cb52cb00a599b52036c4e7052345c6dc74d3565dca4616"
+    },
+    {
+      "name": "elastic-physics-off",
+      "ppm_sha256": "0d5fa85b73b6fd07bc2a387293f9fae4570e2b17d450c3d5da8c04dd19575a55",
+      "png_sha256": "1b09083d87f6e2f298d19aac73e0a90f557d61e0fcfcbba92392e03521a0f351"
+    },
+    {
+      "name": "elastic-physics-seed42",
+      "ppm_sha256": "158d95c4e44dc4dbe06fd920a747967f32cc05d2193f9d28d595707ece864427",
+      "png_sha256": "8d2b6696410519ca2ec508460a67efd60bc533496a01e539442dc6bbbd2d8c4c"
+    },
+    {
+      "name": "elastic-return-long",
+      "ppm_sha256": "4e2e866a86bfb137a316f4326ff78177dbc40ed6dd4ea08e28ea991fdf027a61",
+      "png_sha256": "ca71d1412e13a61f93278b81cd6c9bbb06d33a91e9f7a1e97f375298b7261aea"
+    },
+    {
+      "name": "elastic-cell-armed",
+      "ppm_sha256": "3e8c8dab15daaa0ebbc9dff4101a132391c1eadf1c276b99851c64e3bb76d9c8",
+      "png_sha256": "bb72964880911bc49659661793d38df50b7d4d581e73d8bbeef6d2f9b4c0bf4b"
+    },
+    {
+      "name": "elastic-row-four-armed",
+      "ppm_sha256": "2fb00b270c2a3476dead4f77c6448dc3dcb6e2302551da6fa87d9583b0c0c902",
+      "png_sha256": "ea138ff7df04c2699ba5107650891ca4cf98a48fb005fd0ebfb8da864c3fc8e9"
+    },
+    {
+      "name": "elastic-row-coupled",
+      "ppm_sha256": "9d957eb10d32910e4ac226e47d801c9f4faf0108856ae1ec2eb406ceb401dd55",
+      "png_sha256": "3326af1d20e0514ae5e36642869c725e496ee7eec739bb83cb218512496a2cf2"
+    },
+    {
+      "name": "elastic-four-track-hud",
+      "ppm_sha256": "8a1eba579c80036f79e2583c702c0d6378658a5aae902736f088ef58f39945b8",
+      "png_sha256": "6e4c2bf1752b4b9c6e470072cae9db1b85b29fc933416e1aa37dfae957782922"
+    },
+    {
+      "name": "elastic-setup-t2",
+      "ppm_sha256": "6ad43192b3154036905a313f023f194122be15f04eb814eb0090a8fb6ed9b62b",
+      "png_sha256": "37f602c0f7336e823813440dd37967c2f7455374f173f962c56d7583dd63244c"
+    }
+  ]
+}

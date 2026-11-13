@@ -17,6 +17,7 @@ static void pair_ui_graph(void);
 static int32_t graph_ht = 100;
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
 
+#if FELUCCA_FM4                                      /* (the OP1..OP4 ENV pages of DIGITAL: every other ENV page is a two-group page, ui_lfo2.c) */
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
  * axis is the parameter value (the times themselves are exponential). */
@@ -52,29 +53,7 @@ static void graph_adsr(const track_t *t, uint16_t c)
     }
 #undef EGY
 }
-
-static void graph_lfo(const track_t *t, uint16_t c)
-{
-    int second = cur_page()->graph == GR_LFO2 || cur_page()->graph == GR_LFO2SYNC;
-    uint32_t k = (uint32_t)(t - trk);
-    int32_t wave = second ? lfo2_config[k].p[L2_WAVE] : t->p[P_LWAVE];
-    int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy,
-        uni = second ? lfo2_config[k].p[L2_POL] : t->p[P_LPOL] != 0;
-    uint32_t ph = (uint32_t)(second ? lfo2_config[k].p[L2_PHASE] : t->p[P_LPHASE]) << 25;
-    int32_t z = uni ? cy + a : cy;                   /* the zero line: POL UNI (LFO 2) draws 0..+1 over it */
-    cv_rect(PANEL_X0, z, PANEL_W, 1, T_RAISE);
-    for (x = 0; x < PANEL_W; x++) {                  /* two cycles (lfo_wave only reads the track) */
-        uint32_t phase = ph + (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 2u));
-        int32_t w = second ? (wave == 1 ? osc_tri(phase) : wave == 2 ? (int32_t)(phase >> 16) - 32768 :
-            wave == 3 ? (phase < 0x80000000u ? 32767 : -32767) : osc_sine(phase)) : lfo_wave((track_t *)t, phase), y;
-        if (wave == 4)
-            w = (int32_t)((x / 20 * 2654435761u) >> 16) - 32768;
-        y = uni ? z - (w + 32768) * a / 32768 : cy - w * a / 32768;
-        if (x)
-            cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, c, 2);
-        py = y;
-    }
-}
+#endif
 
 /* step bar x of step i of a 16-step row: 4 groups, as the footer (9 px bars, 13 px apart, 4 px between groups),
  * the row centred: x 12 .. 228 */
@@ -379,127 +358,8 @@ static void graph_detail(const track_t *t, uint16_t c)
         }
     }
 }
-/* SCL: the 12 keys as rounded bars (black keys high, white keys low): in the scale THEME, the root the
- * accent, out of the scale RAISE */
-static void graph_scale(const track_t *t, uint16_t c)
-{
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint32_t i, mask = scale_mask(t);
-    for (i = 0; i < 12u; i++) {
-        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
-        int32_t x = 13 + (int32_t)i * 18;
-        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : c) : T_RAISE;
-        cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, col, T_SURF);
-    }
-}
-/* CHORD (SCL 2): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
- * C4) over the keys from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
- * root's ACCENT, the others RAISE. OFF or a kit: what to do instead */
 static void panel_note(const char *a, const char *b, const char *c);
 static void panel_alert(uint32_t id, const char *a);
-static void graph_chord(const track_t *t, uint16_t c)
-{
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint8_t nn[CHORD_MAX];
-    uint32_t n, i, j, k = trk_index(t), lo, cnt, w;
-    int32_t r;
-    uint16_t mask;
-    char b[12];
-    const char *cap = "LAST";
-    if (!t->p[P_CHRD]) {
-        panel_note("CHORD KEYS OFF", "[K1] DIA3: IN-KEY CHORDS", 0);   /* (the title says what they are) */
-        return;
-    }
-    if (chord_kit(t)) {
-        panel_note("NO CHORDS ON KITS", 0, 0);
-        return;
-    }
-    if (chord_last[k].n) {
-        r = chord_last[k].root;
-        mask = chord_last[k].mask;
-        n = chord_last[k].n;
-        for (i = 0; i < n; i++)
-            nn[i] = chord_last[k].note[i];
-    } else {
-        n = chord_make(t, (uint32_t)(60 + t->p[P_ROOT]), nn, &r, &mask);
-        cap = "ON ROOT";
-    }
-    if (trk_vmode(t) != V_POLY)
-        cap = "ROOT ONLY";                              /* MONO / LEGATO / UNISON */
-    chord_name(b, (uint32_t)r, mask);
-    cv_text_on(14, 8, &AF_M, b, T_TEXT, T_SURF);
-    GFX_HOOK_ALIGN(0, 0, 0, 8 + AF_M.asc, AL_B, "chord caption on the name's baseline");
-    cv_text_r(226, 8 + AF_M.asc - AF_S.asc, &AF_S, cap, T_MID, T_SURF);   /* on the name's baseline */
-    lo = nn[0] - nn[0] % 12u;
-    cnt = nn[n - 1u] - lo < 24u ? 24u : 36u;
-    w = 216u / cnt;
-    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS | AL_N(cnt), "chord keys centred");
-    for (i = 0; i < cnt; i++) {
-        uint32_t note = lo + i, on = 0;
-        int32_t x = 13 + (int32_t)(i * w);              /* (216 px of keys and their gaps: x 13 .. 227) */
-        for (j = 0; j < n; j++)
-            on |= nn[j] == note;
-        cv_rrect(x, BLACK[note % 12u] ? 36 : 62, (int32_t)w - 2, 48, w > 6u ? 3 : 2,
-                 !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : c, T_SURF);
-    }
-}
-/* the SCL family's four pages as a 2 x 2 strip: SCL, CHORD, LINK, HARMONY (the current one accented) */
-static void scl_page_strip(int32_t y)
-{
-    static const char *const names[4] = {"SCL", "CHORD", "LINK", "HARM"};
-    static const uint8_t graphs[4] = {GR_SCALE, GR_CHORD, GR_LINK, GR_HARMONY};
-    uint32_t i;
-    for (i = 0; i < 4u; i++) {
-        int32_t x = 12 + (int32_t)(i & 1u) * 108, yy = y + (int32_t)(i >> 1) * 24;
-        int cur = cur_page()->graph == graphs[i];
-        cv_rrect(x, yy, 100, 20, 4, cur ? T_ACCENT : T_RAISE, T_SURF);
-        cv_text_in(x + 4, yy + 4, 92, &AF_S, names[i], cur ? T_INK : T_MID, cur ? T_ACCENT : T_RAISE);
-    }
-}
-/* HARMONY's graph: its ON/OFF state, the loop and the current bar; the SCL page strip underneath */
-static void graph_harmony(void)
-{
-    uint32_t i, total = 0, at = 0, pos, idx = harmony_chord_at(harmony_bar), x = 12;
-    char b[12];
-    cv_text_on(12, 2, &AF_M, "HARMONY", T_TEXT, T_SURF);
-    cv_text_r(228, 2, &AF_M, harmony_on ? "ON" : "OFF", harmony_on ? T_ACCENT : T_DIM, T_SURF);
-    for (i = 0; i < 4u; i++)
-        total += 1u << hdur_get(i);
-    pos = harmony_bar % (total ? total : 4u);
-    for (i = 0; i < 4u; i++) {
-        uint32_t d = 1u << hdur_get(i), w = 216u * d / (total ? total : 4u);
-        cv_rrect((int32_t)x, 24, (int32_t)(w > 3u ? w - 2u : 2u), 10, 3,
-                 i == idx ? (harmony_on ? T_ACCENT : T_DIM) : T_RAISE, T_SURF);
-        if (pos >= d) pos -= d; else at = i;
-        x += w;
-    }
-    fmt_int(b, (int32_t)at + 1);
-    cv_text_on(12, 40, &AF_S, "CHORD", T_MID, T_SURF);
-    cv_text_on(52, 40, &AF_M, b, T_TEXT, T_SURF);
-    cv_text_on(72, 40, &AF_S, harmony_edit_dur ? "DUR: K1-4" : "ROOT: K1-4", T_MID, T_SURF);
-    scl_page_strip(62);
-}
-/* LINK's graph: the same page strip, above a one-line explanation of the per-track link */
-static void graph_link(void)
-{
-    uint32_t sel = song.sel, src = link_src[sel];
-    cv_text_on(12, 2, &AF_M, "KEY LINK", T_TEXT, T_SURF);
-    cv_text_on(12, 24, &AF_S, src ? "FOLLOWS SOURCE" : "NO LINK", src ? T_THEME : T_DIM, T_SURF);
-    cv_text_on(12, 42, &AF_S, src ? "SOURCE KEY" : "K1 SOURCE", T_MID, T_SURF);
-    scl_page_strip(62);
-}
-/* the four sends as faders under their cards: a RAISE slot, the THEME fill from the bottom, a cap */
-static void graph_fx(const track_t *t, uint16_t c)
-{
-    uint32_t i;
-    for (i = 0; i < 4u; i++) {
-        int32_t h = t->p[P_DIST + i] * 76 / 127, x = CARD_X(i) + 26;
-        cv_rrect(x, 6, 4, 82, 2, T_RAISE, T_SURF);
-        if (h > 3)
-            cv_rrect(x, 88 - h, 4, h, 2, c, T_RAISE);
-        cv_rrect(x - 4, 85 - h, 12, 6, 3, c, T_SURF);
-    }
-}
 /* INSERT pages (1.5, fx.c track_insert): the drives and CRUSH as their curve, input (-1.5 .. +1.5 of a voice's full
  * scale) across, output up, dry and wet blended by MIX (fx.c ins_shape: the same shape; the dry diagonal RAISE); the
  * swept ones as two cycles of their sweep, as deep as DEPTH (FLANG the squared triangle, CHOR a sine, PHASR a
@@ -530,64 +390,6 @@ static void insert_curve(const track_t *t, uint16_t c, int32_t x0, int32_t pw, i
         if (x)
             cv_line_t(x0 + x - 1, py, x0 + x, y, c, 2);
         py = y;
-    }
-}
-static void graph_insert(const track_t *t, uint16_t c)
-{
-    insert_curve(t, c, PANEL_X0, PANEL_W, graph_ht / 2, 38 * graph_ht / 100);
-}
-/* SLICER page: the pattern's 16 steps, a 'x' step a full bar; a '.' step: GATE a bar as high as it stays
- * open (DEPTH), STUT hatched (it repeats the last 'x'); the step playing underlined. Grey when OFF. */
-static void graph_slicer(const track_t *t, uint16_t c)
-{
-    uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
-    int32_t open = 70 - t->p[P_SLDEPTH] * 70 / 127;      /* px a closed GATE step keeps */
-    uint16_t col = mode == SL_OFF ? T_DIM : c;
-    for (i = 0; i < 16u; i++) {
-        int32_t x = bar_x(i), y;
-        if ((pat >> i) & 1u) {
-            cv_rrect(x, 8, 9, 72, 2, mode == SL_OFF ? T_RAISE : col, T_SURF);
-        } else if (mode == SL_STUT) {
-            for (y = 8; y < 80; y += 4)
-                cv_rect(x, y, 9, 1, col);
-        } else {
-            cv_rrect(x, 77, 9, 3, 1, T_RAISE, T_SURF);
-            if (open > 3)
-                cv_rrect(x, 80 - open, 9, open, 2, T_RAISE, T_SURF);
-        }
-        if (mode != SL_OFF && i == cur)
-            cv_rect(x, 84, 9, 2, T_ACCENT);
-    }
-}
-/* MOD page: the four slots as rows "1 LFO > CUT +50%" (M, a list's rows: the source to x 78, the arrow 84..98, the
- * destination of up to 5 characters 106..160, the amount from 172), the one KNOB 2..4 edit selected, slots that do
- * nothing (SRC, DST or AMT at 0) dim */
-static void graph_mod(const track_t *t, uint16_t c)
-{
-    uint32_t k;
-    for (k = 0; k < NMSLOT; k++) {
-        const int16_t *p = &t->p[P_M1SRC + 3u * k];
-        int32_t y = 14 + (int32_t)k * 24, on = p[0] && p[1] && p[2], sel = k == mod_ui_slot, x;
-        uint16_t bg = sel ? T_THEME : T_SURF, col = sel ? T_INK : on ? c : T_DIM;
-        char b[8];
-        const char *unit;
-        if (sel)
-            cv_rrect(6, y, 228, 17, 4, T_THEME, T_SURF);
-        b[0] = (char)('1' + k);
-        b[1] = 0;
-        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
-        cv_text_on(14, y + CAP_IN(M, 17), &AF_M, b, sel ? T_INK : T_MID, bg);
-        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
-        cv_text_on(30, y + CAP_IN(M, 17), &AF_M, N_MSRC[clamp(p[0], 0, MS_N - 1)], col, bg);
-        cv_line(84, y + 8, 98, y + 8, col);              /* an arrow */
-        cv_line(94, y + 4, 98, y + 8, col);
-        cv_line(94, y + 12, 98, y + 8, col);
-        cv_text_on(106, y + CAP_IN(M, 17), &AF_M, mod_dst_name(t, p[1]), col, bg);
-        param_format(&TP[P_M1AMT], p[2], b, &unit);
-        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
-        x = cv_text_on(172, y + CAP_IN(M, 17), &AF_M, b, col, bg) + 2;
-        GFX_HOOK_ALIGN(0, 0, 0, y + CAP_IN(M, 17) + AF_M.asc, AL_B, "mod row unit on its amount's baseline");
-        cv_text_on(x, y + CAP_IN(M, 17) + AF_M.asc - AF_S.asc, &AF_S, unit, sel ? T_INK : T_DIM, bg);   /* (a unit: S) */
     }
 }
 
@@ -1263,12 +1065,6 @@ static uint32_t graph_signature(void)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
          ui.ppick * 1299709u;
-    if (pg->graph == GR_CHORD) {                     /* the last chord played */
-        h = (h ^ (chord_last[song.sel].root + 131u * chord_last[song.sel].mask)) * 16777619u;
-        for (i = 0; i < CHORD_MAX; i++)
-            h = (h ^ chord_last[song.sel].note[i]) * 16777619u;
-        h ^= (uint32_t)t->engine * 389u;             /* (MONO and kits follow the sounding engine) */
-    }
     if (pg->graph == GR_SONG) {
         h ^= ui.song_row * 40503u + chain_config.count * 7919u + ui.song_trk * 3571u;
         h = fnv(h, chain_config.row, sizeof chain_config.row);
@@ -1283,10 +1079,6 @@ static uint32_t graph_signature(void)
             h ^= (ui_prefs & PREF_LARGE) ? 0x2545F491u : 0u;
         }
     }
-    if (pg->graph == GR_MOD)
-        h ^= (mod_ui_slot + 1u) * 40503u;
-    if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
-        h ^= (sl[song.sel].idx + 1u) * 2654435761u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
@@ -1860,6 +1652,8 @@ static void draw_tracks(void)
         cv_blit((uint32_t)CARD_X(c), Y_GRAPH);
     }
 }
+#if !FELUCCA_HOME_PERF                              /* (HOME_PERF: ui_draw_page hands HOME to hp_draw_home before draw_graph can run with ui.home set;
+ * the rows below are drawn only by that path, so the shipped profile leaves them out) */
 /* HOME > TRACKS (1.3, Discussions #112 / #134: MENU > DISPLAY > HOME TRACKS): the four tracks as rows in the panel, one
  * under the other (29 px, 2 apart), in place of the scope; the cards above stay HOME's four (the selected track's). A row:
  * the track's cushion at the left; on its first line the engine's icon and the sound's name (MENU > LARGE: the name in M,
@@ -2009,6 +1803,7 @@ static void draw_home_tracks(void)
     for (c = 0; c < NTRK; c++)
         home_track_row(c);
 }
+#endif
 /* oscilloscope of the output, triggered on a rising zero crossing: a RAISE centre line, the trace 2 px (in silence
  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
 static void graph_scope(uint16_t c)
@@ -2342,10 +2137,12 @@ static void draw_graph(void)
         draw_tracks();
         return;
     }
+#if !FELUCCA_HOME_PERF
     if (ui.home && home_tracks()) {                  /* MENU > HOME TRACKS (1.3) */
         draw_home_tracks();
         return;
     }
+#endif
     if (!ui.home && pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) sample_wave_tick(t);
     sig = graph_signature();
     if (!ui.force && sig == ui.graph_sig)
@@ -2357,11 +2154,12 @@ static void draw_graph(void)
     cv_oy = GOY;                                     /* graphs on a 100 px scale */
     if (strip_kind() != SK_NONE) {                   /* MENU > LARGE: the strip */
         uint32_t k = strip_kind();
-        cv_oy = k == SK_ADSR || k == SK_LFO ? 3 : 0;
+        cv_oy = k == SK_ADSR ? 3 : 0;
         graph_ht = LG_H_GRAPH - 6;
         if (k == SK_SCOPE) graph_scope(c);
+#if FELUCCA_FM4
         else if (k == SK_ADSR) graph_adsr(t, c);
-        else if (k == SK_LFO) graph_lfo(t, c);
+#endif
         else graph_title();
         graph_ht = 100;
     } else if (ui.home) {
@@ -2369,15 +2167,11 @@ static void draw_graph(void)
         graph_scope(c);
     } else {
         switch (pg->graph) {
+#if FELUCCA_FM4
         case GR_ADSR:
             graph_adsr(t, c);
             break;
-        case GR_LFO2:
-        case GR_LFO2SYNC:
-        case GR_LFOSYNC:
-        case GR_LFO:
-            graph_lfo(t, c);
-            break;
+#endif
         case GR_ROLL:
             cv_oy = 0;
             if (detail_on())                          /* 1.5.1 (#199) */
@@ -2386,34 +2180,6 @@ static void draw_graph(void)
                 graph_grid(t, c);
             else
                 graph_roll(t, c);
-            break;
-        case GR_SCALE:
-            graph_scale(t, c);
-            break;
-        case GR_LINK:
-            cv_oy = 0;
-            graph_link();
-            break;
-        case GR_HARMONY:
-            cv_oy = 0;
-            graph_harmony();
-            break;
-        case GR_CHORD:
-            cv_oy = 0;
-            graph_chord(t, c);
-            break;
-        case GR_FX:
-            graph_fx(t, c);
-            break;
-        case GR_SLCR:
-            graph_slicer(t, c);
-            break;
-        case GR_INS:
-            graph_insert(t, c);
-            break;
-        case GR_MOD:
-            cv_oy = 0;
-            graph_mod(t, c);
             break;
         case GR_BROWSE:
             cv_oy = 0;

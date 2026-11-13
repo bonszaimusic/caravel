@@ -118,10 +118,10 @@ def validate(k,b):
         if not b and k!=0:return
         if len(b) in (7200,10000):
             magic,version,size,seq,crc,hcrc=struct.unpack_from("<6I",b)
-            if magic!=0x314D5048 or (version,size) not in ((1,10000),(2,7200),(3,7200)) or size!=len(b) or fnv(b[32:])!=crc or fnv(b[:20])!=hcrc:raise ValueError("Invalid HPM1 capsule")
-            if version in (2,3):                      # 2: 0.7.1-0.8.0 (four shared slots), 3: 0.9.0 (a set per track)
+            if magic!=0x314D5048 or (version,size) not in ((1,10000),(2,7200),(3,7200),(4,7200),(5,7200)) or size!=len(b) or fnv(b[32:])!=crc or fnv(b[:20])!=hcrc:raise ValueError("Invalid HPM1 capsule")
+            if version in (2,3,4,5):                  # 2: 0.7.1-0.8.0 (four shared slots), 3: 0.9.0 (a set per track), 4/5: 0.13.0 ELASTIC (v3 + 4 x 9 B spring settings; 5: tempo-synced times)
                 clen,rawlen=struct.unpack_from("<II",b,24)
-                if not 0<clen<=3328 or rawlen!={2:5518,3:5558}[version]:raise ValueError("Invalid snapshot payload length")
+                if not 0<clen<=3328 or rawlen!={2:5518,3:5558,4:5594,5:5594}[version]:raise ValueError("Invalid snapshot payload length")
                 raw=bytearray();src=memoryview(b)[3872:3872+clen];at=0
                 while at<len(src):
                     tag=src[at];at+=1

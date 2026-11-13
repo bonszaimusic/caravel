@@ -6,7 +6,7 @@ The same tutorials, in one place: [README](../../README.md#tutorials) · [all tu
 
 Random Morph moves the controls on your HOME page, by hand or to a stored sound. Morph Journey chains those moves into one long, hands-free
 movement through up to four sounds. You need **HOME with a few controls on it** (hold GLO and tap HOME on a parameter's page to add it) and
-**ACTION switched on** (double-tap HOME). D#5 steps forward through RANDOM, JOURNEY, HARM, STASIS, PAIR and LIVE; C#5 steps backward. The four ACTION keys are D5/E5/F5/G5. Hold either BANK key for SETUP. See [the current key map and live Harmony guide](harmony-live.md).
+**ACTION switched on** (double-tap HOME). D#5 steps forward through the seven banks RANDOM, JOURNEY, HARM, STASIS, ELASTIC, PAIR and LIVE (ELASTIC is new in 0.13.0; 0.12.0 has the other six); C#5 steps backward. The four ACTION keys are D5/E5/F5/G5. Hold either BANK key for SETUP. See [the current key map and live Harmony guide](harmony-live.md).
 
 ## 1. Save a sound into a slot
 
@@ -103,7 +103,7 @@ SCOPE ALL (RANDOM SETUP, K3) makes the RANDOM keys act on **every track at once*
 
 ## Good to know
 
-- **The journey keeps running when you change bank.** Use STASIS, PAIR or LIVE meanwhile; come back to JOURNEY to steer.
+- **The journey keeps running when you change bank.** Use STASIS, ELASTIC, PAIR or LIVE meanwhile; come back to JOURNEY to steer.
 - **Saving or deleting a snapshot of the journey's track ends a journey.** PLAY starts again from the selected slot. A RANDOM morph on the same track only **holds** it (step 7).
 - **RANDOM's A3 (GO Sx) and the JOURNEY bank's A3 (NEXT) steer a running journey** to that slot at once and it goes on from there. **A paused journey stays paused**: GO is then a plain morph, and PLAY afterwards goes on with the journey's own leg from where the sound stands.
 - **Hands win.** A knob you turn, or a MIDI CC, keeps its value for the rest of the leg; the next leg moves it again.

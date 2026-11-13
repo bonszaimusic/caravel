@@ -1,5 +1,5 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "banner": "tutorials-banner.png",
   "hero_device": "device-hero.svg",
   "groups": [
@@ -152,6 +152,39 @@
       "thumb": "card-harmony.png",
       "status": "ready",
       "tagline": "Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH."
+    },
+    {
+      "id": "elastic-first-steps",
+      "num": "6.1",
+      "group": "play",
+      "title": "ELASTIC · First steps",
+      "minutes": 10,
+      "md": "elastic-first-steps.md",
+      "thumb": "elastic-cell-armed.png",
+      "status": "ready",
+      "tagline": "Make one HOME control breathe, bounce and return using the ELASTIC action bank."
+    },
+    {
+      "id": "elastic-linked-springs",
+      "num": "6.2",
+      "group": "play",
+      "title": "ELASTIC · Linked springs",
+      "minutes": 12,
+      "md": "elastic-linked-springs.md",
+      "thumb": "elastic-row-coupled.png",
+      "status": "ready",
+      "tagline": "Connect four ROW springs with COUPLE and a reproducible SEED network."
+    },
+    {
+      "id": "elastic-ambient-recipes",
+      "num": "6.3",
+      "group": "play",
+      "title": "ELASTIC · Ambient recipes",
+      "minutes": 12,
+      "md": "elastic-ambient-recipes.md",
+      "thumb": "elastic-four-track-hud.png",
+      "status": "ready",
+      "tagline": "Three starting recipes for breathing drones, moving textures and two-track tides."
     },
     {
       "id": "filter-fx",

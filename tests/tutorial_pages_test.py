@@ -25,8 +25,13 @@ class TutorialPagesTest(unittest.TestCase):
 
     def test_registry_has_every_topic_of_the_agreed_structure(self):
         ids = [t["id"] for t in self.data["topics"]]
-        self.assertEqual(ids, ["start-here", "basics", "sem", "hades", "drone", "ensemble", "seq-arp", "home", "harmony", "filter-fx", "midi-sync", "help"])
-        self.assertEqual([t["num"] for t in self.data["topics"]], ["1", "2", "3.1", "3.2", "3.3", "3.4", "4", "5", "6", "7", "8", "9"])
+        self.assertEqual(ids, ["start-here", "basics", "sem", "hades", "drone", "ensemble", "seq-arp", "home", "harmony", "elastic-first-steps", "elastic-linked-springs", "elastic-ambient-recipes", "filter-fx", "midi-sync", "help"])
+        self.assertEqual([t["num"] for t in self.data["topics"]], ["1", "2", "3.1", "3.2", "3.3", "3.4", "4", "5", "6", "6.1", "6.2", "6.3", "7", "8", "9"])
+        previews = [t for t in self.data["topics"] if t.get("preview")]
+        self.assertEqual(previews, [])  # 0.13.0 is a full release, not a preview
+        shots = [t for t in self.data["topics"] if t["id"].startswith("elastic-")]
+        self.assertEqual([t["thumb"] for t in shots], ["elastic-cell-armed.png", "elastic-row-coupled.png", "elastic-four-track-hud.png"])
+        self.assertTrue(all(t["status"] == "ready" for t in shots))
         for t in self.data["topics"]:
             self.assertTrue(t["tagline"].endswith(".") and t["minutes"] > 0)
 
@@ -51,6 +56,14 @@ class TutorialPagesTest(unittest.TestCase):
             self.assertNotIn('href="http', svg)
             # no run of base64 that the publication check would read as a key (AKIA/ASIA plus 16 characters, tokens)
             self.assertIsNone(re.search(r"(?:AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}", svg, re.IGNORECASE), path.name)
+        for path in sorted((TUT / "img").glob("card-elastic-*.svg")):
+            svg = path.read_text(encoding="utf-8")
+            self.assertTrue(svg.startswith("<svg") and 'width="240" height="240"' in svg, path.name)
+            self.assertIn("concept preview", svg.lower(), path.name)
+            self.assertIn("not a firmware screenshot", svg, path.name)
+            self.assertNotIn("<script", svg.lower(), path.name)
+            self.assertNotIn('href="http', svg, path.name)
+        self.assertEqual(len(list((TUT / "img").glob("card-elastic-*.svg"))), 3)
         banner = (TUT / "img" / self.data["banner"]).read_bytes()
         self.assertEqual(struct.unpack(">II", banner[16:24]), (1600, 440))
 
@@ -107,6 +120,18 @@ class TutorialPagesTest(unittest.TestCase):
             self.assertIn('<span class="pill">v0.12.0</span>', overview)
             self.assertEqual(overview.count("<article class=\"card"), len(self.data["topics"]))
             self.assertNotIn("IN PREPARATION", overview)
+            self.assertIn('href="elastic-first-steps/"', overview)
+            self.assertIn('href="elastic-linked-springs/"', overview)
+            self.assertIn('href="elastic-ambient-recipes/"', overview)
+            self.assertNotIn("0.13.0 PREVIEW", overview)
+            self.assertIn("img/elastic-cell-armed.png", overview)
+            self.assertIn("img/elastic-row-coupled.png", overview)
+            self.assertIn("img/elastic-four-track-hud.png", overview)
+            for slug in ("elastic-first-steps", "elastic-linked-springs", "elastic-ambient-recipes"):
+                preview_page = (site / "tutorials" / slug / "index.html").read_text()
+                self.assertIn("REAL FIRMWARE SCREENS", preview_page)
+                self.assertIn('id="step-1"', preview_page)
+                self.assertIn('href="../home/"', preview_page)
             for t in self.data["topics"]:
                 self.assertIn(t["title"], overview)
             self.assertIn('href="start-here/"', overview)
@@ -126,6 +151,14 @@ class TutorialPagesTest(unittest.TestCase):
 
     def test_generated_overview_readme_is_current_and_linked_at_the_top_of_the_readme(self):
         self.assertEqual((TUT / "README.md").read_text(encoding="utf-8"), tp.readme_text(self.data))
+        overview = (TUT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("elastic-first-steps.md", overview)
+        self.assertIn("elastic-linked-springs.md", overview)
+        self.assertIn("elastic-ambient-recipes.md", overview)
+        self.assertIn("Firmware display: ELASTIC", overview)
+        # Existing public lessons remain linked; no migration/deletion is needed.
+        self.assertIn("tutorials/stasis/", overview)
+        self.assertIn("tutorials/random-morph-journey/", overview)
         top = "\n".join((ROOT / "README.md").read_text(encoding="utf-8").splitlines()[:8])
         self.assertIn('href="https://bonszaimusic.github.io/caravel/tutorials/"><img src="docs/tutorials/img/tutorials-banner.png"', top)
         self.assertIn("docs/tutorials/start-here.md", top)

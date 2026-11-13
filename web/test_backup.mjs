@@ -118,5 +118,13 @@ ok(await athrows(() => restoreBackup(failing.request, file)) && failing.log.incl
   ok(await athrows(() => restoreBackup(untouched.request, corrupt)) && untouched.log.length === 0,
     "backup: a corrupt large capsule is rejected before any write");
 }
+{ // 0.13.0 writes HPM1 v4/v5 capsules (7200 B); the web tool must carry them byte for byte (it never interprets the capsule).
+  const cap = (version) => { const b = rnd(7200, 70 + version); const v = new DataView(b.buffer); v.setUint32(0, 0x314d5048, true); v.setUint32(4, version, true); v.setUint32(8, 7200, true); return b; };
+  const caps = [[2, cap(4)], [3, cap(5)], [0, cap(5)]];
+  const el = await captureBackup(device([...caps, [1, rnd(1200, 41)]]).request, "0.13.0");
+  const dst = device([]); await restoreBackup(dst.request, el);
+  ok(caps.every(([id, bytes]) => dst.objs.get(id).length === 7200 && dst.objs.get(id).every((v, i) => v === bytes[i])),
+    "backup: HPM1 v4/v5 capsules (7200 B) in slots and WORK restore byte for byte");
+}
 console.log(fails ? `BACKUP WEB TESTS FAILED (${fails})` : "backup web tests passed");
 process.exit(fails ? 1 : 0);

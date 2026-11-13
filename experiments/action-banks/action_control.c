@@ -72,6 +72,10 @@ static void action_refresh(void)
    if(!action_bank_down[dir]){action_bank_down[dir]=1;action_bank_long[dir]=0;action_bank_started[dir]=fm1_ms;}
    if(!action_bank_long[dir] && fm1_ms-action_bank_started[dir]>=ACTION_LONG_MS){
     action_bank_long[dir]=1;action_setup=!action_setup;
+#if CARAVEL_ELASTIC_PLAYABLE
+    if(action_setup && action_bank==ACT_BANK_ELASTIC)
+        hp_elastic_p1_setup_page_reset(); /* always enter at SCOPE/PULL */
+#endif
     /* Two BANK keys held together form one gesture, never two SETUP toggles. */
     if(fm1_in.notes&(1u<<(dir?ACT_BANK_PREV:ACT_BANK_NEXT)))action_bank_long[dir^1u]=1;
 #if CARAVEL_STASIS_EXPAND
@@ -87,7 +91,11 @@ static void action_refresh(void)
   }else if(action_bank_down[dir]){
    action_bank_down[dir]=0;
    if(!action_bank_long[dir]){
-    static const uint8_t order[ACT_BANKS]={0u,ACT_BANK_JOURNEY,ACT_BANK_HARMONY,1u,2u,3u};
+    static const uint8_t order[ACT_BANKS]={0u,ACT_BANK_JOURNEY,ACT_BANK_HARMONY,1u,
+#if CARAVEL_ELASTIC_P1
+     ACT_BANK_ELASTIC,
+#endif
+     2u,3u};
     uint32_t pos=0;while(pos<ACT_BANKS&&order[pos]!=action_bank)pos++;
     action_bank=order[(pos+(dir?1u:ACT_BANKS-1u))%ACT_BANKS];
     ui.force=1;ui_message(action_bank_names[action_bank]);
@@ -183,6 +191,9 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
   {"SCOPE","TRANSP","--","--"}         /* JOURNEY SETUP: which tracks the keys act on, and the clock its time follows */
  };
  if(action_bank==ACT_BANK_HARMONY){str_cpy(name,slot?"--":"SHIFT",16);if(!slot)fmt_int(value,harmony_shift_want);else str_cpy(value,"--",24);return;}
+#if CARAVEL_ELASTIC_P1
+ if(action_bank==ACT_BANK_ELASTIC){hp_elastic_p1_setup_caption(slot,name,value);return;}
+#endif
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
  if(action_bank==1u && action_stasis_grain_page){
@@ -237,6 +248,12 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
 static void action_setup_turn(uint32_t slot,int32_t steps)
 {
  if(slot>=4u||!steps)return;
+#if CARAVEL_ELASTIC_P1
+ if(action_bank==ACT_BANK_ELASTIC){
+  if(ui.ml.on){ui_message("ELASTIC: NO MIDI LEARN YET");return;}
+  hp_elastic_p1_setup_turn(slot,steps);return;
+ }
+#endif
  if(action_bank==ACT_BANK_HARMONY){if(slot==0u){
   if(ui.ml.on){ml_knob(TSEL,HP_HFIRST+4u);return;}
   harmony_shift_want=(int8_t)clamp(harmony_shift_want+steps,-7,7);harmony_shift_dirty=1;ui.force=1;
@@ -399,6 +416,19 @@ static void action_key(uint32_t key)
 {
  uint32_t act=0;while(act<4u && action_keys[act]!=key)act++;
  if(act==4u)return;
+#if CARAVEL_ELASTIC_P1
+ if(action_bank==ACT_BANK_ELASTIC){
+  if(ui.ml.on){ui_message("ELASTIC: NO MIDI LEARN YET");return;}
+#if CARAVEL_ELASTIC_PLAYABLE
+  if(action_setup && act==3u){
+   /* In SETUP A4 pages between TIME and PHYSICS; A4 RESET stays available
+    * in normal performance. No hidden shortcut or extra controls. */
+   hp_elastic_p1_setup_page_toggle();return;
+  }
+#endif
+  hp_elastic_p1_action(act);return;
+ }
+#endif
  if(action_bank==ACT_BANK_HARMONY){
   if(ui.ml.on){ml_knob(TSEL,HP_HFIRST+act);return;}
   if(!harmony_on){ui_message("LINK: ENABLE HARMONY");return;}

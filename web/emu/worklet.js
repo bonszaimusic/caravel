@@ -93,6 +93,10 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
+      else if (m.type === "p12demo") {                 // local preview helper, not firmware
+        for (let t = 0; t < 4; t++) ex.web_p12_demo_track(t);
+        ex.web_home_row(0);
+      }
     }
 
     publish() {

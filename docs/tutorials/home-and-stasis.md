@@ -2,7 +2,9 @@
 
 **New in 0.12.0: [Live Harmony and the HOME ACTION key map](harmony-live.md)** — two-way BANK selection, HARM after JOURNEY, HOLD/PREV/NEXT/RESET, scale-degree SHIFT and MIDI Learn.
 
-**New: [Random Morph and Morph Journey](random-morph-journey.md)** (0.9.0). The sections below cover STASIS (0.6.0) and the performance workflow (0.5.0).
+**New in 0.13.0: [ELASTIC first steps](elastic-first-steps.md)**: the seventh ACTION bank, between STASIS and PAIR, lets a supported HOME control swing away and return like a spring.
+
+**[Random Morph and Morph Journey](random-morph-journey.md)** (0.9.0). The sections below cover STASIS (0.6.0) and the performance workflow (0.5.0).
 Back to the [tutorial overview](README.md) · [README](../../README.md#tutorials).
 
 ## STASIS and performance tutorials (0.6.0)

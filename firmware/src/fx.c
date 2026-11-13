@@ -1850,8 +1850,12 @@ static void mix_block(int32_t *out, uint32_t n)
 #if FELUCCA_PERF_HW
     pd_worker_mask=m;
 #endif
+    for (i = 0; i < NPART; i++)                         /* which core renders which part: the copy of the scratch it uses (C1_CI); before the worker starts */
+        trk[i].c1i = (uint8_t)(m >> i & 1u);
     if (m && !C1_RUN(c1_parts, m | n << 8)) {
         m = 0;
+        for (i = 0; i < NPART; i++)                     /* not taken: this core renders all, on its copy */
+            trk[i].c1i = 0;
 #if FELUCCA_PERF_HW
         pd_worker_mask=0;
 #endif

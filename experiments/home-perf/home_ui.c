@@ -88,6 +88,9 @@ static void hp_set(hp_ref_t r,int32_t value,int capture)
 #if FELUCCA_RANDOM_MORPH
  if(capture)hp_rm_disengage(r); /* source knob or MIDI overrides moving target */
 #endif
+#if CARAVEL_ELASTIC_P1
+ if(capture && r.kind==HP_TRACK)hp_elastic_p1_manual(t,hp_tid(r));
+#endif
  if(r.kind==HP_TRACK){trk[t].p[hp_tid(r)]=value;if(capture)motion_capture(&trk[t],hp_tid(r),value);}
  else if(r.kind==HP_GLOBAL)song.g[r.id]=value;
  else if(r.kind==HP_LFO2)lfo2_set(t,r.id,value);
@@ -125,6 +128,9 @@ static void hp_midi(track_t*t,uint32_t id,uint32_t value)
  * of that morph, as a physical knob does (hp_set capture=1). Called on the MIDI path, so the same context as hp_midi. */
 static void hp_midi_touch(uint32_t kind,uint32_t track,uint32_t id)
 {
+#if CARAVEL_ELASTIC_P1
+ if(kind==HP_TRACK)hp_elastic_p1_manual(track,id);
+#endif
 #if FELUCCA_RANDOM_MORPH
  hp_ref_t r={0};
  if(kind==HP_TRACK)r=hp_track_ref(track,id,0xFFFFu);
@@ -169,6 +175,9 @@ static void hp_init(void)
  hp_rm_reset_all();hp_rm_snapshot_clear(); /* volatile snapshots never survive boot */
  action_snap_slot=0;
 #endif
+#if CARAVEL_ELASTIC_P1
+ hp_elastic_p1_init();
+#endif
  for(uint32_t t=0;t<NTRK;t++)hp_apply(t,hp_default);hp_last_valid=0;hp_apply_armed=0;hp_edit_track=hp_backup_track=255;perf_irq_restore(irq);
 }
 static void hp_backup_take(uint32_t t){hp_edit_backup=hp.track[t];hp_backup_track=t;hp_backup_automation=0;}
@@ -185,12 +194,20 @@ static void hp_add_last(void)
  found:hp_backup_take(song.sel);if(row==h->count)h->count++;h->cell[row][k]=hp_last;h->active=row;hp_dirty=1;
  char b[32];perf_format(b,sizeof b,"ADDED TO HOME %u.%u",row+1,k+1);ui_message(b);ui.force=1;
 }
-static void hp_row_turn(int32_t steps){hp_track_t*h=&hp.track[song.sel];h->active=clamp((int32_t)h->active+steps,0,h->count-1);hp_dirty=1;ui.force=1;}
+static void hp_row_turn(int32_t steps){hp_track_t*h=&hp.track[song.sel];h->active=clamp((int32_t)h->active+steps,0,h->count-1);
+ hp_dirty=1;ui.force=1;}
 static hp_ref_t hp_current(uint32_t k){return hp.track[song.sel].cell[hp.track[song.sel].active][k&3];}
+#if CARAVEL_ELASTIC_P1
+#include "home_elastic_p1.h"
+#endif
 static void hp_turn(uint32_t slot,int32_t steps,int momentary)
 {
  hp_ref_t r=hp_current(slot);const param_desc_t*d=hp_desc(r);if(!d){ui_message(r.kind?"TARGET NOT AVAILABLE":"EMPTY: GLO+HOME TO ADD");return;}
  hp_last=r;hp_last.page=0xFFFF;hp_last_valid=1;hp_last_track=song.sel;
+#if CARAVEL_ELASTIC_P1
+ if(!momentary && hp_elastic_p1_turn(r,slot,steps))return;
+ if(momentary && r.kind==HP_TRACK)hp_elastic_p1_manual(hp_owner(r),hp_tid(r));
+#endif
  if(momentary){if(r.kind!=HP_TRACK&&r.kind!=HP_GLOBAL){ui_message("USE NORMAL TURN");return;}
 #if FELUCCA_RANDOM_MORPH
   hp_rm_disengage(r);
@@ -242,8 +259,15 @@ static void hp_begin(track_t*t)
  for(uint32_t at=0;at<count;at++)if(off[at]){uint32_t id=hp_macro_ids[tr][at];const param_desc_t*d=track_desc(t,id);
  hp_macro_keep[tr][changed]=t->p[id];hp_macro_ids[tr][changed++]=id;t->p[id]=clamp(t->p[id]+off[at],d->min,d->max);}
  hp_macro_count[tr]=changed;
+#if CARAVEL_ELASTIC_P1
+ hp_elastic_p1_audio_begin(t);
+#endif
 }
-static void hp_end(track_t*t){uint32_t tr=trk_index(t);for(uint32_t at=0;at<hp_macro_count[tr];at++)t->p[hp_macro_ids[tr][at]]=hp_macro_keep[tr][at];hp_macro_count[tr]=0;}
+static void hp_end(track_t*t){
+#if CARAVEL_ELASTIC_P1
+ hp_elastic_p1_audio_end(t);
+#endif
+ uint32_t tr=trk_index(t);for(uint32_t at=0;at<hp_macro_count[tr];at++)t->p[hp_macro_ids[tr][at]]=hp_macro_keep[tr][at];hp_macro_count[tr]=0;}
 static void hp_open_graph(uint32_t graph){for(uint32_t i=0;i<NPAGES;i++)if(PAGES[i].graph==graph){ui.home=0;ui.page=i;page_entered();ui.force=1;return;}}
 static int hp_oct_button(uint32_t b){if(ui.home)return 0;uint32_t g=cur_page()->graph;return g==GR_HOMEEDIT||(g==GR_MACRO&&b==B_OCTUP)||(g==GR_MACROMAP&&b==B_OCTDN);}
 static void hp_editor_sync(void){if(hp_edit_track!=song.sel){hp_edit_track=song.sel;hp_edit_row=hp.track[song.sel].active;hp_edit_col=hp_edit_action=0;}hp_edit_row=clamp(hp_edit_row,0,hp.track[song.sel].count-1);}
@@ -336,36 +360,168 @@ static const char*hp_row_name(const hp_track_t*h,uint32_t row)
  }
  return bits==4?"PAIR":bits==8?"MACRO":bits==2?"FX":bits==1?"SOUND":bits?"MIX":"EMPTY";
 }
+#if CARAVEL_ELASTIC_PLAYABLE
+/* A compact six-link coil; spring end moves on the true Q8 displacement
+ * before a rounded parameter value changes. Fits the left 27 pixels of each
+ * 56px HOME card, underneath the value and away from its unit label. */
+static void hp_elastic_draw_coil(int x,int y,const hp_elastic_t *e,
+                                 const hp_et_t *motion,int32_t visible_q8)
+{
+ int32_t travel=hp_elastic_limit(e,hp_el1_cfg)*256;
+ int32_t shift=hp_evis_shift(visible_q8,travel);
+ int32_t span=hp_evis_span(shift)+13; /* dominate the card, not its label */
+ int32_t cy=y+(action_enabled?34:48);
+ /* Different colors for push, return and held; geometry remains legible
+  * in monochrome even if a theme provides similar RGB565 shades. */
+ uint16_t ink=e->paused?T_TEXT:
+              motion->phase==1u?T_ACCENT:
+              motion->phase==2u?T_THEME:
+              visible_q8!=e->x?T_THEME:T_MID; /* passive linked spring */
+ int32_t oldx=x+7,oldy=hp_evis_wave_y(cy,shift,0u);
+ for(uint32_t p=1u;p<=6u;p++){
+  int32_t nx=x+7+(span*(int32_t)p)/6;
+  int32_t ny=hp_evis_wave_y(cy,shift,p);
+  cv_line(oldx,oldy,nx,ny,ink);
+  oldx=nx;oldy=ny;
+ }
+ /* Head and its own relaxed anchor are different shapes, not just colours. */
+ cv_rect(x+7+span,cy+shift-1,3,3,ink);
+ if(e->paused){cv_rect(x+44,cy-3,1,6,T_TEXT);cv_rect(x+47,cy-3,1,6,T_TEXT);}
+}
+static void hp_elastic_draw_mark(int x,int y,uint16_t ink)
+{
+ /* Small eligibility / armed glyph; distinct from a moving large coil. */
+ cv_line(x,y+3,x+4,y,ink);cv_line(x+4,y,x+8,y+6,ink);
+ cv_line(x+8,y+6,x+12,y,ink);cv_line(x+12,y,x+16,y+3,ink);
+}
+static void hp_elastic_draw_track_arms(int y,uint16_t header_bg)
+{
+ uint32_t mask=hp_elastic_p1_armed_mask();
+ if(!mask)return;
+ static const char *const digits[4]={"1","2","3","4"};
+ cv_text(171,y+1,&AF_S,"E",header_bg==T_ACCENT?T_INK:T_ACCENT);
+ /* ELASTIC track badges remain legible on the selected accent header. */
+ for(uint32_t t=0;t<NTRK;t++){
+  int xx=182+(int)t*14,armed=!!(mask&(1u<<t));
+  uint16_t edge=t==song.sel?T_TEXT:armed?T_ACCENT:T_LINE;
+  uint16_t fill=armed?T_ACCENT:T_RAISE;
+  cv_rrect(xx,y,12,12,2,edge,header_bg);
+  cv_rrect(xx+1,y+1,10,10,2,fill,edge);
+  cv_text_in(xx,y,12,&AF_S,digits[t],armed?T_INK:T_MID,fill);
+ }
+}
+#endif
 static void hp_perf_cell(hp_ref_t r,uint32_t k,int y,int active)
 {
  int x=3+(int)k*59,h=active?72:28,hot=active&&ui.hot_t&&ui.hot_col==k;
 #if CARAVEL_ACTION_BANKS
  if(active&&action_enabled)h=52;
 #endif
- uint16_t bg=active?T_RAISE:T_SURF,edge=hot?T_TEXT:active?T_ACCENT:T_LINE;
+#if CARAVEL_ELASTIC_P1
+ int armed=active && hp_elastic_p1_card(r,k); /* never highlight inactive preview row */
+#else
+ int armed=0;
+#endif
+ uint16_t bg=active?T_RAISE:T_SURF,edge=hot?T_TEXT:armed?T_ACCENT:active?T_ACCENT:T_LINE;
+#if CARAVEL_ELASTIC_PLAYABLE
+ uint16_t armed_ink=T_ACCENT;
+ if(armed){
+  const hp_et_t *m=hp_el_scope?&hp_el_row_time[k]:&hp_el_cell_time;
+  armed_ink=m->phase==2u?T_THEME:m->phase==1u?T_ACCENT:T_TEXT;
+  edge=armed_ink;
+ }
+#endif
  cv_rrect(x,y,56,h,4,edge,T_BG);cv_rrect(x+1,y+1,54,h-2,3,bg,edge);cv_bg=bg;
+#if CARAVEL_ELASTIC_PLAYABLE
+ if(armed){
+  cv_rect(x+1,y+1,3,h-2,armed_ink); /* 3px phase-coded colored spine */
+  cv_rect(x+1,y+1,54,2,armed_ink); /* distinct cap / strong contrast */
+ }
+#else
+ if(armed)cv_rect(x+1,y+1,2,h-2,T_ACCENT);
+#endif
  const param_desc_t*d=r.kind?hp_desc(r):0;
+#if CARAVEL_ELASTIC_PLAYABLE
+ const int spring_eligible=active && action_enabled &&
+     action_bank==ACT_BANK_ELASTIC &&
+     hp_elastic_p1_ref_target(r,song.sel);
+ int spring_moving=0;
+ const hp_elastic_t *spring=0;
+ if(armed){
+  spring=hp_el_scope?&hp_er.spring[k]:&hp_el1.spring;
+  const hp_et_t *motion=hp_el_scope?&hp_el_row_time[k]:&hp_el_cell_time;
+  const int32_t visual_q8=hp_el_scope?hp_elastic_p13_row_x(song.sel,k):spring->x;
+  spring_moving=motion->phase!=0u||spring->paused||
+               (hp_el_scope&&hp_el_couple_live[song.sel]&&visual_q8!=0);
+ }
+#endif
  if(!d){cv_text_in(x,y+(active?23:6),56,active?&AF_M:&AF_S,r.kind?"UNAVAIL":"--",T_DIM,bg);return;}
  int foreign=r.kind==HP_GLOBAL||(r.track!=255&&hp_owner(r)!=song.sel);
- char val[24],line[32];const char*unit;int32_t value=hp_get(r);param_format(d,value,val,&unit);
+ char val[24],line[32];const char*unit;int32_t value=hp_get(r),stable=value;
+#if CARAVEL_ELASTIC_P1
+ if(armed){
+#if CARAVEL_ELASTIC_PLAYABLE
+  value=hp_el_scope?hp_elastic_p12_card_value(k,value):
+        hp_elastic_value(&hp_el1.spring);
+  stable=hp_elastic_p12_base_value(k,stable);
+#else
+  value=hp_elastic_value(&hp_el1.spring);
+#endif
+ }
+#endif
+ param_format(d,value,val,&unit);
  if(active){
   int label_y=2;
   if(foreign){perf_format(line,sizeof line,r.kind==HP_GLOBAL?"GLOBAL":"T%u",hp_owner(r)+1);cv_text(x+4,y+1,&AF_S,line,T_ACCENT);label_y=15;}
   const aafont_t*label=!foreign&&text_w(&AF_M,d->label)<=48?&AF_M:&AF_S;
   cv_free_text(x+4,y+label_y,label,d->label,T_TEXT,bg,48);
+#if CARAVEL_ELASTIC_PLAYABLE
+  if(armed){
+   cv_rect(x+47,y+2,5,5,armed_ink); /* colored armed-cell dot */
+   if(hp_elastic_p12_motion_owns(song.sel,hp_tid(r)))
+    cv_text_in(x+43,y+10,10,&AF_S,"M",T_TEXT,bg);
+    /* M: sequencer MOTION/step lock currently owns the audible value.
+     * The ELASTIC spring remains armed, but must not override that lock. */
+  }
+#endif
   const aafont_t*f=!foreign&&large_face_has(val)&&text_w(&AF_L,val)<=48?&AF_L:text_w(&AF_M,val)<=48?&AF_M:&AF_S;
 #if CARAVEL_ACTION_BANKS
   /* The original 28px readout would collide with the 52px compact gauge.
    * Use the firmware's 15px face only while ACTION is visible. */
   if(action_enabled)f=&AF_M;
 #endif
-  cv_free_text(x+4,y+(foreign?31:23),f,val,T_TEXT,bg,48);
+#if CARAVEL_ELASTIC_PLAYABLE
+  if(!spring_moving)
+#endif
+   cv_free_text(x+4,y+(foreign?31:23),f,val,T_TEXT,bg,48);
+#if CARAVEL_ELASTIC_PLAYABLE
+  /* A rotating knob temporarily restores precise readback during motion. */
+  if(spring_moving && spring && spring->touched &&
+     (uint32_t)(fm1_ms-spring->last_touch_ms)<500u)
+   cv_text_r(x+52,y+20,&AF_S,val,T_TEXT,bg);
+  if(spring_eligible && !spring_moving)
+   hp_elastic_draw_mark(x+7,y+(action_enabled?40:59),
+                         armed?armed_ink:T_MID);
+#endif
   #if CARAVEL_ACTION_BANKS
   if(action_enabled){
+#if CARAVEL_ELASTIC_PLAYABLE
+   if(unit&&!spring_moving)cv_text_r(x+52,y+35,&AF_S,unit,T_MID,bg);
+#else
    if(unit)cv_text_r(x+52,y+35,&AF_S,unit,T_MID,bg);
+#endif
   }else
 #endif
   if(unit)cv_text_r(x+52,y+53,&AF_S,unit,T_MID,bg);
+#if CARAVEL_ELASTIC_PLAYABLE
+  if(armed && spring_moving){
+   const hp_elastic_t *e=hp_el_scope?&hp_er.spring[k]:&hp_el1.spring;
+   const hp_et_t *motion=hp_el_scope?&hp_el_row_time[k]:&hp_el_cell_time;
+   int32_t visible_q8=hp_el_scope?
+       hp_elastic_p13_row_x(song.sel,k):e->x;
+   hp_elastic_draw_coil(x,y,e,motion,visible_q8);
+  }
+#endif
   if(d->max>d->min&&d->fmt!=F_ENUM){
    int32_t pos=clamp((value-d->min)*48/(d->max-d->min),0,48);
    int32_t zero=d->min<0&&d->max>0?(-d->min)*48/(d->max-d->min):0;
@@ -377,6 +533,13 @@ static void hp_perf_cell(hp_ref_t r,uint32_t k,int y,int active)
    cv_rect(x+4,y+gy,48,2,T_LINE);
    if(pos!=zero)cv_rect(x+4+(pos<zero?pos:zero),y+gy,pos<zero?zero-pos:pos-zero,2,T_ACCENT);
    if(zero)cv_rect(x+4+zero,y+gy-1,1,4,T_MID);
+#if CARAVEL_ELASTIC_PLAYABLE
+   if(armed){
+       int32_t tick=clamp((stable-d->min)*48/(d->max-d->min),0,48);
+       cv_rect(x+4+tick,y+gy-2,1,6,T_THEME); /* fixed anchor */
+       cv_rect(x+4+pos,y+gy-1,2,4,T_ACCENT);/* live position */
+   }
+#endif
   }
  }else{
   if(foreign){if(r.kind==HP_GLOBAL)perf_format(line,sizeof line,"G:%s",d->label);else perf_format(line,sizeof line,"T%u:%s",hp_owner(r)+1,d->label);}
@@ -495,8 +658,23 @@ static void hp_draw_home(void)
   uint16_t fill=active?T_ACCENT:T_SURF,ink=active?T_INK:T_MID;
   cv_rrect(3,y,234,active?14:12,3,fill,T_BG);cv_bg=fill;
   perf_format(title,sizeof title,"%s %u/%u",hp_row_name(h,row),row+1,h->count);cv_text(7,y,&AF_S,title,ink);
+#if CARAVEL_ELASTIC_PLAYABLE
+  /* Persistent across HOME/ACTION toggles and track switches; while SETUP
+   * is visible, its existing right-hand label takes precedence. */
+  if(active && !(action_enabled&&action_setup))
+   hp_elastic_draw_track_arms(y,fill);
+#endif
 #if CARAVEL_ACTION_BANKS
-  if(active&&action_enabled&&action_setup)cv_text_r(232,y,&AF_S,"SETUP",ink,fill);
+  if(active&&action_enabled&&action_setup){
+#if CARAVEL_ELASTIC_PLAYABLE
+   if(action_bank==ACT_BANK_ELASTIC){
+    char ts[16];perf_format(ts,sizeof ts,"T%u SETUP",song.sel+1u);
+    if(hp_el_setup_page)perf_format(ts,sizeof ts,"T%u PHYS",song.sel+1u);
+    cv_text_r(232,y,&AF_S,ts,ink,fill); /* selected track + active page */
+   }else
+#endif
+    cv_text_r(232,y,&AF_S,"SETUP",ink,fill);
+  }
 #endif
   for(uint32_t k=0;k<4;k++){
 #if CARAVEL_ACTION_BANKS
@@ -534,7 +712,42 @@ static void hp_draw_home(void)
     }
     hp_harm_status(status,sizeof status,0);
     cv_text_in(82,ya+22,155,&AF_S,status,T_TEXT,T_SURF);
-   }else {hp_sea(ya+2);if(!action_setup)hp_tracks(7,ya+22);{char hs[40];hp_harm_status(hs,sizeof hs,1);if(hs[0])cv_free_text(8,ya+74,&AF_S,hs,T_ACCENT,T_BG,230);}}   /* U08: HARMONY goes on in the other banks (under the panel: the strip above is the sea) */
+   }
+#if CARAVEL_ELASTIC_P1
+   else if(action_bank==ACT_BANK_ELASTIC){
+    char es[48];hp_elastic_p1_status(es,sizeof es);
+#if CARAVEL_ELASTIC_PLAYABLE
+    char detail[48];hp_elastic_p12_detail(detail,sizeof detail);
+    if(action_setup && hp_el_setup_page){
+     /* Small, seed-dependent, signed graph of the four visible ROW springs.
+      * COUPLE=0 draws muted links but does not affect sound; K4 SEED picks
+      * the pattern, K3 COUPLE controls its audible intensity. */
+     const int xx[4]={94,139,184,229};int yy[4];
+     uint32_t strength=hp_el_scope?hp_el_times.couple:0u;
+     uint32_t seed=hp_el_times.seed;
+     for(uint32_t i=0;i<4;i++){
+      /* SEED changes node heights AND signed links; all within 34px. */
+      int32_t w=hp_ec_weight(seed,i,(i+1u)&3u);
+      yy[i]=ya+16+w/12;
+     }
+     for(uint32_t i=0;i<4;i++)for(uint32_t j=i+1;j<4;j++){
+      int32_t w=hp_ec_weight(seed,i,j);
+      cv_line(xx[i],yy[i],xx[j],yy[j],
+              !strength?T_LINE:w>0?T_ACCENT:T_THEME);
+     }
+     for(uint32_t i=0;i<4;i++){
+      cv_rect(xx[i]-2,yy[i]-2,5,5,strength?T_TEXT:T_MID);
+     }
+    }else{
+     cv_text_in(77,ya+7,159,&AF_S,es,T_TEXT,T_SURF);
+     cv_text_in(77,ya+22,159,&AF_S,detail,T_ACCENT,T_SURF);
+    }
+#else
+    cv_text_in(77,ya+14,159,&AF_S,es,T_TEXT,T_SURF);
+#endif
+   }
+#endif
+   else {hp_sea(ya+2);if(!action_setup)hp_tracks(7,ya+22);{char hs[40];hp_harm_status(hs,sizeof hs,1);if(hs[0])cv_free_text(8,ya+74,&AF_S,hs,T_ACCENT,T_BG,230);}}   /* U08: HARMONY goes on in the other banks (under the panel: the strip above is the sea) */
   }
   #if FELUCCA_RANDOM_MORPH
   #endif
@@ -553,6 +766,21 @@ static void hp_draw_home(void)
    #endif
    #endif
    if(action_bank==ACT_BANK_HARMONY && k==0u && harmony_hold)label=harmony_pending==H_RESUME?"QUEUED":"RESUME";
+#if CARAVEL_ELASTIC_P1
+   if(action_bank==ACT_BANK_ELASTIC){
+#if CARAVEL_ELASTIC_PLAYABLE
+    if(action_setup && k==3u)label=hp_el_setup_page?"< TIMES":"PHYS >";
+    else
+#endif
+    if(k==0u)label=hp_el1.on?"OFF":"ARM";
+#if CARAVEL_ELASTIC_PLAYABLE
+    if(k==1u)label="PULSE";
+    if(k==2u)label=hp_elastic_p12_isheld()?"RESUME":"HOLD";
+#else
+    if(k==2u)label=hp_el1.spring.paused?"RESUME":"HOLD";
+#endif
+   }
+#endif
    int kx=7+(int)k*57;cv_rrect(kx,ky,54,30,4,T_RAISE,T_SURF);
    const aafont_t*f=text_w(&AF_M,label)<=48?&AF_M:&AF_S;
    cv_text_in(kx,ky+(30-(f==&AF_M?15:12))/2,54,f,label,T_TEXT,T_RAISE);

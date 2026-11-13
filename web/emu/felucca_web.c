@@ -531,6 +531,18 @@ EXPORT void web_test_drone(uint32_t preset)
     host_preset(&trk[0], ENGI_DRONE, preset);
     ui.force = 1;
 }
+/* Local preview helper: prepare any track for the playable-row experiment. */
+EXPORT void web_p12_demo_track(uint32_t t)
+{
+    if (t >= NTRK) return;
+    host_preset(&trk[t], ENGI_DRONE, 0);
+#if FELUCCA_HOME_PERF
+    hp_apply(t, 1);
+    hp.track[t].active = 0;
+    hp.track[t].count = 1;
+#endif
+    ui.force = 1;
+}
 EXPORT uint32_t web_test_project_used(uint32_t i) { return i < 4u && project_used(i); }
 EXPORT uint32_t web_test_project_ram_mask(void) { return project_ram_mask(); }
 EXPORT void web_test_live_load_mode(uint32_t full) { menu_put(MI_LIVELOAD, !!full); }
@@ -561,6 +573,62 @@ EXPORT uint32_t web_test_fx_edge(uint32_t on)
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }
+#if CARAVEL_ELASTIC_P1 && CARAVEL_ELASTIC_PLAYABLE
+/* Read-only emulator diagnostics: validate actual firmware ELASTIC ownership
+ * and fractional spring travel, not merely "some pixels changed". */
+EXPORT uint32_t web_p12_armed_mask(void)
+{
+    return hp_elastic_p1_armed_mask();
+}
+/* Debug-only queries and track selection for exact compiled WASM testing.
+ * Real HOME/SETUP knob callbacks still perform every configuration edit. */
+EXPORT void web_p12_test_select_track(uint32_t t)
+{
+    if(t<NTRK){song.sel=t;ui.force=1;}
+}
+EXPORT uint32_t web_p12_scope_track(uint32_t t)
+{ return t<NTRK?hp_el_scope_track[t]:0xFFFFFFFFu; }
+EXPORT uint32_t web_p12_pull_track_ms(uint32_t t)
+{ return t<NTRK?hp_et_ms(hp_el_times_track[t].pull):0xFFFFFFFFu; }
+EXPORT uint32_t web_p12_return_track_ms(uint32_t t)
+{ return t<NTRK?hp_et_return_ms(hp_el_times_track[t].back):0xFFFFFFFFu; }
+EXPORT uint32_t web_p12_range_track(uint32_t t)
+{ return t<NTRK?hp_el_cfg_track[t].range:0xFFFFFFFFu; }
+/* P1.3 debug-only readbacks: UI uses the real SETUP page callbacks. */
+EXPORT uint32_t web_p13_bounce_track(uint32_t t)
+{ return t<NTRK?hp_el_times_track[t].bounce:0xFFFFFFFFu; }
+EXPORT uint32_t web_p13_effective_bounce_track(uint32_t t)
+{ return t<NTRK?hp_ec_cycles(hp_el_times_track[t].bounce,
+          hp_et_return_ms(hp_el_times_track[t].back)):0xFFFFFFFFu; }
+EXPORT uint32_t web_p13_reflect_track(uint32_t t)
+{ return t<NTRK?hp_el_times_track[t].reflect:0xFFFFFFFFu; }
+EXPORT uint32_t web_p13_couple_track(uint32_t t)
+{ return t<NTRK?hp_el_times_track[t].couple:0xFFFFFFFFu; }
+EXPORT uint32_t web_p13_seed_track(uint32_t t)
+{ return t<NTRK?hp_el_times_track[t].seed:0xFFFFFFFFu; }
+EXPORT uint32_t web_p13_setup_page(void)
+{ return hp_el_setup_page; }
+EXPORT void web_p13_test_reset_settings(void) { hp_elastic_p1_init(); }
+EXPORT uint32_t web_p13_test_project_save(void) { return (uint32_t)hp_project_save(0u,0); }
+EXPORT uint32_t web_p13_test_project_load(void) { return (uint32_t)hp_project_load(0u); }
+/* WASM test proves the exact compiled control-time maps, independent of
+ * cached screenshots or test-only native model assumptions. */
+EXPORT uint32_t web_p12_pull_ms(uint32_t knob){return hp_et_ms(knob);}
+EXPORT uint32_t web_p12_return_ms(uint32_t knob){return hp_et_return_ms(knob);}
+EXPORT int32_t web_p12_coil_shift(uint32_t track,uint32_t slot)
+{
+    if(track>=NTRK||slot>=HP_ER_MAX || !hp_el1_track[track].on)
+        return 0;
+    const hp_elastic_t *e=0;
+    if(hp_el_scope_track[track] && (hp_er_track[track].valid&(1u<<slot)))
+        e=&hp_er_track[track].spring[slot];
+    else if(!hp_el_scope_track[track] && !hp_el_pick_track[track] &&
+            hp_el1_track[track].slot==slot)
+        e=&hp_el1_track[track].spring;
+    if(!e)return 0;
+    return hp_evis_shift(e->x,hp_elastic_limit(e,hp_el_cfg_track[track])*256);
+}
+#endif
 #if CARAVEL_ACTION_BANKS
 /* Test-only visibility for real WASM keyboard, project and display integration. */
 EXPORT uint32_t web_action_state(void) {

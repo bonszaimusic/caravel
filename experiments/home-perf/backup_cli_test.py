@@ -48,7 +48,8 @@ try:
   cap=bytearray(7200);struct.pack_into("<6I",cap,0,0x314D5048,version,7200,1,0,0);struct.pack_into("<II",cap,24,len(payload),rawlen);cap[3872:3872+len(payload)]=payload
   struct.pack_into("<I",cap,16,b.fnv(bytes(cap[32:])));struct.pack_into("<I",cap,20,b.fnv(bytes(cap[:20])));return bytes(cap)
  b.validate(2,hpm(3,5558));b.validate(2,hpm(2,5518))
- for version,rawlen in ((3,5518),(2,5558),(4,5558)):
+ b.validate(2,hpm(4,5594));b.validate(2,hpm(5,5594))      # 0.13.0 ELASTIC capsules (v3 block + 4 x 9 bytes): backed up and restored as opaque bytes
+ for version,rawlen in ((3,5518),(2,5558),(4,5558),(5,5558),(3,5594),(4,5518),(6,5594)):
   try:b.validate(2,hpm(version,rawlen))
   except ValueError:pass
   else:raise AssertionError(f'HPM1 version {version} with a raw length of {rawlen} accepted')
@@ -64,5 +65,5 @@ try:
  s=SampleClient();s.sample(32,sample);assert s.calls[0]==(14,b'\0') and s.calls[-1][0]==13
  data=b''.join(b.unpack(args[4:]) for cmd,args in s.calls if cmd==12);assert data==audio
  assert b.unpack(s.calls[-1][1][1:])==hdr
- print('USB client: real C LIST/GET/PUT, complete HPM1 slot/WORK roundtrips, 13-object ZIP with CRC, native projects, format-2 and format-3 capsules, corrupt HPM/ZIP rejection and sample header-last wire format passed.')
+ print('USB client: real C LIST/GET/PUT, complete HPM1 slot/WORK roundtrips, 13-object ZIP with CRC, native projects, format-2 to format-5 capsules, corrupt HPM/ZIP rejection and sample header-last wire format passed.')
 finally:link.close()

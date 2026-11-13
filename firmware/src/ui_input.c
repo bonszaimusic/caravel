@@ -1726,6 +1726,9 @@ static void ui_input(void)
     hp_rm_poll(fm1_ms);
     hp_journey_poll(fm1_ms);
 #endif
+#if CARAVEL_ELASTIC_P1
+    hp_elastic_p1_poll(fm1_ms);
+#endif
 #endif
 #if FELUCCA_HOME_PERF
     if(hp_combo_pending){

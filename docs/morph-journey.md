@@ -11,7 +11,7 @@ DEPTH, SCOPE, SHAPE, WAIT, direction); the running journey itself (PLAY/PAUSE, t
 
 1. **Save snapshots in RANDOM** (HOME with ACTION on): set the sound, hold **A4** to save it into the selected slot; tap **A4** to move to
    the next slot, change the sound, hold A4 again. You need two to four snapshots **on the selected track** (see *Every track has its own slots* below).
-2. **Tap BANK once in RANDOM: JOURNEY is the bank right after it** (the order is RANDOM, JOURNEY, STASIS, PAIR, LIVE). The chip names the bank; on the sea chart the caravel is the journey: it sails from buoy to buoy while a leg moves and lies at anchor when the journey is off, waiting (`WAIT`), paused or held.
+2. **Tap BANK once in RANDOM: JOURNEY is the bank right after it** (the order is RANDOM, JOURNEY, HARM, STASIS, ELASTIC, PAIR, LIVE: HARM since 0.12.0, ELASTIC since 0.13.0). The chip names the bank; on the sea chart the caravel is the journey: it sails from buoy to buoy while a leg moves and lies at anchor when the journey is off, waiting (`WAIT`), paused or held.
 3. **A1 PLAY** starts: the sound morphs to the selected snapshot, rests, moves on to the next populated slot and loops
    (S1 → S2 → S3 → S1 …). Every leg starts from the values the sound has at that moment, so nothing jumps.
 
@@ -88,7 +88,7 @@ with its own phase, length and rests; the keys, the A4 label and the sea chart a
   below the hull) while the journey is off, waits, is paused or held, or no morph runs. A RANDOM morph or a GO to a slot also sets it sailing. The
   buoys are S1 to S4 of the selected track: filled when its slot holds a sound. The chip on the left names the bank (or `SETUP`).
   Messages (`SNAP S1 SAVED`, `JOURNEY STOPPED` ...) appear in the top bar as before.
-- **The journey keeps running when you change bank**, so STASIS, PAIR and LIVE stay usable meanwhile.
+- **The journey keeps running when you change bank**, so STASIS, ELASTIC, PAIR and LIVE stay usable meanwhile.
 - **Hands and controllers win.** A parameter you turn, or set from a MIDI CC, keeps its value for the rest of the leg; the next leg
   moves it again.
 - **The JOURNEY bank has its own SETUP** (hold BANK there, see below). An open SETUP stays open when you change bank, so JOURNEY shows its own. Leg length and curve are RANDOM's BARS and SHAPE of the track.

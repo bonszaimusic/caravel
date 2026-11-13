@@ -1176,6 +1176,13 @@ static void load_begin(track_t *t, uint32_t what)
 {
     uint32_t i = trk_index(t);
     if (what & UNDO_SOUND) {
+#if CARAVEL_ELASTIC_P1 && FELUCCA_HOME_PERF
+#if CARAVEL_ELASTIC_PLAYABLE
+        if(hp_elastic_p1_targets_track(i))hp_elastic_p1_clear_track(i);
+#else
+        if(hp_elastic_p1_targets_track(i))hp_elastic_p1_clear();
+#endif
+#endif
         mom_back(t);                              /* (MOMENTARY: the sound as it was, then the load) */
         drum_mute[i] = 0;                         /* (1.4.1: the lanes' mutes go with the sound) */
     }

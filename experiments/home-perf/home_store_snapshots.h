@@ -1,7 +1,19 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Bounded main-loop codec. A failed fit never reaches a flash erase. */
 #if HP_SNAPSHOT_STORE
-#define HP_RAW_META (HP_HW_META+sizeof hp_rm_snap)
+/* v3 bytes remain unchanged for old projects. v4/v5 append ELASTIC's
+ * selected-track settings, never the transient spring positions/arms.
+ * In production builds with ELASTIC disabled, keep the v3 writer. */
+#define HP_RAW_META_V3 (HP_HW_META+sizeof hp_rm_snap)
+#if CARAVEL_ELASTIC_P1 && CARAVEL_ELASTIC_PLAYABLE
+#define HP_EL_PROJECT 1
+#define HP_EL_PERSIST_BYTES (NTRK*9u)
+#define HP_RAW_META (HP_RAW_META_V3+HP_EL_PERSIST_BYTES)
+#else
+#define HP_EL_PROJECT 0
+#define HP_EL_PERSIST_BYTES 0u
+#define HP_RAW_META HP_RAW_META_V3
+#endif
 _Static_assert(HP_V2_SIZE<=sizeof(hp_store_t),"v2 exceeds existing USB staging");
 _Static_assert(HP_RAW_META<=8192u,"review codec stack before enlarging snapshot state");
 /* Literal 0..127: 1..128 bytes. Match 128..255: 3..130 bytes,
@@ -79,6 +91,61 @@ static int hp_ps_valid(hp_snaps_t s)
 }
 #define HP_PS_DEFAULT_WORD (HP_PS_PRESENT|3u|(2u<<3)|((1u|(1u<<2))<<8))   /* BARS 8, DEPTH 35, TRACK, SMOOTH; WAIT 0, forward */
 static uint32_t hp_ps_idx(const uint8_t*tab,uint32_t n,uint32_t v,uint32_t fallback){for(uint32_t i=0;i<n;i++)if(tab[i]==v)return i;return fallback;}
+#if HP_EL_PROJECT
+/* Version-4/5 ELASTIC record: nine bytes per track, no host padding/endianness.
+ * scope/pull/back/range/bounce(u16 LE)/reflect/couple/seed.
+ * All input values validated before any project runtime/state is changed. */
+static void hp_el_persist_pack(uint8_t *dst,uint32_t live)
+{
+ for(uint32_t t=0;t<NTRK;t++){
+  hp_et_cfg_t p=live?hp_el_times_track[t]:HP_ET_DEFAULT;
+  hp_elastic_cfg_t c=live?hp_el_cfg_track[t]:HP_ELASTIC_DEFAULT;
+  uint32_t scope=live?hp_el_scope_track[t]:0u;
+  uint8_t *q=dst+9u*t;
+  q[0]=(uint8_t)scope;q[1]=p.pull;q[2]=p.back;
+  q[3]=c.range;q[4]=(uint8_t)p.bounce;q[5]=(uint8_t)(p.bounce>>8);
+  q[6]=p.reflect;q[7]=p.couple;q[8]=p.seed;
+ }
+}
+static int hp_el_persist_valid(const uint8_t *src,uint32_t version)
+{
+ for(uint32_t t=0;t<NTRK;t++){
+  const uint8_t *q=src+9u*t;
+  uint32_t b=(uint32_t)q[4]+((uint32_t)q[5]<<8);
+  uint32_t sync=hp_es_is_sync((uint16_t)b);
+  if(q[0]>1u||q[1]>100u||q[2]>(version>=5u?HP_ES_RETURN_INF:100u)||
+     q[3]>100u||q[6]>100u||q[7]>100u)return 0;
+  if(version==4u && (sync||b<1u||b>HP_EC_BOUNCE_MAX))return 0;
+  if(version>=5u && !sync && (b<1u||b>HP_EC_BOUNCE_MAX))return 0;
+  if(q[2]==HP_ES_RETURN_INF && !sync)return 0;
+ }
+ return 1;
+}
+static void hp_el_persist_apply(const uint8_t*src)
+{
+ for(uint32_t t=0;t<NTRK;t++){
+  const uint8_t *q=src+9u*t;
+  hp_el_scope_track[t]=q[0];
+  hp_el_times_track[t].pull=q[1];
+  hp_el_times_track[t].back=q[2];
+  hp_el_cfg_track[t].range=q[3];
+  hp_el_times_track[t].bounce=(uint16_t)((uint32_t)q[4]|(uint32_t)q[5]<<8);
+  hp_el_times_track[t].reflect=q[6];
+  hp_el_times_track[t].couple=q[7];
+  hp_el_times_track[t].seed=q[8];
+  /* Start quiet even when a saved project had nonzero COUPLE.
+   * Fresh performance arms and gestures use saved settings. */
+  hp_el_couple_live[t]=0u;hp_el_couple_clock[t]=fm1_ms;
+ }
+ hp_el_setup_page=0u;
+}
+static uint32_t hp_el_persist_sig(void)
+{
+ uint8_t raw[HP_EL_PERSIST_BYTES];
+ hp_el_persist_pack(raw,1u);
+ return hp_hash(raw,sizeof raw);
+}
+#endif
 static uint32_t hp_ps_word(void)                      /* byte 0 and 1: the settings pad bytes */
 {
  uint16_t pend;uint8_t val[HP_JVN];
@@ -193,11 +260,24 @@ static int hp_meta_valid(const uint8_t*b,uint32_t version)
  const hp_pair_store_t*p=(const void*)(b+HP_HW_PAIR);
  if(p->on>1||p->motion>1||p->base<0||(p->on&&(p->a>=4||p->b>=4||p->a==p->b)))return 0;
  for(uint32_t i=0;i<NSTEP;i++)if(p->lane[i]< -1)return 0;
- return version==2u?hp_snapshots_valid_v2((const void*)(b+HP_HW_META)):hp_snapshots_valid((hp_snaps_t)(const void*)(b+HP_HW_META));
+ if(version==2u)return hp_snapshots_valid_v2((const void*)(b+HP_HW_META));
+ if(!hp_snapshots_valid((hp_snaps_t)(const void*)(b+HP_HW_META)))return 0;
+#if HP_EL_PROJECT
+ if((version==4u||version==5u) && !hp_el_persist_valid(b+HP_RAW_META_V3,version))return 0;
+#endif
+ return 1;
 }
 static int hp_v2_decode(const hp_store_t*p,uint8_t*raw)
 {
- return (p->version==2||p->version==3)&&p->size==HP_V2_SIZE&&p->reserved[1]>0&&p->reserved[1]<=HP_V2_META&&p->reserved[2]==(p->version==2?HP_RAW_META_V2:HP_RAW_META)&&hp_unzip(raw,p->reserved[2],(const uint8_t*)&p->model,p->reserved[1])&&hp_meta_valid(raw,p->version);
+ return (p->version==2||p->version==3
+#if HP_EL_PROJECT
+ ||p->version==4||p->version==5
+#endif
+ )&&p->size==HP_V2_SIZE&&p->reserved[1]>0&&p->reserved[1]<=HP_V2_META&&
+ p->reserved[2]==(p->version==2?HP_RAW_META_V2:
+                   p->version==3?HP_RAW_META_V3:HP_RAW_META)&&
+ hp_unzip(raw,p->reserved[2],(const uint8_t*)&p->model,p->reserved[1])&&
+ hp_meta_valid(raw,p->version);
 }
 static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_t*pair,hp_snaps_t snaps)
 {
@@ -209,9 +289,14 @@ static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_
  if(live){hp_pair_capture(&captured);pair=&captured;}
  hp_meta_pack(raw,m,pair);if(snaps)memcpy(raw+HP_HW_META,snaps,sizeof hp_rm_snap);else memset(raw+HP_HW_META,0,sizeof hp_rm_snap);
  if(snaps==hp_rm_snap)hp_ps_pack((hp_rm_snap_t(*)[HP_RM_SNAP_SLOTS])(void*)(raw+HP_HW_META));   /* the live project: its performance settings go with the snapshots */
+#if HP_EL_PROJECT
+ hp_el_persist_pack(raw+HP_RAW_META_V3,snaps==hp_rm_snap);
+#endif
  if(live)for(uint32_t t=0;t<NTRK;t++){uint32_t v=hp_take(raw+2*t,2);hp_put(raw+2*t,(v&1023u)|(uint32_t)trk[t].user<<10,2);}
  perf_irq_restore(irq);
- if(!hp_meta_valid(raw,3u))return 0;
+ /* Validate the version we WRITE, including the P1.3 extension.
+  * Validating as v3 would allow an invalid v4 capsule that cannot LOAD. */
+ if(!hp_meta_valid(raw,HP_EL_PROJECT ? 5u : 3u))return 0;
  return hp_zip(out,HP_V2_META,raw,sizeof raw);
 }
 #endif

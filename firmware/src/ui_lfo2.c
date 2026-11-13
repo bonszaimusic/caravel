@@ -241,97 +241,6 @@ static void slicer_block(const track_t *t)
     }
     cv_blit(0, Y_LABEL + 90u);
 }
-/* SCL: the 12 keys (black keys high, white keys low): in the scale THEME, the root the accent, out of the scale RAISE */
-static void scale_block(const track_t *t)
-{
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint32_t i, mask = scale_mask(t);
-    char ti[16];
-    str_cpy(ti, N_NOTE[(uint32_t)t->p[P_ROOT] % 12u], 4);
-    str_cpy(ti + str_len(ti), " ", 4);
-    str_cpy(ti + str_len(ti), N_SCALE[clamp(t->p[P_SCALE], 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1)], 8);
-    block_begin(ti, 0, T_MID);
-    for (i = 0; i < 12u; i++) {
-        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
-        int32_t x = 13 + (int32_t)i * 18;
-        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : T_THEME) : T_RAISE;
-        cv_rrect(x + 3, BLACK[i] ? 26 : 44, 10, BLACK[i] ? 26 : 31, 3, col, T_SURF);
-    }
-    cv_blit(0, Y_LABEL + 90u);
-}
-/* CHORD: two lanes. Above, what the keys play: with DIA3 / DIA7 the chord on each note of the scale (name on a cell, the one played last
- * in the accent colour); with the other shapes every key plays that shape, said in a line. Below, the last chord (its name is the block's
- * title): the keys from the C below its lowest note (two octaves, three for a wide chord), its notes THEME, its root the accent. */
-static void chord_block(const track_t *t)
-{
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint8_t nn[CHORD_MAX], tmp[CHORD_MAX];
-    uint32_t n, i, j, k = trk_index(t), lo, cnt, w, mode = (uint32_t)t->p[P_CHRD];
-    int32_t r;
-    uint16_t mask;
-    char b[12];
-    const char *cap = "LAST";
-    if (!mode || chord_kit(t)) {
-        block_begin(mode ? "NO CHORDS ON KITS" : "CHORD KEYS OFF", 0, T_MID);
-        if (!mode)
-            cv_text_in(5, 40, 230, &AF_S, "K1: DIA3 PLAYS IN-KEY CHORDS", T_MID, T_SURF);
-        cv_blit(0, Y_LABEL + 90u);
-        return;
-    }
-    if (chord_last[k].n) {
-        r = chord_last[k].root;
-        mask = chord_last[k].mask;
-        n = chord_last[k].n;
-        for (i = 0; i < n; i++)
-            nn[i] = chord_last[k].note[i];
-    } else {
-        n = chord_make(t, (uint32_t)(60 + t->p[P_ROOT]), nn, &r, &mask);
-        cap = "ON ROOT";
-    }
-    if (trk_vmode(t) != V_POLY)
-        cap = "ROOT ONLY";                              /* MONO / LEGATO / UNISON */
-    chord_name(b, (uint32_t)r, mask);
-    block_begin(b, cap, T_MID);
-    if (mode == CH_DIA3 || mode == CH_DIA7) {           /* the chord of each scale note, from the ROOT up */
-        uint32_t sm = scale_mask(t), nd = 0, deg[12];
-        if (sm == 0xFFFu)
-            sm = SCALE_MASK[1];                         /* CHR: the major scale of ROOT (as chord.c) */
-        for (i = 0; i < 12u; i++)
-            if ((sm >> i) & 1u)
-                deg[nd++] = i;
-        w = 216u / nd;
-        for (i = 0; i < nd; i++) {
-            int32_t cr;
-            uint16_t cm;
-            char nm[12];
-            int32_t cx = 12 + (int32_t)(i * w + w / 2u), tw, y = 23 + (int32_t)(i & 1u) * 13;   /* (alternate cells on two rows: room for "Bm7b5") */
-            int hit = chord_last[k].n && chord_last[k].root % 12u == (uint32_t)(t->p[P_ROOT] + (int32_t)deg[i] + 120) % 12u;
-            chord_make(t, 60u + ((uint32_t)t->p[P_ROOT] + deg[i]) % 12u, tmp, &cr, &cm);
-            chord_name(nm, (uint32_t)cr, cm);
-            tw = text_w(&AF_S, nm);
-            cv_text_on(cx - tw / 2, y + 1, &AF_S, nm, hit ? T_ACCENT : T_TEXT, T_SURF);
-            if (hit)
-                cv_rect(cx - tw / 2, y + 13, tw, 2, T_ACCENT);
-        }
-    } else {
-        char ln[24];
-        str_cpy(ln, "EVERY KEY: ", 16);
-        str_cpy(ln + str_len(ln), N_CHRD[clamp(mode, 0, 9)], 8);
-        cv_text_in(5, 25, 230, &AF_S, ln, T_MID, T_SURF);
-    }
-    lo = nn[0] - nn[0] % 12u;
-    cnt = nn[n - 1u] - lo < 24u ? 24u : 36u;
-    w = 216u / cnt;
-    for (i = 0; i < cnt; i++) {
-        uint32_t note = lo + i, on = 0;
-        int32_t x = 13 + (int32_t)(i * w);
-        for (j = 0; j < n; j++)
-            on |= nn[j] == note;
-        cv_rrect(x, BLACK[note % 12u] ? 54 : 62, (int32_t)w - 2, BLACK[note % 12u] ? 10 : 14, w > 6u ? 3 : 2,
-                 !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : T_THEME, T_SURF);
-    }
-    cv_blit(0, Y_LABEL + 90u);
-}
 /* HARMONY ROOTS card col: val gets the name of the chord the slot PREPARES (its root and that root's own quality, from the
  * shared description in seq.c, never mixed with the shifted live chord). The returned unit line: nothing, or with SHIFT
  * "PREP" (and on the slot that sounds now "LIVE" plus the shifted chord) so the names cannot be read as the sounding ones. */
@@ -442,15 +351,8 @@ static void lfo_cards(const page_t *pg)
     if(rps[1] && rps[1]->graph==GR_STLAYER)
         sig=sig*33u+st_layer.phase+st_layer.request*8u+st.auto_hold*32u+st.releasing*64u+st.stopping*128u;
 #endif
-    if (dd->kind == DK_GRAPH && str_eq(dd->top, "CHORD")) {      /* the chord's notes: the last one played */
-        uint32_t k = trk_index(TSEL);
-        sig = sig * 33u + chord_last[k].n * 131u + chord_last[k].mask * 7u + (uint32_t)chord_last[k].root + trk_vmode(TSEL) * 977u +
-              (uint32_t)TSEL->p[P_ROOT] * 31u;
-    }
     if (str_eq(dd->top, "SCL"))                            /* the CHRD card's LOCAL DIA3 note follows the bus switches */
         sig = sig * 33u + harmony_on * 3u + harmony_follow[song.sel] * 7u;
-    if (dd->kind == DK_GRAPH && str_eq(dd->top, "SCL"))
-        sig = sig * 33u + scale_mask(TSEL) + (uint32_t)TSEL->p[P_ROOT] * 31u;
     if (dd->kind == DK_GRAPH && str_eq(dd->top, "SLICER"))   /* the graph: the pattern, the mode, the rate, the depth, the playing step */
         sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
               (uint32_t)TSEL->p[P_SLRATE] * 7919u + (uint32_t)TSEL->p[P_SLPAT] * 31337u + sl[TSEL - trk].idx * 977u;
@@ -466,12 +368,7 @@ static void lfo_cards(const page_t *pg)
         int active = row == bottom;
         int32_t y = 0;
         if (dd->kind == DK_GRAPH && row) {
-            if (str_eq(dd->top, "SLICER"))
-                slicer_block(TSEL);
-            else if (str_eq(dd->top, "SCL"))
-                scale_block(TSEL);
-            else
-                chord_block(TSEL);
+            slicer_block(TSEL);                            /* (DK_GRAPH is SLICER's alone) */
             continue;
         }
         /* Two small blits reuse the existing canvas instead of increasing pool RAM. */

@@ -64,6 +64,19 @@ static int hp_auto_undo_swap(track_t *t);
 static void hp_motion_stop(void);
 static void hp_midi(track_t *t, uint32_t id, uint32_t value);
 static void hp_midi_touch(uint32_t kind, uint32_t track, uint32_t id);
+#if CARAVEL_ELASTIC_P1
+static void hp_elastic_p1_init(void);
+static void hp_elastic_p1_clear(void);
+#if CARAVEL_ELASTIC_PLAYABLE
+static void hp_elastic_p1_clear_track(uint32_t track);
+static void hp_elastic_p1_clear_current(void);
+#endif
+static void hp_elastic_p1_manual(uint32_t track,uint32_t id);
+static void hp_elastic_p1_poll(uint32_t now);
+/* ui.c is compiled before home_ui.c (which includes the controller header):
+ * keep its one load-time query behind this accessor. */
+static int hp_elastic_p1_targets_track(uint32_t track);
+#endif
 static const param_desc_t *hp_vdesc(uint32_t id);
 static int hp_project_save(uint32_t slot, const char *name);
 static int hp_project_load(uint32_t slot);

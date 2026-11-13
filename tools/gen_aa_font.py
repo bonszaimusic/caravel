@@ -81,12 +81,13 @@ def parse_face(s):
 HC_MAXLEN = 15
 
 
-def huff_symbols(v):
-    """a glyph's alpha values -> symbols (count - 1) << 4 | value: runs of 1..16 zeros or 15s, single others"""
+def huff_symbols(v, runs=(0, 15)):
+    """a glyph's alpha values -> symbols (count - 1) << 4 | value: runs of 1..16 of the values in runs (zeros and 15s;
+    the keycaps' fill is 5, gen_aa_keycaps.py), single others"""
     out, i = [], 0
     while i < len(v):
         j = i + 1
-        if v[i] in (0, 15):
+        if v[i] in runs:
             while j < len(v) and v[j] == v[i] and j - i < 16:
                 j += 1
         out.append((j - i - 1) << 4 | v[i])
@@ -112,9 +113,9 @@ def huff_lengths(count):
     return length
 
 
-def huff_pack(glyph_values):
+def huff_pack(glyph_values, runs=(0, 15)):
     """[alpha values per glyph] -> (hc table bytes, [bytes per glyph]): canonical Huffman, MSB first"""
-    syms = [huff_symbols(v) for v in glyph_values]
+    syms = [huff_symbols(v, runs) for v in glyph_values]
     count = {}
     for g in syms:
         for s in g:

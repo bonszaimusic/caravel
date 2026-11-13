@@ -79,7 +79,7 @@ static uint32_t mod_param(uint32_t d)
     return MD_ENGINE(d) ? P_E0 + d - MD_E1 : ID[d];
 }
 
-typedef struct {                 /* a part's, while mix_part renders it (one per part: two cores render at once, fx.c mix_block) */
+typedef struct {                 /* a part's, while mix_part renders it (one per core: two cores render at once, fx.c mix_block; C1_CI) */
     uint8_t on;                  /* a slot is active: track_render calls mod_voice */
     uint8_t amp;                 /* an AMP slot: the voice gain applies */
     uint8_t nv, nk;              /* voice terms, per-block parameters held */
@@ -91,13 +91,14 @@ typedef struct {                 /* a part's, while mix_part renders it (one per
     int16_t keep[NMSLOT];
 } modw_t;
 #if FELUCCA_CPU2
-static modw_t mod_w[NTRK];
-#define MOD(t) (mod_w[C1_PI(t)])
+static modw_t mod_w[C1_NS];
+#define MOD(t) (mod_w[C1_CI(t)])
+#define MOD_W_CLEAR() memset(mod_w, 0, sizeof mod_w)   /* (the host tests: every copy) */
 #else
 static modw_t mod;               /* (one core: the one of 1.6, the same code) */
 #define MOD(t) mod
+#define MOD_W_CLEAR() memset(&mod, 0, sizeof mod)
 #endif
-#define MOD_W_CLEAR() memset(&MOD(&trk[0]), 0, C1_NP * sizeof(modw_t))   /* (the host tests: every part's) */
 
 static uint32_t mod_seed = 0x2545F491u;
 static int16_t mod_rand(void)    /* RAND of a note-on: xorshift32, bipolar */
