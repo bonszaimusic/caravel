@@ -344,3 +344,4 @@ Instruments.
 Copyright (C) 2026 bonszaimusic (Caravel and its changes to Felucca)<br>
 Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca 1.6.1, the base of this work)
 
+You can also try Caravel in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
