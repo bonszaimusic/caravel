@@ -12,6 +12,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef __APPLE__
+/* The target's ELF pool section has no Mach-O equivalent in this host test. */
+#define __attribute__(x)
+#endif
 #define FS 44100
 #define CTL 128
 #define CARAVEL_AUDIO_HOT
@@ -72,6 +76,8 @@ int main(void)
     }
     assert(at5 > 0.01 && at30 > 0.0001);
     assert(at30 < at5 && at60 < at30);
+    assert(afb.al1 == 0 && afb.al2 == 0 && afb.ar1 == 0 && afb.ar2 == 0);
+    assert(at60 < 1.0); /* no amplified DC input from lowpass rounding */
     double diff = 20.0 * log10((at60 + 1e-12) / at5);
     printf("Afterburner: RT60=60s DAMP=70, internal tail 5s %.3f, 30s %.3f, 60s %.3f, 5->60s %.1fdB\n",
            at5, at30, at60, diff);

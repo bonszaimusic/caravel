@@ -83,6 +83,14 @@ static struct {
     uint8_t phase, active, clearing;
 } afb;
 
+/* Round toward the input on both signs. An arithmetic right shift leaves
+ * negative lowpass states stuck a few units below zero after silence; the
+ * near-unity 60s feedback then amplifies that constant DC input. */
+static inline int32_t afb_input_step(int32_t delta)
+{
+    return delta >= 0 ? (delta + 3) / 4 : -((-delta + 3) / 4);
+}
+
 /* Multiply Q12 feedback error by alpha/Q15 using 32-bit pieces.
  * The low 16 bits of a signed two's-complement difference are positive
  * after the high part has taken the sign: exact to 1 Q12 unit, no int64
@@ -168,10 +176,10 @@ void afb_process(int32_t *wet, int32_t *side, const int32_t *pre,
             l = clamp(mid + s, -131072, 131071) >> 2;
             r = clamp(mid - s, -131072, 131071) >> 2;
         }
-        afb.al1 += (l - afb.al1) >> 2;
-        afb.al2 += (afb.al1 - afb.al2) >> 2;
-        afb.ar1 += (r - afb.ar1) >> 2;
-        afb.ar2 += (afb.ar1 - afb.ar2) >> 2;
+        afb.al1 += afb_input_step(l - afb.al1);
+        afb.al2 += afb_input_step(afb.al1 - afb.al2);
+        afb.ar1 += afb_input_step(r - afb.ar1);
+        afb.ar2 += afb_input_step(afb.ar1 - afb.ar2);
         afb.phase++;
         if (afb.phase == 4u) {
             afb.phase = 0;
