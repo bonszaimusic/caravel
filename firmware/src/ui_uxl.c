@@ -2895,7 +2895,7 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         {
             uint8_t nm = fmt_named;
             param_format(d, v, val, &unit);
-            if (dd && dd->kind == DK_HARMONY && !act)
+            if (dd && dd->kind == DK_HARMONY && !act && harmony_edit_dur != 0u)
                 unit = harmony_card_text(k, val);
             fmt_named = nm;
         }
@@ -2978,7 +2978,7 @@ static void uxl_ring_build(void)
     if (dd && dd->kind == DK_LINK)
         bottom = link_setup_row ? 1u : 0u;
     if (dd && dd->kind == DK_HARMONY)
-        bottom = harmony_edit_dur ? 1u : 0u;                      /* (the active group follows the SCL row key) */
+        bottom = harmony_edit_dur == 2u ? 1u : 0u; /* setup and chord roots use the top row; only duration uses the bottom */
     sig = 0xB11D00u + bottom + (uint32_t)ui.page * 257u + song.sel * 31u + (uint32_t)uxl.inter * 7u + uxl.uset * 13u + (uint32_t)ui.hot_t * 17u + ui.hot_col +
           hp_rm.scope * 5u + (uint32_t)(uxl.uset & (1u << song.sel)) * 3u + (uint32_t)TSEL->eng_req * 101u;
     for (row = 0; row < (dd ? 2u : 1u); row++)

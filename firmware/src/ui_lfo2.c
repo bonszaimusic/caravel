@@ -578,7 +578,7 @@ static void lfo_cards(const page_t *pg)
 #endif
             const aafont_t *vf = &AF_M;
             param_format(d, v, val, &unit);
-            if (dd->kind == DK_HARMONY && !row)    /* the top row: the PREPARED chord's name; SHIFT says what sounds */
+            if (dd->kind == DK_HARMONY && !row && harmony_edit_dur != 0u) /* chord roots only; keep setup values ON/ROOT/SCALE */
                 unit = harmony_card_text(col, val);
 #if CARAVEL_STASIS_EXPAND
             /* The generic formatter intentionally limits values to five
