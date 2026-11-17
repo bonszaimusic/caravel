@@ -61,6 +61,23 @@ int main(void) {
     assert(page_visible(find_page(GR_SCALE)));
     open_family(FAM_SCL);
     assert(cur_page()->graph==GR_SCALE); /* already in family: next visible */
+    /* KEY FROM is only effective for local-key roles, not FOLLOW or EXT. */
+    link_src[1]=1;
+    trk[0].p[P_ROOT]=0;trk[0].p[P_SCALE]=1;trk[0].p[P_QUANT]=1;
+    trk[1].p[P_ROOT]=5;trk[1].p[P_SCALE]=2;trk[1].p[P_QUANT]=2;
+    harm_choose_role(&trk[1],HROLE_NOTES);
+    key_link_sync();
+    assert(trk[1].p[P_ROOT]==0 && trk[1].p[P_SCALE]==1 && trk[1].p[P_QUANT]==1);
+    harm_choose_role(&trk[1],HROLE_EXT);
+    trk[1].p[P_ROOT]=5;trk[1].p[P_SCALE]=2;trk[1].p[P_QUANT]=2;
+    key_link_sync();
+    assert(trk[1].p[P_ROOT]==5 && trk[1].p[P_SCALE]==2 && trk[1].p[P_QUANT]==2);
+    harm_choose_role(&trk[1],HROLE_FOLLOW);
+    key_link_sync();
+    assert(trk[1].p[P_ROOT]==5 && trk[1].p[P_SCALE]==2);
+    trk[1].p[P_CHRD]=CH_DIA3;harmony_follow[1]=1; /* legacy mixed */
+    key_link_sync();
+    assert(trk[1].p[P_ROOT]==0 && trk[1].p[P_SCALE]==1);
     puts("HARM-first routing, CHORD K2, global key, legacy CUSTOM and BUS-off policy: PASS");
     return 0;
 }

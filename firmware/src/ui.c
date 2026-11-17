@@ -304,6 +304,12 @@ static void key_link_sync(void)
         const track_t *s;
         if (!src || src > NTRK || src == i + 1u)
             continue;
+        /* KEY FROM is suspended while the track plays from HARMONY or EXT;
+         * keep stored links for the next NOTES / CHORD KEY selection. Old
+         * mixed combinations retain their original behavior as CUSTOM. */
+        if (t->p[P_CSRC] || (harmony_follow[i] &&
+            (t->p[P_CHRD] == CH_OFF || t->p[P_CHRD] == CH_BUS)))
+            continue;
         if (link_src[src - 1u])
             continue;                                 /* no chains: only an unlinked track is a source */
         s = &trk[src - 1u];

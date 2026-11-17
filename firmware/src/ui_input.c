@@ -1098,7 +1098,10 @@ static void edit_param(uint32_t slot, int32_t steps)
         } else if (role == HROLE_EXT) {
             if (slot == 1u) {
                 int32_t src = clamp((int32_t)TSEL->p[P_CSRC] + steps, 1, 5);
-                if (src < 2 || src != (int32_t)song.sel + 2) TSEL->p[P_CSRC] = (int16_t)src;
+                int32_t self = (int32_t)song.sel + 2;
+                if (src == self) /* skip self; do not get stuck on its value */
+                    src = clamp(src + (steps > 0 ? 1 : -1), 1, 5);
+                if (src != self) TSEL->p[P_CSRC] = (int16_t)src;
                 ui.force = 1;
             } else if (slot == 2u) {
                 TSEL->p[P_CEXT] = (int16_t)chext_stored((uint32_t)clamp(

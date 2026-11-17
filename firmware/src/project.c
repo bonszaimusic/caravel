@@ -402,7 +402,7 @@ static void project_init_runtime(void)
     memset(harmony_dur, 0, sizeof harmony_dur);
     memset(link_src, 0, sizeof link_src);
     memset(link_retrig, 0, sizeof link_retrig);
-    memset(harmony_follow, 1, sizeof harmony_follow);
+    memset(harmony_follow, 0, sizeof harmony_follow); /* 1.0: new tracks start in NOTES */
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);
