@@ -171,9 +171,13 @@ class TutorialPagesTest(unittest.TestCase):
         # Existing public lessons remain linked; no migration/deletion is needed.
         self.assertIn("tutorials/stasis/", overview)
         self.assertIn("tutorials/random-morph-journey/", overview)
-        top = "\n".join((ROOT / "README.md").read_text(encoding="utf-8").splitlines()[:8])
-        self.assertIn('href="https://bonszaimusic.github.io/caravel/tutorials/"><img src="docs/tutorials/img/tutorials-banner.png"', top)
-        self.assertIn("docs/tutorials/start-here.md", top)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        top = "\n".join(readme.splitlines()[:8])
+        # The unpublished 1.x candidate links its own source guide index;
+        # the live Classic banner is not its tutorial entry point.
+        self.assertIn("[Tutorials](docs/tutorials/README.md)", top)
+        self.assertIn("prepared, not published", top)
+        self.assertIn("docs/tutorials/start-here.md", readme)
         for url in re.findall(r'(?:src|href)="(docs/[^"]+)"', (ROOT / "README.md").read_text(encoding="utf-8")):
             self.assertTrue((ROOT / url).is_file(), url)
 
