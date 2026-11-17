@@ -13,7 +13,7 @@ SHARDS=['storage_usb','synthesis_midi','ui_storage','effects','cpu_dual','engine
 GROUPS={
  'storage_usb':'storage input midi_uart timer5_midi',
  'synthesis_midi':'scale track_mute chord chordext chordext_diff chordext_capture chordsource ux_capture ux_play_midi latch midi_control midi_resync midi_drift midi_clock_cc voice_reserve ratchet step15 seq155 detail step_play click swing',
- 'ui_storage':'chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
+ 'ui_storage':'ux_elastic_arc chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
  'effects':'speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity',
  'cpu_dual':'dualcore',
  'engines_samples':'format2_engine_memory phys sem hades hades_dsp drone drone_cells drone_motion',
@@ -76,7 +76,7 @@ def run(r):
   folder=ROOT/'build/fixtures';folder.mkdir(exist_ok=True);(folder/'speaker-kicks.f32').write_bytes(raw)
  for n in GROUPS[s]:
   flags=[]
-  if n in ['chordsource','ux_capture','ux_play_midi']:flags+=PROFILE
+  if n in ['chordsource','ux_capture','ux_play_midi','ux_elastic_arc']:flags+=PROFILE
   if n in ['dualcore']:flags+=['-pthread']
   if n in ['stasis','stasis_continuity']:flags+=['-DCARAVEL_REVERB_MINIMAL=1','-DCARAVEL_STASIS_EXPAND=1']
   if n=='stasis_layer':flags+=PROFILE

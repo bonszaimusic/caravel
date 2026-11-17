@@ -422,8 +422,8 @@ static void uxl_el_cap_ex(uint32_t k, char *name, char *value, int page2, int tm
     uint32_t t = song.sel, keep_pg = hp_el_setup_page;
     hp_et_cfg_t keep_t = hp_el_times_track[t];
     hp_elastic_cfg_t keep_c = hp_el_cfg_track[t];
-    int cur = -1;                                   /* (always the settings of the moment, the brush; a touch hands them to the spring) */
-    (void)tmpl;
+    int cur = tmpl ? -1 : uxl_el_cur();             /* BUILD template vs PLAY last-touched spring */
+    /* BUILD edits the track-wide template; PLAY shows the last touched spring. */
     if (page2) {                                    /* the track's: COUPLE REFLECT SEED */
         static const uint8_t M[4] = {2, 1, 3, 255};
         if (M[k & 3u] == 255u) {
@@ -452,6 +452,38 @@ static void uxl_el_cap_ex(uint32_t k, char *name, char *value, int page2, int tm
     hp_el_cfg_track[t] = keep_c;
 }
 static void uxl_el_cap(uint32_t k, char *name, char *value) { uxl_el_cap_ex(k, name, value, hp_el_setup_page & 1u, 0); }
+/* Every ELASTIC value arc follows the *same* settings that its label displays.
+ * BUILD uses the track's new-spring template; PLAY shows the last touched
+ * spring when one is selected. Angles are limited to the 76-degree quadrant. */
+static int32_t uxl_el_arc_frac(uint32_t k, int page2, int tmpl)
+{
+    const uint32_t t = song.sel;
+    hp_et_cfg_t tm = hp_el_times_track[t];
+    hp_elastic_cfg_t cf = hp_el_cfg_track[t];
+    int cur = page2 || tmpl ? -1 : uxl_el_cur();
+    if (cur >= 0) {
+        tm = hp_el_stimes[t][cur];
+        cf = hp_el_scfg[t][cur];
+    }
+    if (page2) {
+        if (k == 0u) return clamp((int32_t)tm.couple, 0, 100) * 76 / 100;
+        if (k == 1u) return clamp((int32_t)tm.reflect, 0, 100) * 76 / 100;
+        if (k == 2u) return (int32_t)tm.seed * 76 / 255;
+        return -1; /* K4 is not a parameter on SPRINGS. */
+    }
+    if (k == 0u) return clamp((int32_t)tm.pull, 0, 100) * 76 / 100;
+    if (k == 1u) return clamp((int32_t)tm.back, 0, (int32_t)HP_ES_RETURN_INF) * 76 / (int32_t)HP_ES_RETURN_INF;
+    if (k == 2u) return clamp((int32_t)cf.range, 0, 100) * 76 / 100;
+    if (k == 3u) {
+        /* The new clock-synced periods are discrete steps; legacy v4
+         * numeric bounce values still have a meaningful visual range. */
+        if (hp_es_is_sync(tm.bounce))
+            return ((int32_t)hp_es_index(tm.bounce) - (int32_t)HP_ES_MIN_INDEX) * 76 /
+                   (int32_t)(HP_ES_COUNT - HP_ES_MIN_INDEX - 1u);
+        return clamp((int32_t)tm.bounce, 0, 1000) * 76 / 1000;
+    }
+    return -1;
+}
 static void uxl_el_setup_turn_ex(uint32_t k, int32_t s, int page2, int tmpl)
 {
     uint32_t t = song.sel, keep_pg = hp_el_setup_page;
@@ -847,6 +879,10 @@ static int32_t uxl_ev_frac(uint32_t b, uint32_t k)
             return v * 76 / 127;
         return k < 3u && v >= -64 && v <= 63 ? (v + 64) * 76 / 127 : -1;
     }
+#if CARAVEL_ELASTIC_P1
+    if (b == ACT_BANK_ELASTIC)
+        return uxl_el_arc_frac(k, hp_el_setup_page & 1u, 0);
+#endif
     if (b != 0u)
         return -1;
     v = action_setup_value(k);
@@ -1902,8 +1938,17 @@ static void uxl_ev_ring_paint(uint32_t pg, const char nm[4][16], const char val[
     uint32_t k, i;
     char f[32];
     cv_rect(0, 0, 240, 240, T_BG);
-    for (k = 0; k < 4u; k++)
-        uxl_ring(120, 116, 58, 71, START[k], START[k] + 76, 0, 0, T_LINE, T_LINE);
+    for (k = 0; k < 4u; k++) {
+        int32_t f = -1;
+#if CARAVEL_ELASTIC_P1
+        if (pg >= 2u)
+            f = uxl_el_arc_frac(k, pg == 3u, 1);
+#endif
+        if (f >= 0)
+            uxl_orbit_arc_f(k, f, 0, 0);
+        else
+            uxl_ring(120, 116, 58, 71, START[k], START[k] + 76, 0, 0, T_LINE, T_LINE);
+    }
     for (k = 0; k < 4u; k++) {
         int32_t cx = (k & 1u) == 0u ? 4 : 236, cy = k < 2u ? 46 : 150;
         if (nm[k][0] == '-')
