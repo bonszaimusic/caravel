@@ -28,7 +28,7 @@ static void fresh(void)
     memset(cap_ln, 0, sizeof cap_ln); memset(cap_st, 0, sizeof cap_st);
     /* Newer implementations may add capacity feedback; clearing via cap_wipe
      * keeps this probe valid on the original prototype too. */
-    for (i=0;i<NTRK;i++) cap_wipe(i);
+    for (i=0;i<NTRK;i++) { cap_wipe(i); cap_li[i] = 1u; }
     memset(cap_hn, 0, sizeof cap_hn); memset(cap_held, 0, sizeof cap_held);
     memset(cap_open, 0, sizeof cap_open); memset(cap_tt, 0, sizeof cap_tt);
     memset(lat_stay, 0, sizeof lat_stay); memset(lat_eat, 0, sizeof lat_eat);
@@ -176,12 +176,12 @@ int main(void)
     fm1_ms += 501; events_block(128); cap_idle();
     REQUIRE("clock loss stops transport and releases loop", !song.playing && cap_st[0] == 2 && probe_gates(0) == 0);
 
-    fresh(); for (i=0;i<40;i++) { cap_put(0,48+i%24,100); perf_bars_q16 += 100; cap_put(0,48+i%24,0); perf_bars_q16 += 100; }
-    REQUIRE("LIVE ring bounded at 64", cap_rn[0] == 64);
+    fresh(); for (i=0;i<80;i++) { cap_put(0,48+i%24,100); perf_bars_q16 += 100; cap_put(0,48+i%24,0); perf_bars_q16 += 100; }
+    REQUIRE("LIVE ring bounded at 128", cap_rn[0] == 128);
     cap_take(0,1,&over);
     { unsigned n=cap_ln[0], on=0, off=0; for(i=0;i<n;i++) { on += !!cap_loop[0][i].vel; off += !cap_loop[0][i].vel; }
       printf("full ring: loop events=%u on=%u off=%u\n",n,on,off);
-      REQUIRE("full-ring capture keeps complete note pairs", n == 64 && on == 32 && off == 32); }
+      REQUIRE("full-ring capture keeps complete note pairs", n == 128 && on == 64 && off == 64); }
 
     fresh(); for(i=0;i<9;i++) cap_play_on(0,60+i,100);
     for(i=0;i<9;i++) cap_play_off(0,60+i);
@@ -194,8 +194,8 @@ int main(void)
     perf_bars_q16=0x00001000u; cap_put(0,60,0); cap_take(0,1,&over);
     REQUIRE("capture across Q16 clock wrap retains both ends", cap_ln[0] == 2 && cap_loop[0][0].t < 4096 && cap_loop[0][1].t < 4096 && ((cap_loop[0][0].vel ? cap_loop[0][1].t-cap_loop[0][0].t : cap_loop[0][0].t-cap_loop[0][1].t)&4095u) == 512);
     fresh();
-    for (i=0;i<40;i++) { cap_put(0,40+i,100); perf_bars_q16 += 10; }
-    for (i=0;i<40;i++) { cap_put(0,40+i,0); perf_bars_q16 += 10; }
+    for (i=0;i<65;i++) { cap_put(0,40+i,100); perf_bars_q16 += 10; }
+    for (i=0;i<65;i++) { cap_put(0,40+i,0); perf_bars_q16 += 10; }
     cap_take(0,1,&over);
     { unsigned active[128]={0}, balanced=1; for(i=0;i<cap_ln[0];i++) { cap_ev_t *e=&cap_loop[0][i]; active[e->note]=!!e->vel; }
       for(i=0;i<128;i++) balanced &= !active[i];
@@ -207,12 +207,12 @@ int main(void)
     uxl_cap_rec(); cap_idle(); uxl_cap_poll();
     REQUIRE("REC on PAIR follower captures owner's notes", cap_ln[0]>0);
     fresh();
-    for(i=0;i<33;i++) { cap_put(0,40+i,100); perf_bars_q16+=10; }
-    REQUIRE("33 held notes reject the whole take instead of losing offs", cap_take(0,1,&over)==0 && cap_ln[0]==0);
+    for(i=0;i<65;i++) { cap_put(0,40+i,100); perf_bars_q16+=10; }
+    REQUIRE("65 held notes reject the whole take instead of losing offs", cap_take(0,1,&over)==0 && cap_ln[0]==0);
     fresh(); loop(0,60);
-    for(i=0;i<64;i++) cap_loop[0][i]=(cap_ev_t){i*100u,(uint8_t)(48+i/2),i%2?0:100};
-    cap_ln[0]=64;
-    { cap_ev_t keep[64]; uint32_t old_o=cap_o[0],old_tt=cap_tt[0]; memcpy(keep,cap_loop[0],sizeof keep);
+    for(i=0;i<128;i++) cap_loop[0][i]=(cap_ev_t){i*100u,(uint8_t)(48+i/2),i%2?0:100};
+    cap_ln[0]=128;
+    { cap_ev_t keep[128]; uint32_t old_o=cap_o[0],old_tt=cap_tt[0]; memcpy(keep,cap_loop[0],sizeof keep);
       perf_bars_q16=9000;cap_put(0,90,100);perf_bars_q16=10000;cap_put(0,90,0);
       REQUIRE("overflow overdub keeps the previous loop byte for byte", cap_take(0,1,&over)==0 &&
           !memcmp(keep,cap_loop[0],sizeof keep) && cap_o[0]==old_o && cap_tt[0]==old_tt); }
@@ -225,7 +225,7 @@ int main(void)
     cap_play_off(0,60);REQUIRE("last mapped loop owner releases shared pitch",!has(0,60));
     fresh();for(i=0;i<CAP_N/2;i++)cap_play_on(0,40+i,100);
     for(i=0;i<CAP_N/2;i++)cap_play_off(0,40+i);
-    REQUIRE("all 32 admitted simultaneous raw inputs retain their releases",probe_gates(0)==0);
+    REQUIRE("all 64 admitted simultaneous raw inputs retain their releases",probe_gates(0)==0);
     fresh();trk[0].p[P_LATCH]=LT_STACK;cap_play_on(0,60,100);cap_play_off(0,60);
     cap_release(0);REQUIRE("pausing clears the loop's released latched voice",!has(0,60)&&!lat_get(lat_stay[0],60));
     fresh();trk[0].p[P_LATCH]=LT_NEW;cap_play_on(0,60,100);cap_play_off(0,60);
@@ -255,6 +255,42 @@ int main(void)
     fresh();cap_put(0,60,100);perf_bars_q16=100;cap_put(0,60,0);cap_take(0,1,&over);
     cap_put(0,62,100);cap_put(0,62,0);
     REQUIRE("new events at the previous REC timestamp are not lost",cap_take(0,1,&over)==1 && cap_ln[0]==4);
+    /* Extended CAPTURE: next-take LENGTH is independent for each track. */
+    fresh();
+    {   static const unsigned li[4] = {0, 2, 4, 5};
+        for(i=0;i<NTRK;i++) cap_li[i]=(uint8_t)li[i];
+        song.sel=0; uxl_cap_knob(0,1);
+        REQUIRE("REC K1 changes only selected track LENGTH",cap_li[0]==1 && cap_li[1]==2 && cap_li[2]==4 && cap_li[3]==5);
+        cap_li[0]=0;
+        perf_bars_q16 = 31u << 16;
+        for(i=0;i<NTRK;i++) cap_put(i,60u+i,100);
+        perf_bars_q16 += 1000u;
+        for(i=0;i<NTRK;i++) cap_put(i,60u+i,0);
+        for(i=0;i<NTRK;i++) {
+            cap_view_t cv;
+            song.sel=(uint8_t)i;
+            uxl_cap_rec(); cap_idle(); uxl_cap_poll();
+            cap_view(i,&cv);
+            REQUIRE("REC selects each track's own 1/4/16/32 bars",cap_len[i]==((uint32_t)CAP_BARS[li[i]]<<16) && cv.bars==CAP_BARS[li[i]] && cv.ln==2);
+        }
+        REQUIRE("other track LENGTH selections survive REC and track switches",cap_li[0]==0 && cap_li[1]==2 && cap_li[2]==4 && cap_li[3]==5);
+    }
+    fresh();perf_bars_q16 = 17u << 16;cap_put(0,60,100);
+    perf_bars_q16 += 1024u;cap_put(0,60,0);
+    perf_bars_q16 = 32u << 16;
+    REQUIRE("32-bar loop captures events past old 16-bit time wrap",cap_take(0,32,&over)==1 && cap_len[0]==(32u<<16) &&
+        cap_ln[0]==2 && cap_loop[0][0].t >= (17u<<12) && cap_loop[0][1].t > cap_loop[0][0].t);
+    fresh();perf_bars_q16=0xFFF00000u;cap_put(0,70,100);
+    perf_bars_q16=0xFFF01000u;cap_put(0,70,0);
+    perf_bars_q16=0x00010000u;
+    REQUIRE("32-bar capture survives Q16 wrap with 18-bit timestamps",cap_take(0,32,&over)==1 && cap_ln[0]==2 &&
+        cap_loop[0][1].t > cap_loop[0][0].t);
+    fresh();
+    for(i=0;i<128u;i++)cap_loop[0][i]=(cap_ev_t){i*10u,(uint8_t)(40u+i/2u),(uint8_t)(i%2u?0u:100u)};
+    cap_ln[0]=128;cap_len[0]=32u<<16;cap_st[0]=1;cap_publish();
+    { cap_view_t cv;cap_view(0,&cv);
+      REQUIRE("LCD snapshot stores all 128 events and 32-bar length",cv.ln==128 && cv.bars==32);
+    }
     printf("memory: rings=%zu held-maps=%zu total test failures=%u\n",sizeof cap_ring+sizeof cap_loop,
            sizeof cap_hn+sizeof cap_held+sizeof cap_open,failures);
     return failures ? 1 : 0;
