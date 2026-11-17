@@ -158,7 +158,8 @@ class TutorialPagesTest(unittest.TestCase):
             self.assertNotIn('<audio controls preload=', sem)  # this 1.x lesson links no audio
             for slug in ("analog", "phys", "capture"):
                 lesson = (site / "tutorials" / slug / "index.html").read_text()
-                self.assertIn("Caravel 1.0", lesson if slug != "capture" else lesson.replace("1.0.0", "Caravel 1.0"))
+                self.assertIn("v1.0.0", lesson)
+                self.assertIn('id="step-1"', lesson)
 
     def test_generated_overview_readme_is_current_and_linked_at_the_top_of_the_readme(self):
         self.assertEqual((TUT / "README.md").read_text(encoding="utf-8"), tp.readme_text(self.data))
