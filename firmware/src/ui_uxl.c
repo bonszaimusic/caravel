@@ -1703,8 +1703,14 @@ static void uxl_paint_widget(void)
             cv_rect(x - 4, y - 4, 9, 9, st == 1u ? T_TEXT : T_MID);
         }
     }
-    b[0] = (char)('0' + nb);
-    str_cpy(b + 1, " BAR", sizeof b - 1u);
+    if (nb >= 10u) {
+        b[0] = (char)('0' + nb / 10u);
+        b[1] = (char)('0' + nb % 10u);
+        str_cpy(b + 2, " BARS", sizeof b - 2u);
+    } else {
+        b[0] = (char)('0' + nb);
+        str_cpy(b + 1, nb == 1u ? " BAR" : " BARS", sizeof b - 1u);
+    }
     uxl_text_c(120, 77, &AF_S, b, uxl.cap_view ? T_ACCENT : T_MID);
     if (v.full) {
         cv_frame(102, 146, 36, 14, T_TEXT);
