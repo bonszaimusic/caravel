@@ -1351,7 +1351,7 @@ static void uxl_boot(void)
 #if CARAVEL_UX_CAPTURE
 static void uxl_cap_rec(void)                       /* REC tapped: the live notes become the loop, or are added to it (overdub, E45) */
 {
-    if (!cap_post(CAP_OP_REC, cap_selected(), CAP_BARS[cap_li & 3u]))     /* (the audio context answers, uxl_cap_poll says it) */
+    if (!cap_post(CAP_OP_REC, cap_selected(), CAP_BARS[cap_li[cap_selected()]]))     /* (the audio context answers, uxl_cap_poll says it) */
         ui_message("CAPTURE BUSY");
 }
 static void uxl_cap_loop(void)                      /* SEQ tapped: the loop pauses or goes on */
@@ -1372,12 +1372,12 @@ static void uxl_cap_poll(void)                      /* what the audio context di
         ui.force = 1;
     }
 }
-static void uxl_cap_knob(uint32_t k, int32_t s)     /* K1 in the view: the length 1 2 4 8 bars (for the next capture) */
+static void uxl_cap_knob(uint32_t k, int32_t s)     /* K1 in the view: per-track length 1 2 4 8 16 32 bars for the next capture */
 {
     if (k == 0u && s && uxl_cap_get(cap_selected(), 2u)) {
         ui_message("LENGTH: CLEAR LOOP FIRST");
     } else if (k == 0u && s) {
-        cap_li = (uint8_t)clamp((int32_t)(cap_li & 3u) + (s > 0 ? 1 : -1), 0, 3);
+        cap_li[cap_selected()] = (uint8_t)clamp((int32_t)cap_li[cap_selected()] + (s > 0 ? 1 : -1), 0, 5);
         ui.force = 1;
     }
 }
@@ -1598,7 +1598,7 @@ static int uxl_layer_head_draw(void)
 }
 #if CARAVEL_UX_CAPTURE
 /* CAPTURE in the middle of PLAY, always (E41, owner's wish): a small dim ring with the loop's notes as dots and its pointer
- * while there is a loop (none while LIVE); inside it the band of the notes played, the last 1/2/4/8 bars: a new note
+ * while there is a loop (none while LIVE); inside it the band of the notes played, up to 32 bars: a new note
  * enters at the right and moves left. The band is the LIVE window (what REC would take), also while a loop runs. */
 static void uxl_paint_widget(void)
 {
@@ -1611,7 +1611,7 @@ static void uxl_paint_widget(void)
     cap_view(i, &v);
     st = v.st;
     len = (uint32_t)v.bars << 12;
-    nb = v.ln && len ? (uint32_t)v.bars : CAP_BARS[cap_li & 3u];
+    nb = v.ln && len ? (uint32_t)v.bars : CAP_BARS[cap_li[i]];
     span = nb << 12;
     uxl_ring(CX, CY, 40, 48, 0, 359, 0, 359, T_LINE, T_LINE);
     cv_rect(BX, BY, BW, BH, T_SURF);
@@ -1635,7 +1635,7 @@ static void uxl_paint_widget(void)
     if (hi - lo < 12) { hi = lo + 12; }
     {   /* the bar lines, as the bars move */
         uint32_t cur = now & ~0xFFFFu;
-        for (k = 0; k <= nb; k++) {
+        for (k = 0; k <= nb; k += nb > 16u ? 4u : nb > 8u ? 2u : 1u) {
             uint32_t tb = cur - (k << 16);
             int32_t x = BX + BW - (int32_t)(((uint32_t)CAP_U(now - tb) * (uint32_t)BW) / span);
             if ((v.wrapped || cur >= (k << 16)) && x >= BX && x < BX + BW)
@@ -2209,20 +2209,31 @@ static void uxl_paint(void)
         uxl_text_c(120, 128, &AF_S, "OCT- CANCEL", T_MID);
     }
 #if CARAVEL_UX_CAPTURE
-    else if (uxl.cap_view) {                          /* REC held: K1 is the CAPTURE length, named, with its four steps (E78) */
-        uint32_t i, on = cap_li & 3u;
-        uxl_orbit_arc_f(0, (int32_t)on * 76 / 3, 0, 1);
-        cv_text(4, 46, &AF_M, "LENGTH", T_ACCENT);
-        for (i = 0; i < 4u; i++) {
-            char sb[2];
-            int32_t x = 4 + (int32_t)i * 16;
-            sb[0] = (char)('0' + CAP_BARS[i]);
-            sb[1] = 0;
+    else if (uxl.cap_view) {                          /* REC held: K1 selects the next CAPTURE length for this owner track (6 steps). */
+        uint32_t i, track = cap_selected(), on = cap_li[track];
+        char label[] = "T1 LENGTH";
+        cap_view_t cv;
+        label[1] = (char)('1' + track);
+        cap_view(track, &cv);
+        uxl_orbit_arc_f(0, (int32_t)on * 76 / 5, 0, 1);
+        cv_text(4, 46, &AF_M, label, T_ACCENT);
+        for (i = 0; i < 6u; i++) {
+            char sb[3];
+            int32_t x = 4 + (int32_t)i * 19;
+            uint32_t bars = CAP_BARS[i];
+            if (bars >= 10u) {
+                sb[0] = (char)('0' + bars / 10u);
+                sb[1] = (char)('0' + bars % 10u);
+                sb[2] = 0;
+            } else {
+                sb[0] = (char)('0' + bars);
+                sb[1] = 0;
+            }
             if (i == on) {
-                cv_rrect(x - 1, 66, 14, 16, 3, T_ACCENT, T_BG);
+                cv_rrect(x - 1, 66, 19, 16, 3, T_ACCENT, T_BG);
                 cv_text_on(x + 2, 67, &AF_S, sb, T_INK, T_ACCENT);
             } else {
-                { cap_view_t cv; cap_view(cap_selected(), &cv); cv_text(x + 2, 67, &AF_S, sb, cv.ln ? T_DIM : T_MID); }
+                cv_text(x + 2, 67, &AF_S, sb, cv.ln ? T_DIM : T_MID);
             }
         }
     }
@@ -2339,7 +2350,7 @@ static void uxl_paint(void)
 static uint32_t uxl_cap_sig(void)
 {
 #if CARAVEL_UX_CAPTURE
-    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) + uxl_cap_get(cap_selected(), 0u) * 17u + cap_li * 5u + uxl_cap_get(cap_selected(), 3u) * 3u + (uint32_t)song.playing + (uint32_t)uxl.cap_view * 977u;
+    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) + uxl_cap_get(cap_selected(), 0u) * 17u + cap_li[cap_selected()] * 5u + uxl_cap_get(cap_selected(), 3u) * 3u + (uint32_t)song.playing + (uint32_t)uxl.cap_view * 977u;
 #else
     return 0;
 #endif
