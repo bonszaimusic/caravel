@@ -627,6 +627,9 @@ static uint32_t page_first(uint32_t fam)
 static uint32_t stasis_fx_pages(uint8_t *pages)
 {
     static const char *const names[]={"FX","DLY","CHORUS","REVERB",
+#if CARAVEL_AFTERBURNER
+        "AFTER",
+#endif
         "GRAIN","LAYER","INSERT","INSERT 2","SLICER"};
     uint32_t n=0;
     for(uint32_t j=0;j<sizeof names/sizeof names[0];j++)

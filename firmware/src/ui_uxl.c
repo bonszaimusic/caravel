@@ -678,6 +678,10 @@ static void uxl_ev_poll(void)
 static int uxl_inter_ref(uint32_t slot, hp_ref_t *out)    /* the parameter a knob has on this page (as hp_touch, without its effects) */
 {
     const page_t *pg = cur_page();
+#if CARAVEL_AFTERBURNER
+    /* AFTER's controls are virtual, not pointers into song.g[]. */
+    if (str_eq(pg->title, "AFTER")) return 0;
+#endif
     hp_ref_t r = {0};
     r.track = song.sel;
     r.engine = 255;

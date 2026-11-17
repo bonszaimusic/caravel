@@ -701,6 +701,12 @@ static const page_t PAGES[] = {
     {"PAIR", FAM_LFO, SC_TRACK, GR_PAIR, {0xFF, 0xFF, 0xFF, 0xFF}},
 #endif
 #endif
+#if CARAVEL_AFTERBURNER
+    /* Append-only: keep every existing PAGES[] index stable for HOME
+     * references and project/performance snapshots. FX navigation uses
+     * stasis_fx_pages() and explicitly locates this page by title. */
+    {"AFTER", FAM_FX, SC_GLOBAL, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
+#endif
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
@@ -724,12 +730,29 @@ static const param_desc_t ST_GRAIN_DESC[4] = {
 };
 #endif
 #endif
+#if CARAVEL_AFTERBURNER
+static const param_desc_t AFTER_DESC[4] = {
+    PE("AFTER", N_ONOFF, 0),
+    {"TIME", F_INT, 10, 60, 30, 0, "s"},
+    PD("AMT", F_PCT, 0, 127, 32),
+    PD("DAMP", F_PCT, 0, 127, 70)
+};
+#endif
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     /* A descriptor-only query need not request the writable value pointer. */
     int16_t *unused;
     if (!valp) valp = &unused;
     uint32_t id = pg->id[slot];
+#if CARAVEL_AFTERBURNER
+    if (str_eq(pg->title, "AFTER")) {
+        static int16_t *const fields[4] = {
+            &afterburner.on, &afterburner.time, &afterburner.amt, &afterburner.damp
+        };
+        *valp = fields[slot];
+        return &AFTER_DESC[slot];
+    }
+#endif
 #if CARAVEL_STASIS_EXPAND
     if(pg->graph==GR_STGRAIN){
         static int16_t *const fields[4]={

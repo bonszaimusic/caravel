@@ -14,14 +14,14 @@ GROUPS={
  'storage_usb':'storage input midi_uart timer5_midi',
  'synthesis_midi':'scale track_mute chord chordext chordext_diff chordext_capture chordsource ux_capture ux_play_midi latch midi_control midi_resync midi_drift midi_clock_cc voice_reserve ratchet step15 seq155 detail step_play click swing',
  'ui_storage':'ux_elastic_arc harmony_roles_ui chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
- 'effects':'speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity',
+ 'effects':'afterburner_host speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity',
  'cpu_dual':'dualcore',
  'engines_samples':'format2_engine_memory phys sem hades hades_dsp drone drone_cells drone_motion',
  'sanitizers':'', 'web_target':''}
 GROUPS={k:v.split() for k,v in GROUPS.items()}
 PROFILE=['-DFELUCCA_HOME_PERF=1','-DFELUCCA_PERF_HW=1','-DFELUCCA_PAIR_MORPH=1','-DCARAVEL_ACTION_BANKS=1','-DFELUCCA_RANDOM_MORPH=1','-DCARAVEL_UX_LAYERS=1','-DCARAVEL_UX_EVOLVE=1','-DCARAVEL_ELASTIC_P1=1','-DCARAVEL_ELASTIC_PLAYABLE=1','-DCARAVEL_REVERB_MINIMAL=1','-DCARAVEL_STASIS_EXPAND=1']
 ELASTIC=['core','overlay','p1_shim','row','visual','trajectory','p13','sync']
-SANITIZED=['format2_project','format2_settings','format2_performance','format2_editor','format2_backup','format2_presets','persistence','duplicate','fx_edit','live_full','midi_resync','midi_drift','voice_reserve','lfo2','lfo2_editor','ratchet','enum_order','fx_feedback','chordext','chordset','chordext_ui','harmony_roles_ui','chordext_capture','release_boot','chordsource','ux_capture','ux_play_midi']
+SANITIZED=['afterburner_host','format2_project','format2_settings','format2_performance','format2_editor','format2_backup','format2_presets','persistence','duplicate','fx_edit','live_full','midi_resync','midi_drift','voice_reserve','lfo2','lfo2_editor','ratchet','enum_order','fx_feedback','chordext','chordset','chordext_ui','harmony_roles_ui','chordext_capture','release_boot','chordsource','ux_capture','ux_play_midi']
 BASELINES=['tests/golden.txt','tests/cpu_baseline.txt','tests/cpu_format2_idle.txt','tests/target_budget.txt','tests/union_golden.txt','tests/chordext_baseline.txt','tests/chordext_format2_off.txt','tests/chordext_format2_scale.txt','tests/chordext_format2_harm.txt']
 EXTERNAL={'ux_render':'tests/ux_render.sh (visual session)'}
 

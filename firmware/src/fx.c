@@ -1063,6 +1063,10 @@ static __attribute__((noinline)) void rev_switch(const int32_t *rev_in, int32_t 
     fx.rtype = (uint8_t)rt;
 }
 
+/* Independent, tail-preserving post-REV processor; no synth voice slots. */
+#if CARAVEL_AFTERBURNER
+#include "afterburner.c"
+#endif
 /* process the three buses for one block; sends in, wet stereo-equal out */
 static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet,
                      uint32_t n)
@@ -1162,6 +1166,11 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         y += mulq15(x * 2, dmix);
         wet[i] = y;
     }
+#if CARAVEL_AFTERBURNER
+    /* Preserve CHORUS+DELAY before adding HALL/STASIS to wet[]. */
+    if ((afterburner.on && afterburner.amt) || afb.active)
+        for (i = 0; i < n; i++) afb_pre[i] = wet[i];
+#endif
     hl.side = 0;
     if (rt != fx.rtype)
         rev_switch(rev_in, wet, n, rt);
@@ -1174,6 +1183,18 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         rev_spring(rev_in, wet, n);
     else
         rev_room(rev_in, wet, n);
+#endif
+#if CARAVEL_AFTERBURNER
+    {
+        uint8_t had_side = hl.side;
+        /* The post-FDN is a stereo REV effect, even for a mono source.
+         * Never add a stale HALL side buffer when a type has none. */
+        if (!had_side && (afterburner.on || afb.active))
+            for (i = 0; i < n; i++) rev_side[i] = 0;
+        afb_process(wet, rev_side, afb_pre, n, had_side,
+                    (uint8_t)(rt == 2u || rt == 3u));
+        if (afb.active) hl.side = 1;
+    }
 #endif
 }
 

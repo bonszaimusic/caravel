@@ -96,6 +96,10 @@ static int mom_turn(uint32_t k, int32_t s)
             return 0;
         d = page_desc(pg, k, &vp);
     }
+#if CARAVEL_AFTERBURNER
+    /* MOMENTARY addresses track/song globals only, not virtual AFTER fields. */
+    if (!ui.home && str_eq(pg->title, "AFTER")) return 0;
+#endif
     g = vp && vp >= song.g && vp < song.g + G_COUNT ? (uint32_t)(vp - song.g) : G_COUNT;
     if (!d || !vp || d->max == d->min ||
         !((vp >= t->p && vp < t->p + P_COUNT) || (g <= G_CDEPTH && g != G_CLOCK) || g == G_RTYPE))

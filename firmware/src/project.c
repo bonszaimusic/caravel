@@ -407,6 +407,11 @@ static void project_init_runtime(void)
     memset(link_retrig, 0, sizeof link_retrig);
     memset(harmony_follow, 0, sizeof harmony_follow); /* 1.0: new tracks start in NOTES */
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
+#if CARAVEL_AFTERBURNER
+    /* Session-only AFTER settings: a new project never inherits the effect. */
+    afterburner.on = 0; afterburner.time = 30;
+    afterburner.amt = 32; afterburner.damp = 70;
+#endif
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);
     fm1_irq_on();
@@ -531,6 +536,12 @@ static int project_restore_runtime(const project_t *input)
     for (i = 0; i < G_COUNT; i++)
         if (i != G_SLOT && i != G_LOAD && i != G_SAVE)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
+#if CARAVEL_AFTERBURNER
+    /* FORMAT2 does not yet encode AFTER controls: avoid retaining settings
+     * from a different loaded project or silently changing legacy sound. */
+    afterburner.on = 0; afterburner.time = 30;
+    afterburner.amt = 32; afterburner.damp = 70;
+#endif
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);
     midi_route = MIDI_ROUTE_AGAIN;                      /* (events_block: what the channels no longer hear let go) */

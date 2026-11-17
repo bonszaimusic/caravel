@@ -87,6 +87,16 @@
 #ifndef CARAVEL_STASIS_EXPAND
 #define CARAVEL_STASIS_EXPAND 0
 #endif
+/* 1.0 AFTERBURNER, a separate post-reverb tail. RC build escape hatch:
+ * -DCARAVEL_AFTERBURNER=0 removes all buffers, DSP and editing UI. */
+#ifndef CARAVEL_AFTERBURNER
+#define CARAVEL_AFTERBURNER 1
+#endif
+#if CARAVEL_AFTERBURNER
+static struct {
+    int16_t on, time, amt, damp; /* ON/OFF; RT60 10..60s; wet amount; high-frequency loss */
+} afterburner = {0, 30, 32, 70}; /* OFF preserves the sound of existing projects */
+#endif
 #if CARAVEL_STASIS_EXPAND && !CARAVEL_REVERB_MINIMAL
 #error "Expanded STASIS requires the experimental minimal reverb implementation"
 #endif
