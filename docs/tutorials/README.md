@@ -2,9 +2,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Caravel tutorials
 
-<a href="https://bonszaimusic.github.io/caravel/tutorials/"><img src="img/tutorials-banner.png" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a>
+<a href="https://bonszaimusic.github.io/caravel/v1/tutorials/"><img src="img/tutorials-banner.png" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a>
 
-**[Open the tutorials on the Caravel site](https://bonszaimusic.github.io/caravel/tutorials/)** for the illustrated version with a map of all lessons, or read them here. Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: [listen](https://bonszaimusic.github.io/caravel/sounds/).
+**Caravel 1.0.0 candidate — not published.** The planned [version-specific tutorials](https://bonszaimusic.github.io/caravel/v1/tutorials/) are not live yet; use these Markdown lessons until release. The existing [Classic 0.13.0 tutorials](https://bonszaimusic.github.io/caravel/tutorials/) remain unchanged. Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: [listen](https://bonszaimusic.github.io/caravel/sounds/).
 
 ### Start
 
@@ -36,7 +36,7 @@ Sequence, arpeggiate, perform and follow a chord progression.
 | --- | --- | --- |
 | <img src="img/one-capture.png" width="120" alt="Firmware display: Sequencer and arpeggiator"> | **[4 Sequencer and arpeggiator](seq-arp.md)** · about 12 min | Step entry, timing, recording while it plays, parts A to D, and the arpeggiator. |
 | <img src="img/one-capture.png" width="120" alt="Firmware display: CAPTURE live loops"> | **[4.1 CAPTURE live loops](capture.md)** · about 12 min | Record retrospective 1–8-bar live notes on four tracks; overdub, pause, clear and understand FULL. |
-| <img src="img/one-move.png" width="120" alt="Firmware display: PLAY and BUILD performance"> | **[5 PLAY and BUILD performance](home-performance.md)** · about 15 min | SPACE, MOVE, snapshots, PAIR and STASIS in the current interface.<br>[Random Morph and Journey](https://bonszaimusic.github.io/caravel/tutorials/random-morph-journey/)<br>[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/stasis/)<br>[Pair Morph, macros and saving](home-and-stasis.md)<br>[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/) |
+| <img src="img/one-move.png" width="120" alt="Firmware display: PLAY and BUILD performance"> | **[5 PLAY and BUILD performance](home-performance.md)** · about 15 min | SPACE, MOVE, snapshots, PAIR and STASIS in the current interface.<br>[Random Morph and Journey](https://bonszaimusic.github.io/caravel/v1/tutorials/random-morph-journey/)<br>[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/v1/tutorials/stasis/)<br>[Pair Morph, macros and saving](home-and-stasis.md)<br>[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/v1/performance/) |
 | <img src="img/one-chordext.png" width="120" alt="Firmware display: HARMONY"> | **[6 HARMONY](harmony-live.md)** · about 15 min | Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH. |
 | <img src="img/one-move.png" width="120" alt="Firmware display: ELASTIC · First steps"> | **[6.1 ELASTIC · First steps](elastic-first-steps.md)** · about 10 min | Make an armed target breathe, bounce and return in PLAY / MOVE / ELASTIC. |
 | <img src="img/one-lfo.png" width="120" alt="Firmware display: ELASTIC · Linked springs"> | **[6.2 ELASTIC · Linked springs](elastic-linked-springs.md)** · about 12 min | Connect four ROW springs with COUPLE and a reproducible SEED network. |
