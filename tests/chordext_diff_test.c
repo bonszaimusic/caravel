@@ -168,6 +168,9 @@ static void scene_reset(void)                 /* the state of a fresh unit with 
 {
     uint32_t k;
     ui_power_on();
+    /* The immutable audio references were recorded with HALL. The 1.0
+     * new-project STASIS default must not change this differential input. */
+    song.g[G_RTYPE] = 2;
     memset(midi_ch, 0, sizeof midi_ch); memset(midi_notes, 0, sizeof midi_notes);
     memset(midi_owners, 0, sizeof midi_owners); memset(midi_bend_q8, 0, sizeof midi_bend_q8);
     memset(midi_bend_target, 0, sizeof midi_bend_target); memset(&midi_clock, 0, sizeof midi_clock);
