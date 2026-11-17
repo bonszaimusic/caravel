@@ -28,6 +28,19 @@ int main(void) {
     assert(proj_pack(&wire,&p));assert(proj_import(&q,wire.raw,sizeof wire));
     assert(!memcmp(p.t,q.t,sizeof p.t));assert(!memcmp(p.lfo2,q.lfo2,sizeof p.lfo2));
     assert(!memcmp(&h,&proj_harmony,sizeof h));
+    /* Legacy zero marker preserves T1-linked mode, but new projects can
+     * encode an independent global ROOT/SCALE in the same 24-byte region. */
+    uint32_t ko=68u+NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE);
+    assert(wire.raw[ko+21u]==0u && wire.raw[ko+22u]==0u && wire.raw[ko+23u]==0u);
+    proj_harmony.key_mode=1u;proj_harmony.key_root=9u;proj_harmony.key_scale=2u;
+    assert(proj_pack(&wire,&p));
+    assert(wire.raw[ko+21u]==1u && wire.raw[ko+22u]==9u && wire.raw[ko+23u]==2u);
+    assert(proj_import(&q,wire.raw,sizeof wire));
+    assert(proj_harmony.key_mode==1u && proj_harmony.key_root==9u && proj_harmony.key_scale==2u);
+    bad=wire;bad.raw[ko+21u]=2u;rehash(&bad);assert(!proj_import(&q,bad.raw,sizeof bad));
+    bad=wire;bad.raw[ko+22u]=12u;rehash(&bad);assert(!proj_import(&q,bad.raw,sizeof bad));
+    bad=wire;bad.raw[ko+23u]=16u;rehash(&bad);assert(!proj_import(&q,bad.raw,sizeof bad));
+    proj_harmony=h;
     for(uint32_t e=0;e<6;e++) {
         p.t[0].engine=eng_unstore(e);assert(proj_pack(&wire,&p));
         assert(wire.raw[68+P_COUNT]==e);assert(proj_import(&q,wire.raw,sizeof wire));

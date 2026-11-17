@@ -37,6 +37,7 @@ typedef union { uint32_t align; uint8_t raw[PROJ_STORE_SIZE]; } project_store_t;
 project_store_t proj_slot[4] __attribute__((section(".noinit")));
 typedef struct {
     uint8_t root[4], dur[4], on, link_src[NTRK], link_retrig[NTRK], follow[NTRK];
+    uint8_t key_mode, key_root, key_scale; /* existing reserved wire bytes */
     uint32_t bar, base;
 } harmony_saved_t;
 static harmony_saved_t proj_harmony;
@@ -103,17 +104,23 @@ static int proj_engines_ok(const project_t *q) {
 static int f2_harmony_valid(const harmony_saved_t *h) {
     if(h->on>1u)return 0;
     for(uint32_t t=0;t<NTRK;t++)if(h->root[t]>11u||h->dur[t]>3u||h->link_src[t]>4u||h->link_retrig[t]>3u||h->follow[t]>1u)return 0;
+    if(h->key_mode>1u)return 0;
+    if(h->key_mode && (h->key_root>11u || h->key_scale>=sizeof SCALE_MASK/sizeof SCALE_MASK[0]))return 0;
     return 1;
 }
 static void f2_harmony_pack(uint8_t *b,const harmony_saved_t *h) {
     memset(b,0,PROJ_HARMONY_SIZE);
     memcpy(b,h->root,4);memcpy(b+4,h->dur,4);b[8]=h->on;
     memcpy(b+9,h->link_src,4);memcpy(b+13,h->link_retrig,4);memcpy(b+17,h->follow,4);
+    if(h->key_mode){b[21]=1u;b[22]=h->key_root;b[23]=h->key_scale;}
 }
 static int f2_harmony_unpack(harmony_saved_t *h,const uint8_t *b) {
     memset(h,0,sizeof *h);memcpy(h->root,b,4);memcpy(h->dur,b+4,4);h->on=b[8];
     memcpy(h->link_src,b+9,4);memcpy(h->link_retrig,b+13,4);memcpy(h->follow,b+17,4);
-    return !b[21]&&!b[22]&&!b[23]&&f2_harmony_valid(h);
+    /* 0/0/0 = historical T1-linked key; 1/root/scale = independent key. */
+    if(b[21]>1u || (!b[21] && (b[22] || b[23])))return 0;
+    h->key_mode=b[21];h->key_root=b[22];h->key_scale=b[23];
+    return f2_harmony_valid(h);
 }
 static int proj_pack(project_store_t *out, const project_t *q)
 {

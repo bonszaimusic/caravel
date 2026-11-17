@@ -66,6 +66,17 @@ static uint16_t harmony_phase;                    /* perf_bars_q16's fraction at
                                                    * so a start is a bar line for them; perf_bars_q16 itself (JOURNEY's clock) is never moved (round 7) */
 #define HARM_BAR() ((perf_bars_q16 - harmony_phase) >> 16)
 static uint8_t harmony_root[4], harmony_dur[4];
+/* Independent global key, legacy old projects still follow T1 until converted. */
+static uint8_t harmony_key_mode, harmony_key_root, harmony_key_scale;
+static uint32_t harmony_key_root_eff(void)
+{
+    return harmony_key_mode ? harmony_key_root : (uint32_t)trk[0].p[P_ROOT];
+}
+static uint32_t harmony_key_scale_eff(void)
+{
+    return harmony_key_mode ? harmony_key_scale : (uint32_t)trk[0].p[P_SCALE];
+}
+
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
 static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 HARM (was CHORD), 2 SCALE (was LINK), 3 BOTH */
@@ -105,16 +116,18 @@ static uint32_t harmony_chord_at(uint32_t bar)
     }
     return 3u;
 }
-/* T1's scale as absolute pitch classes (its scale mask turned by T1's ROOT): what every bus root and chord is built from. */
+/* All global progression consumers resolve to the global key; old unmarked
+ * projects retain their original dynamic T1 mapping. */
 static uint32_t harmony_scale_abs(void)
 {
-    const track_t *k = &trk[0];
-    uint32_t sm = scale_mask(k), abs = 0, i;
+    uint32_t sm = SCALE_MASK[clamp((int32_t)harmony_key_scale_eff(), 0,
+        (int32_t)(sizeof SCALE_MASK / sizeof SCALE_MASK[0]) - 1)];
+    uint32_t abs = 0, i, root = harmony_key_root_eff();
     if (sm == 0xFFFu)
-        sm = SCALE_MASK[1];                           /* CHR has no key of its own: the major scale of ROOT, as CHRD DIA3 builds on it (round 7) */
-    for (i = 0; i < 12u; i++)                         /* the scale is relative to T1's ROOT; the bus roots are absolute */
+        sm = SCALE_MASK[1]; /* CHR: retain former MAJOR fallback */
+    for (i = 0; i < 12u; i++)
         if ((sm >> i) & 1u)
-            abs |= 1u << ((k->p[P_ROOT] + (int32_t)i + 120) % 12);
+            abs |= 1u << ((root + i) % 12u);
     return abs;
 }
 /* The one effective root of a bus chord, for tone generation, the editor and the display: a root inside T1's scale is

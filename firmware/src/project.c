@@ -100,6 +100,9 @@ static void harmony_save(harmony_saved_t *s)
     memcpy(s->link_src, link_src, sizeof s->link_src);
     memcpy(s->link_retrig, link_retrig, sizeof s->link_retrig);
     memcpy(s->follow, harmony_follow, sizeof s->follow);
+    s->key_mode = harmony_key_mode;
+    s->key_root = harmony_key_root;
+    s->key_scale = harmony_key_scale;
     s->on = harmony_on;
     s->bar = harmony_bar;
     s->base = harmony_base_bar;
@@ -111,6 +114,9 @@ static void harmony_restore(const harmony_saved_t *s)
     memcpy(link_src, s->link_src, sizeof s->link_src);
     memcpy(link_retrig, s->link_retrig, sizeof s->link_retrig);
     memcpy(harmony_follow, s->follow, sizeof s->follow);
+    harmony_key_mode = s->key_mode;
+    harmony_key_root = s->key_root;
+    harmony_key_scale = s->key_scale;
     harmony_on = s->on;
     harmony_bar = s->bar;
     harmony_base_bar = s->base;
@@ -387,6 +393,9 @@ static void project_init_runtime(void)
     motion_base_valid = 0;
     harmony_perf_clear();
     harmony_on = 0;
+    harmony_key_mode = 1u;  /* fresh 1.0 project owns its global key */
+    harmony_key_root = 0u;
+    harmony_key_scale = 1u; /* MAJOR */
     harmony_bar = 0;
     harmony_base_bar = HARM_BAR();
     memset(harmony_root, 0, sizeof harmony_root);
