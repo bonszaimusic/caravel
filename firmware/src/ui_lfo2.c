@@ -191,11 +191,21 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
             {"CHORD 3", F_NOTE, 0, 11, 0, 0, 0}, {"CHORD 4", F_NOTE, 0, 11, 0, 0, 0}};
         static const param_desc_t DD = {"DUR", F_ENUM, 0, 3, 0, DUR, 0};
         if (col >= 4u) return 0;
-        if (row) {
+        if (harmony_edit_dur == 0u && !row) {
+            static const char *const ONOFF[] = {"OFF", "ON"};
+            static const param_desc_t ON = {"ACTIVE", F_ENUM, 0, 1, 0, ONOFF, 0};
+            static const param_desc_t ROOT = {"ROOT", F_NOTE, 0, 11, 0, 0, 0};
+            static const param_desc_t SCALE = {"SCALE", F_ENUM, 0, 15, 1, N_SCALE, 0};
+            if (col == 0u) { *v = harmony_on; return &ON; }
+            if (col == 1u) { *v = (int32_t)harmony_key_root_eff(); return &ROOT; }
+            if (col == 2u) { *v = (int32_t)harmony_key_scale_eff(); return &SCALE; }
+            return 0; /* K4 SELECT is navigation hint */
+        }
+        if (row && harmony_edit_dur != 0u) {
             *v = (int32_t)hdur_get(col);
             return &DD;
         }
-        *v = (int32_t)harmony_root_eff(hroot_get(col));       /* the effective root: what sounds and what the name shows */
+        *v = (int32_t)harmony_root_eff(hroot_get(col));
         return &RD[col];
     }
     if (rp && rp->graph == GR_SCALE && col == 0u) {
@@ -423,7 +433,7 @@ static void lfo_cards(const page_t *pg)
     uint32_t bottom;
     const dual_t *dd = dual_of(pg, &bottom);
     if (dd->kind == DK_LINK) bottom = link_setup_row ? 1u : 0u;
-    if (dd->kind == DK_HARMONY) bottom = harmony_edit_dur ? 1u : 0u;   /* the active row follows the SCL row key */
+    if (dd->kind == DK_HARMONY) bottom = harmony_edit_dur == 2u ? 1u : 0u;   /* the active row follows the SCL row key */
     const page_t *rps[2] = {dual_row_page(dd, 0), dual_row_page(dd, 1)};
     /* This layout has no rolling card digits; discard animations from the previous page. */
     for (uint32_t col = 0; col < 4u; col++)
@@ -485,11 +495,14 @@ static void lfo_cards(const page_t *pg)
         cv_rrect(3, y, 234, 80, 5, edge, T_BG);
         cv_rrect(5, y + 2, 230, 76, 3, T_SURF, edge);
         cv_rect(5, y + 5, 230, 16, head);
-        cv_text_on(10, y + 6, &AF_S, row ? dd->hb : dd->ht, active ? T_INK : T_TEXT, head);
+        cv_text_on(10, y + 6, &AF_S, dd->kind == DK_HARMONY ?
+            (row ? (harmony_edit_dur == 0u ? "CHORD PREVIEW" : "DURATIONS") :
+             (harmony_edit_dur == 0u ? "GLOBAL KEY" : "CHORD ROOTS")) :
+            (row ? dd->hb : dd->ht), active ? T_INK : T_TEXT, head);
         {
             char htxt[12];
             if (dd->kind == DK_HARMONY) {
-                str_cpy(htxt, harmony_edit_dur ? "DUR " : "ROOT ", sizeof htxt);
+                str_cpy(htxt, harmony_edit_dur == 0u ? "KEY " : harmony_edit_dur == 1u ? "ROOT " : "DUR ", sizeof htxt);
                 str_cpy(htxt + str_len(htxt), harmony_on ? "ON" : "OFF", sizeof htxt - str_len(htxt));
                 cv_text_r(230, y + 6, &AF_S, htxt, active ? T_INK : T_MID, head);
             } else
@@ -544,6 +557,11 @@ static void lfo_cards(const page_t *pg)
             }
             if (dd->kind == DK_LINK) {
                 link_card(row, col, x, y, active);
+                continue;
+            }
+            if (dd->kind == DK_HARMONY && harmony_edit_dur == 0u && !row && col == 3u) {
+                cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, "CHORDS", T_MID, T_SURF);
+                cv_text_in(x, y + 44 - AF_M_CAP_Y, 56, &AF_M, "SELECT", T_TEXT, T_SURF);
                 continue;
             }
             if (!d || !d->label || d->label[0] == '-') {

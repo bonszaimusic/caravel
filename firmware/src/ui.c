@@ -1051,17 +1051,17 @@ static void scl_page_turn(int32_t dir)
     if (harm_has_key(TSEL)) steps[count++] = 1; /* KEY */
     if (mode == HROLE_CHORD && TSEL->p[P_CHRD] != CH_BUS) steps[count++] = 2; /* SHAPE */
     if (mode == HROLE_EXT) steps[count++] = 3; /* EXT details */
-    steps[count++] = 4; /* GLOBAL HARMONY ON/ROOT/SCALE */
-    steps[count++] = 5; /* progression chords */
+    steps[count++] = 4; /* GLOBAL HARMONY ON/ROOT/SCALE on its own screen */
+    steps[count++] = 5; /* progression chord roots */
     steps[count++] = 6; /* durations */
-    at = pg->graph == GR_LINK ? (link_setup_row ? 4 : 0) :
+    at = pg->graph == GR_LINK ? 0 :
          pg->graph == GR_SCALE ? 1 :
          pg->graph == GR_CHORD ? (chord_ext_row ? 3 : 2) :
-         pg->graph == GR_HARMONY ? (harmony_edit_dur ? 6 : 5) : 0;
+         pg->graph == GR_HARMONY ? 4 + clamp(harmony_edit_dur, 0, 2) : 0;
     for (uint32_t i = 0; i < count; i++)
         if (steps[i] == at) pos = (int32_t)i;
     uint32_t next = steps[clamp(pos + (dir > 0 ? 1 : -1), 0, (int32_t)count - 1)];
-    uint32_t graph = next == 0 || next == 4 ? GR_LINK :
+    uint32_t graph = next == 0 ? GR_LINK :
                      next == 1 ? GR_SCALE : (next == 2 || next == 3) ? GR_CHORD : GR_HARMONY;
     if (at == (int32_t)next) return;
     for (uint32_t i = 0; i < NPAGES; i++) {
@@ -1071,9 +1071,9 @@ static void scl_page_turn(int32_t dir)
             ui.fam_last[FAM_SCL] = ui.page;
             page_entered();
         }
-        link_setup_row = next == 4;
+        link_setup_row = 0;
         chord_ext_row = next == 3;
-        harmony_edit_dur = next == 6;
+        harmony_edit_dur = next >= 4u ? (uint8_t)(next - 4u) : 0u;
         ui_message(next == 0 ? "HARM" : next == 1 ? "KEY" :
                    next == 2 ? "CHORD SHAPE" : next == 3 ? "EXT DETAILS" :
                    next == 4 ? "GLOBAL HARMONY" : next == 5 ? "HARMONY CHORDS" : "HARMONY DURATION");

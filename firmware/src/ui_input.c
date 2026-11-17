@@ -1114,16 +1114,33 @@ static void edit_param(uint32_t slot, int32_t steps)
         }
         return;
     }
-    if (pg->graph == GR_HARMONY) {                    /* K1..K4: the roots (top) or the DUR row (bottom) */
-        uint32_t bottom = (uint32_t)dual_bottom(pg);
-        if (slot < 4u) {
-            if (bottom || harmony_edit_dur) {
-                int32_t d = (int32_t)hdur_get(slot) + steps;
-                d &= 3;
-                hdur_set(slot, (uint8_t)d);
-            } else {
-                hroot_set(slot, (uint8_t)harmony_root_step(hroot_get(slot), steps));   /* scale degrees of T1's scale only */
+    if (pg->graph == GR_HARMONY) { /* global setup, chord roots or durations */
+        if (harmony_edit_dur == 0u) {
+            if (slot == 0u) {
+                uint8_t on = steps > 0;
+                if (on != harmony_on) {
+                    harmony_perf_clear();
+                    harmony_on = on;
+                    harmony_base_bar = HARM_BAR();
+                    harmony_bar = 0;
+                    ui_message(on ? "HARMONY ON" : "HARMONY OFF");
+                    ui.force = 1;
+                }
+            } else if (slot == 1u || slot == 2u) {
+                uint32_t root = harmony_key_root_eff(), scale = harmony_key_scale_eff();
+                if (slot == 1u) root = (uint32_t)((((int32_t)root + steps) % 12 + 12) % 12);
+                else scale = (uint32_t)clamp((int32_t)scale + steps, 0,
+                    (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1);
+                harmony_key_root = (uint8_t)root;
+                harmony_key_scale = (uint8_t)scale;
+                harmony_key_mode = 1u; /* explicit edit decouples T1 */
+                ui.force = 1;
             }
+        } else if (slot < 4u && harmony_edit_dur == 2u) {
+            hdur_set(slot, (uint8_t)(((int32_t)hdur_get(slot) + steps) & 3));
+            ui.force = 1;
+        } else if (slot < 4u) {
+            hroot_set(slot, (uint8_t)harmony_root_step(hroot_get(slot), steps));
             ui.force = 1;
         }
         return;
