@@ -25,13 +25,17 @@ class TutorialPagesTest(unittest.TestCase):
 
     def test_registry_has_every_topic_of_the_agreed_structure(self):
         ids = [t["id"] for t in self.data["topics"]]
-        self.assertEqual(ids, ["start-here", "basics", "sem", "hades", "drone", "ensemble", "seq-arp", "home", "harmony", "elastic-first-steps", "elastic-linked-springs", "elastic-ambient-recipes", "filter-fx", "midi-sync", "help"])
-        self.assertEqual([t["num"] for t in self.data["topics"]], ["1", "2", "3.1", "3.2", "3.3", "3.4", "4", "5", "6", "6.1", "6.2", "6.3", "7", "8", "9"])
+        self.assertEqual(ids, ["start-here", "basics", "analog", "phys", "sem", "hades", "drone", "ensemble", "seq-arp", "capture", "home", "harmony", "elastic-first-steps", "elastic-linked-springs", "elastic-ambient-recipes", "filter-fx", "midi-sync", "help"])
+        self.assertEqual([t["num"] for t in self.data["topics"]], ["1", "2", "3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "4", "4.1", "5", "6", "6.1", "6.2", "6.3", "7", "8", "9"])
         previews = [t for t in self.data["topics"] if t.get("preview")]
         self.assertEqual(previews, [])  # 0.13.0 is a full release, not a preview
         shots = [t for t in self.data["topics"] if t["id"].startswith("elastic-")]
-        self.assertEqual([t["thumb"] for t in shots], ["elastic-cell-armed.png", "elastic-row-coupled.png", "elastic-four-track-hud.png"])
+        self.assertEqual([t["thumb"] for t in shots], ["one-move.png", "one-lfo.png", "one-capture.png"])
         self.assertTrue(all(t["status"] == "ready" for t in shots))
+        self.assertEqual([t["title"] for t in self.data["topics"] if t["group"] == "engines"],
+                         ["ANALOG", "PHYS", "SEM", "HADES", "DRONE", "ENSEMBLE"])
+        self.assertEqual([t["md"] for t in self.data["topics"] if t["id"] in ("analog", "phys", "capture")],
+                         ["engine-analog.md", "engine-phys.md", "capture.md"])
         for t in self.data["topics"]:
             self.assertTrue(t["tagline"].endswith(".") and t["minutes"] > 0)
 
@@ -72,7 +76,7 @@ class TutorialPagesTest(unittest.TestCase):
         for t in self.data["topics"]:
             if t["status"] == "ready":
                 seen |= set(re.findall(r"\]\(img/([^)\s]+\.png)\)", (TUT / t["md"]).read_text(encoding="utf-8")))
-        self.assertGreaterEqual(len(seen), 40)
+        self.assertEqual(len(seen), 14)  # 1.x references 14 current one-*.png renderer screens
         for name in sorted(seen):
             raw = (TUT / "img" / name).read_bytes()
             self.assertEqual((raw[:8], struct.unpack(">II", raw[16:24])), (b"\x89PNG\r\n\x1a\n", (240, 240)), name)
@@ -83,8 +87,8 @@ class TutorialPagesTest(unittest.TestCase):
         self.assertIn("not a recording of an FM-1", manifest["origin"])
         by_file = {c["file"]: c for c in manifest["clips"]}
         used = tp.used_audio(self.data, ROOT)
-        self.assertEqual(sorted(by_file), used)                                   # every clip is used, every used clip is in the manifest
-        self.assertGreaterEqual(len(used), 16)
+        self.assertTrue(set(used).issubset(by_file))  # 1.x guides need not reuse Classic example audio
+        self.assertGreaterEqual(len(by_file), 16)  # archived native-DSP audio manifest remains intact
         for name, clip in by_file.items():
             path = ROOT / "docs/audio/tutorials" / name
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), clip["sha256"], name)
@@ -115,18 +119,18 @@ class TutorialPagesTest(unittest.TestCase):
     def test_site_pages_overview_and_pill(self):
         with tempfile.TemporaryDirectory() as temp:
             site = Path(temp)
-            tp.add_tutorials(site, self.look, make_site.SHIP_PATH, "0.12.0", ROOT)
+            tp.add_tutorials(site, self.look, make_site.SHIP_PATH, "1.0.0", ROOT)
             overview = (site / "tutorials/index.html").read_text()
-            self.assertIn('<span class="pill">v0.12.0</span>', overview)
+            self.assertIn('<span class="pill">v1.0.0</span>', overview)
             self.assertEqual(overview.count("<article class=\"card"), len(self.data["topics"]))
             self.assertNotIn("IN PREPARATION", overview)
             self.assertIn('href="elastic-first-steps/"', overview)
             self.assertIn('href="elastic-linked-springs/"', overview)
             self.assertIn('href="elastic-ambient-recipes/"', overview)
             self.assertNotIn("0.13.0 PREVIEW", overview)
-            self.assertIn("img/elastic-cell-armed.png", overview)
-            self.assertIn("img/elastic-row-coupled.png", overview)
-            self.assertIn("img/elastic-four-track-hud.png", overview)
+            self.assertIn("img/one-move.png", overview)
+            self.assertIn("img/one-lfo.png", overview)
+            self.assertIn("img/one-capture.png", overview)
             for slug in ("elastic-first-steps", "elastic-linked-springs", "elastic-ambient-recipes"):
                 preview_page = (site / "tutorials" / slug / "index.html").read_text()
                 self.assertIn("REAL FIRMWARE SCREENS", preview_page)
@@ -134,13 +138,16 @@ class TutorialPagesTest(unittest.TestCase):
                 self.assertIn('href="../home/"', preview_page)
             for t in self.data["topics"]:
                 self.assertIn(t["title"], overview)
+            for slug in ("analog", "phys", "capture"):
+                self.assertIn(f'href="{slug}/"', overview)
+                self.assertTrue((site / "tutorials" / slug / "index.html").is_file())
             self.assertIn('href="start-here/"', overview)
             self.assertIn("img/device-hero.svg", overview)
             page = (site / "tutorials/start-here/index.html").read_text()
-            self.assertIn('<span class="pill">v0.12.0</span>', page)
+            self.assertIn('<span class="pill">v1.0.0</span>', page)
             self.assertIn('id="step-1"', page)
-            self.assertIn("../firmware/caravel-0.12.0-source.tar.gz", page)
-            self.assertEqual(page, (tp.topic_page(self.data["topics"][0], self.data, self.look, make_site.SHIP_PATH, "0.12.0", ROOT)))
+            self.assertIn("../firmware/caravel-1.0.0-source.tar.gz", page)
+            self.assertEqual(page, (tp.topic_page(self.data["topics"][0], self.data, self.look, make_site.SHIP_PATH, "1.0.0", ROOT)))
             for name in tp.used_images(self.data, ROOT):
                 self.assertTrue((site / "tutorials/img" / name).is_file(), name)
             for name in tp.used_audio(self.data, ROOT):
