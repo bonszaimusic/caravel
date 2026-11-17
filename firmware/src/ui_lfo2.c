@@ -117,9 +117,9 @@ static const dual_t DUALS[] = {
 #endif
     {"INSERT", "INSERT 2", "INSERT TYPE MIX HOLD", "INSERT A B C FILTER", "INSERT", "INSERT A-C FILT", DK_INS},
     {"SLICER", "", "SLICER", "", "SLICER", "", DK_GRAPH},
-    {"SCL", "CHORD", "SCALE", "CHORD KEYS", "SCL", "CHORD", DK_PLAIN},
+    {"KEY", "CHORD", "KEY SETTINGS", "CHORD SHAPE", "KEY", "CHORD", DK_PLAIN},
     {"HARMONY", "", "HARMONY", "DURATION", "HARMONY", "DURATION", DK_HARMONY},
-    {"LINK", "LINK", "LINK", "HARMONY SETUP", "LINK / HARMONY SETUP", "LINK / HARMONY SETUP", DK_LINK},
+    {"HARM", "HARM", "TRACK HARM", "GLOBAL HARMONY", "HARM", "HARMONY KEY", DK_LINK},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
     {"CHORD", "", "CHORD KEYS", "CHORD EXT", "CHORD", "CHORD EXT", DK_CHEXT},
@@ -198,30 +198,43 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         *v = (int32_t)harmony_root_eff(hroot_get(col));       /* the effective root: what sounds and what the name shows */
         return &RD[col];
     }
+    if (rp && rp->graph == GR_SCALE && col == 0u) {
+        static const char *const SOURCES[] = {"OWN", "T1", "T2", "T3", "T4"};
+        static const param_desc_t FROM_KEY = {"KEY FROM", F_ENUM, 0, 4, 0, SOURCES, 0};
+        *v = link_src[song.sel]; return &FROM_KEY;
+    }
     if (dd->kind == DK_LINK) {
-        static const char *const SRC[] = {"OFF", "T1", "T2", "T3", "T4"};
+        static const char *const ROLES[] = {"NOTES", "FOLLOW", "CHORD", "EXT", "CUSTOM"};
+        static const char *const ORIGIN[] = {"KEY", "HARM"};
         static const char *const RT[] = {"OFF", "HARM", "SCALE", "BOTH"};
         static const char *const ONOFF[] = {"OFF", "ON"};
-        static const param_desc_t SD = {"SOURCE", F_ENUM, 0, 4, 0, SRC, 0};
-        static const param_desc_t RD = {"RETRIG", F_ENUM, 0, 3, 0, RT, 0};
-        static const param_desc_t KD = {"KEY", F_NOTE, 0, 11, 0, 0, 0};
-        static const param_desc_t HD = {"FOLLOW", F_ENUM, 0, 1, 0, ONOFF, 0};     /* this track follows the bus */
-        static const param_desc_t HON = {"HARMONY", F_ENUM, 0, 1, 0, ONOFF, 0};   /* the bus itself, for every track */
+        static const param_desc_t MD = {"MODE", F_ENUM, 0, 4, 0, ROLES, 0};
+        static const param_desc_t SRC = {"FROM", F_ENUM, 0, 1, 0, ORIGIN, 0};
+        static const param_desc_t RE = {"RETRIG", F_ENUM, 0, 3, 0, RT, 0};
+        static const param_desc_t HON = {"HARMONY", F_ENUM, 0, 1, 0, ONOFF, 0};
+        static const param_desc_t ROOT = {"ROOT", F_NOTE, 0, 11, 0, 0, 0};
+        static const param_desc_t SCL = {"SCALE", F_ENUM, 0, 15, 1, N_SCALE, 0};
+        uint32_t mode = harm_role(TSEL);
         if (col >= 4u) return 0;
         if (row) {
-            *v = col == 0u ? harmony_on : 0;
-            return col == 0u ? &HON : 0;
+            if (col == 0u) { *v = harmony_on; return &HON; }
+            if (col == 1u) { *v = (int32_t)harmony_key_root_eff(); return &ROOT; }
+            if (col == 2u) { *v = (int32_t)harmony_key_scale_eff(); return &SCL; }
+            return 0;
         }
-        uint32_t src = link_src[song.sel];
-        if (col == 0u) { *v = src; return &SD; }
-        if (col == 1u) { *v = link_retrig[song.sel]; return &RD; }
-        if (col == 2u) {
-            if (!src || src > NTRK) { *v = 0; return 0; }
-            *v = trk[src - 1u].p[P_ROOT];
-            return &KD;
+        if (col == 0u) { *v = (int32_t)mode; return &MD; }
+        if (mode == HROLE_CHORD) {
+            if (col == 1u) { *v = TSEL->p[P_CHRD] == CH_BUS; return &SRC; }
+            if (col == 2u) { *v = TSEL->p[P_CHRD]; return TSEL->p[P_CHRD] == CH_BUS ? 0 : &TP[P_CHRD]; }
+            if (col == 3u) { *v = TSEL->p[P_VOIC]; return &TP[P_VOIC]; }
+        } else if (mode == HROLE_EXT) {
+            if (col == 1u) { *v = TSEL->p[P_CSRC]; return &TP[P_CSRC]; }
+            if (col == 2u) { *v = TSEL->p[P_CEXT]; return &TP[P_CEXT]; }
+            if (col == 3u) { *v = TSEL->p[P_COCT]; return &TP[P_COCT]; }
+        } else if (mode == HROLE_FOLLOW && col == 3u) {
+            *v = link_retrig[song.sel]; return &RE;
         }
-        *v = harmony_follow[song.sel];
-        return &HD;
+        return 0;
     }
     if (dd->kind == DK_LFO2) {
         uint32_t id = lfo2_page_target(row ? GR_LFO2SYNC : GR_LFO2, col);
@@ -332,52 +345,75 @@ static const char *harmony_card_text(uint32_t col, char *val)
  * for a long scale name "T1 C" (the scale dropped before the track). */
 static const char *harmony_basis(char *b, uint32_t bs, int32_t w)
 {
-    str_cpy(b, N_NOTE[(uint32_t)trk[0].p[P_ROOT] % 12u], bs);
+    uint32_t root = harmony_key_root_eff(), scale = harmony_key_scale_eff();
+    str_cpy(b, N_NOTE[root % 12u], bs);
     str_cpy(b + str_len(b), " ", bs - str_len(b));
-    str_cpy(b + str_len(b), N_SCALE[(uint32_t)trk[0].p[P_SCALE] % (sizeof N_SCALE / sizeof N_SCALE[0])], bs - str_len(b));
-    str_cpy(b + str_len(b), " T1", bs - str_len(b));
+    str_cpy(b + str_len(b), N_SCALE[scale % (sizeof N_SCALE / sizeof N_SCALE[0])], bs - str_len(b));
+    if (!harmony_key_mode)
+        str_cpy(b + str_len(b), " T1", bs - str_len(b));
     if (text_w(&AF_S, b) > w) {
-        str_cpy(b, "T1 ", bs);
-        str_cpy(b + str_len(b), N_NOTE[(uint32_t)trk[0].p[P_ROOT] % 12u], bs - str_len(b));
+        str_cpy(b, harmony_key_mode ? "KEY " : "T1 ", bs);
+        str_cpy(b + str_len(b), N_NOTE[root % 12u], bs - str_len(b));
     }
     return b;
 }
 static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int active)
 {
-    const char *lab = "", *val = "";
+    const char *lab = "", *val = "--";
     char buf[20];
-    uint32_t src = link_src[song.sel];
-    if (!row) {
-        static const char *const SRC[] = {"OFF", "T1", "T2", "T3", "T4"};
-        static const char *const RT[] = {"OFF", "HARM", "SCALE", "BOTH"};
-        if (col == 0u) { lab = "SOURCE"; val = SRC[src <= 4u ? src : 0u]; }
-        else if (col == 1u) { lab = "RETRIG"; val = RT[link_retrig[song.sel] & 3u]; }
-        else if (col == 2u) {
-            lab = "KEY";
-            if (!src || src > NTRK) val = "--";
-            else {
-                str_cpy(buf, N_NOTE[(uint32_t)trk[src - 1u].p[P_ROOT] % 12u], sizeof buf);
-                str_cpy(buf + str_len(buf), " ", sizeof buf - str_len(buf));
-                str_cpy(buf + str_len(buf), N_SCALE[(uint32_t)trk[src - 1u].p[P_SCALE] %
-                        (sizeof N_SCALE / sizeof N_SCALE[0])], sizeof buf - str_len(buf));
-                val = buf;
-            }
-        } else { lab = "FOLLOW"; val = harmony_follow[song.sel] ? "ON" : "OFF"; }
-    } else {
+    uint32_t mode = harm_role(TSEL);
+    if (row) {
         if (col == 0u) { lab = "HARMONY"; val = harmony_on ? "ON" : "OFF"; }
-        else {                                       /* K2..K4 do nothing here: a hint, not three cards */
-            if (col == 1u) {
-                cv_text_in(x, y + 31 - AF_S_CAP_Y, 168, &AF_S, "ONLY K1 WORKS HERE", T_DIM, T_SURF);
-                cv_text_in(x, y + 46 - AF_S_CAP_Y, 168, &AF_S, harmony_on ? "ROOTS, DURATIONS:" : "TURN K1 RIGHT FIRST,", T_MID, T_SURF);
-                cv_text_in(x, y + 60 - AF_S_CAP_Y, 168, &AF_S, harmony_on ? "SELECT OR SCL KEY" : "THEN SELECT", T_MID, T_SURF);
+        else if (col == 1u) { lab = "ROOT"; val = N_NOTE[harmony_key_root_eff() % 12u]; }
+        else if (col == 2u) {
+            lab = "SCALE";
+            val = N_SCALE[harmony_key_scale_eff() % (sizeof N_SCALE / sizeof N_SCALE[0])];
+        } else { lab = "CHORDS"; val = "SELECT"; }
+    } else if (col == 0u) {
+        static const char *const names[] = {"NOTES", "FOLLOW", "CHORD", "EXT", "CUSTOM"};
+        lab = "MODE"; val = names[mode];
+    } else if (mode == HROLE_CHORD) {
+        if (col == 1u) { lab = "FROM"; val = TSEL->p[P_CHRD] == CH_BUS ? "HARM" : "KEY"; }
+        else if (col == 2u) {
+            if (TSEL->p[P_CHRD] == CH_BUS) {
+                lab = "NOW";
+                if (!harmony_on) val = "WAIT BUS";
+                else {
+                    uint32_t idx = harmony_chord_at(harmony_bar);
+                    chord_name(buf, (uint8_t)hroot_live(idx), harmony_mask_bar(harmony_bar));
+                    val = buf;
+                }
+            } else {
+                lab = "SHAPE";
+                val = N_CHRD[clamp(TSEL->p[P_CHRD], 0, CH_BUS)];
             }
-            return;
+        } else { lab = "VOICING"; val = N_VOIC[clamp(TSEL->p[P_VOIC], 0, 4)]; }
+    } else if (mode == HROLE_EXT) {
+        if (col == 1u) { lab = "CHORD FROM"; val = N_CSRC[clamp(TSEL->p[P_CSRC], 0, 5)]; }
+        else if (col == 2u) {
+            static const char *const levels[] = {"7", "7+9", "7+9+13"};
+            lab = "EXT"; val = levels[chext_disp((uint32_t)chext_p(1))];
+        } else {
+            static const char *const oct[] = {"-2", "-1", "0", "+1", "+2"};
+            lab = "OCT"; val = oct[clamp(TSEL->p[P_COCT] + 2, 0, 4)];
         }
+    } else if (mode == HROLE_FOLLOW) {
+        static const char *const retrig[] = {"OFF", "HARM", "SCALE", "BOTH"};
+        if (col == 1u) { lab = "FROM"; val = "HARM"; }
+        else if (col == 2u) { lab = "STATUS"; val = harmony_on ? "BUS READY" : "WAIT BUS"; }
+        else { lab = "RETRIG"; val = retrig[link_retrig[song.sel] & 3u]; }
+    } else if (mode == HROLE_NOTES) {
+        if (col == 1u) { lab = "FROM"; val = "KEY"; }
+        else if (col == 2u) { lab = "CHORD"; val = "OFF"; }
+        else { lab = "NEXT"; val = "KEY"; }
+    } else {
+        if (col == 1u) { lab = "CUSTOM"; val = "LEGACY"; }
+        else if (col == 2u) { lab = "CHRD"; val = N_CHRD[clamp(TSEL->p[P_CHRD], 0, CH_BUS)]; }
+        else { lab = "TO EDIT"; val = "MODE"; }
     }
-    uint16_t c = active ? T_TEXT : T_MID;
     cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, lab, active ? T_TEXT : T_DIM, T_SURF);
-    cv_text_in(x, y + 44 - AF_M_CAP_Y, 56, &AF_M, val, c, T_SURF);
-    if (row && col == 0u) {                             /* the bus is global: the key it is built in */
+    cv_text_in(x, y + 44 - AF_M_CAP_Y, 56, &AF_M, val, active ? T_TEXT : T_MID, T_SURF);
+    if (row && col == 0u) {
         char kb[20];
         cv_text_in(x, y + 65 - AF_S_CAP_Y, 56, &AF_S, harmony_basis(kb, sizeof kb, 56), T_MID, T_SURF);
     }
@@ -401,7 +437,7 @@ static void lfo_cards(const page_t *pg)
         }
     if (dd->kind == DK_HARMONY) {                          /* the names follow T1's scale, the SHIFT and the sounding slot */
         sig = sig * 33u + harmony_scale_abs() * 7u + harmony_on * 3u;
-        sig = sig * 33u + (uint32_t)trk[0].p[P_ROOT] * 131u + (uint32_t)trk[0].p[P_SCALE] * 17u;   /* the key label shows T1's own ROOT and SCALE */
+        sig = sig * 33u + harmony_key_root_eff() * 131u + harmony_key_scale_eff() * 17u + harmony_key_mode * 997u;
 #if CARAVEL_ACTION_BANKS
         sig = sig * 33u + (uint32_t)(int32_t)harmony_shift * 17u + (harmony_on ? harmony_chord_at(harmony_bar) * 977u : 0u);
 #endif
@@ -410,14 +446,14 @@ static void lfo_cards(const page_t *pg)
         uint32_t src = link_src[song.sel];
         sig = sig * 33u + harmony_follow[song.sel] * 7u + harmony_on * 3u;
         sig = sig * 33u + harmony_scale_abs() * 5u;          /* the key shown under the HARMONY switch */
-        sig = sig * 33u + (uint32_t)trk[0].p[P_ROOT] * 131u + (uint32_t)trk[0].p[P_SCALE] * 17u;   /* (CHR and periodic scales: one mask for several ROOTs) */
+        sig = sig * 33u + harmony_key_root_eff() * 131u + harmony_key_scale_eff() * 17u + harmony_key_mode * 997u;
         sig = sig * 33u + link_setup_row * 131u + (src && src <= NTRK ? (uint32_t)trk[src - 1u].p[P_SCALE] * 17u : 0u);
     }
 #if CARAVEL_STASIS_EXPAND
     if(rps[1] && rps[1]->graph==GR_STLAYER)
         sig=sig*33u+st_layer.phase+st_layer.request*8u+st.auto_hold*32u+st.releasing*64u+st.stopping*128u;
 #endif
-    if (str_eq(dd->top, "SCL"))                            /* the CHRD card's LOCAL DIA3 note follows the bus switches */
+    if (str_eq(dd->top, "KEY"))                            /* the CHRD card's LOCAL DIA3 note follows the bus switches */
         sig = sig * 33u + harmony_on * 3u + harmony_follow[song.sel] * 7u;
     if (dd->kind == DK_GRAPH && str_eq(dd->top, "SLICER"))   /* the graph: the pattern, the mode, the rate, the depth, the playing step */
         sig = sig * 33u + sl_pattern(TSEL) + (uint32_t)TSEL->p[P_SLCR] * 65599u + (uint32_t)TSEL->p[P_SLDEPTH] * 131u +
@@ -457,7 +493,7 @@ static void lfo_cards(const page_t *pg)
                 str_cpy(htxt + str_len(htxt), harmony_on ? "ON" : "OFF", sizeof htxt - str_len(htxt));
                 cv_text_r(230, y + 6, &AF_S, htxt, active ? T_INK : T_MID, head);
             } else
-                cv_text_r(230, y + 6, &AF_S, !active ? "VIEW" : dd->kind == DK_LINK && row ? "EDIT K1" : "EDIT K1-4", active ? T_INK : T_MID, head);   /* (SETUP: only K1 works) */
+                cv_text_r(230, y + 6, &AF_S, !active ? "VIEW" : dd->kind == DK_LINK && row ? "EDIT K1-3" : "EDIT K1-4", active ? T_INK : T_MID, head);
         }
         if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
             for (uint32_t k = 0; k < NMSLOT; k++) {
@@ -491,7 +527,7 @@ static void lfo_cards(const page_t *pg)
             int32_t v;
             const param_desc_t *d = dual_card(dd, rps[row], row, col, &v);
             int32_t x = 6 + (int32_t)col * 58;
-            if (col && !(dd->kind == DK_LINK && row && col >= 2u))   /* (the SETUP hint spans K2..K4) */
+            if (col)   /* all HARMONY setup cards are distinct */
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
 #if CARAVEL_STASIS_EXPAND
             if(rps[row] && rps[row]->graph==GR_STLAYER && col==3u){
