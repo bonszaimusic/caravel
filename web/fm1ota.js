@@ -220,8 +220,18 @@ export class Updater {
     await sleep(3000);
     const back = await this.waitFor((id) => !IS_OTA(id), 40000);
     if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
-    back.link.close();
-    if (back.id.text !== product) throw fail("mismatch", `installed, but the device reports ${back.id.text}`, back.id.text);
+    try {
+      if (back.id.text !== product) throw fail("mismatch", `installed, but the device reports ${back.id.text}`, back.id.text);
+      if (source.updateOnly) {
+        try {
+          const installed = await back.link.generation();
+          if (installed.generation !== 2 || installed.protocol !== 18)
+            throw new Error("Expected current 1.x protocol 18");
+        } catch (error) {
+          throw fail("mismatch", `Update returned without confirming protocol 18: ${error.message}`);
+        }
+      }
+    } finally { back.link.close(); }
     step("done", back.id.text);
     return back.id.text;
   }

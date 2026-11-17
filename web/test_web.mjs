@@ -1918,7 +1918,8 @@ const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 
 /* an FM-1 on WebMIDI: identity, then "device asks, host answers" reads of the image */
 class FakeFM1 {
-  constructor(image, { unplugAfter = Infinity, names = ["Felucca Update", "Felucca"], generation = 1 } = {}) {
+  constructor(image, { unplugAfter = Infinity, names = ["Felucca Update", "Felucca"], generation = 1, keepLegacyAfterUpdate = false } = {}) {
+    this.keepLegacyAfterUpdate = keepLegacyAfterUpdate;
     this.generation = generation; this.image = image; this.unplugAfter = unplugAfter; this.names = names; this.served = 0; this.bad = 0;
     this.access = { inputs: new Map(), outputs: new Map() };
     this.boot("FM-1_015", "FM-1");
@@ -1961,7 +1962,10 @@ class FakeFM1 {
       this.served++;
       if (this.served >= this.unplugAfter) { this.input.state = this.output.state = "disconnected"; return; }
       if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_900", this.names[0]), 300);
-      else if (addr === 0xF0000000) setTimeout(() => this.boot("FM-1_900", this.names[1]), 300);
+      else if (addr === 0xF0000000) setTimeout(() => {
+        if (this.generation === 17 && !this.keepLegacyAfterUpdate) this.generation = 2;
+        this.boot("FM-1_900", this.names[1]);
+      }, 300);
       else this.next();
     }
   }
@@ -1993,6 +1997,11 @@ async function updater() {
   const development=new FakeFM1(image,{generation:17});
   const upgraded=await new Updater(development.access).install(image,"FM-1_900",null,{allowLegacyFormat2Update:true});
   ok(upgraded==="FM-1_900"&&development.bad===0,"fm1ota.js: known protocol17 uses legacy entry then installs through verified loader");
+  const unchanged=new FakeFM1(image,{generation:17,keepLegacyAfterUpdate:true});
+  let missingRevision=null;
+  try {await new Updater(unchanged.access).install(image,"FM-1_900",null,{allowLegacyFormat2Update:true});}
+  catch(error){missingRevision=error;}
+  ok(missingRevision?.code==="mismatch","fm1ota.js: protocol17 upgrade cannot report done until protocol18 is confirmed");
 
   const devC = new FakeFM1(image, { names: ["Caravel Update", "Caravel"] });   /* Caravel's own port names */
   devC.boot("FM-1_900", "Caravel");
