@@ -173,10 +173,12 @@ class TutorialPagesTest(unittest.TestCase):
         self.assertIn("tutorials/random-morph-journey/", overview)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         top = "\n".join(readme.splitlines()[:8])
-        # The unpublished 1.x candidate links its own source guide index;
-        # the live Classic banner is not its tutorial entry point.
+        # The 1.x release links its own source guide index and runtime;
+        # the frozen Classic banner is not its tutorial entry point.
         self.assertIn("[Tutorials](docs/tutorials/README.md)", top)
-        self.assertIn("prepared, not published", top)
+        self.assertIn("releases/tag/v1.0.0", top)
+        self.assertIn("/caravel/v1/emulator/", top)
+        self.assertIn("/caravel/classic/", top)
         self.assertIn("docs/tutorials/start-here.md", readme)
         for url in re.findall(r'(?:src|href)="(docs/[^"]+)"', (ROOT / "README.md").read_text(encoding="utf-8")):
             self.assertTrue((ROOT / url).is_file(), url)
