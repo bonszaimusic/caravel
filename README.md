@@ -1,346 +1,50 @@
 # Caravel
 
-<p align="center"><a href="https://bonszaimusic.github.io/caravel/tutorials/"><img src="docs/tutorials/img/tutorials-banner.png" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a></p>
+Multi-engine synthesizer firmware for the M-VAVE FM-1. **1.0.0 candidate: prepared, not published.** The latest published version remains [0.13.0](https://github.com/bonszaimusic/caravel/releases/tag/v0.13.0).
 
-<p align="center"><strong><a href="https://bonszaimusic.github.io/caravel/tutorials/">Tutorials on the site</a></strong> · <a href="docs/tutorials/start-here.md">Start here: your first ten minutes</a> · <a href="docs/tutorials/README.md">all tutorials</a></p>
+[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) · [Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/) · [Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/) · [Tutorials](docs/tutorials/README.md) · [FAQ](docs/faq.md)
 
-> [!IMPORTANT]
-> **Newer FM-1 units have a different flash chip.** They carry a UC25HQ80 flash (JEDEC ID `0xB36014`) instead of the Puya P25Q80 (`0x856014`); both are 1 MiB. Caravel up to 0.11.0 accepted only the Puya ID, so on a newer unit nothing was written to flash: saving a project shows `SAVED (RAM)` and the project is gone after power-off, and a firmware update from the installer is not started. **Caravel 0.12.0 and later (including 0.13.0) accept both IDs** (the same change as Felucca's [#320](https://github.com/hugelton/Felucca/issues/320)).
->
-> **We have not tested this on a real UC25HQ80 unit.** It rests on a host test of the ID list and on one user's report for Felucca's 1.8.2 beta, which is not our test. If you have such a unit, please [tell us what happens](https://github.com/bonszaimusic/caravel/issues).
+The live website follows published releases; these source-tree instructions describe the 1.0 candidate.
 
-[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+![Caravel BUILD overview](docs/tutorials/img/one-build.png)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, **version 0.13.0**.
+## Start with PLAY, shape in BUILD
 
-**[Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/)** · **[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/)** · **[Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/)**
+Hold HOME for one second to switch views. PLAY exposes SOUND, SHAPE, MOVE, HARM, SPACE, MIX and ARP with four arcs. BUILD exposes the full sound and performance pages. Tap HOME for the LEVELS explanation in PLAY or the track overview in BUILD; EDIT selects SOUND. SAVE opens PROJECT; double-tap GLO in BUILD opens the menu. STEP, DETAIL and AUTOMATION retain their grid layout.
 
-**[Troubleshooting & FAQ](docs/faq.md)** — USB detection, switching firmware, stock-return error -5, UBOOT and recovery tools.
+[First ten minutes](docs/tutorials/start-here.md) · [Controls](docs/tutorials/basics.md) · [Release notes](docs/release-100.md)
 
-**Tutorials:** [Start here](docs/tutorials/start-here.md) · [Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md) · [STASIS: HOLD, ADD, BLEND](https://bonszaimusic.github.io/caravel/tutorials/) · [HOME, Pair Morph, macros and saving](docs/tutorials/home-and-stasis.md) · [all tutorials](docs/tutorials/README.md)
+## Six engines
 
-Caravel is a fork of **Felucca 1.6.1** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) and
-[Hügelton Instruments](https://hugelton.com), continued independently by bonszaimusic now that Felucca's active development
-has ended. 0.1.0 is the first version under this name. Caravel is **not affiliated with, endorsed or supported by Hügelton
-Instruments or M-VAVE**, and "Felucca" and "Hügelton Instruments" are those authors' names, used here only to say where the code
-comes from. See [NOTICE](NOTICE), [LICENSING.md](LICENSING.md) and [CREDITS.md](CREDITS.md).
-
-## Watch and listen
-
-<table>
-<tr>
-<td width="50%" align="center"><a href="https://www.youtube.com/watch?v=rfY23zoBgzQ"><img src="https://img.youtube.com/vi/rfY23zoBgzQ/hqdefault.jpg" width="420" alt="M-VAVE FM-1: Hades and SEM-inspired sounds"></a><br><strong>SEM &amp; HADES</strong><br>Sound showcase (recorded before the Caravel rename)</td>
-<td width="50%" align="center"><a href="https://www.youtube.com/watch?v=N08Vx3x7fLE"><img src="https://img.youtube.com/vi/N08Vx3x7fLE/hqdefault.jpg" width="420" alt="M-VAVE FM-1 Caravel: Lyra Inspired Drone Engine Demo"></a><br><strong>DRONE</strong><br>Lyra-inspired DRONE engine demo</td>
-</tr>
-</table>
-
-More videos: [BonszaiMusic on YouTube](https://www.youtube.com/@bonszaimusic).
-
-## Tutorials
-
-Firmware screenshots come from the actual firmware renderer; explicitly labelled diagrams are illustrations. Start with the one that matches what you want to do:
-
-| Tutorial | What you learn |
+| Engine | Sound and starting point |
 | --- | --- |
-| **[Random Morph and Morph Journey](docs/tutorials/random-morph-journey.md)** | Save sounds into S1–S4, morph between them, and let a journey chain the morphs hands-free (0.9.0; [reference](docs/morph-journey.md)) |
-| **[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/)** | Capture a texture, build on it, move into a new one · [four-page PDF](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf) · [sound examples](https://bonszaimusic.github.io/caravel/sounds/) · [performance setup download](https://bonszaimusic.github.io/caravel/performance/) |
-| **[HOME, Pair Morph, macros and saving](docs/tutorials/home-and-stasis.md)** | Build a performance surface, pair two engines, map macros, save the whole performance · [six-page PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf) |
-| **[ELASTIC: first steps](docs/tutorials/elastic-first-steps.md)** | Make a HOME control swing like a spring: arm, bounce in musical periods, return (0.13.0; [linked springs](docs/tutorials/elastic-linked-springs.md), [ambient recipes](docs/tutorials/elastic-ambient-recipes.md)) |
-| [Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) | Try any of them without a device |
+| ANALOG | Band-limited oscillators and multimode filtering; leads, basses and pads |
+| PHYS | Modal, string and membrane physical models; mallets, plucks and resonances |
+| SEM | Two oscillators and a continuously blended state-variable filter; warm pads and brass |
+| HADES | Saw/pulse, two suboscillators, resonant bass filter, drive and BODY |
+| DRONE | Coupled generators, drift and cell modes; slowly changing textures |
+| ENSEMBLE | Strings, choir and dark pads with a built-in stereo ensemble |
 
-## Caravel 0.13.0 — ELASTIC P1.4
+[Engine overview](docs/engines/overview.md) · [Practical tips](docs/engines/tips.md)
 
-[Download 0.13.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.13.0) · [What changed and what is tested](docs/release-0130.md) · [ELASTIC first steps](docs/tutorials/elastic-first-steps.md) · [Linked springs](docs/tutorials/elastic-linked-springs.md) · [Ambient recipes](docs/tutorials/elastic-ambient-recipes.md)
+Four tracks share the note/voice budget and provide envelopes, filters, ARP, modulation and effects. HARMONY supplies a progression; CHORD EXT takes extensions from that bus or real live input on T1–T4. RANDOM, JOURNEY, ELASTIC, PAIR and STASIS support performance and changing textures.
 
-- **ELASTIC:** a seventh HOME ACTION bank (between STASIS and PAIR) that makes supported HOME controls swing like temporary springs and return, without changing the stored value. Per track: SCOPE CELL / ROW, PULL, RETURN (up to 5 minutes, or **INF**), RANGE, REFLECT, ROW coupling (COUPLE, SEED). **BOUNCE is a musical period, 1/16 note to 64 BAR**, following the internal tempo or the external MIDI clock. No MIDI Learn for ELASTIC yet.
-- **Smaller factory SAMPLE set:** PIANO has 3 zones instead of 5 and FLUTE 2 instead of 3, **27,014 B less flash**; some PIANO and FLUTE notes **sound different**. The five-zone PIANO HD user export is kept. Also in: the One-Core flash fix and a fix for the MOD slots' DST knob (it read past its table at the right end in 0.12.0).
-- **Back up first. Projects saved by 0.13.0 carry HPM1 v5: 0.12.0 reads only v1 to v3 and does not accept them. Upgrading is safe, going back is not.** `tools/caravel_backup.py` of 0.13.0 saves and restores v4/v5 projects byte for byte (older copies of the tool do not); the web backup has not been verified on a device with v5 projects.
-- **Tested:** host tests and three SDK layouts on the RC1 source, internally reviewed, not independently. The 0.13.0-rc1 package was **tested successfully on an FM-1 by the maintainer (RC1, no individual results)**; the final 0.13.0 differs from it by the version text and the MOD DST table fix, and that build has not been tried on a device. 28,548 B of the app slot are free in the default layout of the final build (553,016 B image).
+**CAPTURE records notes, not audio:** live panel keys and USB/TRS MIDI IN, including velocity and physical note lengths. With transport running, REC takes a retrospective 1/2/4/8-bar loop; another take overdubs. Four independent loops are temporary RAM state and are not saved with projects. ARP/SEQ output and loop playback do not record themselves. [CAPTURE guide](docs/tutorials/seq-arp.md)
 
-## Caravel 0.12.0 — HARMONY
+## A new data generation
 
-[Download 0.12.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.12.0) · [What changed and what is tested](docs/release-0120.md) · [HARMONY guide](docs/tutorials/harmony-live.md) · [all tutorials](docs/tutorials/README.md)
+**Back up before updating.** Keep old backups with their matching firmware and tools. 1.0 uses FORMAT 2 projects, presets and backups; it does not import pre-1.0 data. Old data is identified rather than silently migrated. The backup handshake distinguishes LIST 1 from LIST 2. SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM are absent, as are Song/Chain and Scope. See the [compatibility notes](docs/release-100.md).
 
-- **HARMONY:** one chord progression (four chords of 1, 2, 4 or 8 bars, on the transport's bar clock) that your tracks follow: sequencer strong steps, every ARP step and your live keys move onto the current chord; CHRD = BUS plays the whole chord from one key. **LINK** copies one track's key to another; the **SCL pages** are rebuilt as a family you walk with SELECT.
-- **HOME ACTION:** new key layout (C#5 back, D#5 forward, D5 / E5 / F5 / G5 actions: **the 0.11.0 keys moved**) and a sixth bank, **HARM** (HOLD, PREV, NEXT, RESET, SHIFT in scale degrees).
-- **Back up first. The project format changes (FUN11): 0.11.0 and earlier show a 0.12.0 project as an empty slot.** The flash margin is thin (3,060 B left). Host-tested and run in a local container; the maintainer reports a good device test of an earlier test package without per-item results; the later fixes have not been tested on a device. CHORD EXT is not in this release.
+The existing compressed performance-data limit is 3,328 bytes. A too-large project is refused with PROJECT TOO LARGE / NOT SAVED; the previous saved copy remains. Finish any pending RAM save before powering off.
 
-## Caravel 0.11.0 — ENSEMBLE in stereo
+## Install, build and verify
 
-[Download 0.11.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.11.0) · [What changed and what is tested](docs/release-0110.md) · [ENSEMBLE guide](docs/engines/ensemble-engine.md)
+Use the [installation guide](docs/installing.md). Build instructions and the pinned toolchain are in [BUILDING.md](BUILDING.md); package construction verifies SDK hashes and provides SHA-256 manifests. A candidate test package is not installed or published automatically.
 
-- **ENSEMBLE is stereo:** SPRD is its width (six taps, three left and three right); the factory pads load with a width, the mono presets stay mono; MONO, LEGATO and SPRD 0 are the 0.10.1 sound bit for bit. The mono sum is about 2 to 3.5 dB lower and a wide pad's reverb return is lower: raise REV or LEVEL.
-- **Pair Morph:** a member may have SPRD above 0 on any engine (no more `SPREAD OFF`).
-- **Back up first.** No project-format change; a stereo pad plays mono on 0.10.1 (the width stays stored). Host-tested and run in a local container; the maintainer reports having checked everything on an FM-1 with a release-candidate test build (rc3; no per-item findings are recorded).
+The 1.0 candidate has not been tested on an FM-1 and no sound has been judged by ear. Host, emulator and static budget checks do not establish device interrupt deadlines, MIDI jitter, audio quality or power-cycle behavior. See [candidate validation and hardware checklist](docs/release-100.md).
 
-## Caravel 0.10.1 — fix release
+The UC25HQ80 flash chip (JEDEC `0xB36014`) and Puya P25Q80 (`0x856014`) are recognized. **This project has not tested a real UC25HQ80 unit.** m-bootloader is documented as an external recovery option and is not incorporated into the firmware.
 
-[Download 0.10.1 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.10.1) · [What changed and what is tested](docs/release-0101.md)
+## Project and licences
 
-- **ENSEMBLE fix:** the three taps' slow LFOs now run 120 degrees apart, as documented (in 0.10.0 they moved together); all fourteen presets sound slightly different and PROFILE A was set again. Compared in host renders only.
-- **Fix:** in RANDOM the ship on the sea chart no longer sails between the snapshots because a journey runs on another track; the selected slot follows only the selected track's journey. Reproduced and fixed on the host; **not tried on an FM-1 before publication**. No project-format change.
-
-## Caravel 0.10.0 — the ENSEMBLE engine
-
-[Download 0.10.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.10.0) · [What changed and what is tested](docs/release-0100.md) · [ENSEMBLE guide](docs/engines/ensemble-engine.md)
-
-- **ENSEMBLE (ENSEMB):** a string / choir / dark-pad engine with a built-in three-tap ensemble, eight controls (REG, MORPH, TONE, DRIFT, ENS, RATE, TEXT, MIX), fourteen factory presets and five Pair Morph layer recipes with piano, bells, electric piano and a DRONE bed.
-- **Back up first.** No project-format change; **a project that uses ENSEMBLE shows as an empty slot in 0.9.0** (nothing is deleted).
-- Tested on the host and in the complete validation; a first informal test build was installed on an FM-1 by the maintainer (it led to two fixes; the released build differs by them); **no judgement of how ENSEMBLE or the presets sound has been recorded**. The presets differ as measured signals.
-
-## Caravel 0.9.0 — Random Morph and Journey per track
-
-[Download 0.9.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.9.0) · [What changed and what is tested](docs/release-090.md) · [Tutorial](docs/tutorials/random-morph-journey.md) · [Reference](docs/morph-journey.md)
-
-- **Per track:** every track has its own four snapshot slots (its own HOME controls, up to 32 targets), its own morph engine and its own journey with its own BARS, DEPTH, SCOPE, SHAPE, WAIT and direction. Morphs and journeys of different tracks run side by side; a RANDOM morph holds only its own track's journey; a control two tracks move belongs to the track that started last; SCOPE ALL makes the RANDOM keys act on every track. A track whose HOME pins more than 32 targets cannot start a RANDOM morph.
-- **JOURNEY bank right after RANDOM** (BANK: RANDOM, JOURNEY, STASIS, PAIR, LIVE). Small boxes show what each track does. **JOURNEY SETUP** (hold BANK there): SCOPE THIS / ALL, TRANSP FREE / CONT / START (CONT and START follow the sequencer's bars, Stop freezes a leg, an external clock moves it).
-- **The SAX sample set is retired** to free flash: SAX now plays PIANO. About 25 KB of the app slot are free again.
-- **Back up first: projects use a new format (3).** Everything from earlier versions loads (0.7.1 to 0.8.0 are migrated, at most 32 targets per slot, more are dropped with a message). **0.8.0 does not read a project saved by 0.9.0: the slot shows as empty there.**
-- The OVERWRITE? dialog of a project SAVE no longer flickers while a morph or journey runs; RANDOM moves the FX filter only between -70 and +70.
-- Tested on the host, in CI and in the complete validation, with a simulated external MIDI clock; tried by the maintainer on an FM-1 only as a pre-release build before one fix (a first informal trial, not a systematic acceptance), and **not verified** with a controller, a real external clock or long runs.
-
-## Caravel 0.8.0 — Morph Journey
-
-[Download 0.8.0](https://github.com/bonszaimusic/caravel/releases/tag/v0.8.0) · [What changed and what is tested](docs/release-080.md)
-
-- The first Morph Journey: a fifth ACTION bank with PLAY / PAUSE, direction, NEXT and WAIT, four project-wide snapshot slots with owner labels, A4 hold in RANDOM's SETUP deletes a slot, settings saved with each project, and a learned MIDI CC wins over a running morph for every target.
-
-## Caravel 0.7.2 — candidate fix for the stock return (-5)
-
-[Download 0.7.2 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.7.2) · [What changed and what is tested](docs/release-072.md)
-
-- **Return to official V15:** the updater now checks that the official package's boot area is valid instead of requiring it to equal your unit's. If you got *Update Failed -5* on 0.7.1 or earlier, update to 0.7.2 and try again. This is a candidate fix: it is tested on the host and on one FM-1, not yet on a unit that showed -5. Back up first and see the [FAQ](docs/faq.md#stock-return-error--5).
-- Two small fixes from Felucca: a divide by zero when the BPM is briefly 0, and FM6 operators with AMS other than 0 (imported voices only; factory voices are unchanged).
-- No project-format, audio-engine or USB changes; 0.7.1 projects load as before.
-
-## Caravel 0.7.1 — keep your performance snapshots
-
-[Download 0.7.1 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.7.1) · [Installation, snapshots and compatibility](docs/release-071.md)
-
-- S1–S4 Random Morph parameter snapshots are saved with each performance project, including scope and pinned targets. Project load, RESTORE LAST and USB backups restore them; legacy projects start with empty slots.
-- Save A–D to keep your slots. A4 short selects S1–S4, A4 held captures, A3 morphs to the selected slot and A2 freezes/resumes. Saving during playback stays RAM-only until STOP commits it.
-- The installer verifies the exact package size, SHA-256, product, layout and app/loader CRC before install or resume. USB/recovery help is linked in the FAQ.
-- New project files need 0.7.1 or later. Back up before upgrading or rolling back. Extremely dense, incompressible projects are rejected before writing with `PROJECT TOO LARGE / NOT SAVED`.
-
-STASIS captured audio, active morph motion and RETURN origins remain volatile. Automated tests and physical FM-1 acceptance are distinct; see the release guide for validation scope.
-
-## Caravel 0.7.0 — smoother audio and visible performance automation
-
-[Download 0.7.0 firmware, installer, emulator and source](https://github.com/bonszaimusic/caravel/releases/tag/v0.7.0) · [Release details and installation](docs/prerelease-070.md)
-
-- Run hot DRONE, SEM, HADES, STASIS and HALL DSP from checked executable RAM. The owner reports no audible crackle and indicated load at most about 70% with the rc6 test setup; this is not a controlled speedup measurement.
-- Group STASIS GRAIN/LAYER on one view and place CHORUS before REVERB; retain reverse/scan/capture continuity fixes.
-- Keep independent Random Morph RETURN origins for each track/HOME row. Show HOME macro and Pair automation in SEQ > AUTOMATION and make its PLAY switch apply to both event stores. Pair recordings belong to member A.
-- In 0.7.0 the four S1–S4 Random Morph snapshots were still volatile and saving a project kept the current sound, not the snapshot slots. Since 0.7.1 the slots are saved with each project (below); captured STASIS audio is still not stored.
-
-The 0.6.0 STASIS tutorials and sound examples below remain useful for the shared controls.
-
-## Caravel 0.6.0 - Hold a sound. Build a texture.
-
-**[STASIS tutorials](https://bonszaimusic.github.io/caravel/tutorials/)** · **[Listen to the examples](https://bonszaimusic.github.io/caravel/sounds/)** · **[Four-page PDF guide](docs/tutorials/Caravel-0.6.0-STASIS-Guide.pdf)** · **[Changelog](CHANGELOG.md)**
-
-**[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/)** — the HOME project from the feature Short, with two paired SEM tracks, a driven Drone, MIDI notes and English/German play guides. Load the starting project, then follow the individual moves.
-
-Play a chord, hold its texture, and keep performing over it. STASIS captures the
-internal REV send and turns it into a slowly moving stereo wash. The captured
-sound can stay while you change instruments or play something new.
-
-- **HOLD:** freeze recently played sound. STR brings the texture forward; MOTN
-  moves reflections, filters and reverb damping without sweeping playback speed.
-- **ADD:** mix a new captured sound into the held texture. Choose its share with
-  AMT, then press OCT+. Repeat to build a combined layer with bounded gain.
-- **BLEND:** transition into a new captured texture over 1-30 seconds, then hold
-  the destination. OCT+ cancels WAIT or returns MIX smoothly to the original.
-
-<img src="docs/tutorials/img/stasis-hold.png" width="240" alt="Actual STASIS HOLD display"> <img src="docs/tutorials/img/blend-mix.png" width="240" alt="Actual BLEND transition display">
-
-**0.6.0 profile:** HALL and STASIS; ROOM, SPRING and the SLICE engine are omitted.
-The separate SLICER track effect remains. Old projects using omitted features
-offer **CANCEL / TEST** with explicit substitutions, protect their source slot,
-and can be saved as a separate copy. Ordinary tempo DELAY is suspended while
-STASIS is active. Captured audio is volatile RAM and is not stored in projects.
-
-The original sound examples use the actual native firmware DSP and are labelled
-as renders, not FM-1 recordings. Automated target, audio, MIDI, UI/storage, web,
-ASan/UBSan and ThreadSanitizer checks gate publication. Actual FM-1 worst-case
-load and long-term stability remain separate hardware checks.
-
-## Performance controls retained from 0.5.0
-
-**[Illustrated tutorials](docs/tutorials/home-and-stasis.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
-
-**Deep HADES bass. Drifting DRONE atmospheres. Warm SEM pads. Shimmering FM bells.
-Now explore what happens between them.**
-
-Caravel brings hands-on live sound design to your **M-VAVE FM-1**. Pair two engines,
-shape their sounds together and turn a single gesture into a dramatic transformation.
-
-- 🎚️ **Pair Morph — explore the space between engines.** Play two engines from the same
-  notes and blend between their sounds in real time. Find a beautiful halfway point—or
-  take the audience on the whole journey.
-- 🎛️ **Custom HOME — build your own performance surface.** Bring your favourite controls
-  together, with large active values and preset names that stay visible.
-- ✨ **Assignable macros — make one knob move your sound.** Map up to four parameters
-  to each of four macros per track. Open the filter and bring in the reverb together,
-  with the combinations and amounts you choose.
-
-**Build the sound. Find the unexpected. Play the transformation.**
-
-Free and open source for the M-VAVE FM-1.
-
-<a href="docs/tutorials/img/home-active-1.png"><img src="docs/tutorials/img/home-active-1.png" width="300" alt="Performance HOME with paired presets, morph position and large active controls"></a>
-
-**[Illustrated tutorials](docs/tutorials/home-and-stasis.md)** · **[PDF quickstart](docs/tutorials/Caravel-0.5.0-Quickstart.pdf)** · **[Try the browser emulator](https://bonszaimusic.github.io/caravel/emulator/)**
-
-[Release notes](RELEASE-NOTES.md)
-
-## A look at the screen
-
-<table>
-<tr>
-<td align="center"><img src="docs/img/home.png" width="240" alt="HOME: four knobs, the scope and the track's engine"><br>HOME</td>
-<td align="center"><img src="docs/img/lfo.png" width="240" alt="LFO: two parameter groups on one screen"><br>LFO: two groups, one framed</td>
-<td align="center"><img src="docs/img/env.png" width="240" alt="ENV and ENV DEST with the envelope pictogram"><br>ENV with its pictogram</td>
-</tr>
-<tr>
-<td align="center"><img src="docs/img/seq.png" width="240" alt="STEP page with the piano roll"><br>STEP and piano roll</td>
-<td align="center"><img src="docs/img/presets.png" width="240" alt="PRESETS list"><br>PRESETS</td>
-<td align="center"><img src="docs/img/sem-filter.png" width="240" alt="SEM: OSC and filter groups"><br>SEM: oscillators and filter</td>
-</tr>
-</table>
-
-The screens are drawn by the firmware's own drawing code (AMBER palette, 240 x 240 shown at 2x). MENU > COLOR has more palettes:
-
-![HOME in the GREEN, AMBER, ICE, VIOLET and ROSE palettes](docs/img/palettes.png)
-
-## Engines at a glance
-
-| Engine | Good for |
-| --- | --- |
-| ANALOG | classic subtractive leads, basses, pads, plucks |
-| SEM | warm pads, brass, strings, notch sweeps |
-| HADES | basses, sub layers, dark leads |
-| DRONE (experimental) | evolving drones, beds, bells, slow textures |
-| PHASE | bright, glassy and organ-like tones, bells |
-| LOFI | chiptune, 8-bit arps, bytebeat |
-| TRIO | fat basses, sync and ring-mod leads |
-| WHEEL | tonewheel organ |
-| FM6 | electric pianos, bells, FM basses and pads |
-| PHYS | mallets, plucks, hand drums, metallic textures |
-| VOICE | sung vowels, choirs, vocal leads |
-| SAMPLE, GRAIN | instrument samples and your own, granular clouds |
-| DRUM (with DRUM-X) | drum kits and percussion |
-| NOISE | wind, rain, risers, effects |
-
-What each engine is and how its controls work: [Engines at a glance](docs/engines/overview.md). Tips for good sounds with SEM, HADES and
-DRONE: [Tips and tricks](docs/engines/tips.md).
-
-## What Caravel adds to Felucca
-
-The focus is usability and the sound experience:
-
-- **Two parameter groups on one screen** (LFO, LFO2, ENV, ARP, VOICE, EDIT 1/2, LANES, the FX pages): the active group is framed
-  and marked EDIT K1-4, a tag says whether a group is for ALL tracks or the track (T1..T4), SELECT steps through the groups, and the footer
-  shows a numbered view ("LFO TOP 1/3"). SLICER, SCL and CHORD put a picture of their settings below their group, and every page frames the
-  cards KNOB 1-4 edit. SELECT starts on PAGE; in the menu it walks the rows.
-- **FILTER** (0.3.0): one bipolar knob per track on the INSERT 2 page, LP to the left, HP to the right, OFF in the middle; the last stage of the track's chain
-  on every engine, so the sends take the filtered sound ([docs/track-filter.md](docs/track-filter.md)).
-- **LATCH** (CHORD page): notes of the keys, the chord keys and MIDI IN keep sounding after release, per track ([docs/latch.md](docs/latch.md)).
-  **FX HOLD**: a factory preset load keeps the track's sends and INSERT instead of replacing them.
-- **Clearer sequencing:** EDIT opens the EDIT pages everywhere; the cursor step is cleared with SEQ held + F5 (CLEAR STEP,
-  one undo). Euclid, DOUBLE/HALF, conditional steps and external-clock start and resync are inherited and extended.
-- **Deeper modulation:** an independent LFO2 and the MOD matrix (SLEW, S&H sources, MORPH and PHS FB destinations).
-- **More sound sources:** SEM, HADES, DRONE (experimental), DRUM-X, MORPH on ANALOG, PHASE and LOFI, BYTE/FLOAT waves in LOFI.
-- **Per-track voice reservations** (MENU > VOICES) and a MORE page for SPREAD, MORPH and PHS FB.
-
-The full list is in [CHANGELOG.md](CHANGELOG.md); how the features work is in [docs/](docs/README.md).
-
-## Compatibility with Felucca
-
-Caravel 0.1.0 changed names and text, not storage, and 0.2.0 keeps all formats too (LATCH and FX HOLD use unused slots): settings, projects, presets, the `.fwsc` package markers and the editor's
-file formats are the ones of Felucca 1.6.1 and its Custom additions, so Felucca data opens in Caravel. Projects that use
-Caravel-only parameters need Caravel or newer. **0.3.0 adds one track parameter (the FILTER)**: it opens everything saved before with the filter OFF, but 0.2.0
-and 0.1.0 cannot open a project saved by 0.3.0 (user presets still load there, without the filter): see [docs/track-filter.md](docs/track-filter.md). The web editor and installer accept devices named Felucca as well as Caravel.
-Identifiers in the source (`FELUCCA_*`, `felucca.c`, the `firmware/engines/` submodule) keep their names.
-
-## Installing
-
-**USB test IDs:** the current firmware uses `1209:0001` (running) and `1209:0002` (loader).
-They are not allocated to Caravel or universally unique. The pid.codes policy permits private / in-house testing only and
-forbids their use on devices that will be redistributed, sold or manufactured, even if given away for free.
-Do not use them outside test environments. General deployment needs suitable IDs or written authorization / clarification;
-firmware-only downloads and end-user reflashing need policy clarification, not an assumption that free use is allowed.
-See [NOTICE](NOTICE) and the policies for [0001](https://pid.codes/1209/0001/) and [0002](https://pid.codes/1209/0002/).
-
-Installing custom firmware is at your own risk, without warranty to the extent permitted by law; a failed update can leave the
-FM-1 unusable or need a Transporter for attempted recovery. M-VAVE's updater or the installer's **Return to official V15** can
-attempt an official firmware reinstall, not guarantee factory condition, data restoration, warranty coverage or recoverability.
-Keep the official package and backups of your data. Non-excludable statutory rights and liability are unaffected.
-Use the [web installer](https://bonszaimusic.github.io/caravel/webapp/installer/) for browser-based updates, or
-`tools/fm1_install.py` to install a package from a terminal. How to install a specific release, check it, and go back: [Installing Caravel](docs/installing.md). The web tools are in `web/` and are built into the site by
-`web/make_site.py` ([BUILDING.md](BUILDING.md)).
-
-- Build: [BUILDING.md](BUILDING.md); clone with the engines' submodule: `git clone --recurse-submodules https://github.com/bonszaimusic/caravel.git`
-- Documentation of what Caravel adds: [docs/](docs/README.md); engines: [docs/engines](docs/engines/README.md)
-- Sequencer documentation: [live parts, recording and FX automation](docs/sequencer/README.md)
-- Felucca's manual describes the features Caravel inherits, but not Caravel's additions:
-  [Installation](https://github.com/hugelton/Felucca/wiki/Installation) ·
-  [Controls](https://github.com/hugelton/Felucca/wiki/Controls) · [Menu](https://github.com/hugelton/Felucca/wiki/Menu) ·
-  [Engines](https://github.com/hugelton/Felucca/wiki/Engines) · [Features](https://github.com/hugelton/Felucca/wiki/Features)
-
-## What it is
-
-Fifteen engines with factory presets, four tracks (8 voices shared), a 64-step sequencer (chords, ties, chance, conditions,
-ratchets, nudge, locks, automation, live and step recording), SEQ TOOLS, songs, effects, a MOD matrix, MIDI (USB and TRS,
-per-track channels, MIDI LEARN) and USB audio.
-
-## Inherited from Felucca
-
-What the base brings with it, as of Felucca 1.6.1 and 1.6:
-
-### New in 1.6.1
-
-- **MENU > LARGE keeps one size per knob** (#251): a value no longer jumps between sizes as you turn the knob
-- **Updates check the package's size on the FM-1**: a package made for another device is refused before anything is erased
-- **Second core (beta), off by default:** MENU > SYSTEM > 2ND CORE > ON (BETA), then restart: the FM-1's second core
-  renders some of the parts, same sound, more headroom (#247)
-- **Felucca-Engines:** Felucca 1.6.1 moved ANALOG, LOFI, TRIO, WHEEL and NOISE to
-  [their own MIT repository](https://github.com/hugelton/Felucca-Engines) (a git submodule here).
-  Caravel uses its TRIO, WHEEL, NOISE and shared DSP, but local GPL-3.0-only, JIANT-derived ANALOG and LOFI variants in
-  `firmware/src/`; the unchanged submodule variants remain MIT. Felucca itself stays GPL-3.0-only.
-
-### New in 1.6
-
-- **Your own UI colours:** COLOR has an eleventh value, CUSTOM, set in the web editor with a live preview on the FM-1
-- **The SEQ piano roll follows the play position** when the pattern is longer than one screen
-- **Conditional steps** (1:2 … 4:4, FILL), **EUCLID, DOUBLE and HALF**, **a MIDI channel per track**, PHASE FOLD, three more drum kits and humanize in the MOD matrix (1.5.5 and 1.5.6 were never released: 1.6 carries them)
-- ⚠ A project with conditional steps does not open on 1.5 or 1.5.1; projects saved by 1.4 or later do not open on 1.1.5.x
-
-All changes and what to know before going back: [Release notes](https://github.com/hugelton/Felucca/wiki/Release-Notes) · [Upgrading from 1.1.5](https://github.com/hugelton/Felucca/wiki/Upgrading-from-1.1.5).
-
-
-## Support and contributing
-
-Please report what you find in this repository's Issues (reproducible bugs, one per issue), not to Hügelton Instruments or M-VAVE.
-Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Caravel is GPLv3 and you are free to fork it.
-
-## AI disclaimer
-
-Caravel-specific changes to Felucca were developed with AI coding agents (code, tests and documentation). Direction, design
-decisions and acceptance are the maintainer's. The original public Felucca history through 1.6.1 is unchanged and is the work
-of its authors. The initial Caravel changes are recorded as one baseline snapshot rather than as their individual
-development commits.
-
-## Credits and licence
-
-Free software: [GPL-3.0-only](LICENSE), the Hügelton Sample Pack and local JIANT-derived ANALOG / LOFI variants included.
-The unchanged [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) submodule (`firmware/engines/`) remains MIT;
-Caravel uses its TRIO, WHEEL, NOISE and shared DSP. Bundled fonts and ported DSP keep their own licences
-([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)). Thanks to everyone whose work and contributions are in it: [CREDITS.md](CREDITS.md).
-
-M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by them or by Hügelton
-Instruments.
-
-Copyright (C) 2026 bonszaimusic (Caravel and its changes to Felucca)<br>
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca 1.6.1, the base of this work)
-
+Caravel is bonszaimusic's GPL-3.0-only fork of Felucca 1.6.1 by Leo Kuroshita / Hügelton Instruments. It is independent of M-VAVE and Hügelton Instruments. Preserve the notices and component licences: [LICENSE](LICENSE), [NOTICE](NOTICE), [CREDITS](CREDITS.md), [LICENSING](LICENSING.md). Historical release behavior is recorded in [CHANGELOG](CHANGELOG.md).

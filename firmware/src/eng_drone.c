@@ -25,6 +25,11 @@ typedef struct {
 } drone_part_t;
 ENG_MEM_FITS("DRONE", sizeof(drone_part_t));
 
+/* The legacy topologies (PAIRS, CHAIN, RING) render about 6 to 8 dB louder than the cell ones (CELLPAIR, CELLCHN, CELLRING) for the same
+ * values (measured at a track level the limiter does not touch, validation/drone-level-2026-11-16), and they reached the master
+ * limiter's threshold with a single held note. Their output is scaled after the soft knee (the knee, the character, is kept) by
+ * DRONE_LEGACY_GAIN_Q4 / 16 = 9 / 16, -5.0 dB. */
+#define DRONE_LEGACY_GAIN_Q4 9
 static const char *const N_DRONE_TOPO[] = {"PAIRS", "CHAIN", "RING", "CELLPAIR", "CELLCHN", "CELLRING"};
 static drone_part_t *drone_state(const track_t *t)
 {
@@ -143,7 +148,7 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void drone_legacy_render(trac
         int64_t lp = (int64_t)(hp - s->low) * g;
         s->low += (int32_t)((lp + ((lp >> 63) & 32767)) >> 15);
         /* Match the HADES/SEM voice_amp and output scaling conventions. */
-        out[i] += voice_amp(soft_knee(s->low, 16000) * 2, m, i) * 2;
+        out[i] += (voice_amp(soft_knee(s->low, 16000) * 2, m, i) * 2 * DRONE_LEGACY_GAIN_Q4) >> 4;
     }
 }
 /* Gesture hooks are deliberately separate from engine.note_on: LEGATO may

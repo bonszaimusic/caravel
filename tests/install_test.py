@@ -15,11 +15,20 @@ import sys
 import tempfile
 import threading
 import time
+import json
+import hashlib
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import fm1_install as I  # noqa: E402
+
+if os.environ.get("CLI_TARGET_NEGATIVE"):
+    # Reintroduce the former normal-target bypass for an explicit negative control.
+    def unchecked_target(raw, product, image, target, record_path=None):
+        return I.VerifiedTarget(target,product,hashlib.sha256(image).hexdigest())
+    I.verify_target=unchecked_target
 
 I.DELAY.update(open=0, start=0.01, reply=0, loader=0.01, reboot=0.01, retry=0.02, poll=0.05, hs=0.1,
                idle_check=0.4, idle_write=0.4, wait_loader=2, wait_reboot=2)
@@ -67,7 +76,8 @@ class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None):
+                 stall_after=None, bad_addr=None, protocol_generation=1):
+        self.protocol_generation=protocol_generation
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
         self.stall_after, self.bad_addr = stall_after, bad_addr
         self.served = self.bad = self.upgrades = 0
@@ -101,7 +111,19 @@ class FakeFM1:
         if d == I.HS_QUERY:
             t = self.identity.encode()
             self.tx(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + t + bytes(28 - len(t))) + b"\xF7")
-        elif d == I.UPGRADE:
+        elif d.startswith(I.generation.V1_HEADER if self.protocol_generation==2 else I.generation.CLASSIC_HEADER) and d[4] in (1,65):
+            fixture=json.loads((ROOT/'tests/fixtures/generation-info.json').read_text())
+            import caravel_backup as cb
+            ids=tuple(range(8)) if self.protocol_generation==2 else cb.IDS
+            objects={k:(F2_CAP if self.protocol_generation==2 else CLASSIC_CAP) if k==0 else bytes([1,2,3]) if k==1 else b'' for k in ids}
+            args=bytes(fixture['modern' if self.protocol_generation==2 else 'classic']) if d[4]==1 else bytes([self.protocol_generation,0,len(ids)])+b''.join(bytes([k])+cb.u32(len(objects[k]))+cb.u32(cb.zlib.crc32(objects[k])) for k in ids)
+            self.tx(d[:5]+args+b'\xF7')
+        elif d.startswith(I.generation.V1_HEADER if self.protocol_generation==2 else I.generation.CLASSIC_HEADER) and d[4]==66:
+            import caravel_backup as cb
+            a=d[5:-1];k=a[0];off=cb.r32(a[1:6]);n=a[6]|a[7]<<7
+            data=(F2_CAP if self.protocol_generation==2 else CLASSIC_CAP) if k==0 else bytes([1,2,3]) if k==1 else b''
+            self.tx(d[:5]+bytes([k,0])+cb.u32(off)+bytes([n&127,n>>7])+cb.pack(data[off:off+n])+b'\xF7')
+        elif d == (I.UPGRADE if self.identity.startswith("ota-") or self.protocol_generation==1 else I.generation.update_entry(2)):
             self.upgrades += 1
             first = self.bad_addr if self.bad_addr is not None else 0
             self.queue = ([(first + k * 512, 512) for k in range(6)] + [(I.FINISH_WRITE, 8)]
@@ -149,6 +171,21 @@ def package(product="FM-1_900", marker=True, size=0x2000):
 
 
 TMP = Path(tempfile.mkdtemp(prefix="felucca-install-"))
+# Valid protocol fixtures: the Classic capsule is synthetic, not a new Classic build.
+import caravel_backup as CB
+import struct
+F2_CAP=(ROOT/'tests/format2_project_capsule.bin').read_bytes()
+payload=bytearray([0,0]);left=5593
+while left:
+    n=min(130,left)
+    if 0<left-n<3:n=left-3
+    payload+=bytes([128+n-3,1,0]);left-=n
+cap=bytearray(7200);struct.pack_into('<6I',cap,0,0x314d5048,5,7200,1,0,0)
+struct.pack_into('<II',cap,24,len(payload),5594);cap[3872:3872+len(payload)]=payload
+struct.pack_into('<I',cap,16,CB.fnv(cap[32:]));struct.pack_into('<I',cap,20,CB.fnv(cap[:20]))
+CLASSIC_CAP=bytes(cap)
+RECOVERY=TMP/'recovery.zip';CB.save_archive(RECOVERY,{k:F2_CAP if k==0 else bytes([1]) if k==1 else b'' for k in CB.IDS2},2)
+
 
 
 def pkgfile(name, raw):
@@ -161,13 +198,76 @@ def cli(args, dev, answer=True):
     out, err = io.StringIO(), io.StringIO()
     old, sys.stderr = sys.stderr, err
     try:
-        rc = I.main(args, backend=dev, out=out, ask=lambda _p: answer)
+        selected=list(args)
+        if "--info" not in selected:
+            package_path = Path(selected[0])
+            raw = package_path.read_bytes() if package_path.is_file() else b""
+            target = "stock" if hashlib.sha256(raw).hexdigest() == I.STOCK_V15_SHA256 else "2"
+            # These transport tests deliberately use synthetic packages and a
+            # matching synthetic release record. Target mismatch tests below
+            # exercise the production refusal before opening MIDI.
+            package_path.with_name("release-build.json").write_text(json.dumps({
+                "schema":1,"version":"1.0.0","product":I.product_of(raw) if len(raw)>960 else "FM-1_900",
+                "binaries":{"caravel-1.0.0.fwsc":hashlib.sha256(raw).hexdigest()}}))
+            selected += ["--target-generation",target,"--backup-dir",str(TMP)]
+            if dev.identity.startswith("ota-"): selected += ["--recovery-backup",str(RECOVERY)]
+        rc = I.main(selected, backend=dev, out=out, ask=lambda _p: answer)
     finally:
         sys.stderr = old
     return rc, out.getvalue(), err.getvalue()
 
 
 # ------------------------------------------------------------------- tests ---
+
+def target_binding():
+    raw = package()
+    p = Path(pkgfile("target.fwsc",raw))
+    image = I.logical_image(raw)
+    record = p.with_name("release-build.json")
+    valid = {"schema":1,"version":"1.0.0","product":"FM-1_900",
+             "binaries":{"caravel-1.0.0.fwsc":hashlib.sha256(raw).hexdigest()}}
+    record.write_text(json.dumps(valid))
+    verified = I.verify_target(raw,"FM-1_900",image,"2",record)
+    ok(verified.generation=="2" and verified.image_sha256==hashlib.sha256(image).hexdigest(),
+       "target: valid 1.x record binds the exact logical image")
+    invalid = [None, [], {**valid,"schema":2}, {**valid,"version":"0.13.0"},
+               {**valid,"product":"FM-1_999"}, {**valid,"binaries":{"caravel-1.0.0.fwsc":"0"*64}}]
+    blocked = 0
+    for candidate in invalid:
+        if candidate is None: record.unlink(missing_ok=True)
+        else: record.write_text(json.dumps(candidate))
+        dev=FakeFM1(image,protocol_generation=2)
+        rc=I.main([str(p),"--yes","--target-generation","2","--backup-dir",str(TMP)],backend=dev,out=io.StringIO())
+        blocked += rc==2 and not dev.sent
+    ok(blocked==len(invalid),"target: missing/schema/version/product/hash records all reject before MIDI")
+    record.write_text(json.dumps(valid))
+    # Pin substitution isolates the known-package rule without distributing
+    # stock or Classic binaries in these small synthetic transport fixtures.
+    pins=(I.CLASSIC_013_SHA256,I.STOCK_V15_SHA256)
+    try:
+        pin_blocks=0
+        for name in ("CLASSIC_013_SHA256","STOCK_V15_SHA256"):
+            setattr(I,name,hashlib.sha256(raw).hexdigest())
+            dev=FakeFM1(image,protocol_generation=2)
+            rc=I.main([str(p),"--yes","--target-generation","2","--backup-dir",str(TMP)],backend=dev,out=io.StringIO())
+            pin_blocks += rc==2 and not dev.sent
+            I.CLASSIC_013_SHA256,I.STOCK_V15_SHA256=pins
+        ok(pin_blocks==2,"target: Classic/stock pins cannot be relabelled by a matching 1.x record")
+    finally:
+        I.CLASSIC_013_SHA256,I.STOCK_V15_SHA256=pins
+    dev=FakeFM1(image); device=I.Updater(dev).find()
+    dev.sent.clear()
+    try:
+        I.Updater(dev).install(device,image,"FM-1_900")
+        rejected=False
+    except I.InstallError: rejected=True
+    ok(rejected and not dev.sent,"low-level updater refuses an unverified target before update requests")
+    dev=FakeFM1(image); device=I.Updater(dev).find();dev.sent.clear()
+    try:
+        I.Updater(dev).install(device,image+b"x","FM-1_900",verified_target=verified)
+        rejected=False
+    except I.InstallError: rejected=True
+    ok(rejected and not dev.sent,"low-level updater refuses a changed image after target verification")
 
 def wire():
     data = bytes(range(256)) * 3
@@ -202,10 +302,22 @@ def installs():
     rc, out, err = cli([p, "--yes"], dev)
     ok(rc == 0 and dev.bad == 0 and "done: the FM-1 runs FM-1_900" in out, "install: a running device named Caravel is found too (Felucca's name works as well: above)")
 
+    dev = FakeFM1(image, protocol_generation=2)
+    rc, out, err = cli([p,"--yes"],dev)
+    ok(rc==0 and dev.upgrades==2 and "Complete backup saved and verified" in out,
+       "protocol 18: real F2 capsule archived before the new update entry")
+    dev = FakeFM1(image)
+    sink=io.StringIO()
+    rc=I.main([p,"--yes"],backend=dev,out=sink,ask=lambda _:True)
+    ok(rc!=0 and not dev.sent,"CLI: missing explicit target rejected before any MIDI")
+    dev = FakeFM1(image,identity="ota-FM-1_900",name="Caravel Update")
+    rc=I.main([p,"--yes","--target-generation","2"],backend=dev,out=sink,ask=lambda _:True)
+    ok(rc!=0 and dev.upgrades==0,"CLI: loader recovery requires a saved matching backup")
+
     dev = FakeFM1(image)
     rc, out, err = cli([p], dev, answer=False)
-    ok(rc == 1 and dev.upgrades == 0 and "cancelled" in out, "install: answer no -> nothing sent but the handshake")
-    ok("own risk" in out and "Transporter" in out and "no backup" in out, "install: the risk notice is printed before the question")
+    ok(rc == 1 and dev.upgrades == 0 and "cancelled" in out, "install: answer no -> backup verified, no update entry sent")
+    ok("own risk" in out and "Transporter" in out and "complete backup" in out, "install: the risk notice is printed before the question")
 
     dev = FakeFM1(image, identity="FM-1_905", name="Felucca")
     rc, out, err = cli(["--info"], dev)
@@ -316,6 +428,11 @@ def official():
 
 
 wire()
+target_binding()
+if os.environ.get("CLI_TARGET_NEGATIVE"):
+    print("target negative control: failed checks",failed)
+    shutil.rmtree(TMP,ignore_errors=True)
+    sys.exit(1 if failed else 0)
 installs()
 errors()
 against_js()

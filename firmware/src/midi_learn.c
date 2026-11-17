@@ -10,7 +10,7 @@
  * replaces both. The editor reads and edits it (editor_learn.c). Its state: ui.ml (ui.c) */
 _Static_assert(ENGI_SEM == ENGINE_FAV_FIRST && NENGINES <= ENGINE_FAV_FIRST + ENGINE_FAV_N,
                "new engine favorites must use their dedicated storage, never the Learn row");
-static uint8_t *const ml_tab = favorites.factory[14];
+static uint8_t *const ml_tab = ml_base;
 static volatile uint8_t *const ml_io = ui.ml.io;         /* (midi_control.c ml_arm, ml_heard) */
 
 static uint32_t ml_code(uint32_t id) { return virtual_target(id) ? id : id >= P_E0 ? ML_E0 + id - P_E0 : id + 1u; }
@@ -134,7 +134,6 @@ static void ml_name(char *b)
     else
 #endif
     if (lfo2_target(ui.ml.id)) { str_cpy(b + 3, "L2 ", 4); str_cpy(b + 6, lfo2_desc(ui.ml.id)->label, 6); }
-    else if (dx_target(ui.ml.id)) dx_short_name(b + 3, ui.ml.id);
     else str_cpy(b + 3, track_desc(&trk[ui.ml.trk % NTRK], ui.ml.id)->label, 9);
 }
 /* each frame: a CC heard for the picked parameter is learned */

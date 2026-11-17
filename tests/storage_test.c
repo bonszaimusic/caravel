@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Host test of firmware/src/storage.c against a simulated NOR flash:
  * erase -> 0xFF, program can only clear bits, page writes must not wrap. */
+#define CARAVEL_FORMAT2 1
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -59,6 +60,17 @@ int main(void)
     memset(b, 'B', sizeof b);
     bad += check("empty flash loads nothing", st_load(OBJ_PROJECT0, got, sizeof got) < 0);
     bad += check("save A", st_save(OBJ_PROJECT0, a, sizeof a) == 0);
+    {
+        st_hdr_t h;
+        bad += check("commit reserved fields match format",
+                     st_current(OBJ_PROJECT0, &h) >= 0 &&
+#if CARAVEL_FORMAT2
+                     h.rsv[0] == ST_FMT2 &&
+#else
+                     h.rsv[0] == 0xFFFFFFFFu &&
+#endif
+                     h.rsv[1] == 0xFFFFFFFFu);
+    }
     n = st_load(OBJ_PROJECT0, got, sizeof got);
     bad += check("load returns A", n == (int)sizeof a && !memcmp(got, a, sizeof a));
     bad += check("save B", st_save(OBJ_PROJECT0, b, sizeof b) == 0);

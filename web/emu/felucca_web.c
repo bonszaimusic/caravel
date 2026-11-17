@@ -135,21 +135,36 @@ static void fm1_irq_on(void) {}
 /* ----------------------------------------------------------- the screen --- */
 static uint16_t web_fb[240 * 240];       /* RGB565 as the panel gets it (high byte first) */
 static uint32_t web_draws;
+#ifdef WEB_LCD_TRACE
+/* (tests, -DWEB_LCD_TRACE=1: every lcd_fill / lcd_blit as x y w h colour kind, and after it the panel's pixels at four probes on the
+ * outer frame: what a real panel shows between two draw calls of one frame) */
+static uint16_t web_trace[4096][6], web_probe[4096][6];
+static uint32_t web_trace_n;
+static void web_tr(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t c, uint32_t k) { if (web_trace_n < 4096u) { uint16_t *t = web_trace[web_trace_n++]; t[0]=(uint16_t)x; t[1]=(uint16_t)y; t[2]=(uint16_t)w; t[3]=(uint16_t)h; t[4]=(uint16_t)c; t[5]=(uint16_t)k; } }
+static void web_tr_after(void) { if (web_trace_n && web_trace_n <= 4096u) { uint16_t *p = web_probe[web_trace_n - 1u]; p[0] = web_fb[0]; p[1] = web_fb[120 * 240]; p[2] = web_fb[120 * 240 + 239]; p[3] = web_fb[239 * 240 + 120]; p[4] = web_fb[25 * 240 + 3]; p[5] = web_fb[26 * 240 + 130]; } }   /* (4, 5: two amber pixels of the hazard strip under the header) */
+#else
+#define web_tr(x,y,w,h,c,k) ((void)0)
+#define web_tr_after() ((void)0)
+#endif
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
 {
     uint32_t i, j;
     uint16_t sw = (uint16_t)((c >> 8) | (c << 8));
+    web_tr(x, y, w, h, c, 0);
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++)
             web_fb[(y + j) * 240u + x + i] = sw;
+    web_tr_after();
     web_draws++;
 }
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *p)
 {
     uint32_t i, j;
+    web_tr(x, y, w, h, 0, 1);
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++)
             web_fb[(y + j) * 240u + x + i] = p[j * w + i];
+    web_tr_after();
     web_draws++;
 }
 static void lcd_sync(void) {}
@@ -229,6 +244,7 @@ static void fl_plain_window_init(void) {}
 #include "../../experiments/home-perf/home_store.c"
 #endif
 #endif
+#include "../../firmware/src/ui_f2.c"
 
 
 /* ------------------------------------------------- main.c and its HAL --- */
@@ -311,6 +327,9 @@ static void web_power_on(void)
     hp_init();
 #endif
     autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c) */
+#if CARAVEL_UX_LAYERS
+    uxl_boot();                           /* main.c: PLAY at power-on */
+#endif
     web_boot_ms = fm1_ms + 430u;         /* main.c: 30 + 400 ms before the first frame */
     web_booted = 1;
 }
@@ -395,6 +414,11 @@ EXPORT uint8_t *web_nor(void) { return nor; }
 EXPORT uint32_t web_nor_size(void) { return sizeof nor; }
 EXPORT void web_nor_erase(void) { memset(nor, 0xFF, sizeof nor); }
 EXPORT uint32_t web_flash_writes_count(void) { return web_flash_writes; }
+#if CARAVEL_UX_LAYERS
+EXPORT void web_test_build(void) { uxl.play = 0; uxl.lvl = 0; uxl.hint_until = 0; ui.force = 1; }   /* (tests: the emulator started in PLAY; the tests that were written for BUILD go back) */
+EXPORT uint32_t web_test_seen(void) { return (favorites.factory[15][31] >> 7) & 1u; }   /* (tests: the LEVELS screen has been shown) */
+EXPORT uint32_t web_test_lvl(void) { return uxl.lvl; }
+#endif
 EXPORT void web_boot(void)
 {
     if (!web_booted)
@@ -491,7 +515,7 @@ EXPORT uint8_t *web_anim_levels(void)
  * steps, held; T4 DRUM, kick snare and hats. PLAY is the page's (or the test's) to press */
 EXPORT void web_test_heavy(void)
 {
-    static const uint8_t ENG[3][2] = {{12, 4}, {ENGI_PHYS, 7}, {8, 0}};
+    static const uint8_t ENG[3][2] = {{ENGI_ENSEMBLE,4},{ENGI_PHYS,7},{ENGI_DRONE,5}};
     static const uint8_t CH[4][4] = {{48, 55, 60, 64}, {45, 52, 57, 60}, {41, 48, 53, 57}, {43, 50, 55, 59}};
     uint32_t p, i;
     for (p = 0; p < 3u; p++) {
@@ -506,7 +530,7 @@ EXPORT void web_test_heavy(void)
             put_step(t, i, 4, n, ST_NOTE, 0);
         }
     }
-    host_drums(&trk[3]);
+    host_percussive_track(&trk[3]);
     for (i = 0; i < 16u; i++) {
         uint8_t n[4];
         uint32_t k = 0;
@@ -520,6 +544,173 @@ EXPORT void web_test_heavy(void)
     ui.force = 1;
 }
 
+#if CARAVEL_UX_CAPTURE
+EXPORT uint32_t web_test_cap_open(uint32_t i)   /* (tests: note-ons in the live ring without an end) */
+{
+    uint32_t k, j, n = 0;
+    if (i >= NTRK) return 0;
+    for (k = 0; k < cap_rn[i]; k++) {
+        const cap_ev_t *e = cap_ring_at(i, k);
+        if (!e->vel) continue;
+        for (j = k + 1u; j < cap_rn[i]; j++) { const cap_ev_t *o = cap_ring_at(i, j); if (!o->vel && o->note == e->note) break; }
+        if (j == cap_rn[i]) n++;
+    }
+    return n;
+}
+#if CARAVEL_UX_EVOLVE
+EXPORT uint32_t web_test_ev(uint32_t what)   /* (tests: EVOLVE state) */
+{
+    switch (what) {
+    case 0: return hp_rm.state;
+    case 1: return hp_j.on;
+    case 2: return hp_el1.on;
+    case 3: return action_snap_slot;
+    case 4: return hp_rm.count;
+    case 5: return hp_rm_snapshot_count(song.sel, 0);
+    case 6: return hp_rm_snapshot_count(song.sel, 1);
+    case 7: return hp_j.cur;
+    case 8: return hp_j.paused;
+    case 9: return hp_j.wait;
+    case 10: return uxl.grp[UXL_MOVE];
+    case 11: return uxl.area;
+#if CARAVEL_ELASTIC_P1
+    case 13: return hp_er_count(&hp_er);
+    case 14: return hp_er.spring[0].active | hp_er.spring[1].active << 1 | hp_er.spring[2].active << 2 | hp_er.spring[3].active << 3;
+    case 15: return hp_el_scope;
+    case 16: return hp_el_pick;
+    case 17: return hp_er.valid;
+    case 18: return hp_er.row * 100u + hp.track[song.sel].active;
+    case 19: return hp_el1.row;
+    case 20: case 21: case 22: case 23: return ENGINES[trk[song.sel].eng_req % NENGINES]->knob[what - 20u];
+    case 25: return P_E0;
+    case 50: return (uint32_t)(int32_t)perf_k[0];
+    case 51: return (uint32_t)(int32_t)trk[song.sel].p[P_DLY];
+    case 52: return (uint32_t)(int32_t)trk[song.sel].p[P_REV];
+    case 53: return (uint32_t)(int32_t)song.g[G_DMIX];
+    case 1000: return ui.page;
+    case 49: return song.playing;
+    case 48: return ui.home ? 100u : cur_page()->fam;
+#if CARAVEL_ELASTIC_P1
+    case 47: return hp_er.last;
+#endif
+    case 46: { uint32_t c, m = 0; hp_ref_t r; for (c = 0; c < 4u; c++) { if (uxl_inter_ref(c, &r)) { m |= 1u << c; if (uxl_morph_has(r)) m |= 16u << c; } } return m; }
+    case 40: return cur_page()->graph == GR_EVOLVE ? 1u + uxl_evp_idx() : 0u;
+    case 41: return hp_rm.scope;
+    case 42: return hp_rm.bars;
+#if CARAVEL_ELASTIC_P1
+    case 44: return hp_el_times_track[song.sel].pull;
+    case 45: return hp_el_times_track[song.sel].couple;
+#endif
+#if CARAVEL_ELASTIC_P1
+    case 31: case 32: case 33: case 34: return hp_el_stimes[song.sel][what - 31u].pull;
+    case 35: case 36: case 37: case 38: return hp_el_scfg[song.sel][what - 35u].range;
+#endif
+#if CARAVEL_ELASTIC_P1
+    case 30: return (hp_er_audio[song.sel][0] | hp_er_audio[song.sel][1] | hp_er_audio[song.sel][2] | hp_er_audio[song.sel][3]) >> 31;
+#endif
+    case 27: return uxl.inter;
+    case 28: return uxl.uset;
+    case 29: return uxl_set_count(song.sel);
+    case 26: { hp_ref_t r = hp_current(0); return r.kind * 100000u + r.id * 100u + r.aux * 10u + (r.track == 255u) + 1000u * hp_elastic_p1_ref_target(r, song.sel); }
+    case 24: return trk[song.sel].engine * 100u + trk[song.sel].eng_req;
+#endif
+    case 12: { uint32_t i, sum = 0; for (i = 0; i < P_COUNT; i++) sum = sum * 31u + (uint32_t)(int32_t)trk[song.sel].p[i]; return sum; }
+    default: return 0;
+    }
+}
+#endif
+
+#if CARAVEL_UX_EVOLVE
+/* (tests: the widest label (M) and value (S) of every parameter of every engine and of the globals: do they fit a BUILD card?) */
+static char meas_buf[1024];
+EXPORT const char *web_test_measure(void)
+{
+    track_t tmp = trk[0];
+    uint32_t e, id, n = 0;
+    int32_t wl = 0, wv = 0, wt = 0, wlg = 0, wvg = 0, wtg = 0, w, v, step;
+    char ll[24] = "", lv[24] = "", lt[32] = "", lgl[24] = "", lgv[24] = "", lgt[32] = "", b[24];
+    const char *u;
+    const param_desc_t *d;
+    for (e = 0; e < NENGINES + 1u; e++) {
+        for (id = 0; id < P_COUNT + (e == 0u ? G_COUNT : 0u); id++) {
+            int glob = id >= P_COUNT;
+            if (e > 0u && glob)
+                break;
+            if (!glob) { tmp.eng_req = (uint8_t)(e ? e - 1u : tmp.eng_req); d = track_desc(&tmp, id); }
+            else d = &GP[id - P_COUNT];
+            if (!d || !d->label || !d->label[0] || (d->label[0] == '-' && !d->label[1]))
+                continue;
+            w = text_w(&AF_M, d->label);
+            if (!glob && w > wl) { wl = w; str_cpy(ll, d->label, sizeof ll); }
+            if (glob && w > wlg) { wlg = w; str_cpy(lgl, d->label, sizeof lgl); }
+            if (d->max < d->min || d->max - d->min > 20000)
+                continue;
+            step = (d->max - d->min) / 80;
+            if (step < 1) step = 1;
+            for (v = d->min; v <= d->max; v += step) {
+                param_format(d, v, b, &u);
+                w = text_w(&AF_S, b);
+                if (!glob && w > wv) { wv = w; str_cpy(lv, b, sizeof lv); }
+                if (glob && w > wvg) { wvg = w; str_cpy(lgv, b, sizeof lgv); }
+                w += (u && u[0] ? 3 + text_w(&AF_S, u) : 0);
+                if (!glob && w > wt) { wt = w; str_cpy(lt, b, sizeof lt); str_cpy(lt + str_len(lt), u, sizeof lt - str_len(lt)); }
+                if (glob && w > wtg) { wtg = w; str_cpy(lgt, b, sizeof lgt); str_cpy(lgt + str_len(lgt), u, sizeof lgt - str_len(lgt)); }
+                n++;
+            }
+        }
+    }
+    perf_format(meas_buf, sizeof meas_buf, "track label M max %d (%s); value S max %d (%s); value+unit max %d (%s) | global label %d (%s); value %d (%s); value+unit %d (%s) | %u samples",
+                (int)wl, ll, (int)wv, lv, (int)wt, lt, (int)wlg, lgl, (int)wvg, lgv, (int)wtg, lgt, n);
+    return meas_buf;
+}
+#endif
+
+#if CARAVEL_SLIM
+/* (tests: every entry of the PRESETS list: bit e of the result is set when engine e has one; and the engines of the four tracks) */
+EXPORT uint32_t web_test_preset_engines(void)
+{
+    uint32_t total, i, m = 0, pk;
+    (void)preset_pos(&total);
+    for (i = 0; i < total; i++) {
+        uint32_t e = preset_at(i, &pk);
+        if (e < 32u)
+            m |= 1u << e;
+        else
+            m |= 0x80000000u;                           /* a user preset */
+    }
+    return m;
+}
+EXPORT uint32_t web_test_track_engines(void) { return (uint32_t)trk[0].eng_req | (uint32_t)trk[1].eng_req << 8 | (uint32_t)trk[2].eng_req << 16 | (uint32_t)trk[3].eng_req << 24; }
+#endif
+EXPORT void web_test_engine(uint32_t e, uint32_t preset) { host_preset(&trk[0], e, preset); ui.force = 1; }   /* (tests, shots: track 1's engine) */
+EXPORT uint32_t web_test_page(void) { return (uint32_t)ui.page | (uint32_t)ui.home << 8 | (uint32_t)ui.layer << 9; }   /* (tests: the page shown) */
+EXPORT int32_t web_test_p(uint32_t i) { return i < P_COUNT ? TSEL->p[i] : 0; }   /* (tests: a parameter of the selected track) */
+#if CARAVEL_UX_LAYERS && CARAVEL_UX_EVOLVE
+/* Read the actual FX card model; test setup changes only the stored track filter. */
+EXPORT void web_test_filter_own(int32_t v) { TSEL->p[P_FILT] = (int16_t)clamp(v, -64, 63); ui.force = 1; }
+EXPORT int32_t web_test_filter_view(uint32_t what) {
+    uly_t m; uly_model(LAYER_FX, &m);
+    if (!what) return tf_eff(TSEL);
+    if (what == 1u) return m.dim[0];
+    if (what == 2u) return perf_k[0];
+    if (what == 3u) return TSEL->p[P_FILT];
+    if (what == 24u) return T_DIM;
+    if (what == 25u) return T_TEXT;
+    return what - 4u < sizeof m.cv[0] ? (uint8_t)m.cv[0][what - 4u] : 0;
+}
+#endif
+
+EXPORT void web_test_select(uint32_t t) { if (t < NTRK) { song.sel = (uint8_t)t; ui.force = 1; } }   /* (tests: select a track) */
+EXPORT uint32_t web_test_cap_events(uint32_t i) { return i < NTRK ? cap_ln[i] : 0u; }   /* (tests: the events of a track's loop) */
+EXPORT uint32_t web_test_cap_post(uint32_t op, uint32_t i, uint32_t nb) { return cap_post(op, i, nb); }   /* (tests: a command as the UI posts it, none run until the next block) */
+EXPORT uint32_t web_test_cap_pending(void) { return (uint8_t)(cap_cq_w - cap_cq_r); }   /* (tests: commands not yet taken by the audio context) */
+EXPORT uint32_t web_test_cap_loop_abs(uint32_t i, uint32_t k) { return i < NTRK && k < cap_ln[i] && cap_len[i] ? (cap_o[i] + ((uint32_t)cap_loop[i][k].t << 4)) % cap_len[i] : 0xFFFFFFFFu; }   /* (tests: where a loop event falls on the bar clock, Q16 within the loop) */
+EXPORT uint32_t web_test_cap_len(uint32_t i) { return i < NTRK ? cap_len[i] : 0u; }   /* (tests: the loop's length, Q16 bars) */
+EXPORT uint32_t web_test_cap_prof(uint32_t what) { return what == 0u ? cap_p_blocks : what == 1u ? cap_p_fired_max : what == 2u ? cap_p_takes : cap_p_all; }   /* (tests: the block counter: blocks, most events fired in a block, takes, all four loops running) */
+EXPORT uint32_t web_test_cap_state(uint32_t i) { return i < NTRK ? cap_st[i] : 0u; }   /* (tests: 0 no loop, 1 running, 2 paused) */
+#endif
+EXPORT void web_test_stasis(uint32_t on) { song.g[G_RTYPE] = on ? 3 : 2; }   /* (tests: the reverb TYPE STASIS or HALL) */
+EXPORT int32_t web_test_dr_level(void) { return song.g[G_DRLVL]; }   /* (tests: STASIS HOLD) */
 EXPORT uint32_t web_test_user_preset(uint32_t i) { return (uint32_t)up_used(i); }
 EXPORT void web_test_hades(uint32_t preset)
 {
@@ -543,6 +734,14 @@ EXPORT void web_p12_demo_track(uint32_t t)
 #endif
     ui.force = 1;
 }
+#if CARAVEL_FORMAT2
+EXPORT uint32_t web_test_f2(uint32_t what)       /* (tests: FORMAT 2) 0 notice stage, 1 old mask, 2 acknowledged */
+{
+    return what == 0u ? f2.stage : what == 1u ? f2_old : (ui_prefs3 & (PREF_F2_ACK >> 24)) != 0u;
+}
+#endif
+EXPORT uint32_t web_test_project_save(uint32_t slot) { return (uint32_t)project_save_as(slot & 3u, "TEST"); }
+EXPORT uint32_t web_test_project_load(uint32_t slot) { project_load(slot & 3u); return 0u; }
 EXPORT uint32_t web_test_project_used(uint32_t i) { return i < 4u && project_used(i); }
 EXPORT uint32_t web_test_project_ram_mask(void) { return project_ram_mask(); }
 EXPORT void web_test_live_load_mode(uint32_t full) { menu_put(MI_LIVELOAD, !!full); }
@@ -573,6 +772,12 @@ EXPORT uint32_t web_test_fx_edge(uint32_t on)
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }
+#ifdef WEB_LCD_TRACE
+EXPORT uint32_t web_trace_count(void) { return web_trace_n; }
+EXPORT void web_trace_reset(void) { web_trace_n = 0; }
+EXPORT const uint16_t *web_trace_ptr(void) { return &web_trace[0][0]; }
+EXPORT const uint16_t *web_probe_ptr(void) { return &web_probe[0][0]; }
+#endif
 #if CARAVEL_ELASTIC_P1 && CARAVEL_ELASTIC_PLAYABLE
 /* Read-only emulator diagnostics: validate actual firmware ELASTIC ownership
  * and fractional spring travel, not merely "some pixels changed". */

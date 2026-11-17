@@ -235,7 +235,7 @@
           <button id="factlib" data-t="factoryToLib" data-ic="symbol_folder"></button></p>
         <p class="bar"><button id="savefile" data-t="saveFile" data-ic="symbol_download"></button>
           <button id="loadfile" data-t="loadFile" data-ic="symbol_upload"></button>
-          <input type="file" id="file" accept=".json,application/json" hidden></p>
+          <input type="file" id="file" accept=".json,.zip,application/json,application/zip" hidden></p>
       </div>
     </div>
     <p class="dim" id="ctlhelp" data-t="ctlHelp"></p>
@@ -368,7 +368,7 @@
     <div class="group" id="backup-panel">
       <h2 data-t="backupTitle"></h2>
       <p class="bar"><button id="backup-export" data-t="backupExport"></button>
-        <button id="backup-import" data-t="backupImport"></button><input id="backup-file" type="file" accept=".json,application/json" hidden></p>
+        <button id="backup-import" data-t="backupImport"></button><input id="backup-file" type="file" accept=".json,.zip,application/json,application/zip" hidden></p>
       <p class="dim" id="backup-help"></p>
     </div>
     <div class="group" id="songchain" hidden>
@@ -406,7 +406,7 @@
 "use strict";
 /*PROTO-BEGIN*/
 /* ---------------------------------------------------------------- protocol --- */
-const HDR = [0x7D, 0x46, 0x4C];
+const HDR = [0x7D, 0x43, 0x41];
 const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7, PRESET: 8, PROJECT: 9, NAMES: 10,
   SMP_BEGIN: 11, SMP_WRITE: 12, SMP_END: 13, SMP_ERASE: 14, SMP_INFO: 15,
   UP_LIST: 16, UP_GET: 17, UP_PUT: 18, UP_STORE: 19, UP_LOAD: 20, UP_ERASE: 21,
@@ -426,7 +426,7 @@ const v14enc = (v) => { const u = Math.max(-8192, Math.min(8191, Math.round(v)))
 const v14dec = (lo, hi) => (lo | (hi << 7)) - 8192;
 function strEnc(s) { const a = []; for (const c of String(s)) a.push(c.charCodeAt(0) & 0x7F); a.push(0); return a; }
 
-/* only ever builds F0 7D 46 4C ... F7 */
+/* Generation 2: F0 7D 43 41 ... F7. Classic frames cannot edit 1.x. */
 function frame(cmd, args = []) {
   for (const b of args) if (!(Number.isInteger(b) && b >= 0 && b <= 0x7F)) throw new Error("bad data byte " + b);
   return [0xF0, ...HDR, cmd & 0x7F, ...args, 0xF7];
@@ -508,6 +508,15 @@ const parse = {
       let r = trailer[p + 7] === 0x50 ? p + 10 : p + 7;                                   /* RATCH after FM6 v2 */
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) { o.menuCount = trailer[r + 2] || 0; r += 3; }
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
+    }
+    if (trailer[0] === 0 && trailer[1] === 0x55 && trailer[2] === 1) {
+      o.uiCaps = trailer[3] & 15;
+      o.motionMax = trailer[4] === 0x4d && trailer[5] === 1 ? trailer[6] : 0;
+      o.chance = !!o.motionMax && trailer[7] === 1;
+      o.backupCaps = trailer[8] === 0x42 && trailer[9] === 1 ? trailer[10] & 3 : 0;
+      o.syncCaps = trailer[11] === 0x53 && trailer[12] === 1 ? trailer[13] & 3 : 0;
+      o.menuCount = trailer[14] === 0x4e && trailer[15] === 1 ? trailer[16] : 0;
+      o.ratchet = trailer[17] === 0x52 && trailer[18] === 1 ? trailer[19] : 0;
     }
     o.lfo2 = trailer.some((v,i)=>v===0x59 && trailer[i+1]===1 && trailer[i+2]===7);
     o.drumx = trailer.some((v,i)=>v===0x58 && trailer[i+1]===1 && trailer[i+2]===64);
@@ -1373,12 +1382,13 @@ async function capturePatch(rq, info, name) {
    SCL, LEN DIV SWING GATE (17..32), PAN, MUTE, the SLICER (45..48); with P_E0 83 the chord keys CHRD VOIC (81, 82:
    E0 E1 of the 89-parameter firmware) */
 const TRACK_OWN = new Set([0, 39, 40, ...Array.from({ length: 16 }, (_, i) => 17 + i), 45, 46, 47, 48]);
+const P_CSET = [76, 77, 79];                       /* core.h P_CSRC, P_CEXT, P_COCT: CHORD SOURCE / EXT / OCT in the retired DIGITAL operator 4 ATK DEC REL ids (the track's setting, not a sound; from P_E0 106) */
 const P_CHORD = [81, 82, 8];                       /* core.h P_CHRD, P_VOIC (since P_COUNT 91, P_E0 83), P_LATCH (the retired FX slot, Caravel) */
 const P_LANES = [83, 84, 85, 86, 87, 88, 89, 90];   /* core.h P_LN0..P_LN7: the DRUM lane levels (since P_COUNT 99, P_E0 91) */
 const P_SPRD = 95;                                  /* core.h P_SPRD: SPREAD (since P_COUNT 104); the ENSEMBLE's width from 0.11.0 */
 const ENS_WIDTH = [127, 127, 127, 127, 127, 112, 96, 112, 0, 127, 0, 0, 96, 127];   /* eng_ensemble.c ENS_WIDTH: the SPRD a factory ENSEMBLE preset loads with (the pads; 0 = mono) */
 const P_QNTZ = 94;                                  /* core.h P_SQNT: QUANTIZE, the track's (since P_COUNT 103, P_E0 95) */
-const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(i)) || (pe0 >= 95 && i === P_QNTZ);
+const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(i)) || (pe0 >= 95 && i === P_QNTZ) || (pe0 >= 106 && P_CSET.includes(i));
 /* play a patch without writing flash, as UP_LOAD would load it: the sound only. SET the engine (G_ENGSEL:
    engine defaults and its first preset), then every instrument parameter that differs, except the track's
    own (TRACK_OWN). The steps are never touched. The device keeps a copy of the sound from before (SAVE held
@@ -1996,6 +2006,9 @@ function makeMockDevice(opt = {}) {
     [[48, 51, 55, 60, 63, 67, 72, 75, 48, 51, 55, 60, 63, 67, 72, 75], [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]],   /* 13 ARP */
   ];
   for (let op = 0; op < 4; op++) TP.push(D("ATK", F.TIME, 0, 127, 0), D("DEC", F.TIME, 0, 127, 0), D("SUS", F.PCT, 0, 127, 127), D("REL", F.TIME, 0, 127, 0), D("LVL", F.PCT, 0, 127, 127));
+  TP[76] = E("CSRC", ["OFF", "HARM", "T1", "T2", "T3", "T4"], 0);                                  /* CHORD SOURCE / EXT / OCT replace operator 4's ATK DEC REL (76, 77, 79; core.h P_CSRC ..): */
+  TP[77] = E("CEXT", ["7+9", "7", "ALL"], 0);                              /* SOURCE 0..1 until the live sources exist (the firmware names six), EXT in its stored order, */
+  TP[79] = D("COCT", F.INT, -2, 2, 0, null, "oct");                /* OCT -2..+2 */
   TP.push(E("CHRD", ["OFF", "DIA3", "DIA7", "MAJ", "MIN", "DOM7", "MAJ7", "MIN7", "SUS4", "POW", "BUS"], 0),   /* the chord keys 81, 82 */
     E("VOIC", ["CLOSE", "OPEN", "INV1", "INV2", "+OCT"], 0));
   for (const l of ["KICK", "SNARE", "CLAP", "HATCL", "HATOP", "TOM", "RIM", "BELL"]) TP.push(D(l, F.PCT, 0, 127, 127));   /* 83..90: DRUM lane levels */
@@ -2137,15 +2150,16 @@ function makeMockDevice(opt = {}) {
     applyPreset(0);
   }
   /* the selected track's sound = p, DIGITAL's values, converted (ui.c fm4_apply) */
-  function fm4Apply(p) {
+  function fm4Apply(p, own) {
     const r = FM4.convert(p, P_E0);
+    P_CSET.forEach((id, k) => { r.p[id] = own ? own[k] : 0; });   /* the conversion read 76, 77, 79 as operator 4's ATK DEC REL and zeroed them: they are the track's CHORD SOURCE / EXT / OCT (ui.c fm4_apply) */
     st.engine = FM6_E; st.preset = r.preset; st.p = r.p;
     st.tracks[st.sel].fm6 = FM6.pack(r.voice);
     fm6Adopt(st.tracks[st.sel]);                  /* (the converted patch is the track's own: SLOT OWN) */
   }
   function fm4Load(k) {                           /* a DIGITAL preset number (ui.c fm4_load_preset) */
-    const p = st.p.map((x, i) => (i < P_E0 && !trackOwn(i, P_E0) ? TP[i].def : x));
-    fm4Apply(FM4.presetValues(p, k, P_E0));
+    const p = st.p.map((x, i) => (i < P_E0 && (!trackOwn(i, P_E0) || P_CSET.includes(i)) ? TP[i].def : x));
+    fm4Apply(FM4.presetValues(p, k, P_E0), P_CSET.map((i) => st.p[i]));
   }
   const snapshot = (name) => {                   /* (upreset.c up_store: a DRUM track that strikes a lane: its grid; an FM6
                                                      track: its patch, up_fm6.c) */
@@ -2292,8 +2306,8 @@ function makeMockDevice(opt = {}) {
         const u = st.bank[a[0]];
         if (u) {                                    /* the sound only (upreset.c up_load): the steps and the track's own */
           const own = st.p.slice();                 /* parameters (TRACK_OWN: mix, ARP, SCL, LEN.., SLICER) stay */
-          const p = u.p.map((x, i) => (trackOwn(i, P_E0) ? own[i] : x));
-          if (u.engine === 1) fm4Apply(p);          /* a DIGITAL record (kept as it is): FM6 */
+          const p = u.p.map((x, i) => (trackOwn(i, P_E0) && !(u.engine === 1 && P_CSET.includes(i)) ? own[i] : x));
+          if (u.engine === 1) fm4Apply(p, P_CSET.map((i) => own[i]));   /* a DIGITAL record (kept as it is): FM6 (76, 77, 79: its operator values, the track's CHORD settings stay) */
           else { st.engine = u.engine; st.preset = 0; st.p = p; }
           st.tracks[st.sel].lfo2=(u.lfo2 || Array(7).fill(0)).slice();
           if (dxActive(st.tracks[st.sel])) st.tracks[st.sel].dx=(u.dx || dxDefault()).slice();
@@ -3048,7 +3062,7 @@ $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
 const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings"];
-const TAB_KEY = "felucca-editor-tab";
+const TAB_KEY = "caravel-v1-editor-tab";
 const TRACK_TABS = new Set(["sound", "sequencer", "tracks"]);
 let tab = (() => {
   const h = location.hash.slice(1);
@@ -3285,7 +3299,17 @@ async function load(d) {
   const releaseBusy = beginBusy();
   try {
     /* the first frame after opening the port can be lost: a few tries */
-    d.info = parse[CMD.INFO](await sessionRequest(d, req.info(), { timeout: 500, retries: 3 }));
+    let infoReply;
+    try { infoReply = await sessionRequest(d, req.info(), { timeout: 500, retries: 3 }); }
+    catch (error) {
+      if (error.message === "closed") throw error;
+      throw new Error("No matching 1.x protocol. For Classic 0.13 use the Classic editor; nothing written.");
+    }
+    if (!MOCK) {
+      const { generationInfo } = await import("./generation.js");
+      if (generationInfo(infoReply).generation !== 2) throw new Error("Wrong device generation; use the matching editor");
+    }
+    d.info = parse[CMD.INFO](infoReply);
     $("version").textContent = d.info.version;
     const total = d.info.pcount + d.info.gcount;
     for (let i = 0; i < d.info.pcount; i++) { sayK("reading", `${i + 1}/${total}`); d.pdesc[i] = await getDescOrNull(0, i, d); }
@@ -3696,7 +3720,9 @@ function renderBackup() {
   const caps = dev?.info?.backupCaps || 0;
   $("backup-export").disabled = !(caps & 1);
   $("backup-import").disabled = !(caps & 2);
-  $("backup-help").textContent = t(caps & 1 ? "backupHelp" : "backupOld");
+  $("backup-help").textContent = !(caps & 1) ? t("backupOld") :
+    (caps & 1) ?
+      "FORMAT 2 — save/restore WORK, A–D, user presets and settings (no user samples)." : t("backupHelp");
 }
 const backupModule = () => import("./fm1backup.js");
 const backupProgress = (done, total) => sayK("backupWorking", `${Math.round(done / Math.max(1, total) * 100)}%`);
@@ -3715,9 +3741,10 @@ $("backup-file").addEventListener("change", () => {
   const file = $("backup-file").files[0], d = dev; $("backup-file").value = "";
   if (!file || !(d?.info?.backupCaps & 2)) return;
   op(async () => {
-    if (file.size > 600000) throw new Error("Backup file too large");
-    const { readBackup, restoreBackup } = await backupModule();
-    const archive = readBackup(await file.text()); assertSession(d);
+    if (file.size > 2 * 1024 * 1024) throw new Error("Backup file too large");
+    const { readBackupFile, restoreBackup } = await backupModule();
+    const archive = await readBackupFile(await file.arrayBuffer()); assertSession(d);
+    if (archive.generation !== 2) throw new Error("Classic backup: restore it with Classic firmware and editor; nothing written");
     if (!confirm(t("backupConfirm"))) return;
     await restoreBackup((r, o) => sessionRequest(d, r, o), archive, backupProgress);
     await load(d); sayK("backupRestored");
@@ -4838,14 +4865,14 @@ $("file").addEventListener("change", async () => {
 });
 
 /* ----------------------------------------------------------- library --- */
-/* Patches live in IndexedDB "felucca-editor": store "patches" (by id), store "meta" ("layout": the
+/* FORMAT 2 patches live in IndexedDB "caravel-v1-editor": store "patches" (by id), store "meta" ("layout": the
    parameter keys / engine names the stored values are in). Without IndexedDB (some private windows)
    the library is kept in memory only. */
 const store = (() => {
   let dbp = null;
   const open = () => dbp || (dbp = new Promise((res) => {
     try {
-      const r = indexedDB.open("felucca-editor", 1);
+      const r = indexedDB.open("caravel-v1-editor", 1);
       r.onupgradeneeded = () => { r.result.createObjectStore("patches", { keyPath: "id" }); r.result.createObjectStore("meta"); };
       r.onsuccess = () => res(r.result);
       r.onerror = r.onblocked = () => res(null);

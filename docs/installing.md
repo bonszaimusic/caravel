@@ -2,6 +2,9 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Installing Caravel
 
+
+> **Caravel 1.0 candidate:** start fresh with FORMAT 2. Back up before updating using the old matching firmware/tool; pre-1.0 backups are not imported into 1.0. Keep the old firmware and backup for a return. [Current formats, controls, limits and device checklist](release-100.md). Historical recovery observations below keep their original version scope. UC25HQ80 is recognized but not tested on a real unit by this project; m-bootloader remains an external, documented tool, not integrated firmware.
+
 **Connection or update problem?** See the [Troubleshooting & FAQ](faq.md), including
 [USB detection](faq.md#usb-device-not-recognized), [stock-return error -5](faq.md#stock-return-error--5)
 and [M-Flasher / m-bootloader](faq.md#recovery-tools).

@@ -52,7 +52,7 @@
 #define UP_USED 0xA5u
 #define UP_VER 4u                                /* 2 since 1.0; 1 is read too (PHYS MODEL 2 was DUST) */
 #define UP_VER_GRID 5u                           /* 2 with a drum grid as the pattern (see the top) */
-#define UP_BANK_MAGIC 0x31425055u                /* "UPB1" */
+#define UP_BANK_MAGIC 0x32425055u                /* "UPB2" (FORMAT 2: the records' engine numbers are 0..5, eng_store) */
 typedef struct {
     uint8_t used, ver, engine, np;               /* UP_USED, UP_VER, engine, P_COUNT when stored */
     char name[12];                               /* ASCII 32..126, 0-padded (no 0 when 12 long) */
@@ -70,6 +70,31 @@ _Static_assert(P_COUNT <= UP_PMAX * 2u && P_COUNT < 128, "user preset record: P_
 static up_bank_t up_bank[UP_SLOTS / UP_PER_BANK] __attribute__((section(".pool")));   /* (main loop only) */
 
 static up_rec_t *up_rec(uint32_t k) { return &up_bank[k / UP_PER_BANK].r[k % UP_PER_BANK]; }
+
+/* FORMAT 2: the bank in flash holds the stored engine numbers (0..5); in RAM the running ones. map: 1 = to the stored
+ * numbers (right before the save), 0 = back (right after it, and after a load: a number past the six empties the record) */
+static void up_bank_map(up_bank_t *bk, int store)
+{
+    uint32_t i;
+    for (i = 0; i < UP_PER_BANK; i++) {
+        up_rec_t *r = &bk->r[i];
+        if (r->used != UP_USED) continue;
+        if (store) {
+            r->engine = (uint8_t)eng_store(r->engine);
+        } else {
+            uint32_t e = eng_unstore(r->engine);
+            if (e == 0xFFu) memset(r, 0, sizeof *r); else r->engine = (uint8_t)e;
+        }
+    }
+}
+static int up_bank_save(uint32_t obj, up_bank_t *bk)
+{
+    int rc;
+    up_bank_map(bk, 1);
+    rc = st_save(obj, bk, sizeof *bk);
+    up_bank_map(bk, 0);
+    return rc;
+}
 
 /* 1.2 (Discussion #90): the sound's category (category.c CAT_*) in the record's last byte, packed[UP_CAT_AT]: a
  * version 4 / 5 record's values take np = P_COUNT (< 128) of its 144 bytes and nothing reads the others (up_valid
@@ -111,6 +136,7 @@ static void up_set_cat(up_rec_t *r, uint32_t c)  /* c CAT_BASS..CAT_OTHER; a rec
 
 static int up_valid(const up_rec_t *r)
 {
+    if((r->ver!=4u&&r->ver!=8u)||r->np!=P_COUNT||!eng_ok(r->engine))return 0;
     if (!(r->used == UP_USED && r->ver >= 1u && r->ver <= 11u && r->engine < NENGINES &&
           r->np >= 8u && r->np <= (r->ver >= 4u ? UP_PMAX * 2u : UP_PMAX) && r->name[0])) return 0;
     if ((r->ver == 6u || r->ver == 7u || r->ver >= 10u) && !(r->engine == ENGI_DRUM && (int16_t)r->packed[r->np - 8u] - 64 == DX_KIT_ID)) return 0;
@@ -154,6 +180,8 @@ static void up_bank_check(uint32_t b, int len)
     if (len != (int)sizeof *bk || bk->magic != UP_BANK_MAGIC || bk->rsize != sizeof(up_rec_t) ||
         bk->nslot != UP_PER_BANK)
         memset(bk, 0, sizeof *bk);
+    else
+        up_bank_map(bk, 0);
     for (i = 0; i < UP_PER_BANK; i++) {
         up_rec_t *r = &bk->r[i];
         if (!up_valid(r))
@@ -261,7 +289,7 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
     memset(r, 0, sizeof *r);
     r->used = UP_USED;
     r->ver = UP_VER;
-    r->engine = a[1];
+    r->engine = (uint8_t)eng_unstore(a[1]);if(r->engine==255u)return 1;
     r->np = P_COUNT;
     for (i = 0; i < n; i++)
         r->name[i] = (char)a[2 + i];
@@ -313,8 +341,6 @@ static void up_values(const up_rec_t *r, int16_t *v)   /* mapped and clamped for
         v[i] = (int16_t)param_fit(param_desc_of(r->engine, i), v[i]);   /* (a retired KIT: the kit it plays) */
 }
 
-#include "up_fm6.c"                            /* the FM6 user presets' patches: the same kind of store */
-#include "fm6_vbank.c"                         /* FM6's voice bank (SLOT B1..B32, 1.4.1) */
 
 static void up_boot(void)                      /* persist_boot: the banks from flash */
 {
@@ -323,8 +349,6 @@ static void up_boot(void)                      /* persist_boot: the banks from f
     for (b = 0; b < UP_SLOTS / UP_PER_BANK; b++)
         up_bank_check(b, flash_ok ? st_load(OBJ_UPRESET0 + b, &up_bank[b], sizeof up_bank[b]) : -1);
 #endif
-    upf_boot();                                  /* (after the banks: it may move the retired FM6 bank's patches) */
-    fvb_boot();                                  /* FM6's voice bank: a staged one finished, its voices */
 #ifdef FELUCCA_FAVORITES
     for (uint32_t k = 0; k < UP_SLOTS; k++)
         if (!up_used(k)) favorite_set(NENGINES, k, 0);
@@ -347,6 +371,12 @@ static int up_put(uint32_t k, const up_rec_t *r)
         ui_message("STOP TO SAVE");
         return 2;
     }
+    if (f2_old & (F2_OLD_BANK0 << (k / UP_PER_BANK))) {   /* FORMAT 2: this bank holds an older version's sounds: only erased */
+        f2_offer();
+        ui_message("OLD SOUNDS HERE");
+        str_cpy(ui.msg2, "NOT OVERWRITTEN", sizeof ui.msg2);
+        return 2;
+    }
     bk = &up_bank[k / UP_PER_BANK];
 #if FELUCCA_FLASH
     old = *up_rec(k);
@@ -362,7 +392,7 @@ static int up_put(uint32_t k, const up_rec_t *r)
     else
         memset(up_rec(k), 0, sizeof(up_rec_t));
 #if FELUCCA_FLASH
-    if (flash_ok && st_save(OBJ_UPRESET0 + k / UP_PER_BANK, bk, sizeof *bk)) {
+    if (flash_ok && up_bank_save(OBJ_UPRESET0 + k / UP_PER_BANK, bk)) {
         *up_rec(k) = old;
         bk->magic = magic;
         bk->rsize = rsize;
@@ -400,7 +430,7 @@ static void up_auto_name(char *b, uint32_t e, uint32_t k)
 {
     char l[4];
     e %= NENGINES;
-    str_cpy(b, ENGINES[eng_ok(e) ? e : ENGI_FM6]->name, 9);   /* (a DIGITAL record plays as FM6) */
+    str_cpy(b, ENGINES[eng_ok(e) ? e : ENG_FALLBACK]->name, 9);   /* (a DIGITAL record plays as FM6) */
     up_slot_label(l, k);
     str_cpy(b + str_len(b), " ", 2);
     str_cpy(b + str_len(b), l + 1, 3);
@@ -455,22 +485,16 @@ static int up_store_cat(uint32_t k, const char *name, uint32_t cat)
             }
         }
     }
-    if (dx_track(TSEL)) r.ver = r.ver == UP_VER_GRID ? 7u : 6u;
     {
         int need = lfo2_nonzero(&lfo2_config[(uint32_t)(TSEL - trk)]);
         for (i = 0; i < NMSLOT; i++) if (r.packed[P_M1SRC + 3u * i] - 64 >= MS_LFO2) need = 1;
         if (need) {
             memcpy(r.packed + UP_L2_AT, lfo2_config[(uint32_t)(TSEL - trk)].p, L2_N);
-            r.ver = dx_track(TSEL) ? (up_grid(&r) ? 11u : 10u) : (up_grid(&r) ? 9u : 8u);
+            r.ver = (up_grid(&r) ? 9u : 8u);
         }
     }
     {
         int rc = up_put(k, &r);                         /* the record first, then its FM6 patch (up_fm6.c) */
-        if ((rc == 0 || rc == 3) && (r.engine == ENGI_FM6 || dx_track(TSEL))) {
-            int u = upf_store(k, (uint32_t)(TSEL - trk));
-            if (u == 2)
-                rc = 2;
-        }
         return rc;
     }
 }
@@ -506,14 +530,7 @@ static int up_load(uint32_t k)
     up_values(r, v);
     load_begin(t, UNDO_SOUND);                          /* (ui.c: the copy for SAVE held = undo) */
     panic_req |= (uint8_t)(1u << song.sel);
-#if !FELUCCA_FM4
-    if (r->engine == ENGI_DIGITAL) {                    /* a DIGITAL sound (kept as it was stored): FM6 */
-        int16_t p[P_COUNT];
-        for (i = 0; i < P_COUNT; i++)
-            p[i] = param_kept(i) ? t->p[i] : v[i];
-        fm4_apply(t, p);
-    } else
-#endif
+
     {
         fm1_irq_off();                                  /* the audio ISR must not see half a sound */
         t->eng_req = r->engine;
@@ -522,7 +539,6 @@ static int up_load(uint32_t k)
                 t->p[i] = v[i];
         t->preset = 0;
         fm1_irq_on();
-        upf_track_load(t, k);                           /* FM6: the preset's own patch (up_fm6.c) */
     }
     {
         lfo2_config_t c = {{0}};
@@ -585,7 +601,7 @@ static void up_pat_load(track_t *t, uint32_t k)
 }
 
 /* the engine a used slot's sound plays on (a DIGITAL record: FM6, without FELUCCA_FM4) */
-static uint32_t up_engine(uint32_t k) { return eng_ok(up_rec(k)->engine) ? up_rec(k)->engine : ENGI_FM6; }
+static uint32_t up_engine(uint32_t k) { return eng_ok(up_rec(k)->engine) ? up_rec(k)->engine : ENG_FALLBACK; }
 
 static uint32_t up_count(void)                 /* used slots */
 {
@@ -623,7 +639,7 @@ static void up_ui_named(uint32_t op, uint32_t k, const char *name, uint32_t cat)
         ui_message("EMPTY SLOT");
         return;
     }
-    if (op && (song.playing || chain_busy() || transport_req == 1u)) {    /* (up_put refuses too) */
+    if (op && (song.playing || 0 || transport_req == 1u)) {    /* (up_put refuses too) */
         ui_message("STOP TO SAVE");
         return;
     }

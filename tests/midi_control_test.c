@@ -2,11 +2,12 @@
  * End-to-end channel input and external-clock tests using the real queues,
  * UART parser, ownership model, sequencer, voice renderer and UI source. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void midi_test_reset(void)
 {
     ui_power_on();
+    for(uint32_t t=0;t<NTRK;t++){set_engine_of(&trk[t],0);trk[t].p[P_VOICE]=V_POLY;}
     memset(midi_ch, 0, sizeof midi_ch); memset(midi_notes, 0, sizeof midi_notes);
     memset(midi_owners, 0, sizeof midi_owners); memset(midi_bend_q8, 0, sizeof midi_bend_q8);
     memset(midi_bend_target, 0, sizeof midi_bend_target); memset(&midi_clock, 0, sizeof midi_clock);
@@ -50,7 +51,7 @@ static int controls_test(void)
     queued(0xB0, 1, 87, 1); queued(0xB0, 11, 23, 1); queued(0xD0, 90, 0, 1);
     bad += check("existing modwheel/expression/aftertouch stay routed to the track", t->mw == 87 && t->ex_off == 104 && t->at == 90);
     queued(0xE3, 127, 127, 1);
-    bad += check("drum track ignores pitch bend", !midi_bend_target[3]);
+    bad += check("fourth synth track receives pitch bend", midi_bend_target[3]==512);
     return bad;
 }
 static int sustain_test(void)
@@ -65,7 +66,7 @@ static int sustain_test(void)
     queued(0xB0, 121, 0, 1);
     bad += check("Reset Controllers releases pedal-held notes", !gate_note(t, 62) && !midi_note_get(0, 62));
     queued(0x93, 36, 100, 1); queued(0xB3, 64, 127, 1); queued(0x83, 36, 0, 1);
-    bad += check("drum note-offs do not accumulate pedal-held owners", !midi_note_get(3, 36) && !midi_owners[3]);
+    bad += check("fourth synth track sustains its released note", midi_note_get(3,36) && midi_owners[3]);
     queued(0x90, 67, 100, 1); queued(0xB0, 64, 127, 1); queued(0x80, 67, 0, 1); queued(0xB0, 120, 0, 1);
     bad += check("All Sound Off ignores pedal and discards all track ownership", !midi_note_get(0, 67) && !midi_owners[0] && !t->nheld && !gate_note(t, 67));
     return bad;
@@ -561,21 +562,21 @@ static int follow_test(void)
         go_home();
         open_family(FAM_SEQ);
         frames(300);
-        k4 = key_at(0, 4);
-        fm1_in.notes |= 1u << k4; host_notes |= 1u << k4; frame();
-        ok = grid_on() && lock_held() == (1u << 4);
+        cursor_set(4);song.rec=1u<<3;step_record_mask=1u<<3;k4 = key_at(0, 4);
+        key_down(k4);frame();
+        ok = !grid_on() && lock_held() == (1u << 4);
         queued(0x90, 60, 100, 1); frame();               /* T1's channel */
         ok &= song.sel == 3u && lock_held() == (1u << 4) && midi_lit(0);
         turn(EN_K1, 3);
         ok &= motion_lock_count(t4) == 1u && !motion_lock_count(&trk[0]);
-        fm1_in.notes &= ~(1u << k4); frame();
+        key_up(k4);frame();song.rec=step_record_mask=0;
         frames(48);
         ok &= song.sel == 3u;                            /* (the note during the lock: gone) */
         frames(300);
         queued(0x90, 62, 100, 1); frame();
         ok &= song.sel == 0u;
         menu_put(MI_MFOLLOW, 0);
-        bad += check("  a step held for a lock (DRUM grid): no switch while held (the lock on its own track), the next note after", ok);
+        bad += check("  a note held for a lock (piano roll): no switch while held (the lock on its own track), the next note after", ok);
     }
     midi_test_reset();
     return bad;
@@ -589,8 +590,9 @@ static int cc_map_test(void)
     };
     int bad = 0, ok = 1; uint32_t i, e; int16_t before[P_COUNT];
     midi_test_reset();
-    bad += check("power-on parts: ANALOG, FM6, LOFI, DRUM", trk[0].eng_req == 0u && trk[1].eng_req == ENGI_FM6 &&
-                 trk[2].eng_req == 3u && trk[3].eng_req == ENGI_DRUM);
+    ui_power_on();
+    bad += check("power-on parts: ANALOG, SEM, DRONE, ENSEMBLE", trk[0].eng_req == 0u && trk[1].eng_req == ENGI_SEM &&
+                 trk[2].eng_req == ENGI_DRONE && trk[3].eng_req == ENGI_ENSEMBLE);
     for (i = 0; i < NELEM(COMMON); i++) {
         queued(0xB0, COMMON[i].cc, 127, 1);
         ok &= trk[0].p[COMMON[i].id] == TP[COMMON[i].id].max;
@@ -607,12 +609,13 @@ static int cc_map_test(void)
     queued(0xB0, 74, 127, 1); queued(0xB0, 71, 0, 1);
     bad += check("CC74 / CC71 on ANALOG: CUT / RES", trk[0].p[P_E4] == 127 && trk[0].p[P_E5] == 0);
     queued(0xB1, 74, 64, 1); queued(0xB1, 74, 127, 1);
-    bad += check("CC74 on FM6 (channel 2): MLVL, bipolar (127: +63)", trk[1].p[P_E2] == 63);
+    bad += check("CC74 on SEM (channel 2): cutoff", trk[1].p[P_E4] == 127);
     memcpy(before, trk[1].p, sizeof before); queued(0xB1, 71, 99, 1);
-    bad += check("CC71 on FM6 (no resonance): ignored", !memcmp(before, trk[1].p, sizeof before));
+    bad += check("CC71 on SEM: resonance", trk[1].p[P_E5] == 99);
     queued(0xB3, 74, 10, 1);
-    bad += check("CC74 on DRUM (channel 4): TONE", trk[3].p[P_E2] == 10);
+    bad += check("CC74 on ENSEMBLE (channel 4): TONE", trk[3].p[P_E2] == 10);
     for (e = 0, ok = 1; e < NENGINES; e++) {   /* the table names a continuous EDIT value of every engine */
+        if(!eng_ok(e))continue;
         uint32_t m = MIDI_CC_ENG[e], k;
         for (k = 0; k < 2u; k++) {
             uint32_t n = (m >> (k ? 0 : 4)) & 15u;
@@ -653,7 +656,7 @@ static int cc_map_test(void)
     bad += check("not armed: the CC is the new value, no event", trk[0].p[P_E4] == 77 && motion.count == 1u);
     return bad;
 }
-/* 1.5 (Discussion #170): MIDI LEARN. GLO + D4 on, a knob picks, a CC is learned; the map in favorites.factory[14] */
+/* 1.5 (Discussion #170): MIDI LEARN. GLO + D4 on, a knob picks, a CC is learned; the map in ml_base */
 static int ml_entry(uint32_t cc, uint32_t k, uint32_t id) { return ml_cc_of(k, id) == cc + 1u; }
 static int learn_test(void)
 {
@@ -797,7 +800,7 @@ static int learn_test(void)
     for (i = 0; i < P_COUNT; i++)
         ok &= ml_id(ml_code(i)) == i && (i < P_E0 ? ml_code(i) == i + 1u && ml_code(i) < ML_E0 : ml_code(i) == ML_E0 + i - P_E0);
     ok &= ml_id(0) == P_COUNT && ml_id(P_E0 + 1u) == P_COUNT && ml_id(ML_E0 - 1u) == P_COUNT;   /* (no such parameter) */
-    memset(favorites.factory[14], 0, 32);
+    memset(ml_base, 0, 32);
     ok &= ml_learn(30, 1, P_IMIX) == 1u && ml_learn(31, 2, P_ESYNC) == 1u && ml_learn(33, 3, P_E0 + 3u) == 1u;
     ok &= ml_get(0) == (30u | 1u << 7 | (P_IMIX + 1u) << 9) && ml_get(1) == (31u | 2u << 7 | (P_ESYNC + 1u) << 9) &&
           ml_get(2) == (33u | 3u << 7 | (ML_E0 + 3u) << 9);
@@ -806,19 +809,14 @@ static int learn_test(void)
     queued(0xB0, 33, 127, 1);
     ok &= trk[1].p[P_IMIX] == 0 && trk[2].p[P_ESYNC] == 1 && trk[3].p[P_E0 + 3u] == param_desc_of(eng_idx(trk[3].eng_req), P_E0 + 3u)->max;
     bad += check("MIDI LEARN codes with 1.5's P_E0 103: common ids + 1 (INSERT MIX, ESYNC), engine ML_E0 + k; all ids round trip", ok);
-    memset(favorites.factory[14], 0, 32);
+    memset(ml_base, 0, 32);
     return bad;
 }
 /* 1.5.1 (#179): MIDI Program Change. The audio side only notes it (ui.mpc); the main loop loads it, as PRESETS
  * numbers the engine's sounds (aliases skipped), DRUM's kits (retired variants skipped), FM6's presets then its
  * voice bank; past the last: ignored */
-static uint32_t pc_bank_k;                               /* the bank voice pc_bank_read was last asked for */
-static int pc_bank_read(uint32_t k, uint8_t *pk)
-{
-    pc_bank_k = k;
-    memcpy(pk, FM6_FACTORY[(k + 2u) % FM6_NFACTORY], FM6_PACKED);
-    return 0;
-}
+
+
 static int pc_test(void)
 {
     int bad = 0, ok;
@@ -883,65 +881,6 @@ static int pc_test(void)
         ok &= !memcmp(was.p, t->p, sizeof was.p) && t->preset == was.preset && t->eng_req == e;
     }
     bad += check("  every engine: 0.. its presets in PRESETS' order (no alias twice); past the last ignored", ok);
-    set_engine_of(t, ENGI_SAMPLE);
-    pc(0, 1); frame();
-    ok = str_eq(ENGINES[ENGI_SAMPLE]->presets[t->preset].name, "FLUTE");
-    pc(0, 4); frame();
-    ok &= t->eng_req == ENGI_SAMPLE && str_eq(ENGINES[ENGI_SAMPLE]->presets[t->preset].name, "FLUTE");
-    bad += check("  SAMPLE: PC 1 is FLUTE (not PIANO's alias); PC 4 (once PERC) does not turn the track into DRUM", ok);
-
-    /* DRUM: the kits as KIT steps through them */
-    {
-        const param_desc_t *d = param_desc_of(ENGI_DRUM, P_E0);
-        track_t *dr = &trk[3];
-        set_engine_of(dr, ENGI_DRUM);
-        dr->p[P_E0] = 1;                                 /* (HAND, retired: plays 66) */
-        ok = 1;
-        for (n = 0, last = -1;; n++) {
-            was = *dr;
-            pc(3, n); frame();
-            if (!memcmp(was.p, dr->p, sizeof was.p))
-                break;
-            ok &= dr->p[P_E0] > last && enum_orig(d, dr->p[P_E0]) == dr->p[P_E0] && dr->preset == was.preset;
-            for (k = 0; k < P_COUNT; k++)
-                ok &= k == P_E0 || dr->p[k] == was.p[k];
-            last = dr->p[P_E0];
-        }
-        ok &= n == 10u && last == d->max;                 /* (1.5.6, #216: DEEP TIGHT PERC 6..8) */
-        pc(3, DK_COUNT + 2u); frame();
-        ok &= dr->p[P_E0] == last;
-        bad += check("  DRUM: original programs 0..8 unchanged, program 9 DRUM-X, only KIT; 10.. ignored", ok);
-    }
-
-    /* FM6: its presets, then the bank's voices */
-    {
-        track_t *f = &trk[1];
-        uint8_t v[FP_SIZE + 1u];
-        set_engine_of(f, ENGI_FM6);
-        pc(1, 4); frame();
-        ok = f->preset == 4 && f->p[P_E7] == 4 && fm6_slot[1] == 4u && f->p[P_E6] == 30;   /* PAD: F5, DTUN 30 */
-        bad += check("  FM6: 0..7 its presets (PC 4: PAD, SLOT F5, its DTUN)", ok);
-        pc(1, 8); frame();
-        ok = f->p[P_E7] == 4 && fm6_slot[1] == 4u;
-        fm6_bank_used = 1u | 1u << 5;
-        fm6_bank_read = pc_bank_read;
-        pc(1, 8); frame();
-        fm6_unpack(FM6_FACTORY[2], v);
-        ok &= f->p[P_E7] == (int16_t)(FM6_OWN + 1u) && fm6_slot[1] == FM6_OWN + 1u && pc_bank_k == 0u &&
-              !memcmp(v, fm6_patch[1], FP_SIZE) && f->p[P_E6] == 30 && f->preset == 4;
-        pc(1, 9); frame();
-        ok &= f->p[P_E7] == (int16_t)(FM6_OWN + 1u);
-        pc(1, 13); frame();
-        ok &= f->p[P_E7] == (int16_t)(FM6_OWN + 6u) && pc_bank_k == 5u;
-        pc(1, 8u + FM6_NBANK); frame();
-        ok &= f->p[P_E7] == (int16_t)(FM6_OWN + 6u);
-        pc(1, 0); frame();
-        ok &= f->p[P_E7] == 0 && fm6_slot[1] == 0u && f->p[P_E6] == 0;
-        fm6_bank_used = 0;
-        fm6_bank_read = 0;
-        bad += check("  FM6: 8.. the voice bank B1..B32 through SLOT (the rest stays), an empty or no bank ignored", ok);
-    }
-
     /* ROUT */
     midi_test_reset();
     set_engine_of(&trk[0], 0); set_engine_of(&trk[1], 0); set_engine_of(&trk[2], 0);

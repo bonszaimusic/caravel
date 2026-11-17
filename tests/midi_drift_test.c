@@ -2,7 +2,7 @@
  * Long-run external-clock phase measured against independent wire pulse counts.
  * Use rational musical positions, not another copy of the firmware clock math. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #include <math.h>
 
 /* arp_idx is deliberately reset by ARP SYNC at every bar. Count emitted steps

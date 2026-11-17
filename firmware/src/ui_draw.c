@@ -10,6 +10,9 @@
  * (a card value with its unit wider than the card, a dialog question or a header message too long) it is set in S;
  * free text (names) is ellipsised at its size. */
 static void draw_menu(void);
+#if CARAVEL_UX_LAYERS
+static int uxl_layer_head_draw(void);
+#endif
 static int name_on(void);                              /* NAME (ui_name.c) */
 static uint64_t lock_held(void);                       /* parameter locks: the steps held on STEP (ui_input.c) */
 static void name_draw(void);
@@ -290,11 +293,6 @@ static int head_slot(char *b)
 {
     uint32_t k = song.sel % NTRK, s;
     b[1] = b[2] = 0;
-    if (chain.running) {
-        s = chain.lane[k];
-        b[0] = s < 4u ? (char)('A' + s) : '-';
-        return 1;
-    }
     if (!pat_from[k] || pat_from[k] > 4u)
         return 0;
     b[0] = (char)('A' + pat_from[k] - 1u);
@@ -307,8 +305,8 @@ static void head_group(void)
 {
     char b[8];
     int32_t x;
-    if (chain.running) {
-        fmt_int(b, (int32_t)chain.row + 1);
+    if (0u) {
+        fmt_int(b, (int32_t)0u + 1);
         x = HEAD_GRP_R - (16 + 4 + text_w(&AF_M, b));
         x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_SONG, T_MID, T_BG);   /* SONG: the disc */
     } else {
@@ -347,8 +345,12 @@ static void ship_draw(int32_t x0, int32_t y0, int32_t k, uint16_t col)
         }
     }
 }
+static uint32_t ui_head_paints;                    /* the old header's full repaints (uxl_build_mark must draw over each one) */
 static void draw_head(void)
 {
+#if CARAVEL_UX_LAYERS
+    if (uxl_layer_head_draw()) return;
+#endif
     static int16_t metro_x = -1;                       /* the metronome's ink as drawn (-1: hidden), its beat */
     static int8_t metro_beat;
     char b[16];
@@ -360,7 +362,7 @@ static void draw_head(void)
     uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
                    (ui.msg_t ? str_hash(7u, ui.msg) : ui.layer * 7919u + (uint32_t)layer_locked() * 3u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
-                   (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
+                   (uint32_t)batt_shown() * 7777u + (0u ? (0u + 1u) * 104729u : 0u) +
                    (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u;   /* (1.5.5) */
 #if FELUCCA_PAIR_MORPH
     if (pair_member(TSEL)) sig += (ep.a + ep.b * 4u + 1u) * 2654435761u;
@@ -397,6 +399,7 @@ static void draw_head(void)
         return;
     }
     ui.head_sig = sig;
+    ui_head_paints++;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
 #if FELUCCA_PAIR_MORPH
@@ -423,7 +426,7 @@ static void draw_head(void)
 #endif
     if (centre) {
         int32_t ib[4], lx = g.bx + g.b[2];             /* lx: the right end of the BPM (and its lock) */
-        uint32_t id = song.playing ? (chain.running ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;
+        uint32_t id = song.playing ? (0u ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;
         icon_ink(16, id, ib);                          /* the play state: the song's disc, play (counting in: the
                                                         * accent's, about to play), stop */
         cv_icon_mid(g.px1 - ib[2], H_HEAD / 2, 16, id, /* (right-aligned in its slot) */
@@ -446,7 +449,7 @@ static void draw_head(void)
     } else {
         head_msg(-1, HEAD_MSG_W);
     }
-    if (!msg && (chain.running || song.octave))
+    if (!msg && (0u || song.octave))
         head_group();
     if (!(msg && centre))
         draw_battery(HEAD_BAT_X);
@@ -520,6 +523,10 @@ static void draw_frame(void)
     uint32_t ch = card_h(), gy = graph_y(), gh = graph_h();   /* (MENU > LARGE: tall cards, a strip) */
     int dual = !ui.home && dual_page(cur_page());
     int fr = ux_frame_cards && !dual && !ux.style;     /* (LINE: its rules are the frame) */
+#if CARAVEL_UX_LAYERS
+    if (uxl_build_now()) {                              /* BUILD: these rows (24..27) are the hazard strip's, drawn every frame: not cleared here (it flickered at every redraw) */
+    } else
+#endif
     if (fr)
         gap_rows_card(H_HEAD, Y_LABEL, Y_LABEL - 3u);
     else
@@ -570,13 +577,7 @@ static void span_param(const card_span_t *sp, int32_t v, char *val)
     param_format((const param_desc_t *)sp->p, v, val, &u);
     fmt_named = named;
 }
-static void span_fop(const card_span_t *sp, int32_t v, char *val)       /* FM6's operator pages: card ctx's byte = v */
-{
-    const char *l, *u;
-    int32_t r;
-    uint32_t ic;
-    (void)fop_card_at((uint32_t)sp->ctx, v, &l, val, &u, &r, &ic);
-}
+
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
     card_span.fn = fn;
@@ -886,6 +887,9 @@ static void sound_name(const track_t *t, char *b)
 
 static void draw_foot(void)
 {
+#if CARAVEL_UX_EVOLVE
+    if (uxl_c_page() || uxl_ring_page() || uxl_save_page() || (!ui.home && cur_page()->graph == GR_EVOLVE)) return;        /* (layout C: no footer, the page is in the header's bubble; the ring pages draw their own foot) */
+#endif
 #if FELUCCA_PAIR_MORPH
     if (ui.home && ep.on && !ui.layer) {
         char pair_label[32];
@@ -1011,6 +1015,33 @@ static void draw_foot(void)
             str_cpy(ti + 4, ti + 10, sizeof ti - 4);    /* #93: "AUTOMATION 6/6" -> "AUTO 6/6" where the sound's name */
             tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);   /* would be cut (MENU > LARGE) */
         }
+#if CARAVEL_UX_LAYERS
+        if (uxl_build_now() && !ui.home) {                /* BUILD's flat pages: the foot line of the ring pages (the sound, the page's place), no pill */
+            char lb[24], pos[16];
+            uint16_t pc = T_MID;
+            int32_t lw;
+            uxl_page_pos(pos, sizeof pos);                           /* "2/3": the page's place in its family */
+            if (str_eq(ti, "STEP REC") || str_eq(ti, "LIVE REC")) {
+                str_cpy(pos, ti, sizeof pos);
+                pc = T_ACCENT;
+            }
+            if (pg->graph == GR_EVENTS) {
+                str_cpy(lb, ename, sizeof lb);
+            } else {
+                lb[0] = 'T';
+                lb[1] = (char)('1' + song.sel);
+                lb[2] = ' ';
+                lb[3] = 0;
+                str_cpy(lb + 3, eng_abbr(ename), sizeof lb - 3u);
+            }
+            lw = text_w(&AF_S, lb);
+            cv_text(8, 19, &AF_S, lb, T_MID);
+            cv_free_text(8 + lw + 8, 19, &AF_S, pn, T_TEXT, T_BG, r - 16 - lw - 8 - text_w(&AF_S, pos));
+            cv_text_r(r, 19, &AF_S, pos, pc, T_BG);
+            cv_blit(0, Y_FOOT);
+            return;
+        }
+#endif
         x = 8;
         if (FELUCCA_ICONS) {
             if (ei != ICON_NONE)
@@ -1044,13 +1075,15 @@ static void engine_columns(void)
     draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
     draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
 }
-#include "ui_drumx.c"
 #include "ui_lfo2.c"
 
 #if FELUCCA_PAIR_MORPH
 #include "../../experiments/engine-pair-morph/pair_ui.c"
 #if FELUCCA_HOME_PERF
 #include "../../experiments/home-perf/home_ui.c"
+#if CARAVEL_UX_LAYERS
+#include "ui_uxl.c"
+#endif
 #endif
 
 #endif
@@ -1063,8 +1096,15 @@ static void draw_columns(void)
 #endif
     if (!ui.home && cur_page()->graph == GR_PAIR) { pair_ui_cards(); return; }
 #endif
+#if CARAVEL_UX_EVOLVE
+    if (!ui.home && cur_page()->graph == GR_EVOLVE) { uxl_ev_cards(); return; }
+#endif
+#if CARAVEL_UX_EVOLVE
+    if (uxl_ring_page()) { uxl_ring_build(); return; }
+    if (uxl_save_page()) { uxl_save_build(); return; }
+    if (uxl_c_page()) { uxl_cards_c(); return; }
+#endif
     if (!ui.home && dual_page(cur_page())) { lfo_cards(cur_page()); return; }
-    if (!ui.home && dx_page(cur_page()->graph)) { dx_cards(cur_page()); return; }
     uint32_t c;
     char val[12];
     const char *unit;
@@ -1086,24 +1126,6 @@ static void draw_columns(void)
             else
                 draw_column(c, d->label, val, unit, VAL(c), RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
         }
-        return;
-    }
-    if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
-        uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
-        int used = row < chain_config.count;
-        fmt_int(val, (int32_t)row + 1);
-        draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_X_SONG);
-        val[0] = 'T';
-        val[1] = (char)('1' + k);
-        val[2] = 0;
-        draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
-        sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
-        if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
-        else str_cpy(val, "--", sizeof val);
-        draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
-        if (used) fmt_int(val, chain_config.row[row].repeat);
-        else str_cpy(val, "--", sizeof val);
-        draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
         return;
     }
     if (cur_page()->graph == GR_EVENTS) {              /* AUTOMATION (ui_events.c): ROW STEP PARAM VALUE */
@@ -1267,43 +1289,7 @@ static void draw_columns(void)
         draw_act_column(3, "SAVE", T_THEME, ICON_AUTO);
         return;
     }
-#if FELUCCA_SLICE
-    if (cur_page()->graph == GR_SLICES) {                /* SLICE POS, then SPLIT JOIN (ui_slice.c) */
-        uint32_t n = slice_count(), j = slice_sel(), src, div, ok = slice_src(&src, &div) && src;
-        char u[8];
-        if (j < n) {
-            fmt_int(val, (int32_t)j + 1);
-            str_cpy(u, "/", 8);
-            fmt_int(u + 1, (int32_t)n);
-        } else {
-            str_cpy(val, n ? "END" : "--", sizeof val);
-            u[0] = 0;
-        }
-        draw_column(0, "SLICE", val, u, VAL(0u), -1, ICON_SLICE);
-        slice_time(val, slice_mark(j));
-        draw_column(1, "POS", val, "S", ok ? VAL(1u) : T_DIM, -1, ICON_AUTO);
-        draw_act_column(2, "SPLIT", ok ? T_THEME : T_DIM, ICON_AUTO);
-        draw_act_column(3, "JOIN", ok ? T_THEME : T_DIM, ICON_AUTO);
-        return;
-    }
-#endif
-    if (fop_page(cur_page()->graph)) {                   /* FM6: OP, then three of its bytes (ui_fm6op.c) */
-        for (c = 0; c < 4u; c++) {
-            const char *lb, *u;
-            int32_t r;
-            uint32_t ic;
-            int on;
-            if (!fop_ok()) {                             /* (the engine changed before ui_draw left the page) */
-                draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
-                continue;
-            }
-            on = fop_card(c, &lb, val, &u, &r, &ic);
-            if (fop_field(c) != FO_OP && fop_field(c) != FO_STG)   /* (OP, STAGE: 1..6, 1..4) */
-                card_span_by(span_fop, 0, 0, (int32_t)fm6_max(fop_byte(fop_field(c))), (int32_t)c);
-            draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, ic);
-        }
-        return;
-    }
+
     if (detail_on()) {                                  /* DETAIL (1.5.1, #199): the cursor step's CHANCE RATCH NUDGE VEL;
                                                          * DIM where they do not play (ui_input.c sd_turn) */
         static const char *const SD_LABEL[4] = {"CHANCE", "RATCH", "NUDGE", "VEL"};
@@ -1724,7 +1710,14 @@ static void ui_draw(void)
     }
     if (!scr_frame())                                   /* MENU > SCREEN OFF: dark (or waking), nothing drawn */
         return;
+    if (f2_active()) {                                  /* FORMAT 2: the notice about an older version's data, instead of the page */
+        f2_draw();
+        return;
+    }
     ui_draw_page(counting);
+#if CARAVEL_UX_LAYERS
+    uxl_build_mark();
+#endif
     scr_shown();
 }
 static void ui_draw_page(uint32_t counting)
@@ -1766,6 +1759,9 @@ static void ui_draw_page(uint32_t counting)
             draw_frame();
             ux_frame_cards = 1;
         }
+#if CARAVEL_UX_EVOLVE
+        if (uxl_layer_page()) uxl_layer_header(); else
+#endif
         draw_head();
         draw_layer();
         if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
@@ -1781,6 +1777,10 @@ static void ui_draw_page(uint32_t counting)
         return;
     }
 
+#if CARAVEL_UX_LAYERS
+    if (uxl.play) { uxl_draw_play(); return; }
+    if (ui.home) { uxl_draw_overview(); return; }
+#endif
 #if FELUCCA_HOME_PERF
     if (ui.home) { hp_draw_home(); ui.force=0; if(ui.msg_t)ui.msg_t--; if(ui.hot_t)ui.hot_t--; return; }
 #endif
@@ -1789,6 +1789,14 @@ static void ui_draw_page(uint32_t counting)
         page_entered();
     }
     cursor_fix();
+#if CARAVEL_UX_EVOLVE
+    uint16_t surf_keep = ux.surf;
+    uint8_t frame_keep = ux_frame_cards;
+    if (uxl_flat_page()) {                              /* BUILD, a page not yet rebuilt: its cards and panel without the box (the surface as the background) */
+        ux.surf = ux.bg;
+        ux_frame_cards = 0;                             /* .. and without the frame round the card row */
+    }
+#endif
     if (ui.force)
         draw_frame();
     felucca_dbg.stage = 3;
@@ -1796,7 +1804,11 @@ static void ui_draw_page(uint32_t counting)
     felucca_dbg.stage = 4;
     draw_columns();
     felucca_dbg.stage = 5;
-    if (ui.home || !dual_page(cur_page()))
+    if (ui.home || (!dual_page(cur_page())
+#if CARAVEL_UX_EVOLVE
+                    && !uxl_c_page() && !uxl_save_page()
+#endif
+                   ))
         draw_graph();
     if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {     /* the second message (ui_notices) */
         str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
@@ -1811,6 +1823,10 @@ static void ui_draw_page(uint32_t counting)
         ui.help_t--;
     felucca_dbg.stage = 6;
     draw_foot();
+#if CARAVEL_UX_EVOLVE
+    ux.surf = surf_keep;
+    ux_frame_cards = frame_keep;
+#endif
     ui.force = 0;
 }
 

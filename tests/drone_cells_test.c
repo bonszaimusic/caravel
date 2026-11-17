@@ -6,7 +6,7 @@
 #include "c1_host.h"
 #endif
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #include <stddef.h>
 #include <math.h>
 #include <time.h>
@@ -1027,7 +1027,7 @@ static int dc_lifecycle(void)
             "cells: mode%u real mixer MUTE ignores on, accepts off, no stuck ownership after unmute", mode);
         bad += check(label, ok);
     }
-    static const uint8_t dest[] = {0, ENGI_SEM, ENGI_HADES, ENGI_FM6};
+    static const uint8_t dest[] = {0, ENGI_SEM, ENGI_HADES, ENGI_ENSEMBLE};
     for (uint32_t k = 0; k < NELEM(dest); k++) {
         dc_setup(5, V_LEGATO); track_t *t = &trk[0]; trk_note_on(t, 48, 90); trk_note_on(t, 60, 100);
         dc_host_blocks(t, 16); host_preset_req(t, dest[k], 0); engine_block(t);
@@ -1069,8 +1069,8 @@ static int dc_full_load(void)
         ok &= !!dc_active(t) == !!sounding;
         seq_start();
         if (sounding) { trk_note_on(t, 0, 100); trk_note_on(t, 61, 80); dc_host_blocks(t, 8); }
-        ok &= project_pattern_queue(1) == 0 && chain.live_full;
-        dc_full_boundary(); ok &= !chain.live_pending && t->eng_req == ENGI_DRONE && t->p[P_E3] == 5;
+        ok &= project_pattern_queue(1) == 0 && LAUNCH_STATE.live_full;
+        dc_full_boundary(); ok &= !LAUNCH_STATE.live_pending && t->eng_req == ENGI_DRONE && t->p[P_E3] == 5;
         if (sounding) {
             trk_note_on(t, 72, 100); trk_note_on(t, 73, 100); trk_note_off(t, 73);
             dc_host_blocks(t, XF_BLOCKS + 2);
@@ -1192,7 +1192,7 @@ static dc_parity_t dc_scene(uint32_t scene, int dual, const char *mask)
 {
     dc_setup(5, V_LEGATO); c1h_off = !dual; setenv("C1_MASK", mask, 1);
     dc_parity_t r = {.hash = 0xCBF29CE484222325ull, .state_hash = 0xCBF29CE484222325ull, .healthy = 1};
-    static const uint8_t mixed[] = {ENGI_DRONE, ENGI_HADES, ENGI_SEM, ENGI_FM6};
+    static const uint8_t mixed[] = {ENGI_DRONE, ENGI_HADES, ENGI_SEM, ENGI_ENSEMBLE};
     for (uint32_t p = 0; p < NPART; p++) {
         track_t *t = &trk[p]; uint32_t e = scene ? mixed[p] : ENGI_DRONE;
         host_preset(t, e, e == ENGI_DRONE ? 5 + p % 3 : p % ENGINES[e]->npresets);
@@ -1254,7 +1254,7 @@ static int dc_cpu2(void)
             ok &= same;
         }
         char label[150]; snprintf(label, sizeof label, "cells: CPU2 %s, 16 masks, samples/peaks/full cell state bit-identical, healthy nonzero parts",
-            scene ? "DRONE+HADES+SEM+FM6" : "4 cells tracks presets5..7");
+            scene ? "DRONE+HADES+SEM+ENSEMBLE" : "4 cells tracks presets5..7");
         bad += check(label, ok);
     }
     return bad;

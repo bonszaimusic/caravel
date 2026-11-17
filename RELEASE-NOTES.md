@@ -1,27 +1,44 @@
-# Caravel 0.13.0
+# Caravel 1.0.0
 
-> [!IMPORTANT]
-> **Newer FM-1 units (flash UC25HQ80, JEDEC ID `0xB36014`) are recognised** (since 0.12.0): saving to flash and firmware updates work there. Not tested by us on a real UC25HQ80 unit (host test of the ID list; one user's report for Felucca's 1.8.2 beta).
+Prepared for validation; **not published, not installed by this task, not tested on an FM-1. No sound was heard.** The live website and latest published release remain 0.13.0 until a separately approved publication.
 
-**ELASTIC P1.4.** A seventh HOME ACTION bank (between STASIS and PAIR) turns supported HOME controls into temporary springs: A1 ARM / OFF, A2 PULSE, A3 HOLD / RESUME, A4 RESET; hold the bank key for SETUP (SCOPE CELL / ROW, PULL, RETURN, RANGE; A4 in SETUP switches to BOUNCE, REFLECT, COUPLE, SEED). The four tracks are independent.
-**BOUNCE is a musical period**, one full oscillation from 1/16 note to 64 BAR, following the internal tempo or the external MIDI clock; a tempo change keeps the phase, and a gesture starts at once rather than on a step or bar. **RETURN INF** keeps swinging until HOLD, RESET or OFF. The HOME cards show a spring mark and a moving spring. ELASTIC cannot be MIDI-learned.
+Classic 0.13.0 is frozen and no longer maintained: no 0.13.1 or further fixes. Existing Classic downloads remain available until the owner decides their retention period. Corrections continue only in 1.x.
 
-**Smaller factory SAMPLE set.** PIANO uses three full recordings instead of five zones, FLUTE two instead of three: **27,014 B less flash**, and **some PIANO and FLUTE notes sound different** (wider transposition; an upward-transposed note can end earlier). Presets, user slots and the five-zone PIANO HD export are kept. The maintainer chose this variant after listening to host renders ("fein"); it is not a measured listening test of the final firmware.
+## Before updating
 
-**Fixes.** The One-Core flash layout fits again. The MOD slots' DST knob read one byte past its table when turned to its right end (0.12.0 and RC1 too) and could not select SCAN; fixed.
+Back up using the firmware and backup tool that currently read your device. Keep that firmware, its installer and the backup together. 1.0 starts fresh: **pre-1.0 backups are not imported** and there is no automatic migration. A backup preserves the old system's data for use with that old system; it is not a 1.0 restore file.
 
-**Projects: back up first.** Every project saved by 0.13.0 carries an HPM1 **v5** HOME capsule. 0.13.0 loads v1 to v5; **0.12.0 reads only v1 to v3 and does not accept v5**, so projects saved by 0.13.0 are not readable there: **upgrading is safe, going back is not.** The command-line backup tool `tools/caravel_backup.py` of 0.13.0 saves and restores v4 and v5 projects byte-preserving; copies from 0.12.0 or earlier stop with `Invalid HPM1 capsule`. The web backup checks sizes only and has **not been verified on a device with v5 projects**.
+Projects now use FUNW with the HPM2 v6 performance container; user presets use UPB2 and performance flash records IFP2. The editor protocol is 18, with separate generation-2 framing for every request. Frozen Classic clients cannot edit 1.x or start its software update/recovery entry. Backup LIST 1 and LIST 2 describe different generations; restore must match the connected firmware. Old data is reported as OLD DATA FOUND, with explicit trial/save-copy handling where supported, rather than converted or silently overwritten.
 
-**Costs and limits.** Final build: 28,548 B of the app slot are free in the default layout (image 553,016 B; 0.12.0: 3,060 B free); the static RAM headroom is 352 B above the guard in the default layout. BOUNCE is tempo-synchronous, not locked to the sequencer's steps or bars; long-run external-clock drift and the sound of 1/16 at 240 to 300 BPM are not covered by tests. CHORD EXT is not in this release.
+## What changed
 
-**What is tested.** Host tests with the real firmware code on the RC1 source (the eight host groups with ASan / UBSan and host ThreadSanitizer, 28 ACTION steps, 45 target-validation entries, 147 of 147 audio hashes in three host configurations, three SDK layouts, the matching browser build with HPM1 v5 save / load); internally reviewed, **not independently**. **Re-run on the final 0.13.0 source:** the 28 ACTION steps, all eight host groups, the ELASTIC host scripts, the sample-zone policy test, the MOD DST order test and the USB backup tests passed; host ThreadSanitizer, the HARM / CHORD EXT fuzz runs and the GitHub-only jobs were not re-run.
-**On hardware:** the 0.13.0-rc1 package was **tested successfully on an FM-1 by the maintainer (RC1, no individual results)** and without per-item results and without naming the tested package's hash. **The final 0.13.0 is not byte-identical to RC1**: it differs by the version text and the MOD DST table fix (plus a compile-time check); neither has been tested on a device. Not covered: a protocolled hardware, clock and listening test, the CPU on the device, a real UC25HQ80 unit.
+- Six engines: **ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE**. SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM are removed from the shipped profile. Song/Chain and Scope are removed.
+- Start in **PLAY**, with a one-time LEVELS introduction. Hold HOME one second for BUILD/PLAY; tap it for the LEVELS explanation or the BUILD track overview. EDIT selects SOUND. SAVE opens PROJECT. BUILD uses the ring pages; STEP, DETAIL and AUTOMATION retain their grids.
+- **CAPTURE enabled by default.** It records live panel keys and USB/TRS MIDI IN before harmonic mapping: pitch, velocity, timing and physical Note-Off. REC takes 1/2/4/8 bars and overdubs; four loops are independent. No audio, pedal/CC automation, ARP/SEQ output or recursive recording. Loops are temporary and are not saved/backed up. A loop has at most 64 events including releases; FULL refuses an entire take and retains the old loop.
+- **CHORD EXT:** SOURCE OFF/HARM/T1–T4, EXT 7 / 7+9 / 7+9+13, OCT −2…+2, and read-only actual NOTES. Live sources collect real panel/MIDI Note-Ons with a 41-control-block gap and 138-block cap. They remember the last recognized chord; ambiguous gestures keep it. They never start a silent follower. They exclude generated ARP/SEQ/CAPTURE output, self-sources, EXT-source cycles and PAIR followers. A legato change with only two new tones can be ambiguous because held tones from the preceding chord are not added.
+- **RETRIG OFF/HARM/SCALE/BOTH. HARM/BOTH now applies to all eligible tracks**, including SOURCE OFF. This is an intentional behavior change for held harmony-following notes; OFF/SCALE retain their separate differential references. ARP/SEQ consult the context on their next event.
+- FILTER on the FX layer and PLAY arcs shows the effective selected-track value. Dim means the stored filter, bright means a macro intervention. First turn picks up the track value. Unlatched FX HOLD returns FILTER on release; ordinary PLAY arcs stay. The macro is never written to the stored track filter.
+- ENV held plus a knob in BUILD suppresses page advance on release. LFO held permits momentary changes; OCT+ accepts them.
+- PAIR project loads normalize SPREAD to zero on both member tracks, including projects imported over USB. Bad capsules, unsupported engine/voice data and malformed pairs remain rejected.
 
-Download `Caravel-0.13.0-FM1-Testpaket.zip` for the local installer, firmware,
-verified source and notices, or `Caravel-0.13.0-Emulator.html` for the offline
-emulator. Firmware: `caravel-0.13.0.fwsc` (SHA-256 `a1d560684519667b4051b35630380874065853a20a353a4f9d279c2bfee208b7` expected, checked against the draft before publication). INFO must show `v0.13.0` after reboot.
-[Details](https://github.com/bonszaimusic/caravel/blob/v0.13.0/docs/release-0130.md).
+## Limits and validation
 
-Caravel is independent of M-VAVE and Hügelton Instruments. Firmware
-flashing and returning to stock carry risks. See the
-[installation FAQ](docs/faq.md).
+The compressed performance capsule still has a **3,328-byte budget**. PROJECT TOO LARGE / NOT SAVED refuses a save and retains the previous copy. The pinned engine submodule is required for a reproducible source checkout. m-bootloader remains documentation-only. UC25HQ80 (`0xB36014`) is recognized but **not tested on a real unit by this project**.
+
+Host and emulator checks are being finalized for the exact candidate source; their receipt and package SHA-256 belong with the final test package. Host instruction counts are not FM-1 cycles. Device audio deadlines, arrival jitter, clock behavior, UI feel, power cycling, the DRONE level and dense CAPTURE playback still require the checklist below. GitHub-hosted CI is not available in this preparation; Docker results must be named separately, without claiming hosted CI passed.
+
+## Hardware acceptance checklist
+
+Record the installed package SHA-256, device/flash identity and each result. Stop and report a failure with the exact gesture.
+
+1. Back up 0.13.0 or Felucca, install the candidate using the matching installer and verify INFO shows v1.0.0. Test both upgrade origins on suitable hardware; do not erase the only backup.
+2. On a fresh settings image, verify PLAY and LEVELS appear once. Fully power off/on; LEVELS must not repeat. Check an already-seen image as well.
+3. Inspect BUILD header/strip for flicker, SAVE/PROJECT, MIXER, GLO and menu. Check the retained STEP/DETAIL/AUTOMATION grids.
+4. Set different stored filters on two tracks. Compare dim/bright FX values, first-turn pickup, return to the anchor, unlatched release, LATCH and ordinary PLAY persistence. Listen for unintended jumps and verify only the selected track is affected.
+5. Hold ENV, turn a knob and release without page advance. Try LFO momentary, release to return, then OCT+ to accept.
+6. Try HARM and each T1–T4 source from the panel, USB and TRS, with simultaneous and rolled chords, inversions, release before recognition, sustain, ambiguous dyads and legato. Test WAIT, source changes, retrigger, STOP/panic and no stuck follower notes. Judge whether the collection delay is usable.
+7. For CAPTURE, exercise all four loops with dense live panel and MIDI chords, repeated notes, sustain, REC/overdub/full refusal, pause/resume, clock START/STOP/loss, track changes and PAIR. Listen for missing notes or releases. Measure block/REC maxima with the console CAPTURE counters under the intended device load; a host timing ratio is insufficient.
+8. Listen to DRONE gain and layered levels, with dry/wet comparisons. Test the second-core option separately if enabled.
+9. Save/load projects, stop to commit a live save, power cycle, test autosave and a complete FORMAT 2 backup/restore with the matching tool. Confirm an old-format restore is refused. Confirm a malformed import leaves saved data unchanged.
+
+Public push, tag, release assets and live-site updates need separate owner approval after review of the exact package and these results.

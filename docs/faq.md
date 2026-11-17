@@ -2,6 +2,9 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Troubleshooting & FAQ
 
+
+> **Caravel 1.0 candidate:** start fresh with FORMAT 2. Back up before updating using the old matching firmware/tool; pre-1.0 backups are not imported into 1.0. Keep the old firmware and backup for a return. [Current formats, controls, limits and device checklist](release-100.md). Historical recovery observations below keep their original version scope. UC25HQ80 is recognized but not tested on a real unit by this project; m-bootloader remains an external, documented tool, not integrated firmware.
+
 USB connections, firmware changes and recovery for the M-VAVE FM-1.
 Last reviewed: **30 October 2026**. Reported recoveries are individual observations;
 they do not establish a universal fix or the cause of a fault.

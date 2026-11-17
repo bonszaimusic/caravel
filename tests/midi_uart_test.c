@@ -83,9 +83,16 @@ static int test_usb_sysex(void)
     feed(msg, sizeof msg);
     bad += check("usb: an oversized frame (698 B) is not taken", !sx_ready);
     feed((const uint8_t *)"\xF0\x22\x24\x35\x7D\xF7", 6);
-    bad += check("usb: soft key -> uboot_req, not a frame", usb.uboot_req && !sx_ready);
+    bad += check("usb: Classic soft key cannot enter recovery", !usb.uboot_req && !sx_ready);
     feed((const uint8_t *)"\xF0\x22\x24\x35\x7F\xF7", 6);
-    bad += check("usb: upgrade key -> ota_req, not a frame", usb.ota_req && !sx_ready);
+    bad += check("usb: Classic upgrade cannot enter update", !usb.ota_req && !sx_ready);
+    feed((const uint8_t *)"\xF0\x7D\x43\x41\x7F\x11\x02\xF7", 8);
+    bad += check("usb: wrong protocol cannot enter update", !usb.ota_req);
+    ota_frame_done();
+    feed((const uint8_t *)"\xF0\x7D\x43\x41\x7F\x12\x02\xF7", 8);
+    bad += check("usb: protocol 18 upgrade -> ota_req", usb.ota_req && !sx_ready);
+    feed((const uint8_t *)"\xF0\x7D\x43\x41\x7D\x12\x02\xF7", 8);
+    bad += check("usb: protocol 18 recovery -> uboot_req", usb.uboot_req && !sx_ready);
     feed((const uint8_t *)"\x22\x24\xF7", 3);           /* no F0: ignored */
     bad += check("usb: bytes outside F0..F7 are ignored", !sx_ready);
 

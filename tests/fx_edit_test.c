@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Independent FX edges through the panel, replay, undo and fixed project store. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void edit_init(uint32_t len)
 {
@@ -95,9 +95,7 @@ static int collision_and_capture(void)
     bad += check("FX EDIT: unfinished FX take rejects edits without consuming its reserved release", !memcmp(&before, &motion, sizeof motion) &&
         undo_mot_tag == tag && motion_fx_owner[PF_HPF] == 1);
     perf_press(PF_HPF, 0); song.rec = 0; seq_stop();
-    chain.running = 1; before = motion; ev_knob(1, 1);
-    bad += check("FX EDIT: active SONG retains STOP TO EDIT", !memcmp(&before, &motion, sizeof motion));
-    chain.running = 0;
+
     return bad;
 }
 static int live_timing(void)
@@ -162,8 +160,8 @@ static int storage_and_pool(void)
     pick_edge(edge(0, PF_ETHR, 63, 255, 1)); ev_knob(1, -1); ev_knob(3, -1);
     project_t q, restored; project_store_t disk;
     project_capture(&q);
-    bad += check("FX EDIT: edited unsigned phase and cross-loop timing round-trip in FUN10", proj_pack(&disk, &q) &&
-        proj_import(&restored, &disk, sizeof disk) && !memcmp(&q.motion, &restored.motion, sizeof q.motion) && sizeof disk == 3840);
+    bad += check("FX EDIT: edited unsigned phase and cross-loop timing round-trip in FUNW", proj_pack(&disk, &q) &&
+        proj_import(&restored, &disk, sizeof disk) && !memcmp(&q.motion, &restored.motion, sizeof q.motion) && sizeof disk == 2784);
     for (uint32_t j = 0; j < MOTION_MAX - 2u; j++)
         motion_set_event(&trk[1], j % 64u, j < 64u ? P_REV : P_DLY, 40);
     pick_edge(edge(0, PF_ETHR, 62, 254, 1)); uint32_t count = motion.count; ev_knob(1, -1);
@@ -221,8 +219,8 @@ static int delete_pairs(void)
     bad += check("FX DELETE: OFF removes its preceding ON", motion.count == before.count - 4u &&
         edge(0, PF_LPF, 0, 10, 1) == MOTION_MAX && edge(0, PF_LPF, 1, 200, 0) == MOTION_MAX && motion_valid(&motion));
     project_t q, restored; project_store_t disk; project_capture(&q);
-    bad += check("FX DELETE: remaining automation round-trips in the unchanged FUN10 store", proj_pack(&disk, &q) &&
-        proj_import(&restored, &disk, sizeof disk) && !memcmp(&q.motion, &restored.motion, sizeof q.motion) && sizeof disk == 3840);
+    bad += check("FX DELETE: remaining automation round-trips in the unchanged FUNW store", proj_pack(&disk, &q) &&
+        proj_import(&restored, &disk, sizeof disk) && !memcmp(&q.motion, &restored.motion, sizeof q.motion) && sizeof disk == 2784);
     return bad;
 }
 static int delete_chronology(void)
@@ -302,9 +300,7 @@ static int delete_playback_and_capture(void)
     bad += check("FX DELETE: unfinished take rejects deletion before replacing undo or consuming reserved OFF", !memcmp(&before, &motion, sizeof motion) &&
         tag == undo_mot_tag && keep == undo.keep && motion_fx_owner[PF_FRZ] == 1 && motion_fx_reserved() == 1);
     perf_press(PF_FRZ, 0); song.rec = 0; seq_stop();
-    chain.running = 1; before = motion; ev_delete();
-    bad += check("FX DELETE: active SONG retains STOP TO EDIT", !memcmp(&before, &motion, sizeof motion));
-    chain.running = 0;
+
     motion_fx_set_track(1); song.rec = 2; seq_start(); perf_press(PF_FRZ, 1);
     pick_edge(edge(0, PF_LPF, 0, 40, 1)); ev_delete();
     bad += check("FX DELETE: another track's open take survives deletion on a closed track", edge(0, PF_LPF, 0, 40, 1) == MOTION_MAX &&

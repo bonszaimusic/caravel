@@ -2,8 +2,8 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* FELUCCA core types: tracks, voices, engines, parameters.
  * Four tracks, each a synth part: its own engine, preset, parameters, voices and 64-step
- * pattern. The parts share one budget of NVOICE sounding voices (voice.c). Drums are the DRUM
- * engine (General MIDI map) on any part; the SAMPLE engine's PERC set is retired (drum_from_perc).
+ * pattern. The parts share one budget of NVOICE sounding voices (voice.c).
+ * FORMAT 2 retains ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE.
  * Sections: sizes, parameters, voices and engines, tracks and the song, system. */
 #include <stdint.h>
 #include "voice_policy.h"
@@ -21,8 +21,8 @@
 #endif
 
 /* Product identity. Caravel is a fork of Felucca 1.6.1 (NOTICE, LICENSING.md); these are display strings only. Identifiers
- * (FELUCCA_*, felucca.c), data formats, package markers and the Felucca-Engines names stay as in Felucca, so settings,
- * projects, presets and tools remain compatible. "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments:
+ * (FELUCCA_*, felucca.c), package markers and the Felucca-Engines names retain their origin. FORMAT 2
+ * project/preset data is deliberately incompatible with older firmware. "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments:
  * they appear only as the origin of the code. */
 #ifndef BRAND_NAME
 #define BRAND_NAME "Caravel"
@@ -39,7 +39,7 @@
 #define NSTEP 64
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
 #ifndef FELUCCA_SLICE
-#define FELUCCA_SLICE 1          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
+#define FELUCCA_SLICE 0          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
 #endif
 /* Experimental lean reverb: omit ROOM/SPRING DSP, retain saved IDs
  * 0 and 1 as HALL aliases. Default 0 preserves stock Caravel behavior. */
@@ -49,6 +49,22 @@
 #endif
 #ifndef FELUCCA_RANDOM_MORPH
 #define FELUCCA_RANDOM_MORPH 0
+#endif
+#ifndef CARAVEL_UX_EVOLVE
+#define CARAVEL_UX_EVOLVE 0
+#endif
+/* E85: FORMAT 2 and its six-engine profile are the new basis. */
+#ifndef CARAVEL_SLIM
+#define CARAVEL_SLIM 1
+#endif
+/* FORMAT 2 (docs/FORMAT_2_ENTWURF): one new revision of everything stored. Needs CARAVEL_SLIM (six engines, stored as 0..5).
+ * Every commit record carries the tag ST_FMT2 (storage.c); an object without it is OLD DATA: it is never loaded,
+ * never overwritten without the owner's say (the first-start notice, ui_f2.c), only listed and erased. Projects are "FUNW". */
+#ifndef CARAVEL_FORMAT2
+#define CARAVEL_FORMAT2 1
+#endif
+#if !CARAVEL_FORMAT2 || !CARAVEL_SLIM
+#error "Caravel 1.0 requires FORMAT 2 and the six-engine profile"
 #endif
 /* Developer-only ELASTIC P1. Production/release profiles remain unchanged. */
 #ifndef CARAVEL_ELASTIC_P1
@@ -113,8 +129,15 @@ static struct {
 #define ENGI_DRONE 16u           /* experimental coupled drone; append-only */
 #define ENGI_ENSEMBLE 17u        /* strings / choir / dark texture with a built-in ensemble (eng_ensemble.c); append-only */
 #define NENGINES 18u
+#define ENGI_FM6 12u
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
+#if CARAVEL_SLIM                                       /* E27, E29: six engines stay: ANALOG PHYS SEM HADES DRONE ENSEMBLE */
+#define NENG_SHOWN 6
+#define ENG_FALLBACK 0u                                 /* a removed engine's sounds play as ANALOG */
+#else
+#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SLICE)
+#define ENG_FALLBACK ENGI_FM6                           /* (DIGITAL without FELUCCA_FM4: its sounds play as FM6) */
+#endif   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 
@@ -165,11 +188,58 @@ enum {                          /* per-track parameters */
  * retired P_ED_FX slot (stored by every format and the editor protocol already, so no layout change) */
 #define P_LATCH P_ED_FX
 
+/* Caravel CHORD SOURCE / EXT (the settings; chord.c's CHORD EXT resolver and seq.c's hooks read them, once per event: seq.c ext_cfg): the track's CHORD SOURCE, EXT and
+ * OCT live in the retired DIGITAL operator-4 envelope ids ATK, DEC, REL (76, 77, 79: the three operator values whose
+ * default is 0, so a fresh FORMAT 2 project starts with the function off). Pre-1.0 backups are not imported. Without
+ * FELUCCA_FM4 only: with it these ids are real operator values, so the aliases are not defined and any use is a
+ * compile error, not a silent clash (FM4=1 is a host-test / manual build, not shipped).
+ *   CSRC  stored 0 OFF, 1 HARM, 2..5 T1..T4 (N_CSRC names them);
+ *         a stored value outside the range counts as OFF (params.c param_fit), never as the maximum
+ *   CEXT  stored 0 = 7+9 (the default), 1 = 7, 2 = 7+9+13; shown 7 / 7+9 / 7+9+13 (chordext_disp, chordext_stored)
+ *   COCT  -2 .. +2 octaves, 0 the default
+ * param_kept (a sound load leaves them), motion_param excludes them, fm4_apply / fm4_load_preset / up_load keep them
+ * across a DIGITAL conversion. CHORDSET_ID(i): i is one of the three (0 with FM4) */
+#if !FELUCCA_FM4
+#define P_CSRC P_FM4_ATK
+#define P_CEXT P_FM4_DEC
+#define P_COCT P_FM4_REL
+_Static_assert(P_FM4_ATK == 76 && P_FM4_DEC == 77 && P_FM4_SUS == 78 && P_FM4_REL == 79 && P_FM4_LEVEL == 80 &&
+               P_CHRD == 81 && P_CSRC == 76 && P_CEXT == 77 && P_COCT == 79,
+               "CHORD SOURCE / EXT / OCT are the retired ids 76, 77, 79");
+#define CHORDSET_ID(i) ((i) == P_CSRC || (i) == P_CEXT || (i) == P_COCT)
+/* EXT's stored order (0 = 7+9, 1 = 7, 2 = 7+9+13) <-> the order the UI shows (0 = 7, 1 = 7+9, 2 = 7+9+13): the swap of
+ * 0 and 1. A stored value outside 0..2 reads as the default 7+9 (shown 1); a shown index outside 0..2 stores 7+9 (0) */
+static inline uint32_t chordext_disp(uint32_t stored) { return stored == 1u ? 0u : stored == 2u ? 2u : 1u; }
+static inline uint32_t chordext_stored(uint32_t disp) { return disp == 0u ? 1u : disp == 2u ? 2u : 0u; }
+#else
+#define CHORDSET_ID(i) 0
+#endif
+/* Clear ephemeral live-source collection and follower memory when an accepted project
+ * replaces the tracks. HARM is resolved directly from the bus; nothing new is stored. */
+static void chordext_reset_runtime(void);
+
+/* Caravel CHORD EXT status for the UI (chord.c fills it; read-only, safe from the main loop). state: what K4
+ * shows; why: the second text line; src: the stored SOURCE; the source chord (root + mask for chord_name) when one is
+ * known (AMBIG keeps the old one); pc[]: the pool's pitch classes in priority order 7, 9, 13 (npc of want available);
+ * mono: the follower plays one note at a time (MONO/LEGATO/UNISON, shown "1 OF n"). EXT_INFO_HOOK(f, o), if a test
+ * defines it, may fill o and return 1 to override (host UI renders). */
+enum { EXT_ST_OFF, EXT_ST_NA, EXT_ST_WAIT, EXT_ST_WAITBUS, EXT_ST_AMBIG, EXT_ST_EMPTY, EXT_ST_OK };
+enum { EXT_WHY_NONE, EXT_WHY_SELF, EXT_WHY_SRCEXT, EXT_WHY_KIT, EXT_WHY_PAIR, EXT_WHY_PLAY, EXT_WHY_BUSOFF, EXT_WHY_KEPT, EXT_WHY_INSRC };
+typedef struct {
+    uint8_t state, why, src, have_chord, root, npc, want, mono;
+    uint16_t mask;
+    uint8_t pc[3];
+} ext_info_t;
+static void ext_info(uint32_t f, ext_info_t *o);
+
 #define FELUCCA_DRUMX 1
 #define DX_KIT_ID 12u
 #define ML_EXTRA_N 48u
 static uint32_t ml_extra[ML_EXTRA_N];
 static uint16_t ml_virtual[16];
+#if CARAVEL_FORMAT2
+static uint8_t ml_base[32]; /* independent of favorites and removed Drum engine */
+#endif
 
 #define FELUCCA_MORPH 1
 #define FELUCCA_PHASE_FB 1
@@ -343,22 +413,6 @@ _Static_assert(P_COUNT <= MOTION_FX_FIRST, "FX event ids must not overlap sound 
 typedef struct { uint8_t place, param; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
 _Static_assert(sizeof(motion_store_t) == 388u, "motion disk layout (FUN10)");
-#define CHAIN_ROWS 16u
-/* A song section (1.2, FUN10): the PROJECT slot each track plays (0..3, A..D; CHAIN_SILENT "-": that track plays
- * nothing there) and its repeats (1..16). Up to 1.1 a row was {slot, repeat}, all four tracks on that slot
- * (chain_v9_t, FUN6..FUN9): it loads as a section with the four on it (song_chain.c chain_from_v9) */
-#define CHAIN_SILENT 4u
-typedef struct { uint8_t slot[NTRK], repeat; } chain_row_t;
-typedef struct {
-    uint8_t count, rsv[3];
-    chain_row_t row[CHAIN_ROWS];
-} chain_config_t;
-typedef struct { uint8_t slot, repeat; } chain_row_v9_t;   /* frozen: the rows of FUN6..FUN9 */
-typedef struct {
-    uint8_t count, rsv[3];
-    chain_row_v9_t row[CHAIN_ROWS];
-} chain_v9_t;
-_Static_assert(sizeof(chain_config_t) == 84u && sizeof(chain_v9_t) == 36u, "song chain layouts (FUN10 / FUN6..FUN9)");
 
 typedef struct track {
     int16_t p[P_COUNT];
@@ -381,9 +435,10 @@ typedef struct track {
     /* arp runtime */
     uint32_t arp_pos;            /* q8 samples into the current arp step */
     uint32_t arp_idx;
-    uint8_t arp_note;            /* sounding arp note, 0 = none */
+    uint8_t arp_note;            /* sounding arp pitch, including MIDI 0; arp_gate bit 0 owns it */
     uint8_t arp_walk;            /* WALK: the place in the note list it stands on */
-    uint8_t arp_ch[3];           /* CHORD: the other notes sounding with arp_note, 0 = none */
+    uint8_t arp_ch[3];           /* CHORD: the other pitches; arp_gate bits 1..3 own them */
+    uint8_t arp_gate;            /* sounding ARP owners, independent of pitch (uses prior alignment padding) */
     uint32_t arp_off;            /* q8 sample time of its note-off */
     /* sequencer */
     step_t step[NSTEP];

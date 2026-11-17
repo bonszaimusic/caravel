@@ -2,7 +2,7 @@
  * Custom MIDI resync through the real USB/TRS queues, transport, sequencers,
  * ARPs and panel handlers. MIDI clock has no bar metadata: only Start anchors it. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void rs_packet(uint32_t source, uint32_t status, uint32_t ms)
 {
@@ -132,9 +132,7 @@ static int rs_safety_test(void)
     bad += check("LIVE REC is preserved and resync is refused", song.rec == 1u && song.playing && !midi_clock.resync && midi_resync_notice == RS_REC && !memcmp(&saved, &motion, sizeof saved));
     song.rec = 0; rs_request(1); song.rec = 1; events_block(CTL);
     bad += check("recording begun after arming also cancels the request", !midi_clock.resync && song.rec == 1u);
-    song.rec = 0; chain.armed = 1; midi_resync_request(2);
-    bad += check("SONG is refused without changing its state", !midi_clock.resync && chain.armed && midi_resync_notice == RS_SONG);
-    chain.armed = 0;
+    song.rec=0;
     rs_request(1); transport_req = 2; events_block(CTL);
     bad += check("local STOP cancels a request", !midi_clock.resync && !song.playing);
     return bad;

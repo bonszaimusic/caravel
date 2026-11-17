@@ -45,11 +45,6 @@ static void part_setup(track_t *t, uint32_t k, uint32_t e)
     }
     if (e == 0u || e == 2u || e == 3u) t->p[P_MORPH] = (int16_t)(40u + k * 20u);
     if (e == 2u) t->p[P_PD_FB] = 48;
-    if (dx_track(t)) {
-        dx_config_t *c = dx_of(k);
-        c->image = 100; c->send[0] = 127; c->send[1] = 191; c->send[2] = 255;
-        c->mot[0] = 7; c->mot[1] = 60;
-    }
     t->p[P_ITYPE] = (int16_t)((k * 4u + e) % IT_N);  /* an INSERT on most parts (its own state, ins[]) */
     t->p[P_IMIX] = 90;
     t->p[P_REV] = (int16_t)(20 + 10 * k);
@@ -199,20 +194,9 @@ int main(void)
             sc[n++].morph = 0;
         }
     }
-    sc[n++] = (scen_t){"4 x Custom DRUM-X", {10, 10, 10, 10}, {4, 4, 4, 4}, 0};
-    sc[n++] = (scen_t){"Custom MORPH BYTE FLOAT DRUM-X", {0, 3, 3, 10}, {1, 12, 13, 4}, 0};
-    sc[n++] = (scen_t){"Custom HADES SEM FM6 DRUM-X", {ENGI_HADES, ENGI_SEM, ENGI_FM6, ENGI_DRUM}, {4, 4, 4, 4}, 0};
-    sc[n++] = (scen_t){"SEM DRUM-X FM6 ANALOG", {ENGI_SEM, ENGI_DRUM, ENGI_FM6, 0}, {4, 4, 4, 1}, 0};
-    sc[n++] = (scen_t){"PHYS FM6 ANALOG DRUM", {ENGI_PHYS, ENGI_FM6, 0, ENGI_DRUM}, {1, 4, 7, 0}, 0};
-    sc[n++] = (scen_t){"GRAIN NOISE VOICE LOFI", {8, 11, 5, 3}, {1, 4, 7, 10}, 0};
-    sc[n++] = (scen_t){"TRIO WHEEL PHASE FM6", {6, 7, 2, ENGI_FM6}, {1, 4, 7, 10}, 0};
-    sc[n++] = (scen_t){"PHYS morph + DRUM GRAIN ANALOG", {ENGI_PHYS, ENGI_DRUM, 8, 0}, {2, 1, 3, 5}, 1};
-#if FELUCCA_SLICE
-    sc[n++] = (scen_t){"SAMPLE SLICE GRAIN PHASE", {ENGI_SAMPLE, 13, 8, 2}, {2, 1, 3, 5}, 0};
-    sc[n++] = (scen_t){"SLICE FM6 SAMPLE DRUM", {13, ENGI_FM6, ENGI_SAMPLE, ENGI_DRUM}, {0, 2, 3, 4}, 0};
-#else
-    sc[n++] = (scen_t){"SAMPLE FM6 GRAIN PHASE", {ENGI_SAMPLE, ENGI_FM6, 8, 2}, {2, 1, 3, 5}, 0};
-#endif
+    sc[n++] = (scen_t){"Custom HADES SEM PHYS ENSEMBLE", {ENGI_HADES,ENGI_SEM,ENGI_PHYS,ENGI_ENSEMBLE}, {4,4,1,4},0};
+    sc[n++] = (scen_t){"DRONE ENSEMBLE ANALOG PHYS", {ENGI_DRONE,ENGI_ENSEMBLE,0,ENGI_PHYS}, {1,4,7,0},0};
+    sc[n++] = (scen_t){"PHYS model change + SEM HADES ANALOG", {ENGI_PHYS,ENGI_SEM,ENGI_HADES,0}, {2,1,3,5},1};
     for (i = 0; i < n; i++) {
         uint64_t ref;
         uint32_t m, bad = 0, quiet = 0, taken = 0, took = 0;

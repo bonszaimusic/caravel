@@ -2,7 +2,7 @@
 /* Independent modulation, real UI/Learn and unchanged-size sound storage. */
 #include <assert.h>
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void l2slot(track_t *t, uint32_t source, uint32_t dest, int amount)
 {
@@ -152,18 +152,18 @@ int main(void)
     memset(ml_virtual,0,sizeof ml_virtual); memset(ml_extra,0,sizeof ml_extra);
     assert(settings_import(&settings,sizeof settings)); assert(ml_cc_of(0,L2_FIRST)==21);
     /* Both patch payloads and all four LFO settings survive the fixed-size project. */
-    song.sel=0; set_engine_of(&trk[1],ENGI_FM6); set_engine_of(&trk[2],ENGI_DRUM); apply_preset_to(&trk[2],4);
+    song.sel=0; set_engine_of(&trk[1],ENGI_ENSEMBLE);set_engine_of(&trk[2],ENGI_PHYS);apply_preset_to(&trk[2],0);
     set_engine_of(&trk[3],ENGI_SEM);
     for(uint32_t k=0;k<NTRK;k++) { lfo2_set(k,L2_FIRST,17+k); lfo2_set(k,L2_FIRST+L2_WAVE,k); }
     project_t p,q; project_store_t wire;
     project_capture(&p); assert(proj_pack(&wire,&p)); assert(*(uint32_t*)wire.raw==PROJ_MAGIC_V11);
-    assert(sizeof wire==3840 && proj_import(&q,wire.raw,sizeof wire));
-    assert(!memcmp(p.fm6,q.fm6,sizeof p.fm6) && !memcmp(p.lfo2,q.lfo2,sizeof p.lfo2));
+    assert(sizeof wire==2784 && proj_import(&q,wire.raw,sizeof wire));
+    assert(!memcmp(p.lfo2,q.lfo2,sizeof p.lfo2));
     project_store_t broken=wire;
-    broken.raw[PROJ_FM6_OFF+120] |= 128u;
+    broken.raw[PROJ_LFO2_OFF-1] |= 128u;
     uint32_t sum=proj_hash(broken.raw,PROJ_STORE_SIZE-4u); memcpy(broken.raw+PROJ_STORE_SIZE-4u,&sum,4);
     assert(!proj_import(&q,broken.raw,sizeof broken));
-    broken=wire; broken.raw[PROJ_FM6_OFF+8u+3u] |= 128u; /* WAVE 8 is invalid. */
+    broken=wire; broken.raw[PROJ_LFO2_OFF+L2_WAVE]=5; /* WAVE 8 is invalid. */
     sum=proj_hash(broken.raw,PROJ_STORE_SIZE-4u); memcpy(broken.raw+PROJ_STORE_SIZE-4u,&sum,4);
     assert(!proj_import(&q,broken.raw,sizeof broken));
     assert(proj_import(&q,wire.raw,sizeof wire));
@@ -173,9 +173,7 @@ int main(void)
     /* User presets: normal, FM6 and DX, with payload identity retained. */
     for(uint32_t k=0;k<3;k++) {
         song.sel=k; uint8_t pk[128],saved[128]; int payload=k==1||k==2;
-        if(k==1) fm6_pack(fm6_patch[k],pk); else if(k==2) dx_pack(k,pk);
         assert(up_store(k,"LFO2 TEST")==3); assert(up_rec(k)->ver>=8 && up_valid(up_rec(k)));
-        if(payload) assert(upf_get(k,saved)==0 && !memcmp(pk,saved,128));
         lfo2_set(k,L2_FIRST,100); assert(up_load(k)==0 && lfo2_get(k,L2_FIRST)==(int32_t)(17+k));
     }
     song.sel=0; undo.keep=0; lfo2_set(0,L2_FIRST,51); apply_preset(0);

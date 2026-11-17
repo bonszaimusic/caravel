@@ -1,0 +1,23 @@
+# chordext_baseline v1: tests/chordext_diff_test.c (CHORD SOURCE / EXT step 0). RECORDED ONCE, on the base commit 8243ec0,
+# in the CI container image (linux/amd64, tools/docker_validate.sh's caravel-validate). Never rewritten: there is no update flag.
+# A scene line is: name, FNV-1a 64 of the audio, of the note events, of the MIDI OUT packets, then the counts.
+# base-commit: 8243ec0
+# firmware-fingerprint: c6b80037fbc2558a
+poly_keys       audio=58ed9d8ea67e8112 events=f32206e9f77487ee midiout=f6f75991ebd8d0aa blocks=2068 noteevents=18 midiout_packets=18
+mono_keys       audio=770181af51b768c6 events=896e19d8a359f72e midiout=ee43c096274c495a blocks=3170 noteevents=28 midiout_packets=22
+unison_keys     audio=24218d43cf3d5e7d events=b6092aac83d45e1d midiout=9cc57a5ffbb6b47f blocks=2757 noteevents=96 midiout_packets=10
+chrd_dia3_voic  audio=9e818f4813948952 events=5f031af35847e50e midiout=bd5461df2c374b2e blocks=3032 noteevents=74 midiout_packets=74
+chrd_shapes     audio=66b6ec43c243177b events=1a7f4c3aaf9f1d7a midiout=65672183f30e2abe blocks=2757 noteevents=80 midiout_packets=80
+chrd_bus        audio=445d3dba71aeccca events=84d339043bf15561 midiout=6ec1537d60741a0f blocks=6891 noteevents=48 midiout_packets=24
+chrd_midi       audio=3c45418b3fd887ec events=725f65d48463ad9f midiout=cbf29ce484222325 blocks=2619 noteevents=40 midiout_packets=0
+latch_new       audio=031b39298d575889 events=f46f490807c0f783 midiout=837cc9f80d1dde80 blocks=2757 noteevents=28 midiout_packets=22
+latch_stack     audio=464c3cdaabd5e7cc events=0e1999b7f7f8c8c9 midiout=9e68bdbe53436baf blocks=2619 noteevents=20 midiout_packets=24
+arp_modes_a     audio=80e1b4eed70e18ff events=a758a9f242f722e0 midiout=d79defc75c126119 blocks=4893 noteevents=82 midiout_packets=8
+arp_modes_b     audio=a9e68803f47dcde4 events=e696573d1bed0861 midiout=3032c944d8901f8a blocks=5375 noteevents=116 midiout_packets=6
+arp_hold_chord  audio=e2e499a538631839 events=3f1f320c957da70c midiout=8ed5331eb0b03f93 blocks=6202 noteevents=214 midiout_packets=14
+seq_harmony     audio=89cc2f7cf1c68ee4 events=ccbc5c2146cb8996 midiout=cbf29ce484222325 blocks=6340 noteevents=354 midiout_packets=0
+link_retrig     audio=6e88ac3c849e2b65 events=52bc7ac555dc4a02 midiout=4cfe27f807c56d0e blocks=4962 noteevents=60 midiout_packets=12
+midi_channels   audio=ba1190a3faa3f584 events=682227c37e73de6e midiout=cbf29ce484222325 blocks=2757 noteevents=38 midiout_packets=0
+midi_track_sel  audio=de5948da8a0169bc events=fa3f0e301617b518 midiout=cbf29ce484222325 blocks=2343 noteevents=20 midiout_packets=0
+sustain_panic   audio=a557521ab6812f25 events=7bc022dbeab623c6 midiout=b7a4ac0aac42e13a blocks=2619 noteevents=23 midiout_packets=4
+follow          audio=a57b2946728a4eb3 events=1d5e23a21f6a53c0 midiout=4f7f106c71c73426 blocks=4962 noteevents=364 midiout_packets=10

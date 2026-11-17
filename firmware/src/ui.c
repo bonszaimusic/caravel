@@ -15,7 +15,6 @@ static void project_compat_cancel(void);
 static void project_init_runtime(void);
 static uint32_t project_pattern_queue(uint32_t slot);
 static int project_used(uint32_t slot);
-static uint32_t chain_prepare(void);
 static int up_used(uint32_t k);              /* user presets: upreset.c */
 static int up_load(uint32_t k);
 static uint32_t up_count(void);
@@ -110,6 +109,40 @@ static uint32_t sel_mode(void) {
  * and a BPM chosen in the menu survives a reboot (no format change). */
 static void ui_prefs_fresh(void) { ui_prefs2 = (uint8_t)(ui_prefs2 | (PREF_SEL_PAGE >> 16)); }
 static void ui_message(const char *s);
+static int f2_active(void);                     /* ui_f2.c: the first-start notice about an older version's data */
+static int f2_input(uint32_t pressed);
+static void f2_draw(void);
+#ifndef CARAVEL_UX_LAYERS
+#define CARAVEL_UX_LAYERS 0
+#endif
+#if CARAVEL_UX_EVOLVE
+static void uxl_ev_graph(void);
+static void uxl_ev_cards(void);
+static void uxl_evp_knob(uint32_t slot, int32_t steps);
+static int uxl_c_page(void);
+static const char *uxl_c_title(void);
+static void uxl_cards_c(void);
+static int uxl_ring_page(void);
+static void uxl_ring_build(void);
+static int uxl_save_page(void);
+static void uxl_save_build(void);
+static int uxl_flat_page(void);
+static int uxl_build_now(void);
+static void uxl_page_pos(char *out, uint32_t cap);
+static int uxl_layer_page(void);
+static void uxl_layer_header(void);
+static void uxl_layer_body(uint32_t l);
+#endif
+#if !CARAVEL_UX_LAYERS
+#define UXL_ON 0
+#define UXL_PLAY 0
+#define uxl_layer_blocked(l) 0
+#define uxl_pv_on() 0
+#define uxl_panic_poll() ((void)0)
+#define uxl_harm_keys(k) (k)
+#define uxl_fx_label(p) ((const char *)0)
+#define uxl_fx_map_filter() ((void)0)
+#endif
 
 /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
  * oscilloscope, as before), 1 TRACKS (the four tracks as rows: ui_graph.c draw_home_tracks), 2 LEVELS (1.5, #134: the
@@ -380,7 +413,9 @@ static int scr_input(uint32_t pressed, uint32_t notes)
 static int scr_frame(void)
 {
     uint32_t lim = SCR_MIN[scr_get()] * 60000u;
-    if (ui.confirm || ui.uboot || seq_counting()) {    /* (never dark under these) */
+    if (ui.confirm || ui.uboot || seq_counting()
+        || f2_active()
+        ) {                                            /* (never dark under these) */
         scrn.idle = fm1_ms;
         if (scrn.st == SCR_OFF)
             scr_wake();
@@ -460,6 +495,9 @@ static uint32_t large_kind(void)
 #if FELUCCA_PAIR_MORPH
     if (g == GR_PAIR) return LK_LABEL;
 #endif
+#if CARAVEL_UX_EVOLVE
+    if (g == GR_EVOLVE) return LK_LABEL;
+#endif
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
            g == GR_SLICES || g == GR_EVENTS ? LK_LABEL : LK_TALL;
 }
@@ -496,7 +534,7 @@ static uint32_t layer_btn(void);
 static int more_slot_ok(uint32_t id)
 {
     if (id == P_MORPH)
-        return FELUCCA_MORPH && (TSEL->eng_req == 0u || TSEL->eng_req == 2u || TSEL->eng_req == 3u || dx_track(TSEL));
+        return FELUCCA_MORPH && (TSEL->eng_req == 0u || TSEL->eng_req == 2u || TSEL->eng_req == 3u);
     if (id == P_PD_FB)
         return FELUCCA_PHASE_FB && TSEL->eng_req == 2u;
     return 1;
@@ -512,20 +550,15 @@ static int page_visible(uint32_t i)
 #endif
     if (str_eq(PAGES[i].title, "SEM MODE")) return TSEL->eng_req == ENGI_SEM;
     if (str_eq(PAGES[i].title, "MORE")) return TSEL->eng_req != ENGI_SEM;          /* SEM MODE has its SPREAD: nothing else is left */
-    if (PAGES[i].graph >= GR_DXKIT && PAGES[i].graph <= GR_DXLAYER) return dx_track(TSEL);
+    if (PAGES[i].graph >= GR_DXKIT && PAGES[i].graph <= GR_DXLAYER) return 0;
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
     if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)
         return TSEL->eng_req % NENGINES == ENGI_FM6;
-#if FELUCCA_SLICE
-    if (PAGES[i].graph == GR_SLICES)
-        return ENGINES[TSEL->eng_req % NENGINES] == &ENG_SLICE;
-#else
     if (PAGES[i].graph == GR_SLICES)
         return 0;
-#endif
     return !(PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] >= P_FM1_ATK &&
              PAGES[i].id[0] <= P_FM4_LEVEL) || (FELUCCA_FM4 && TSEL->eng_req % NENGINES == ENGI_DIGITAL);
 }
@@ -582,7 +615,6 @@ static void ui_message(const char *s) { ui_say(s, ""); }
  * for the header's 130 px after the icon) */
 #define MSG_NO_SAMPLE MSG_NOFILE "NO SAMPLE"
 
-static int chain_busy(void) { return chain.running || chain.armed; }
 static uint32_t project_ram_mask(void);          /* A-D changed in RAM, not yet committed to flash */
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */
@@ -590,22 +622,9 @@ static int transport_busy(void)
 {
     int busy;
     fm1_irq_off();
-    busy = song.playing || chain_busy() || transport_req == 1u || seq_counting();   /* (a count-in: as playing) */
+    busy = song.playing || 0 || transport_req == 1u || seq_counting();   /* (a count-in: as playing) */
     fm1_irq_on();
     return busy;
-}
-static void chain_play_ui(void)
-{
-    uint32_t rc = chain_prepare();
-    if (!rc) {
-        ui.force = 1;
-    } else if (rc >= 3u) {
-        char b[8] = "A EMPTY";
-        b[0] = (char)('A' + rc - 3u);
-        ui_say("PATTERN ", b);
-    } else {
-        ui_message(rc == 1u ? "ADD A SECTION" : "STOP FIRST");
-    }
 }
 
 
@@ -644,11 +663,13 @@ static uint32_t midi_lit_ms[NTRK];
 static int midi_lit(uint32_t k) { return midi_lit_ms[k % NTRK] && (fm1_ms | 1u) - midi_lit_ms[k % NTRK] < MLIT_MS; }
 static void help_start(void) { ui.help_t = (uint8_t)(help_on() ? HELP_FRAMES : 0u); }
 extern uint8_t link_setup_row;
+extern uint8_t chord_ext_row;
 extern uint8_t harmony_edit_dur;
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
     if (!ui.home && str_eq(pg->title, "LINK")) link_setup_row = 0;
+    if (!ui.home && pg->graph == GR_CHORD) chord_ext_row = 0;        /* the CHORD KEYS row first */
     if (!ui.home && str_eq(pg->title, "HARMONY")) harmony_edit_dur = 0;   /* first SCL tap opens durations */
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
         ev_enter();
@@ -917,8 +938,9 @@ static void open_family(uint32_t fam)
     } else if (fam == FAM_SAVE) {
         uint32_t i;
         for (i = 0; i < NPAGES; i++)
-            if (PAGES[i].graph == GR_USER) break;
-        ui.page = (uint8_t)i;                         /* SAVE enters the sound save screen directly */
+            if (PAGES[i].graph == GR_SLOTS) break;
+        ui.page = (uint8_t)i;                         /* SAVE enters the PROJECT screen: what is saved first is everything (nothing picked: OCT+ does nothing until
+                                                       * an action is; the sound save of 1.5's quick save is USER, one tap on) */
     } else {
         uint32_t i = ui.fam_last[fam];
         ui.page = (uint8_t)(i && i < NPAGES && PAGES[i].fam == fam && page_visible(i) ? i : page_first(fam));
@@ -959,17 +981,18 @@ static void home_tap(void)
 #endif
 }
 
-/* SCL has two virtual lower rows as well as ordinary pages. SELECT walks
- * SCALE, CHORD, LINK, HARMONY SETUP, HARMONY ROOTS, DURATIONS. The bus switch
- * remains reachable while OFF; only the roots/durations are hidden. */
+/* SCL has three virtual lower rows as well as ordinary pages. SELECT walks
+ * SCALE, CHORD, CHORD EXT, LINK, HARMONY SETUP, ROOTS, DURATIONS. The bus
+ * switch and CHORD EXT remain reachable while the bus is OFF; only the
+ * roots/durations are hidden. */
 static void scl_page_turn(int32_t dir)
 {
     const page_t *pg = cur_page();
-    int32_t at = pg->graph == GR_SCALE ? 0 : pg->graph == GR_CHORD ? 1 :
-                 pg->graph == GR_LINK ? 2 + !!link_setup_row : 4 + !!harmony_edit_dur;
-    int32_t last = harmony_on ? 5 : 3;
+    int32_t at = pg->graph == GR_SCALE ? 0 : pg->graph == GR_CHORD ? 1 + !!chord_ext_row :
+                 pg->graph == GR_LINK ? 3 + !!link_setup_row : 5 + !!harmony_edit_dur;
+    int32_t last = harmony_on ? 6 : 4;
     int32_t next = clamp(at + (dir > 0 ? 1 : -1), 0, last);
-    uint32_t graph = next == 0 ? GR_SCALE : next == 1 ? GR_CHORD : next < 4 ? GR_LINK : GR_HARMONY;
+    uint32_t graph = next == 0 ? GR_SCALE : next < 3 ? GR_CHORD : next < 5 ? GR_LINK : GR_HARMONY;
     if (at == next) return;                         /* preserve endpoint row and edit state */
     for (uint32_t i = 0; i < NPAGES; i++) {
         if (PAGES[i].fam != FAM_SCL || PAGES[i].graph != graph) continue;
@@ -978,8 +1001,10 @@ static void scl_page_turn(int32_t dir)
             ui.fam_last[FAM_SCL] = ui.page;
             page_entered();
         }
-        link_setup_row = next == 3;
-        harmony_edit_dur = next == 5;
+        chord_ext_row = next == 2;
+        link_setup_row = next == 4;
+        harmony_edit_dur = next == 6;
+        if (graph == GR_CHORD && (chord_ext_row || at == 2)) ui_message(chord_ext_row ? "CHORD EXT" : "CHORD");   /* (CHORD from SCALE: no message, as before) */
         if (graph == GR_LINK) ui_message(link_setup_row ? "HARMONY SETUP" : "LINK");
         if (graph == GR_HARMONY) ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
         ui.force = 1;
@@ -1062,10 +1087,7 @@ static struct {
     uint8_t keep;                /* the track is as the last load left it (undo.after): a next load keeps the copy */
     uint8_t what;                /* UNDO_SOUND | UNDO_PAT: what the loads since the copy changed (undo_swap) */
     uint8_t eng, preset, user, patn;
-    uint8_t dx[128];
     lfo2_config_t lfo2;
-    uint8_t fm6_slot;            /* the track's FM6 patch and its SLOT (eng_fm6.c): an edited or a project's */
-    uint8_t fm6[FP_SIZE + 1u];   /* patch is the track's own, not a factory one */
     int16_t p[P_COUNT];
     step_t step[NSTEP];
     motion_store_t motion_backup; /* one track only, swaps with the shared event pool on undo */
@@ -1100,9 +1122,7 @@ static uint32_t track_sig(const track_t *t)      /* the sound (an FM6 track's pa
 {
     uint8_t id[3] = {t->eng_req, t->preset, t->user};
     uint32_t h = fnv(fnv(steps_sig(t), t->p, sizeof t->p), id, 3), k = trk_index(t);
-    if (dx_track(t)) h = fnv(h, dx_of(k), sizeof(dx_config_t));
     h = fnv(h, &lfo2_config[k], sizeof lfo2_config[k]);
-    h = fnv(h, fm6_patch[k], sizeof fm6_patch[k]); /* (a patch the editor sent between two loads) */
     for (uint32_t j = 0; j < motion.count; j++)
         if ((motion.event[j].place >> 6) == k) h = fnv(h, &motion.event[j], sizeof motion.event[j]);
     return h ^ ((motion.on >> k) & 1u);
@@ -1201,10 +1221,7 @@ static void load_begin(track_t *t, uint32_t what)
     undo.user = t->user;
     memcpy(undo.p, t->p, sizeof undo.p);
     memcpy(undo.step, t->step, sizeof undo.step);
-    dx_pack(i, undo.dx);
     undo.lfo2 = lfo2_config[i];
-    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
-    undo.fm6_slot = fm6_slot[i];
     undo.pat = pat_sig[i];
     undo.from = pat_from[i];
     undo.from_h = pat_from_h[i];
@@ -1267,10 +1284,7 @@ static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
     undo.user = t->user;
     memcpy(undo.p, t->p, sizeof undo.p);
     memcpy(undo.step, t->step, sizeof undo.step);
-    dx_pack(i, undo.dx);
     undo.lfo2 = lfo2_config[i];
-    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
-    undo.fm6_slot = fm6_slot[i];
     undo.pat = pat_sig[i];
     undo.from = pat_from[i];
     undo.from_h = pat_from_h[i];
@@ -1371,18 +1385,8 @@ static void undo_swap(void)
         }
     }
     fm1_irq_on();
-    if (undo.what & UNDO_SOUND) {                 /* FM6: the track's patch as it was (edited, a project's, a
-                                                   * converted DIGITAL sound), not a factory one */
-        uint32_t tr = trk_index(t);
-        uint8_t v[FP_SIZE + 1u], sl = fm6_slot[tr], dx[128];
-        dx_pack(tr, dx); dx_unpack(tr, undo.dx); memcpy(undo.dx, dx, sizeof dx);
-        { lfo2_config_t c = lfo2_config[tr]; lfo2_load(tr, &undo.lfo2); undo.lfo2 = c; }
-        memcpy(v, fm6_patch[tr], FP_SIZE);
-        fm6_set_patch(tr, undo.fm6);
-        fm6_slot[tr] = undo.fm6_slot;             /* (fm6_poll: the patch stays) */
-        fm6_own_ok &= (uint8_t)~(1u << tr);
-        memcpy(undo.fm6, v, FP_SIZE);
-        undo.fm6_slot = sl;
+    if (undo.what & UNDO_SOUND) {
+        uint32_t tr=trk_index(t);lfo2_config_t c=lfo2_config[tr];lfo2_load(tr,&undo.lfo2);undo.lfo2=c;
     }
     undo.keep = 0;                                /* the next load copies the track as it is now */
     if (t == TSEL)
@@ -1499,11 +1503,13 @@ static void pat_load_ui(track_t *t, uint32_t n)
 /* the track's settings, not the sound's: what a sound load (factory or user preset, an engine jump,
  * TOOLS INIT) leaves alone. The mix (LEVEL, PAN, MUTE: the TRACKS faders), the arpeggiator (ARP, ARP 2),
  * the scale and key map (SCL, with the chord keys and LATCH), the pattern parameters (LEN, DIV, SWING, GATE; 1.2: QUANTIZE) and the SLICER
- * insert, which chops whatever the track plays in time with its sequencer */
+ * insert, which chops whatever the track plays in time with its sequencer. Caravel: CHORD SOURCE / EXT / OCT
+ * (core.h CHORDSET_ID) are the track's too */
 static int param_kept(uint32_t i)
 {
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
-           (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_LATCH || i == P_SQNT;
+           (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_LATCH || i == P_SQNT ||
+           CHORDSET_ID(i);
 }
 
 /* What a factory preset load (and an engine jump, MIDI program change, the editor) leaves of the track's own FX. The INSERT
@@ -1526,69 +1532,20 @@ static int load_kept(uint32_t i)
 /* a retired preset kept as an alias, so stored preset numbers stay valid: SAMPLE 1, once TRANH, is PIANO
  * (tools/gen_samples.py SMP_SET_ORIG). It loads as the original; browsing skips it. -> the preset k stands for.
  * (SAMPLE 4, once PERC, is past SMP_NPRESETS: apply_preset_to loads it as DRUM) */
-static uint32_t preset_orig(const engine_t *e, uint32_t k)
-{
-    return e->presets == SMP_PRESET_TABLE && k < SMP_NSETS ? SMP_SET_ORIG[k] : k;
-}
+static uint32_t preset_orig(const engine_t*e,uint32_t k){(void)e;return k;}
 
 /* the presets of engine e that browsing shows before preset k (k = npresets: all of them) */
-static uint32_t preset_rank(const engine_t *e, uint32_t k)
-{
-    uint32_t i, n = 0;
-    if (e->presets != SMP_PRESET_TABLE)
-        return k;
-    for (i = 0; i < k; i++)
-        n += preset_orig(e, i) == i;
-    return n;
-}
+static uint32_t preset_rank(const engine_t*e,uint32_t k){(void)e;return k;}
 
-#define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))
+#define preset_shown(e) (ENGINES[e]->npresets)
 
-#if !FELUCCA_FM4
 /* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own
  * (fm4_convert.c). Every path that brings a DIGITAL sound into a track ends here: a track never keeps engine 1 */
-static void fm4_apply(track_t *t, int16_t *p)
-{
-    uint8_t v[FP_SIZE + 1u];
-    uint32_t pr = fm4_convert(p, v), tr = trk_index(t), f;
-    fm6_set_patch(tr, v);
-    f = motion_guard();                               /* the audio ISR sees the old sound or the new one */
-    memcpy(t->p, p, sizeof t->p);
-    t->eng_req = ENGI_FM6;
-    t->preset = (uint8_t)pr;
-    motion_unguard(f);
-    fm6_adopt(tr);                                    /* SLOT OWN: the converted patch is the track's own */
-}
-static void fm4_track(track_t *t)                     /* t holds a DIGITAL sound (engine 1): convert it */
-{
-    int16_t p[P_COUNT];
-    memcpy(p, t->p, sizeof p);
-    fm4_apply(t, p);
-}
+
+
 /* DIGITAL preset k (a stored preset number of engine 1: the editor's PRESET, SET G_ENGSEL, an old project's
  * power-on sound): its sound as a preset load sets it, converted. The sound only (not the steps, not param_kept) */
-static void fm4_load_preset(track_t *t, uint32_t k)
-{
-    int16_t p[P_COUNT];
-    uint32_t i;
-    load_begin(t, UNDO_SOUND);
-    panic_req |= (uint8_t)(1u << trk_index(t));
-    t->user = 0;
-    if (t == TSEL)
-        sync_reload = 1;
-    memcpy(p, t->p, sizeof p);
-    for (i = 0; i < P_E0; i++)
-        if (!load_kept(i))
-            p[i] = TP[i].def;
-    lfo2_load(trk_index(t), 0);
-    fm4_preset_values(p, k);
-    for (i = 0; i < P_E0; i++)                        /* (it sets the sends too: FX HOLD gives the track's back) */
-        if (load_kept(i))
-            p[i] = t->p[i];
-    fm4_apply(t, p);
-    load_end(t);
-}
-#endif
+
 
 static void set_engine_of(track_t *t, uint32_t ei);
 /* preset pi of the engine the track asked for: the sound only (not the steps, not param_kept) */
@@ -1644,16 +1601,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
 {
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
     uint32_t i;
-#if !FELUCCA_FM4
-    if (t->eng_req % NENGINES == ENGI_DIGITAL) {
-        fm4_load_preset(t, pi);
-        return;
-    }
-#endif
-    if (t->eng_req % NENGINES == ENGI_SAMPLE && pi == SMP_SET_PERC) {   /* SAMPLE preset 4 was PERC (retired, a stored */
-        set_engine_of(t, ENGI_DRUM);                  /* number: the editor's PRESET, a favourite): DRUM's kit */
-        return;                                       /* (core.h drum_from_perc) */
-    }
+
     load_begin(t, UNDO_SOUND);
     panic_req |= (uint8_t)(1u << trk_index(t));       /* MONO/POLY may change: release what sounds */
     t->user = 0;
@@ -1669,8 +1617,6 @@ static void apply_preset_to(track_t *t, uint32_t pi)
     preset_sound_values(t->eng_req,pi,values,&l2);
     for(i=0;i<P_COUNT;i++)if(!load_kept(i))t->p[i]=values[i];
     lfo2_load(trk_index(t),&l2);
-    if (dx_track(t)) dx_reset(trk_index(t));
-    fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);
 }
 
@@ -1680,12 +1626,7 @@ static void set_engine_of(track_t *t, uint32_t ei)
 {
     const engine_t *e = ENGINES[ei % NENGINES];
     uint32_t i;
-#if !FELUCCA_FM4
-    if (ei % NENGINES == ENGI_DIGITAL) {             /* DIGITAL (retired): its first preset, as FM6 */
-        fm4_load_preset(t, 0);
-        return;
-    }
-#endif
+
     load_begin(t, UNDO_SOUND);
     fm1_irq_off();
     t->eng_req = (uint8_t)(ei % NENGINES);
@@ -1717,12 +1658,7 @@ static void clean_engine_of(track_t *t)
 {
     uint32_t ei = t->eng_req % NENGINES, i;
     const engine_t *e = ENGINES[ei];
-#if !FELUCCA_FM4
-    if (ei == ENGI_DIGITAL) {                         /* (retired: it becomes FM6, fm4_track) */
-        set_engine_of(t, ei);
-        return;
-    }
-#endif
+
     load_begin(t, UNDO_SOUND);
     set_engine_of(t, ei);                             /* (nested in this load: one undo copy, from before) */
     fm1_irq_off();
@@ -1742,12 +1678,7 @@ static void clean_engine_of(track_t *t)
         t->p[P_REL] = CLEAN_REL;
     }
     fm1_irq_on();
-    if (ei == ENGI_FM6) {                             /* the init voice as the track's own patch (SLOT: OWN) */
-        uint8_t v[FP_SIZE + 1u];
-        fm6_unpack(FM6_INIT, v);
-        fm6_set_patch(trk_index(t), v);
-        fm6_adopt(trk_index(t));
-    }
+
     load_end(t);
 }
 static void clean_engine(void) { clean_engine_of(TSEL); }
@@ -1769,12 +1700,7 @@ static void midi_pc_load(track_t *t, uint32_t n)
             t->p[P_E0] = (int16_t)k;
         return;
     }
-    if (n >= preset_shown(e)) {
-        int32_t s = (int32_t)(FM6_OWN + 1u + n - preset_shown(e));
-        if (e == ENGI_FM6 && fm6_bank_slot(s) >= 0 && fm6_slot_ok(s))
-            t->p[P_E7] = (int16_t)s;
-        return;
-    }
+    if (n >= preset_shown(e)) return;
     for (k = 0; preset_orig(ENGINES[e], k) != k || n--; k++)   /* the n-th shown preset */
         ;
     apply_preset_to(t, k);
@@ -2120,7 +2046,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return (c & 3u) == 1u && ui.tl_clean ? "CLEAN" : actions[c & 3u];   /* (1.5.5: KNOB 2 on: CLEAN INIT) */
     }
     if (cur_page()->graph == GR_SONG)
-        return song.playing || chain_busy() ? "STOP" : "PLAY";
+        return song.playing || 0 ? "STOP" : "PLAY";
     if (cur_page()->graph == GR_PATS)
         return "LOAD";
     if (cur_page()->graph == GR_USER)
@@ -2144,19 +2070,11 @@ static int act_ready(void)
         return stasis_layer_can_start() || stasis_layer_can_cancel();
 #endif
     if (cur_page()->graph == GR_EVENTS) return ev_act_ready();
-    if (cur_page()->graph == GR_TOOLS)                  /* one case per column: CLEAR PAT, INIT, DELETE ROW, CLEAR SONG */
-        return !chain_busy() && (c == 0u ? !seq_is_empty(TSEL) || motion_count(TSEL) : c == 1u ? 1 :
-                                 c == 2u ? ui.song_row < chain_config.count : chain_config.count != 0u);
-    if (cur_page()->graph == GR_SONG)
-        return song.playing || chain_busy() || chain_config.count;
+    if (cur_page()->graph == GR_TOOLS) return c == 0u ? !seq_is_empty(TSEL) || motion_count(TSEL) : c == 1u;
     if (cur_page()->graph == GR_PATS)
         return pat_last[s] != pat_pick() + 1u || steps_sig(TSEL) != pat_sig[s];
     if (cur_page()->graph == GR_USER)
         return c == 3u ? !song.playing : up_used(ui.uslot) && (c == 1u || !song.playing);
-#if FELUCCA_SLICE
-    if (cur_page()->graph == GR_SLICES)
-        return slice_act_ready(c);
-#endif
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PROJECT ERASE: a used slot, stopped */
         return !ui.proj_erase || (!song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u));
     id = cur_page()->id[c & 3u];

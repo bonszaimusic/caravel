@@ -156,10 +156,10 @@ static void layer_arm(uint32_t pressed, uint32_t now)
     if (ui.ly)
         return;
     for (l = LAYER_FX; l < LAYER_N; l++)
-        if (pressed & ly_bit(l)) {
+        if ((pressed & ly_bit(l)) && !uxl_layer_blocked(l)) {   /* (PLAY: EDIT, SEQ, REC are plain buttons: uxl_poll; a key beside them stays a note) */
             ui.ly = (uint8_t)l;
             ui.ly_t0 = (now & ~15u) | 1u | (layer_allowed() ? 0u : LY_DEAD);
-            lys.dtap = lys.dt_l == l && fm1_ms - lys.dt_ms <= LY_DTAP_MS;   /* (#83: the second tap of a double tap?) */
+            lys.dtap = lys.dt_l == l && fm1_ms - lys.dt_ms <= LY_DTAP_MS && !(UXL_ON && l == LAYER_GLO);   /* (#83: the second tap of a double tap?) */
             lys.dt_l = 0;
             return;
         }
@@ -171,8 +171,15 @@ static void layer_let_go(uint32_t quiet)
 {
     if (eu.on)                                          /* (SEQ TOOLS: an open EUCLID is applied) */
         eu_close(&trk[lys.trk % NTRK], 1);
+#if CARAVEL_UX_EVOLVE
+    if (ui.ly == LAYER_FX && !perf_latch_on) {
+        perf_k[0] = 0; /* held FILTER is temporary; ordinary PLAY arc turns never enter this path */
+        if (!UXL_PLAY) perf_k[1] = perf_k[2] = perf_k[3] = 0;
+    }
+#else
     if (ui.ly == LAYER_FX && !perf_latch_on)
         perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+#endif
     if (lys.rp_dirty) {                                 /* REC: its settings kept, as MENU does when it closes (FX: the map) */
         lys.rp_dirty = 0;
         settings_save();                                /* (deferred while playing) */
@@ -283,7 +290,7 @@ static uint32_t layer_gesture(uint32_t now, uint32_t combo)
         ui.lock = 0;                                    /* (the menu, a dialog, NAME: the lock closes) */
     }
     if (ly_down(l)) {
-        if (!(*t0 & (LY_OPEN | LY_DEAD)) &&
+        if (!(*t0 & (LY_OPEN | LY_DEAD)) && !uxl_layer_blocked(l) &&
             (combo || now - (*t0 & ~15u) >= (uint32_t)HOLD_MS[settings_hold % 4u] * 1000u * FM1_TICKS_PER_US)) {
             *t0 |= LY_OPEN | (combo ? LY_COMBO : 0u);
             layer_opened(l);
@@ -410,7 +417,7 @@ static void tools_key(uint32_t p)
     char n[4];
     if (!tl_cell(TSEL, p))
         return;
-    if (chain_busy()) {
+    if (0) {
         ui_message("STOP TO EDIT");
         return;
     }
@@ -454,7 +461,7 @@ static void tools_key(uint32_t p)
 static void rec_clear(void)
 {
     track_t *t = TSEL;
-    if (chain_busy()) {
+    if (0) {
         ui_message("STOP TO EDIT");
         return;
     }
@@ -516,6 +523,7 @@ static void fx_map_sync(void)
             perf_map[p] = (uint8_t)e;
             perf_remap = 1;
         }
+    uxl_fx_map_filter();
 }
 /* the white key PRESETS assigns: the last pressed in the FX layer, while still held (+ 1; 0 none) */
 static uint32_t fx_key_held(void)
@@ -682,11 +690,11 @@ static void layer_key(uint32_t l, uint32_t k)
     } else if (l == LAYER_EDIT && !key_black(k)) {
         if (p < NENG_SHOWN && p < LY_INIT)
             edit_load(eng_vis(p), 0);
-        else if (p == LY_INIT && chain_busy())
+        else if (p == LY_INIT && 0)
             ui_message("STOP TO EDIT");
         else if (p == LY_INIT)
             confirm_open(CF_INIT_SOUND, song.sel);      /* (the dialog closes the layer) */
-        else if (p == LY_CLEAN && chain_busy())
+        else if (p == LY_CLEAN && 0)
             ui_message("STOP TO EDIT");
         else if (p == LY_CLEAN)
             confirm_open(CF_CLEAN_SOUND, song.sel);
@@ -729,10 +737,18 @@ static void layer_keys(uint32_t keys)
 static void layer_knob(uint32_t k, int32_t s)
 {
     uint32_t l = layer_open();
+#if CARAVEL_UX_CAPTURE
+    if (UXL_PLAY && ui.ly == LAYER_REC) {                 /* PLAY, REC held: K1 is the CAPTURE length */
+        uxl_cap_knob(k, s);
+        return;
+    }
+#endif
     if (l == LAYER_FX) {                                /* perform.c perf_k, not recorded */
         if (k == 3u && !perf_harm_on())
             s = -s;                                     /* DEPTH (100 - perf_k[3]) rises to the right (#40: it fell) */
-        perf_k[k] = (int8_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
+        int32_t delta = accel(EN_K1 + k, s, k ? 100 : 200);
+        if (!k) tf_macro_turn(delta);
+        else perf_k[k] = (int8_t)clamp(perf_k[k] + delta, 0, 100);
     } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER */
         int16_t *vp = &trk[k].p[P_LEVEL];
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
@@ -773,7 +789,7 @@ static int layer_play(void)
         transport_req = 4;
         return 1;
     }
-    if (chain_busy()) return 0;
+    if (0) return 0;
     transport_req = song.playing ? 3u : 1u;
     return 1;
 }
@@ -813,7 +829,7 @@ static void ly_scale_all(void)
 /* GLO + OCT+: arm the downbeat reset. Playing, seq.c applies it at the next bar line; stopped, at once. */
 static void ly_bar_reset(void)
 {
-    if (chain_busy()) {
+    if (0) {
         ui_message("STOP SONG FIRST");
         return;
     }
@@ -856,7 +872,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 ui_message("MUTES PUT BACK");
         } else if (lys.l == LAYER_SEQ || lys.l == LAYER_REC) {
             track_t *t = &trk[lys.trk % NTRK];
-            if (lys.loaded && chain_busy()) {
+            if (lys.loaded && 0) {
                 ui_message("STOP TO EDIT");
             } else {
                 if (lys.loaded) {                       /* (SAVE held then: the tools / the clear again) */
@@ -934,17 +950,17 @@ static uint32_t layer_leds(uint32_t *br)
             can = (mask >> e) & 1u;
         } else if (l == LAYER_EDIT && !b) {             /* the engine lit, the others and INIT breathe */
             on = p < NENG_SHOWN && p < LY_INIT && eng_vis(p) == TSEL->eng_req % NENGINES;
-            can = p < NENG_SHOWN && p < LY_INIT ? 1u : (p == LY_INIT || p == LY_CLEAN) && !chain_busy();
+            can = p < NENG_SHOWN && p < LY_INIT ? 1u : (p == LY_INIT || p == LY_CLEAN) && !0;
         } else if (l == LAYER_EDIT && (a = eqa_of(TSEL, p)) != 0) {   /* the quick actions: on lit (DRUM: sounding), */
             on = a->on(TSEL, a->arg) != 0u;             /* a HOLD one off breathes, none dark */
             can = a->kind == LK_HOLD;
         } else if (l == LAYER_SEQ) {                    /* the tools breathe (not while a song plays); DRUM: the lane */
             on = (b && p < NLANE && drum_track(TSEL) && p == ui.lane) || (!b && p == TL_EUCLID && eu.on);   /* lit, the */
-            can = b ? p < NLANE && drum_track(TSEL) : tl_cell(TSEL, p) && !chain_busy();
+            can = b ? p < NLANE && drum_track(TSEL) : tl_cell(TSEL, p) && !0;
         } else if (l == LAYER_REC && !b && p < 4u) {    /* a setting on (LEVEL: the click on) lit, the rest breathe; */
             on = p == 1u ? rp_get(RP_CLICK) != 0u : p == 2u ? rp_get(RP_COUNTIN) != 0u :   /* CLEAR: something to */
                  p == 3u && rp_get(RP_CLICK) != 0u;    /* clear, not while a song plays */
-            can = p ? 1u : !chain_busy() && rec_clearable();
+            can = p ? 1u : !0 && rec_clearable();
         }
         m |= on << k;
         n |= (can & !on) << k;
@@ -1011,6 +1027,13 @@ static uint16_t lc_box(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t fill
         if (y > 4)
             cv_rule(x > 7 ? x - 4 : x, y - 2, w + (x > 7 ? 4 : 0), 1);
     }
+#if CARAVEL_UX_LAYERS
+    if (uxl.play) {
+        cv_rrect(x,y,w,h,5,fill,T_SURF);
+        cv_frame(x+1,y+1,w-2,h-2,T_MID);
+        return fill;
+    }
+#endif
     cv_rrect(x, y, w, h, 4, fill, T_SURF);
     return fill;
 }
@@ -1065,10 +1088,10 @@ static void layer_fx(void)
     char n[3] = {0, 0, 0};
     for (p = 0; p < PF_KEYS; p++) {                     /* the white keys F3 .. G5, 4 a row: the effect each holds */
         e = perf_map[p];
-        st = p == ed ? LS_SEL : e >= PF_NFX || !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF
+        st = p == ed ? LS_SEL : uxl_fx_label(p) ? LS_OFF : e >= PF_NFX || !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF
            : (act >> e) & 1u ? LS_HELD : LS_WAIT;       /* (the key PRESETS assigns: the selection's fill) */
         n[0] = W_NOTE[p];
-        lcell(LC_X(p % 4u), 4 + (LF_H + 4) * (int32_t)(p / 4u), LF_H, n, 0, 0, e < PF_NFX ? PF_CELL[e] : "",
+        lcell(LC_X(p % 4u), 4 + (LF_H + 4) * (int32_t)(p / 4u), LF_H, n, 0, 0, uxl_fx_label(p) ? uxl_fx_label(p) : e < PF_NFX ? PF_CELL[e] : "",
               st | (p & 1u ? LS_ALT : 0u), 0);           /* (#173: the 2nd and 4th columns' idle cells their own fill) */
     }
     for (e = 0; e < NTRK; e++) {                        /* the mutes of the black keys 1..4 */
@@ -1141,7 +1164,7 @@ static void layer_edit(void)                            /* the engines from F3, 
         else
             lcell(x, y, (int32_t)h, 0, i == n ? ICON_X_WARN : ICON_COUNT, 0, i == n ? "INIT" : "CLEAN",   /* (CLEAN: no
                                                                                     * icon, the word fills the cell) */
-                  chain_busy() ? LS_DIM : LS_OFF, 0);
+                  0 ? LS_DIM : LS_OFF, 0);
     }
     if (na)                                             /* the black keys' quick actions in the sound's place (KNOB 2 */
         eqa_row(na);                                    /* still shows its number) */
@@ -1170,7 +1193,7 @@ static void layer_euclid(void)
 }
 static void layer_seq(void)
 {
-    uint32_t p, st = chain_busy() ? LS_DIM : LS_OFF, drum = (uint32_t)drum_track(TSEL);
+    uint32_t p, st = 0 ? LS_DIM : LS_OFF, drum = (uint32_t)drum_track(TSEL);
     char n[3] = {0, 0, 0}, nm[8];
     if (eu.on)
         layer_euclid();
@@ -1217,7 +1240,7 @@ static void layer_rec(void)
     char n[3] = {0, 0, 0}, b[16];
     for (r = 0; r < 4u; r++) {
         int32_t y = 4 + (LR_H + 4) * (int32_t)r, x = 6, vx = 6 + LR_KW + 4;
-        uint32_t dim = r == 0u && (chain_busy() || !rec_clearable());
+        uint32_t dim = r == 0u && (0 || !rec_clearable());
         uint16_t ink, fill = lc_box(x, y, LR_KW, LR_H, lc_fill(dim ? LS_DIM : LS_OFF, &ink));
         n[0] = W_NOTE[r];
         GFX_HOOK_ALIGN(0, y, 0, y + LR_H, AL_V, "rec layer key cell on its middle");
@@ -1231,7 +1254,7 @@ static void layer_rec(void)
             b[0] = 'T';
             b[1] = (char)('1' + song.sel);
             str_cpy(b + 2, rec_clearable() ? " SEQUENCE" : " EMPTY", sizeof b - 2);
-            if (chain_busy())
+            if (0)
                 str_cpy(b, "STOP TO EDIT", sizeof b);
             fill = lc_box(vx, y, w, LR_H, lc_fill(dim ? LS_DIM : LS_OFF, &ink));
             GFX_HOOK_ALIGN(vx, y, vx + w, y + LR_H, AL_HV, "rec layer clear cell centred");
@@ -1246,16 +1269,52 @@ static void layer_rec(void)
     }
 }
 
+#if CARAVEL_UX_LAYERS
+/* PLAY peek cards: same four controls and values, compact titles, no hidden assignments. */
+static int uxl_layer_cards(uint32_t l)
+{
+    uint32_t k;
+    if (!uxl.play || l > LAYER_SCL || !l) return 0;
+    for (k=0;k<4u;k++) {
+        char b[16], tag[4]; const char *unit="", *label="";
+        int32_t ratio=0, v=0; const param_desc_t *d=0; int16_t *vp=0;
+        if (l==LAYER_FX) {
+            static const char *const LAB[]={"FILTER","CRUSH","THROW","DEPTH"};
+            label=perf_harm_on() && k==3u ? "SHIMR" : LAB[k];
+            v=k==3u && !perf_harm_on()?100-perf_k[k]:perf_k[k];
+            if(k==0u && !v) str_cpy(b,"OFF",sizeof b);
+            else fmt_int(b,v<0?-v:v);
+            ratio=(k==0u?v+100:v)*(k==0u?5:10);
+            unit=k==0u?(v<0?"LP":v>0?"HP":""):"%";
+        } else if (l==LAYER_GLO) {
+            tag[0]='T';tag[1]=(char)('1'+k);tag[2]=0;label=tag;
+            d=&TP[P_LEVEL];v=trk[k].p[P_LEVEL];
+        } else { d=page_desc(&LY_SCL,k,&vp); if(d&&vp)v=*vp; }
+        if(d) {label=l==LAYER_GLO?tag:d->label;param_format(d,v,b,&unit);ratio=RATIO(d,v);}
+        cv_begin(57,44,T_BG);cv_bg=T_BG;
+        cv_rrect(0,0,57,44,5,T_SURF,T_BG);
+        cv_text_on(5,1,&AF_S,label,T_TEXT,T_SURF);
+        cv_free_text(5,18,&AF_M,b,T_TEXT,T_SURF,47);
+        if(unit[0])cv_text_r(52,22,&AF_S,unit,T_MID,T_SURF);
+        cv_rect(5,38,47,2,T_LINE);
+        cv_rect(5,38,clamp(ratio,0,1000)*47/1000,2,T_TEXT);
+        cv_blit(CARD_X(k),Y_LABEL);
+    }
+    return 1;
+}
+#endif
 static void layer_cards(uint32_t l)
 {
     char val[12];
     const char *unit;
     uint32_t c;
+#if CARAVEL_UX_LAYERS
+    if(uxl_layer_cards(l))return;
+#endif
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
-        int32_t m = perf_k[0];
-        fmt_int(val, m < 0 ? -m : m);
-        draw_column(0, "FILTER", m ? val : "OFF", m < 0 ? "LP" : m > 0 ? "HP" : "", m ? VAL(0u) : T_DIM, (m + 100) * 5,
-                    ICON_CUTOFF);
+        int32_t m = tf_eff(TSEL);
+        param_format(&TP[P_FILT], m, val, &unit);
+        draw_column(0, "FILTER", val, unit, perf_k[0] ? VAL(0u) : T_DIM, RATIO(&TP[P_FILT], m), ICON_CUTOFF);
         fmt_int(val, perf_k[1]);
         draw_column(1, "CRUSH", perf_k[1] ? val : "OFF", perf_k[1] ? "%" : "", perf_k[1] ? VAL(1u) : T_DIM,
                     perf_k[1] * 10, ICON_BITS);
@@ -1308,6 +1367,232 @@ static void layer_cards(uint32_t l)
     }
 }
 
+#if CARAVEL_UX_EVOLVE
+/* ---- BUILD in PLAY's manner: the FX, EDIT, REC and SEQ layers, held (ui_uxl.c has SEL and GLO and the header) ----
+ * The same plan: the four knobs round a small ring (name and value at the corners), what is chosen in the middle, the keys' cells as fields
+ * below, the footer of the layer unchanged. The cells are the layer's own (the key map, the engines, the options, the tools); each
+ * keeps its state (chosen, held, waiting, not available, muted). SEQ TOOLS with EUCLID open keeps its old drawing. */
+typedef struct { char name[12]; uint8_t st, col, row, span; } uly_cell_t;
+typedef struct {
+    char cn[4][10], cv[4][20], big[16], small[20];
+    int16_t ratio[4];
+    uint8_t dim[4], n, rows;
+    uly_cell_t c[40];
+} uly_t;
+static int uxl_eu_on(void) { return eu.on != 0; }
+static void uly_add(uly_t *m, const char *name, uint32_t st, uint32_t col, uint32_t row, uint32_t span)
+{
+    uly_cell_t *c;
+    if (m->n >= 40u)
+        return;
+    c = &m->c[m->n++];
+    str_cpy(c->name, name, sizeof c->name);
+    c->st = (uint8_t)(st & 7u);
+    c->col = (uint8_t)col;
+    c->row = (uint8_t)row;
+    c->span = (uint8_t)span;
+    if (row + 1u > m->rows)
+        m->rows = (uint8_t)(row + 1u);
+}
+static void uly_corner(uly_t *m, uint32_t k, const char *name, const char *val, const char *unit, int32_t ratio, uint32_t dim)
+{
+    str_cpy(m->cn[k], name, sizeof m->cn[k]);
+    str_cpy(m->cv[k], val, sizeof m->cv[k]);
+    if (unit && unit[0]) {
+        str_cpy(m->cv[k] + str_len(m->cv[k]), " ", sizeof m->cv[k] - str_len(m->cv[k]));
+        str_cpy(m->cv[k] + str_len(m->cv[k]), unit, sizeof m->cv[k] - str_len(m->cv[k]));
+    }
+    m->ratio[k] = (int16_t)ratio;
+    m->dim[k] = (uint8_t)dim;
+}
+static void uly_model(uint32_t l, uly_t *m)
+{
+    uint32_t i, p;
+    char b[24], tag[8], nm[16];
+    const char *unit;
+    memset(m, 0, sizeof *m);
+    if (l == LAYER_FX) {
+        uint32_t held = perf_kill ? 0u : perf_held | perf_latched, act = perf_act, ok = perf_avail(), e, st;
+        uint32_t ed = fx_key_held() ? key_place(fx_key_held() - 1u) : PF_KEYS;
+        int32_t mf = tf_eff(TSEL);
+        param_format(&TP[P_FILT], mf, b, &unit);
+        uly_corner(m, 0, "FILTER", b, unit, RATIO(&TP[P_FILT], mf), !perf_k[0]);
+        fmt_int(b, perf_k[1]);
+        uly_corner(m, 1, "CRUSH", perf_k[1] ? b : "OFF", perf_k[1] ? "%" : "", perf_k[1] * 10, !perf_k[1]);
+        fmt_int(b, perf_k[2]);
+        uly_corner(m, 2, "THROW", perf_k[2] ? b : "OFF", perf_k[2] ? "%" : "", perf_k[2] * 10, !perf_k[2]);
+        fmt_int(b, perf_harm_on() ? perf_k[3] : 100 - perf_k[3]);
+        uly_corner(m, 3, perf_harm_on() ? "SHIMR" : "DEPTH", b, "%", (perf_harm_on() ? perf_k[3] : 100 - perf_k[3]) * 10, 0);
+        str_cpy(m->big, "FX", sizeof m->big);
+        str_cpy(m->small, fx_key_held() ? "ASSIGN" : ui.lock == LAYER_FX ? "LOCKED" : "HOLD", sizeof m->small);
+        for (p = 0; p < PF_KEYS; p++) {
+            e = perf_map[p];
+            st = p == ed ? LS_SEL : uxl_fx_label(p) ? LS_OFF : e >= PF_NFX || !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF
+               : (act >> e) & 1u ? LS_HELD : LS_WAIT;
+            uly_add(m, uxl_fx_label(p) ? uxl_fx_label(p) : e < PF_NFX ? PF_CELL[e] : "", st, p % 4u, p / 4u, 1);
+        }
+        for (e = 0; e < NTRK; e++) {
+            str_cpy(b, "MUTE ", sizeof b);
+            b[5] = (char)('1' + e);
+            b[6] = 0;
+            uly_add(m, b, (held >> (PF_M1 + e)) & 1u ? LS_MUTE : LS_OFF, e, PF_KEYS / 4u, 1);
+        }
+    } else if (l == LAYER_EDIT) {
+        uint32_t total, cur = eng_list_pos(&total), e = TSEL->eng_req % NENGINES, n = NENG_SHOWN < LY_INIT ? NENG_SHOWN : LY_INIT, na = eqa_count(TSEL), u = user_of(TSEL);
+        const engine_t *en = ENGINES[e];
+        fmt_int(b, (int32_t)cur + 1);
+        str_cpy(tag, "/", sizeof tag);
+        fmt_int(tag + 1, (int32_t)total);
+        uly_corner(m, 0, "ENG", en->name, "", (int32_t)eng_rank(e) * 1000 / (NENG_SHOWN > 1 ? NENG_SHOWN - 1 : 1), 0);
+        uly_corner(m, 1, "No.", b, tag, total > 1u ? (int32_t)(cur * 1000u / (total - 1u)) : 0, 0);
+        uly_corner(m, 2, "FAV", preset_favorite() ? "ON" : "OFF", "", 0, 0);
+        if (u < UP_SLOTS) {
+            up_slot_label(tag, u);
+            up_name(u, nm);
+        } else {
+            tag[0] = (char)('0' + (cur + 1u) / 10u % 10u);
+            tag[1] = (char)('0' + (cur + 1u) % 10u);
+            tag[2] = 0;
+            str_cpy(nm, en->npresets ? en->presets[TSEL->preset % en->npresets].name : "", sizeof nm);
+        }
+        str_cpy(m->big, tag, sizeof m->big);
+        str_cpy(m->small, nm, sizeof m->small);
+        for (i = 0; i < n + 2u; i++)
+            uly_add(m, i < n ? ENGINES[eng_vis(i) % NENGINES]->name : i == n ? "INIT" : "CLEAN", i < n && eng_vis(i) == e ? LS_SEL : LS_OFF, i % 4u, i / 4u, 1);
+        for (i = 0; i < na; i++) {
+            const eqa_t *a = eqa_of(TSEL, i);
+            uint32_t on = a->on(TSEL, a->arg) != 0u, st = a->show == EQ_SHOW_MUTE ? (on ? LS_OFF : LS_MUTE) : on ? (a->kind == LK_HOLD ? LS_HELD : LS_SEL) : LS_OFF;
+            uly_add(m, a->name(TSEL, a->arg), st, i % 4u, (n + 2u + 3u) / 4u + i / 4u, 1);
+        }
+    } else if (l == LAYER_REC) {
+        for (i = 0; i < 3u; i++) {
+            uint32_t v = rp_get(RL_F[i]);
+            uly_corner(m, i, RL_LABEL[i], rl_name(i, v), "", (int32_t)v * 500, i < 2u && !v);
+        }
+        str_cpy(m->big, "REC", sizeof m->big);
+        m->small[0] = 'T';
+        m->small[1] = (char)('1' + song.sel);
+        str_cpy(m->small + 2, rec_clearable() ? " SEQUENCE" : " EMPTY", sizeof m->small - 2u);
+        uly_add(m, "CLEAR", rec_clearable() ? LS_OFF : LS_DIM, 0, 0, 1);
+        uly_add(m, m->small, LS_DIM, 1, 0, 3);
+        for (p = 0; p < 3u; p++) {
+            uly_add(m, RL_LABEL[p], LS_DIM, 0, p + 1u, 1);
+            for (i = 0; i < 3u; i++)
+                uly_add(m, rl_name(p, i), i == rp_get(RL_F[p]) ? LS_SEL : LS_OFF, i + 1u, p + 1u, 1);
+        }
+    } else {                                            /* LAYER_SEQ, EUCLID closed: the tools */
+        uint32_t drum = (uint32_t)drum_track(TSEL), row = 0;
+        for (i = 0; i < 4u; i++) {
+            int16_t *vp = 0;
+            const param_desc_t *d = page_desc(&LY_SEQ, i, &vp);
+            if (d && vp) {
+                param_format(d, *vp, b, &unit);
+                uly_corner(m, i, d->label, b, unit, d->max > d->min ? (*vp - d->min) * 1000 / (d->max - d->min) : 0, 0);
+            }
+        }
+        str_cpy(m->big, "TOOLS", sizeof m->big);
+        if (drum)
+            str_cpy(m->small, drum_lane_abbr(TSEL, ui.lane), sizeof m->small);
+        else
+            str_cpy(m->small, "SEQUENCE", sizeof m->small);
+        for (p = 0; p < TL_DOUBLE; p++) {
+            if (!tl_cell(TSEL, p))
+                continue;
+            str_cpy(nm, p == 2u ? "< SHIFT" : p == 3u ? "SHIFT >" : TL_NAME[p], sizeof nm);
+            if (p >= TL_LCLR) {
+                str_cpy(nm + str_len(nm), " ", 2);
+                str_cpy(nm + str_len(nm), drum_lane_abbr(TSEL, ui.lane), sizeof nm - str_len(nm));
+            }
+            uly_add(m, nm, LS_OFF, p % 4u, p / 4u, 1);
+            if (p / 4u + 1u > row)
+                row = p / 4u + 1u;
+        }
+        if (!drum)
+            uly_add(m, "CLR STP", LS_OFF, 0, row++, 1);
+        for (p = 0; drum && p < NLANE; p++)
+            uly_add(m, drum_lane_abbr(TSEL, p), p == ui.lane % NLANE ? LS_SEL : LS_OFF, p % 4u, row + p / 4u, 1);
+        if (drum)
+            row += (NLANE + 3u) / 4u;
+        uly_add(m, "x2", LS_OFF, 0, row, 1);
+        uly_add(m, "/2", LS_OFF, 1, row, 1);
+        uly_add(m, drum ? "CLR" : "GEN", LS_OFF, 2, row, 1);
+    }
+}
+static void uly_paint(const uly_t *m)
+{
+    static const int16_t START[4] = {277, 7, 187, 97};
+    uint32_t k, i;
+    int32_t cx = 120, cy = 76, pitch = m->rows <= 4u ? 19 : 15, y0 = 200 - (int32_t)m->rows * pitch + 4;
+    cv_rect(0, 0, 240, 240, T_BG);
+    for (k = 0; k < 4u; k++) {
+        int32_t x = (k & 1u) == 0u ? 4 : 236, y = k < 2u ? 34 : 78, r = clamp(m->ratio[k], 0, 1000);
+        if (!m->cn[k][0])
+            continue;
+        uxl_ring(cx, cy, 38, 49, START[k], START[k] + 76, START[k], START[k] + r * 76 / 1000, T_LINE, m->dim[k] ? T_DIM : T_THEME);
+        uint16_t value_ink = !k && str_eq(m->cn[k], "FILTER") ? (m->dim[k] ? T_DIM : T_TEXT) : T_MID;
+        if (x < 120) {
+            cv_text(x, y, &AF_M, m->cn[k], m->dim[k] ? T_MID : T_TEXT);
+            cv_text(x, y + 20, &AF_S, m->cv[k], value_ink);
+        } else {
+            uxl_text_r(x, y, &AF_M, m->cn[k], m->dim[k] ? T_MID : T_TEXT);
+            uxl_text_r(x, y + 20, &AF_S, m->cv[k], value_ink);
+        }
+    }
+    uxl_text_c(cx, cy - 14, &AF_M, m->big, T_TEXT);
+    {
+        char f[24];
+        text_fit(f, sizeof f, m->small, &AF_S, 84);
+        uxl_text_c(cx, cy + 6, &AF_S, f, T_MID);
+    }
+    if (y0 < 104)
+        y0 = 104;
+    for (i = 0; i < m->n; i++) {
+        const uly_cell_t *c = &m->c[i];
+        int32_t x = 6 + (int32_t)c->col * 58, w = (int32_t)c->span * 54 + ((int32_t)c->span - 1) * 4, y = y0 + (int32_t)c->row * pitch, h = pitch - 4;
+        uint16_t fill = T_RAISE, ink = T_MID;
+        char f[16];
+        switch (c->st) {
+        case LS_SEL: case LS_WAIT: fill = T_THEME; ink = T_INK; break;
+        case LS_HELD: fill = T_ACCENT; ink = T_BG; break;
+        case LS_DIM: ink = T_DIM; break;
+        case LS_MUTE: fill = T_KEY; ink = T_INK; break;
+        default: break;
+        }
+        cv_rrect(x, y, w, h, 4, fill, T_BG);
+        text_fit(f, sizeof f, c->name, &AF_S, w - 4);
+        cv_text_on(x + (w - text_w(&AF_S, f)) / 2, y + (h > 14 ? 1 : 0), &AF_S, f, ink, fill);
+    }
+}
+static void uxl_layer_body_more(uint32_t l)
+{
+    static uly_t m;
+    static uint32_t last;
+    uint32_t h = 2166136261u, i;
+    const uint8_t *b;
+    uly_model(l, &m);
+    b = (const uint8_t *)&m;
+    for (i = 0; i < sizeof m; i++)
+        h = (h ^ b[i]) * 16777619u;
+    h ^= l << 24;
+    if (!ui.force && h == last)
+        return;
+    last = h;
+    cv_begin(240, 120, T_BG);
+    cv_bg = T_BG;
+    cv_oy = -28;
+    uxl_y0 = 28;
+    uly_paint(&m);
+    cv_oy = 0;
+    cv_blit(0, 28);
+    cv_begin(240, 54, T_BG);
+    cv_bg = T_BG;
+    cv_oy = -148;
+    uxl_y0 = 148;
+    uly_paint(&m);
+    cv_oy = 0;
+    cv_blit(0, 148);
+}
+#endif
 static void draw_layer(void)
 {
     uint32_t l = ui.layer % LAYER_N, sig = l * 7919u + ux.gen * 977u;
@@ -1316,6 +1601,12 @@ static void draw_layer(void)
         fx_foot = (uint8_t)(l == LAYER_FX && fx_key_held());
         ui.force = 1;
     }
+#if CARAVEL_UX_EVOLVE
+    if (uxl_layer_page()) {                             /* BUILD, SEL and GLO: the ring and the fields (ui_uxl.c); the footer below is the layer's own */
+        uxl_layer_body(l);
+        goto uxl_foot;
+    }
+#endif
     layer_cards(l);
     if (l == LAYER_FX)
     {
@@ -1332,12 +1623,12 @@ static void draw_layer(void)
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
-        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
+        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)0 * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
-        sig += (uint32_t)drum_track(TSEL) * 31u + ui.lane * 5u + (uint32_t)chain_busy() * 3u + (uint32_t)TSEL->p[P_E0] * 131u + song.sel * 977u +
+        sig += (uint32_t)drum_track(TSEL) * 31u + ui.lane * 5u + (uint32_t)0 * 3u + (uint32_t)TSEL->p[P_E0] * 131u + song.sel * 977u +
                (eu.on ? 7u + eu.hits * 13u + eu.steps * 1031u + eu.rot * 65537u + (uint32_t)TSEL->p[P_SLEN] * 257u : 0u);
     else
-        sig += snd_id() * 31u + (uint32_t)preset_favorite() * 5u + (uint32_t)chain_busy() * 3u + up_gen * 101u +
+        sig += snd_id() * 31u + (uint32_t)preset_favorite() * 5u + (uint32_t)0 * 3u + up_gen * 101u +
                eqa_sig() * 2654435761u;
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
@@ -1358,6 +1649,19 @@ static void draw_layer(void)
             layer_edit();
         cv_blit(0, Y_GRAPH);
     }
+#if CARAVEL_UX_EVOLVE
+uxl_foot:
+#endif
+#if CARAVEL_UX_LAYERS
+    if (uxl.play && l <= LAYER_SCL) {
+        const char *hint = l==LAYER_FX ? "B4 HOLD C5 ADD F5 BLEND G5 REL" :
+            l==LAYER_GLO ? "KEYS MUTE/SOLO  PLAY RESTART" : "D5 PREV E5 NEXT F5 HOLD G5 RESET";
+        cv_begin(240,H_FOOT,T_BG);cv_bg=T_BG;
+        cv_free_text(4,0,&AF_S,ui.msg_t?ui.msg:hint,T_TEXT,T_BG,232);
+        cv_text(4,19,&AF_S,layer_locked()?"TAP KEY: CLOSE":"RELEASE KEY: PLAY",T_MID);
+        cv_blit(0,Y_FOOT);ui.foot_sig=0;return;
+    }
+#endif
     if (ui.force) {                                     /* the footer: what the keys, knobs and buttons do */
         cv_begin(240, H_FOOT, T_BG);
         const khint_t *ft = l == LAYER_FX && fx_key_held() ? FX_KEY_FOOT : l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT :

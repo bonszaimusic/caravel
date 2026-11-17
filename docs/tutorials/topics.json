@@ -1,5 +1,5 @@
 {
-  "version": "0.13.0",
+  "version": "1.0.0",
   "banner": "tutorials-banner.png",
   "hero_device": "device-hero.svg",
   "groups": [
@@ -11,7 +11,7 @@
     {
       "id": "engines",
       "title": "Engines",
-      "blurb": "Four engines, each with what to do first, then how the sound is made."
+      "blurb": "Six engines: ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE."
     },
     {
       "id": "play",
@@ -37,7 +37,7 @@
       "title": "Start here",
       "minutes": 10,
       "md": "start-here.md",
-      "thumb": "card-start.png",
+      "thumb": "one-sound.png",
       "status": "ready",
       "tagline": "Back up, install, make a first sound and sequence, save it, and know the way back to the stock firmware."
     },
@@ -48,7 +48,7 @@
       "title": "Basics",
       "minutes": 10,
       "md": "basics.md",
-      "thumb": "card-basics.png",
+      "thumb": "one-build.png",
       "status": "ready",
       "tagline": "Tracks, engine versus preset, the pages and how to move between them, saving projects and presets."
     },
@@ -59,7 +59,7 @@
       "title": "SEM",
       "minutes": 10,
       "md": "engine-sem.md",
-      "thumb": "card-sem.png",
+      "thumb": "one-sem.png",
       "status": "ready",
       "tagline": "Warm pads, brass, strings and notch sweeps."
     },
@@ -70,7 +70,7 @@
       "title": "HADES",
       "minutes": 10,
       "md": "engine-hades.md",
-      "thumb": "card-hades.png",
+      "thumb": "one-hades.png",
       "status": "ready",
       "tagline": "Basses, sub layers and dark leads."
     },
@@ -81,7 +81,7 @@
       "title": "DRONE",
       "minutes": 10,
       "md": "engine-drone.md",
-      "thumb": "card-drone.png",
+      "thumb": "one-drone.png",
       "status": "ready",
       "tagline": "Evolving drones, beds, bells and slow textures (experimental).",
       "links": [
@@ -98,7 +98,7 @@
       "title": "ENSEMBLE",
       "minutes": 10,
       "md": "engine-ensemble.md",
-      "thumb": "card-ensemble.png",
+      "thumb": "one-ensemble.png",
       "status": "ready",
       "tagline": "Strings, choirs and dark pads with a built-in three-tap ensemble, in stereo."
     },
@@ -109,7 +109,7 @@
       "title": "Sequencer and arpeggiator",
       "minutes": 12,
       "md": "seq-arp.md",
-      "thumb": "card-seq-arp.png",
+      "thumb": "one-capture.png",
       "status": "ready",
       "tagline": "Step entry, timing, recording while it plays, parts A to D, and the arpeggiator."
     },
@@ -117,12 +117,12 @@
       "id": "home",
       "num": "5",
       "group": "play",
-      "title": "HOME performance functions",
+      "title": "PLAY and BUILD performance",
       "minutes": 15,
       "md": "home-performance.md",
-      "thumb": "journey-play.png",
+      "thumb": "one-move.png",
       "status": "ready",
-      "tagline": "The ACTION banks: Random Morph and Journey, STASIS hold, Pair Morph and macros.",
+      "tagline": "SPACE, MOVE, snapshots, PAIR and STASIS in the current interface.",
       "links": [
         {
           "title": "Random Morph and Journey",
@@ -149,7 +149,7 @@
       "title": "HARMONY",
       "minutes": 15,
       "md": "harmony-live.md",
-      "thumb": "card-harmony.png",
+      "thumb": "one-chordext.png",
       "status": "ready",
       "tagline": "Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH."
     },
@@ -157,21 +157,21 @@
       "id": "elastic-first-steps",
       "num": "6.1",
       "group": "play",
-      "title": "ELASTIC · First steps",
+      "title": "ELASTIC \u00b7 First steps",
       "minutes": 10,
       "md": "elastic-first-steps.md",
-      "thumb": "elastic-cell-armed.png",
+      "thumb": "one-move.png",
       "status": "ready",
-      "tagline": "Make one HOME control breathe, bounce and return using the ELASTIC action bank."
+      "tagline": "Make an armed target breathe, bounce and return in PLAY / MOVE / ELASTIC."
     },
     {
       "id": "elastic-linked-springs",
       "num": "6.2",
       "group": "play",
-      "title": "ELASTIC · Linked springs",
+      "title": "ELASTIC \u00b7 Linked springs",
       "minutes": 12,
       "md": "elastic-linked-springs.md",
-      "thumb": "elastic-row-coupled.png",
+      "thumb": "one-lfo.png",
       "status": "ready",
       "tagline": "Connect four ROW springs with COUPLE and a reproducible SEED network."
     },
@@ -179,10 +179,10 @@
       "id": "elastic-ambient-recipes",
       "num": "6.3",
       "group": "play",
-      "title": "ELASTIC · Ambient recipes",
+      "title": "ELASTIC \u00b7 Ambient recipes",
       "minutes": 12,
       "md": "elastic-ambient-recipes.md",
-      "thumb": "elastic-four-track-hud.png",
+      "thumb": "one-capture.png",
       "status": "ready",
       "tagline": "Three starting recipes for breathing drones, moving textures and two-track tides."
     },
@@ -193,7 +193,7 @@
       "title": "Filter, FX and modulation",
       "minutes": 12,
       "md": "filter-fx.md",
-      "thumb": "card-filter-fx.png",
+      "thumb": "one-filter.png",
       "status": "ready",
       "tagline": "The per-track filter, reverb, delay and insert effects, LFO and envelope."
     },
@@ -204,7 +204,7 @@
       "title": "MIDI and sync",
       "minutes": 8,
       "md": "midi-sync.md",
-      "thumb": "card-midi.png",
+      "thumb": "one-capture.png",
       "status": "ready",
       "tagline": "MIDI Learn, clock and start over USB and TRS."
     },
@@ -215,7 +215,7 @@
       "title": "Help",
       "minutes": 5,
       "md": "help.md",
-      "thumb": "card-help.png",
+      "thumb": "one-build.png",
       "status": "ready",
       "tagline": "The FAQ, backup, update and the way back, and the known limits.",
       "links": [

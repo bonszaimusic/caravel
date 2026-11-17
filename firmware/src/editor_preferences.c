@@ -87,6 +87,12 @@ static uint32_t ed_ui_set(const uint8_t *a, uint32_t n)
 }
 static int ed_ui_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
+    uint8_t mapped[4];uint32_t wire_engine=0;
+    if(cmd==ED_FAV_GET||cmd==ED_FAV_SET){
+        if(n!=4u||a[0]>6u){ed_b(1);return 1;}
+        wire_engine=a[0];memcpy(mapped,a,4);mapped[0]=(uint8_t)(a[0]==6u?NENGINES:eng_unstore(a[0]));a=mapped;
+    }
+#define ED_FAV_ENGINE wire_engine
     switch (cmd) {
     case ED_UI_STATE:
         ed_ui_state(); return 1;
@@ -104,7 +110,7 @@ static int ed_ui_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             int32_t start = ed_rv(a + 1);
             uint32_t limit = a[0] == NENGINES ? UP_SLOTS : ENGINES[a[0]]->npresets;
             if (start >= 0 && a[3] && a[3] <= 32u && (uint32_t)start + a[3] <= limit) {
-                ed_b(0); ed_b(a[0]); ed_v(start); ed_b(a[3]);
+                ed_b(0); ed_b(ED_FAV_ENGINE); ed_v(start); ed_b(a[3]);
                 for (uint32_t i = 0; i < a[3]; i++) ed_b(favorite_has(a[0], (uint32_t)start + i));
                 return 1;
             }
@@ -123,7 +129,7 @@ static int ed_ui_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
                 (a[0] != NENGINES || !a[3] || up_used((uint32_t)preset))) {
                 favorite_set(a[0], (uint32_t)preset, a[3]);
                 ui.force = 1;
-                ed_b(ed_ui_save()); ed_b(a[0]); ed_v(preset); ed_b(a[3]);
+                ed_b(ed_ui_save()); ed_b(ED_FAV_ENGINE); ed_v(preset); ed_b(a[3]);
                 return 1;
             }
         }

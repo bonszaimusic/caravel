@@ -1,955 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Projects: four slots. The slots live in .noinit RAM: they
- * survive resets and UBOOT entry. With FELUCCA_FLASH (default) every save
- * also goes to flash through storage.c, and an
- * empty RAM slot is filled from flash on load.
- *
- * Format 7 ("FUN7", written) stores P_COUNT (byte 66) and maps an older count as user presets do: FUN7 of
- * 89 parameters (before the chord keys P_CHRD / P_VOIC) loads its engine values at today's P_E0..P_E7,
- * the chord keys OFF / CLOSE, and its motion events' ids from its P_E0 on move up with them (proj_motion_ids).
- * 68 + 4 x (91 + 2 + 64 x 9) + chain + motion = 3040 of the 3372 bytes before the name: 332 spare, room for
- * 83 more track parameters (4 bytes each).
- * Format 6 ("FUN6") adds a 36-byte song chain before the checksum.
- * Format 5 ("FUN5", read only) = format 4 with the drum grid: a step is 10 bytes (step_t: its lane hits and
- * their accents after the 8 bytes it was), and each track has 40 reserved bytes (lane[8][5], written 0: room
- * for per-lane sounds of the DRUM engine). 4 ("FUN4": PROJ_NP_V4 parameters, the modulation matrix), 3
- * ("FUN3": PROJ_NP_V3, the SLICER), 2 ("FUN2") and 1 ("FUN1": PROJ_NP_V2) are read and converted, mapped by
- * count as user presets are (the first np - 8 are P_LEVEL.. in order, the last 8 P_E0..P_E7; the
- * parameters added since take their defaults: the SLICER OFF, every matrix slot OFF). Their steps get no
- * hits; on a DRUM track their notes that are a lane's note become its hits (proj_grid: the same notes and
- * velocities play, the grid shows them as its own).
- * Their engine bytes are kept: formats 1 and 2 had engines 0..7 (ANALOG .. WHEEL), and the engines
- * added since (SLICE 8, ..) were appended, no index moved.
- *
- * Track 4 was the GM drum part until 1.0 (no engine: its byte 0; its level and reverb send in the
- * globals G_DRLVL / G_DRREV, which are inert now). A project says which it has in `parts`: NPART
- * when written since, 0 before (a reserved byte, always written 0: the format and its size did not
- * change). proj_drums_to_part turns such a track 4 into a DRUM part with its default kit (the GM map, so
- * its drum steps still play drums; until 1.0.2 it was the SAMPLE engine's PERC set), keeping its steps, its
- * pattern and mix parameters (LEN DIV SWING GATE, PAN MUTE), its SLICER, and the drum level and reverb send
- * as LEVEL and REV.
- *
- * The byte `phys` (reserved, always 0, before 1.0) says what a PHYS track's MODEL means: 0 MODEL 2 was
- * DUST (dropped: it loads as MODAL bowed, eng_phys.c phys_legacy); 1 MODEL 4 was DRUM (the kit is the DRUM
- * engine since: such a track loads as DRUM, core.h drum_from_phys); 2 (PROJ_PHYS) as today. proj_phys.
- *
- * Format 8 ("FUN8", written since 1.0) = FUN7 with each track's FM6 patch (eng_fm6.c, the 128-byte packed
- * record, 4 x 128 bytes just before the name): a project is self-contained. On load an FM6 track's SLOT shows F n
- * when its patch is that factory one, else OWN (eng_fm6.c fm6_adopt; a stored 9..40, the B slots of the patch bank
- * before 1.0.3 or of 1.4.1's voice bank, is OWN too: the project has the patch).
- * It is 3584 bytes (FUN7: 3388); FUN7 is read (its tracks get the init patch). The retained cache (proj_slot,
- * .noinit) grew with it: after an update its slot 1 still starts with a FUN7 record, which is read; the other
- * slots fail their hash and come back from flash (persist_boot).
- *
- * Format 9 ("FUN9", written since 1.1) = FUN8 with 64 more bytes: the DRUM lane levels (P_LN0..P_LN7, #97) made
- * P_COUNT 99 (P_E0 91), and 68 + 4 x (99 + 2 + 576) + chain + motion = 3072 no longer fit before FUN8's patches
- * (3056). 3648 bytes, the patches at PROJ_FM6_OFF (3120): 48 spare, room for 12 more track parameters. FUN8 (3584,
- * its 91 parameters mapped by count: the lane levels 100 %) and FUN7 are read; the retained cache grew again (its
- * slot 1 still starts with the older record, read as above).
- *
- * Format 10 ("FUNA", written since 1.2; FUN10 in the docs) = FUN9 laid out the same way, 3840 bytes (a whole storage
- * object, storage.c ST_PAYLOAD_MAX), for four changes made together:
- *   - P_COUNT 104 (P_E0 96): LFO 2's SYNC TRIG POL, QUANTIZE and SPREAD (P_LSYNC .. P_SPRD) before the engine
- *     values. SPREAD (#148) came before FUN10's release, into the spare bytes below: a FUN10 of a 1.2 build before
- *     it holds 103 (byte 66) and loads by count (SPREAD 0, its engine values and their motion moved up by one);
- *   - 128 motion records (core.h MOTION_MAX, 64 before), 3 bytes each (place, id, the value as an int8_t: the values
- *     were always -64..127): the block is 4 + 384 = 388 bytes (FUN9's 260 held 64 of 4 bytes);
- *   - each step's NUDGE (core.h step_nudge, -8..+7) in bit 7 of its four note bytes (bit j in note j), bits every
- *     earlier format wrote 0: the step stays 9 bytes;
- *   - the song's sections (core.h chain_row_t): a slot per track (A..D or "-") and the repeats, 5 bytes a row: the
- *     chain is 4 + 16 x 5 = 84 bytes (FUN6..FUN9: 36, rows {slot, repeat}, chain_v9_t; they load as sections with the
- *     four tracks on the row's slot, song_chain.c chain_from_v9: the same song).
- * 68 + 4 x (104 + 2 + 576) + chain + motion = 3268; the patches at PROJ_FM6_OFF (3312): 44 spare, room for 11 more
- * track parameters. 1.5 took seven of them (no format change, FUN10 as it was): the INSERT (P_ITYPE .. P_IMIX, 96..100),
- * ANALOG's filter TYPE (P_FTYPE, 101) and ENV SYNC (P_ESYNC, 102), before the engine values (P_COUNT 111, P_E0 103; 16
- * spare, room for 4). A FUN10 of 1.2 .. 1.4 (104) loads by count: the INSERT OFF, TYPE LP, ENV SYNC OFF (as they
- * played), its engine values and their motion moved up by seven.
- * Firmware 1.2 .. 1.4 refuses a FUN10 of more parameters than its own (np > P_COUNT): a 1.5 project shows EMPTY there. FUN9 / FUN8 / FUN7 load as before (their 64 records of 4 bytes read by proj_motion_v9, every
- * step's nudge 0: the timing they always had; parameters mapped by count, the four new ones at their defaults:
- * SYNC OFF, TRIG NOTE, POL BI, QUANTIZE ON, SPREAD 0, which play as before 1.2), and so do FUN6..FUN1. Firmware before 1.2
- * refuses a FUN10 everywhere (its size and magic are no format it knows): a slot holding one shows EMPTY there (the
- * flash copy stays until that slot is saved over), a backup PUT of one is refused (rc 1), the retained RAM copy of
- * one fails its checks.
- *
- * Caravel 0.3.0 took one more (the track's FILTER, P_FILT 105: -64 .. 63, LP / OFF / HP; fx.c track_filter), before the engine values: P_COUNT 114,
- * P_E0 106, no format change (FUN10, 3840 bytes). The data now ends 4 bytes before the patches and MIDI IN TRACK's 3 bytes (PROJ_MIDI_OFF) take
- * the end of them: 1 spare byte, and P_COUNT 114 is core.h MOTION_FX_FIRST: there is no room for another common parameter in this format. A FUN10 of
- * 0.1.0 / 0.2.0 (113) loads by count: FILT 0 (OFF), the engine values and their motion one higher. 0.1.0 / 0.2.0 refuse a FUN10 of more parameters
- * than their own (np > P_COUNT, proj_unpack), as the firmware before 1.5 did a 1.5 one: a project saved by 0.3.0 shows EMPTY there (the flash copy
- * stays until that slot is saved over). Checked once with 0.2.0's own sources: its proj_import of a 0.3.0 FUN10 returns 0.
- *
- * Parameter locks (1.1, core.h MOTION_LOCK) are motion records with bit 7 of their id byte set (P_COUNT 99 < 128:
- * the bit is free): no byte moved for them, and every project before 1.1 has none. FUN9 holds them. A FUN8 / FUN7
- * record of a 1.1 development build may hold some: on load their ids move to today's positions as the others do,
- * the lock bit kept (proj_motion_ids). Firmware before 1.1 refuses a project that holds a lock (an id out of its
- * range), as with RATCH below; FUN9 it refuses anyway (a newer format).
- *
- * Format 11 ("FUNV", written now) = FUN10's field layout and size, with the HARMONY/LINK state in the 84-byte chain
- * block: the four roots and four DUR codes (1/2/4/8 bars) in its three reserved bytes, and the bus on/off + the four
- * LINK sources (3 bits: 0 OFF, 1..4 T1..T4) + the four RETRIG modes (2 bits: OFF CHORD LINK BOTH) in the high bits of
- * the first section row (the slot bytes keep their low 3 bits, the repeat its low 4). The runtime chain never carries
- * those high bits: project.c encodes/decodes at the save/load boundary. A FUN11 has its own magic; firmware before it
- * shows the slot EMPTY, and this firmware reads every FUN10 (every published 0.x writer leaves the chain reserved bytes 0, so
- * HARMONY comes up off; an unreleased development build kept roots and on/off there, and those migrate to the new block; the
- * other new values start OFF / 1 bar). No sound, step or parameter byte moved.
- *
- * A step's RATCH (core.h SF_RATCH, the hits - 1, 0..3) is in bit 7 of its velocity byte (bit 0) and of its chance
- * byte (bit 1) of FUN7 / FUN8: bits every firmware before wrote 0, so every older project loads with its steps x1,
- * and no format or size changed. Firmware before RATCH refuses a project that holds a ratchet (those bytes out
- * of their range), as it would a newer format. FUN6..FUN1 have none (x1).
- *
- * DIGITAL (engine 1) was retired in 1.0 (fm4_convert.c): a track of it, in any format, loads as FM6 with the
- * patch converted from its values as the track's own (proj_fm4, on every import; the stored record keeps what it
- * holds until saved again). Its motion events on the EDIT or OP ENV values are dropped.
- *
- * SAMPLE's SET 4, PERC (the GM drum kit), was retired after 1.0.2: a SAMPLE track that selects it, in any
- * format, loads as the DRUM engine with its default kit (core.h drum_from_perc: the same GM key map, its steps
- * as they are, the rest of its sound kept; proj_perc, on every import as proj_fm4). Its motion events on the
- * EDIT values are dropped (SAMPLE's meanings, not DRUM's).
- *
- * Built on the Mac too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
- * PROJ_HOST needs core.h, params.c (TP) and engines.c. */
-#define PROJ_MAGIC 0x46554E41u                 /* "FUNA" (FUN10): 104 (1.5: 111) parameters, 128 motion records, nudges */
-#define PROJ_MAGIC_V11 0x46554E56u             /* "FUNV" (FUN11): FUN10 + per-track LINK/RETRIG and HARMONY roots/durations */
-#define PROJ_MAGIC_V9 0x46554E39u              /* "FUN9": FUN8, 64 bytes longer (the DRUM lane levels, 99 parameters) */
-#define PROJ_MAGIC_V8 0x46554E38u              /* "FUN8": FUN7 + the tracks' FM6 patches */
-#define PROJ_MAGIC_V7 0x46554E37u              /* "FUN7": serialized (byte params, packed steps), chain, motion */
-#define PROJ_MAGIC_V6 0x46554E36u              /* FUN6: 69 parameters, drum grid, chain */
-#define PROJ_MAGIC_V5 0x46554E35u              /* "FUN5": the grid, without the chain; read only */
-#define PROJ_MAGIC_V4 0x46554E34u              /* "FUN4": four tracks, PROJ_NP_V4 parameters, 8-byte steps; read only */
-#define PROJ_MAGIC_V3 0x46554E33u              /* "FUN3": four tracks, PROJ_NP_V3 parameters; read only */
-#define PROJ_MAGIC_V2 0x46554E32u              /* "FUN2": four tracks, PROJ_NP_V2 parameters; read only */
-#define PROJ_MAGIC_V1 0x46554E31u              /* "FUN1": one instrument; loads into track 1 */
-#define PROJ_NP_V2 53u                         /* P_COUNT of formats 1 and 2 (P_E0 was 45) */
-#define PROJ_NG_V2 27u                         /* G_COUNT of formats 1 and 2 */
-#define PROJ_NP_V3 57u                         /* P_COUNT of format 3 (P_E0 was 49) */
-#define PROJ_NP_V4 69u                         /* P_COUNT of format 4 (P_E0 61) */
-#define PROJ_PHYS 2u                           /* project_t.phys: PHYS without DUST and DRUM (see the top) */
-#define PROJ_NAME_LEN 12u                      /* the name: FUN7 bytes PROJ_NAME_OFF.. (the reserved tail's end) */
-typedef struct {                               /* one track */
-    int16_t p[P_COUNT];
-    uint8_t engine, preset;
-    step_t step[NSTEP];
-} proj_trk_t;
-typedef struct {
-    uint32_t magic, size;
-    int16_t g[G_COUNT];
-    uint8_t sel;                               /* the selected track */
-    uint8_t parts;                             /* NPART; 0: track 4 is the old GM drum part (see the top) */
-    uint8_t phys;                              /* PROJ_PHYS: PHYS MODEL values as today; 1: MODEL 4 was DRUM;
-                                                * 0 (a reserved byte before 1.0): MODEL 2 was DUST */
-    uint8_t rsv;
-    proj_trk_t t[NTRK];
-    chain_config_t chain;
-    motion_store_t motion;
-    lfo2_config_t lfo2[NTRK];
-    uint8_t fm6[NTRK][FM6_PACKED];             /* each track's FM6 patch, packed (eng_fm6.c) */
-    uint8_t mch[NTRK];                         /* 1.5.5: MIDI IN TRACK's channels, as song.mch (PROJ_MIDI_OFF) */
-    char name[PROJ_NAME_LEN];                  /* the project's name: upper-case ASCII 32..126, 0-padded; "" = none */
-    uint32_t sum;
-} project_t;
-/* Historical FUN5/6 types are frozen, independent of today's P_COUNT/step_t. */
-typedef struct { uint8_t note[4], n, time, flags, vel, hit, acc; } step10_t;
-typedef struct { int16_t p[69]; uint8_t engine, preset; step10_t step[NSTEP]; uint8_t lane[NLANE][5]; } proj_trk_v5_t;
-typedef struct {                               /* format 5, before the song chain */
-    uint32_t magic, size;
-    int16_t g[G_COUNT];
-    uint8_t sel, parts, phys, rsv;
-    proj_trk_v5_t t[NTRK];
-    uint32_t sum;
-} project_v5_t;
-typedef struct { uint32_t magic, size; int16_t g[G_COUNT]; uint8_t sel, parts, phys, rsv;
-    proj_trk_v5_t t[NTRK]; chain_v9_t chain; uint32_t sum; } project_v6_t;
-_Static_assert(sizeof(project_v5_t) == 3352u && sizeof(project_v6_t) == 3388u, "frozen formats 5 / 6 sizes");
-/* Serialized FUN7 keeps the retained cache's exact extent. Params are biased
- * bytes, steps pack n/time/flags. Reserved tail is zero and covered by hash.
- * The tail's last 12 bytes (PROJ_NAME_OFF, just before the hash) are the project's name since 1.0:
- * ASCII 32..126 (upper case), 0-padded, all 0 = no name ("PROJECT A"). Firmware before wrote them 0 and
- * never reads them, so every FUN7 file stays valid both ways; FUN6..FUN1 imports get no name.
- * FUN8: the same, 3584 bytes, the four packed FM6 patches at PROJ_FM6_OFF (before the name); 16 bytes of the
- * reserved tail were left for parameters added later. FUN9: the same, 3648 bytes (see the top). */
-#define PROJ_MAGIC_L2 0x46554E43u
-#define PROJ_MAGIC_DX 0x46554E42u
-#define PROJ_STORE_SIZE 3840u                  /* FUN10: a whole storage object (storage.c ST_PAYLOAD_MAX) */
-#define PROJ_STORE_V9 3648u                    /* FUN9 */
-#define PROJ_MOTION_V9 260u                    /* the motion block of FUN7..FUN9: 64 x (place, id, i16 value) */
-#define PROJ_STORE_V8 3584u                    /* FUN8 */
-#define PROJ_STORE_V7 3388u                    /* FUN7 */
-#define PROJ_NAME_OFF (PROJ_STORE_SIZE - 4u - PROJ_NAME_LEN)
-#define PROJ_FM6_OFF (PROJ_NAME_OFF - NTRK * FM6_PACKED)
-/* 1.5.5 (#202): MIDI IN TRACK, the last 3 of FUN10's 16 spare bytes (just before the patches: the parameters a later
- * version adds grow from the other end, 13 bytes, 3 more track parameters). 24 bits LE: bits 5k..5k+4 track k's channel
- * as song.mch holds it (0..15 its distance up from channel k + 1, 16 OMNI, 17 OFF; 18..31 read as 0), bit 23 set: MIDI IN
- * is TRACK. Then the globals' G_ROUTE holds the block TRACK falls back to (proj_route_fallback: the block its four
- * channels make, else CH1-4), which is all a firmware before 1.5.5 reads (these bytes it never did): a TRACK project plays
- * there as that block. Every project before has them 0: channels 1..4, MIDI IN as its G_ROUTE says */
-#define PROJ_MIDI_OFF (PROJ_FM6_OFF - 3u)
-typedef union { uint32_t align; uint8_t raw[PROJ_STORE_SIZE]; } project_store_t;
-_Static_assert(G_COUNT == 27u, "FUN7 globals retain original IDs");
-_Static_assert(sizeof(project_store_t) == 3840u && PROJ_STORE_V7 == sizeof(project_v6_t), "FUN10 / FUN7 sizes");
-typedef struct {                               /* a track of format 4, read only */
-    int16_t p[PROJ_NP_V4];
-    uint8_t engine, preset;
-    step8_t step[NSTEP];
-} proj_trk_v4_t;
-typedef struct {                               /* format 4 (1.0 development builds), read only */
-    uint32_t magic, size;
-    int16_t g[G_COUNT];
-    uint8_t sel, parts, phys, rsv;
-    proj_trk_v4_t t[NTRK];
-    uint32_t sum;
-} project_v4_t;
-typedef struct {                               /* a track of format 3, read only */
-    int16_t p[PROJ_NP_V3];
-    uint8_t engine, preset;
-    step8_t step[NSTEP];
-} proj_trk_v3_t;
-typedef struct {                               /* format 3 (0.9 .. 1.0), read only */
-    uint32_t magic, size;
-    int16_t g[G_COUNT];
-    uint8_t sel, parts, rsv[2];
-    proj_trk_v3_t t[NTRK];
-    uint32_t sum;
-} project_v3_t;
-#define PROJ_DEF_SOUND 0xFFu                   /* preset byte: the track's power-on sound, no steps (format 1) */
-#define PROJ_DEF_KEEP 0xFEu                    /* .. DRUM's kit (once SAMPLE PERC), steps and the rest kept (old drums) */
-typedef struct {                               /* a track of formats 1 and 2, read only */
-    int16_t p[PROJ_NP_V2];
-    uint8_t engine, preset;
-    step8_t step[NSTEP];
-} proj_trk_v2_t;
-typedef struct {                               /* format 2 (until 0.9), read only */
-    uint32_t magic, size;
-    int16_t g[PROJ_NG_V2];
-    uint8_t sel, rsv[3];
-    proj_trk_v2_t t[NTRK];
-    uint32_t sum;
-} project_v2_t;
-typedef struct {                               /* format 1 (until 0.5 beta), read only */
-    uint32_t magic, size;
-    int16_t g[PROJ_NG_V2];
-    proj_trk_v2_t t;
-    uint32_t sum;
-} project_v1_t;
-_Static_assert(sizeof(project_v2_t) == 2552u && sizeof(project_v1_t) == 688u && sizeof(project_v3_t) == 2584u &&
-               sizeof(project_v4_t) == 2680u, "formats 1 / 2 / 3 / 4 as they were stored");
-project_store_t proj_slot[4] __attribute__((section(".noinit")));
-
-static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
-{
-    const uint8_t *b = (const uint8_t *)p;
-    uint32_t i, s = 0x811C9DC5u;
-    for (i = 0; i < n; i++)
-        s = (s ^ b[i]) * 16777619u;
-    return s;
-}
-static uint32_t proj_sum(const project_t *p) { return proj_hash(p, sizeof *p - 4u); }
-static int proj_ok(const project_t *q) { return q->magic == PROJ_MAGIC_V11 && q->size == sizeof *q &&
-    q->sum == proj_sum(q) && chain_valid(&q->chain) && motion_valid(&q->motion); }
-
-/* G_RTYPE (id 24) was G_DRCH, the GM drum part's MIDI channel (0..16, 10 by default) until 1.0: a project of a
- * format before FUN7 may hold any channel there. FUN7 came after it was inert (always 0), so only those imports
- * set it: ROOM, the only reverb they knew */
-static void proj_rtype_room(int16_t *g) { g[G_RTYPE] = 0; }
-
-/* the globals of formats 1 and 2 (G_* unchanged since; any added later: their defaults) */
-static void proj_g_from_v2(int16_t *g, const int16_t *g2)
-{
-    uint32_t i;
-    for (i = 0; i < G_COUNT; i++)
-        g[i] = i < PROJ_NG_V2 ? g2[i] : GP[i].def;
-    proj_rtype_room(g);
-}
-
-/* np stored parameters, engine, preset and steps of an older track -> today's, mapped by count (see the top);
- * the steps without hits */
-static void proj_trk_from(proj_trk_t *d, const int16_t *p, uint32_t np, uint8_t engine, uint8_t preset, const step8_t *step)
-{
-    int16_t def[P_E0];
-    uint32_t k;
-    for (k = 0; k < P_E0; k++)
-        def[k] = TP[k].def;
-    params_by_count(d->p, p, np, def);
-    d->engine = engine;                         /* (indices 0..7 of formats 1 and 2 as they were) */
-    d->preset = preset;
-    for (k = 0; k < NSTEP; k++) {
-        step_t *s = &d->step[k];
-        memcpy(s->note, step[k].note, 4);
-        s->n = step[k].n;
-        s->time = step[k].time;
-        s->flags = step[k].flags & 3u;          /* accent, slide: x1 (no RATCH then) */
-        s->vel = step[k].vel;
-        s->hit = s->acc = 0;
-    }
-}
-
-/* the DRUM tracks of a project of before the grid: their lanes' notes as hits (see the top) */
-static void proj_grid(project_t *q)
-{
-    uint32_t k, i;
-    for (k = 0; k < NTRK; k++)
-        if (q->t[k].engine == ENGI_DRUM)
-            for (i = 0; i < NSTEP; i++)
-                step_to_grid(&q->t[k].step[i]);
-    q->sum = proj_sum(q);
-}
-static void proj_trk_from_v2(proj_trk_t *d, const proj_trk_v2_t *s)
-{
-    proj_trk_from(d, s->p, PROJ_NP_V2, s->engine, s->preset, s->step);
-}
-
-/* a project written with the GM drum part as track 4 (parts 0) -> track 4 a part (see the top);
- * project_load gives it DRUM's kit (PROJ_DEF_KEEP; the SAMPLE PERC sound until 1.0.2). Idempotent */
-static void proj_drums_to_part(project_t *q)
-{
-    proj_trk_t *d = &q->t[NTRK - 1u];
-    if (q->parts == NPART)
-        return;
-    d->engine = ENGI_DRUM;                      /* DRUM's first kit: independent of today's power-on drum sound */
-    d->preset = PROJ_DEF_KEEP;
-    d->p[P_LEVEL] = (int16_t)clamp(q->g[G_DRLVL], 0, 127);   /* the drum part's level and reverb send */
-    d->p[P_REV] = (int16_t)clamp(q->g[G_DRREV], 0, 127);
-    q->parts = NPART;
-    q->sum = proj_sum(q);
-}
-
-/* PHYS tracks of a project written before PROJ_PHYS (see the top) -> today's: DUST as MODAL bowed, MODEL
- * DRUM as the DRUM engine (its E values moved, the preset its first). Idempotent */
-static void proj_phys(project_t *q)
-{
-    uint32_t k;
-    if (q->phys >= PROJ_PHYS)
-        return;
-    for (k = 0; k < NTRK; k++) {
-        proj_trk_t *d = &q->t[k];
-        if (d->engine != ENGI_PHYS)
-            continue;
-        if (!q->phys)
-            phys_legacy(&d->p[P_E0]);
-        if (drum_from_phys(d->engine, &d->p[P_E0])) {
-            d->engine = ENGI_DRUM;
-            d->preset = 0;
-        }
-    }
-    q->phys = PROJ_PHYS;
-    q->sum = proj_sum(q);
-}
-
-/* DIGITAL tracks (engine 1; without FELUCCA_FM4) -> FM6 with the converted patch as the track's own (fm4_convert.c,
- * whatever format the project is: the conversion runs on every load, the stored record keeps what it holds until it
- * is saved again). Their motion events on the EDIT values or the OP ENV values go: DIGITAL's meanings do not carry
- * over to FM6's macros. Idempotent */
-static void proj_fm4(project_t *q)
-{
-#if !FELUCCA_FM4
-    uint32_t k, i, n, hit = 0;
-    for (k = 0; k < NTRK; k++) {
-        proj_trk_t *d = &q->t[k];
-        uint8_t v[FP_SIZE + 1u];
-        uint32_t pr;
-        if (d->engine != ENGI_DIGITAL)
-            continue;
-        for (i = 0; i < P_COUNT; i++)
-            d->p[i] = (int16_t)clamp(d->p[i], param_desc_of(ENGI_DIGITAL, i)->min, param_desc_of(ENGI_DIGITAL, i)->max);
-        pr = fm4_convert(d->p, v);
-        fm6_pack(v, q->fm6[k]);
-        d->engine = ENGI_FM6;
-        if (d->preset < PROJ_DEF_KEEP)
-            d->preset = (uint8_t)pr;
-        hit |= 1u << k;
-    }
-    if (!hit)
-        return;
-    for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
-        const motion_event_t *e = &q->motion.event[i];
-        if (!MOTION_IS_FX(e) && ((hit >> (e->place >> 6)) & 1u) && (MOTION_ID(e) >= P_E0 || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
-            continue;
-        q->motion.event[n++] = *e;
-    }
-    for (i = n; i < q->motion.count && i < MOTION_MAX; i++)
-        memset(&q->motion.event[i], 0, sizeof q->motion.event[i]);
-    q->motion.count = (uint8_t)n;
-    q->sum = proj_sum(q);
-#else
-    (void)q;
-#endif
-}
-
-/* SAMPLE tracks of the retired PERC set (SET 4) -> DRUM with its default kit (see the top; core.h drum_from_perc,
- * whatever format the project is: on every load, the stored record keeps what it holds until it is saved again).
- * Their motion events on the EDIT values go. Idempotent */
-static void proj_perc(project_t *q)
-{
-    uint32_t k, i, n, hit = 0;
-    for (k = 0; k < NTRK; k++) {
-        proj_trk_t *d = &q->t[k];
-        if (!drum_from_perc(d->engine, &d->p[P_E0]))
-            continue;
-        d->engine = ENGI_DRUM;
-        if (d->preset < PROJ_DEF_KEEP)
-            d->preset = 0;
-        hit |= 1u << k;
-    }
-    if (!hit)
-        return;
-    for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
-        const motion_event_t *e = &q->motion.event[i];
-        if (!MOTION_IS_FX(e) && ((hit >> (e->place >> 6)) & 1u) && MOTION_ID(e) >= P_E0)
-            continue;
-        q->motion.event[n++] = *e;
-    }
-    for (i = n; i < q->motion.count && i < MOTION_MAX; i++)
-        memset(&q->motion.event[i], 0, sizeof q->motion.event[i]);
-    q->motion.count = (uint8_t)n;
-    q->sum = proj_sum(q);
-}
-
-/* a format 4 project (n bytes in *v4) -> slot q as format 6 */
-static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
-{
-    uint32_t i;
-    if (n != (int)sizeof *v4 || v4->magic != PROJ_MAGIC_V4 || v4->size != sizeof *v4 ||
-        v4->sum != proj_hash(v4, sizeof *v4 - 4u))
-        return 0;
-    memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC_V11;
-    q->size = sizeof *q;
-    memcpy(q->g, v4->g, sizeof q->g);
-    proj_rtype_room(q->g);
-    q->sel = v4->sel;
-    q->parts = v4->parts;
-    q->phys = v4->phys;
-    for (i = 0; i < NTRK; i++)
-        proj_trk_from(&q->t[i], v4->t[i].p, PROJ_NP_V4, v4->t[i].engine, v4->t[i].preset, v4->t[i].step);
-    q->sum = proj_sum(q);
-    proj_drums_to_part(q);
-    return 1;
-}
-
-/* a format 3 project (n bytes in *v3) -> slot q as format 6 */
-static int proj_from_v3(project_t *q, const project_v3_t *v3, int n)
-{
-    uint32_t i;
-    if (n != (int)sizeof *v3 || v3->magic != PROJ_MAGIC_V3 || v3->size != sizeof *v3 ||
-        v3->sum != proj_hash(v3, sizeof *v3 - 4u))
-        return 0;
-    memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC_V11;
-    q->size = sizeof *q;
-    memcpy(q->g, v3->g, sizeof q->g);
-    proj_rtype_room(q->g);
-    q->sel = v3->sel;
-    q->parts = v3->parts;
-    for (i = 0; i < NTRK; i++)
-        proj_trk_from(&q->t[i], v3->t[i].p, PROJ_NP_V3, v3->t[i].engine, v3->t[i].preset, v3->t[i].step);
-    q->sum = proj_sum(q);
-    proj_drums_to_part(q);                     /* (a format 3 of firmware before 1.0: parts 0) */
-    return 1;
-}
-
-/* a format 2 project (n bytes in *v2) -> slot q as format 6 */
-static int proj_from_v2(project_t *q, const project_v2_t *v2, int n)
-{
-    uint32_t i;
-    if (n != (int)sizeof *v2 || v2->magic != PROJ_MAGIC_V2 || v2->size != sizeof *v2 ||
-        v2->sum != proj_hash(v2, sizeof *v2 - 4u))
-        return 0;
-    memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC_V11;
-    q->size = sizeof *q;
-    proj_g_from_v2(q->g, v2->g);
-    q->sel = v2->sel;
-    for (i = 0; i < NTRK; i++)
-        proj_trk_from_v2(&q->t[i], &v2->t[i]);
-    proj_drums_to_part(q);                     /* (format 2 had the drum track: parts 0) */
-    return 1;
-}
-
-/* a format 1 project (n bytes in *v1) -> slot q as format 6: the instrument becomes track 1,
- * tracks 2..4 start empty (their sounds as at power-on) */
-static int proj_from_v1(project_t *q, const project_v1_t *v1, int n)
-{
-    uint32_t i;
-    if (n != (int)sizeof *v1 || v1->magic != PROJ_MAGIC_V1 || v1->size != sizeof *v1 ||
-        v1->sum != proj_hash(v1, sizeof *v1 - 4u))
-        return 0;
-    memset(q, 0, sizeof *q);
-    q->magic = PROJ_MAGIC_V11;
-    q->size = sizeof *q;
-    proj_g_from_v2(q->g, v1->g);
-    q->parts = NPART;                          /* (format 1 had no track 4) */
-    proj_trk_from_v2(&q->t[0], &v1->t);
-    for (i = 1; i < NTRK; i++) {               /* the other tracks: their defaults, no steps */
-        uint32_t k;
-        for (k = 0; k < P_COUNT; k++)
-            q->t[i].p[k] = param_desc_of(trk_def_engine(i), k)->def;
-        q->t[i].engine = (uint8_t)trk_def_engine(i);
-        q->t[i].preset = PROJ_DEF_SOUND;
-        for (k = 0; k < NSTEP; k++)
-            q->t[i].step[k].time = ST_REST;
-    }
-    q->sum = proj_sum(q);
-    return 1;
-}
-
-/* n bytes of a stored project (any format) -> slot q as format 6; 0 = not a project */
-static int proj_unpack(project_t *q, const uint8_t *b, uint32_t size);
-/* the init patch on every track (a project of a format before FUN8) */
-static void proj_fm6_init(project_t *q)
-{
-    uint32_t t;
-    for (t = 0; t < NTRK; t++)
-        memcpy(q->fm6[t], FM6_INIT, FM6_PACKED);
-    q->sum = proj_sum(q);
-}
-static int proj_import_old(project_t *q, const void *b, int n);
-static int proj_import_any(project_t *q, const void *b, int n);
-static void proj_harmony_off(void);
-/* every track's engine one this firmware has (DIGITAL, 1, is one: it converts): a project of another number
- * is not one (it never was: no engine number past the last was ever stored) */
-static int proj_engines_ok(const project_t *q)
-{
-    uint32_t t;
-    for (t = 0; t < NTRK; t++)
-        if (q->t[t].engine >= NENGINES)
-            return 0;
-    return 1;
-}
-/* n bytes of a stored project (any format) -> q as today's, DIGITAL and SAMPLE PERC tracks converted; 0 = not a
- * project */
-static int proj_import(project_t *q, const void *b, int n)
-{
-    if (!proj_import_any(q, b, n) || !proj_engines_ok(q))
-        return 0;
-    proj_fm4(q);
-    proj_perc(q);
-    return 1;
-}
-static int proj_import_any(project_t *q, const void *b, int n)
-{
-    proj_harmony_off();                             /* a format without a Harmony block (FUN1..FUN6, a raw project_t) comes up with it off */
-    if (n == PROJ_STORE_SIZE && (((const uint32_t *)b)[0] == PROJ_MAGIC_V11 || ((const uint32_t *)b)[0] == PROJ_MAGIC || ((const uint32_t *)b)[0] == PROJ_MAGIC_DX || ((const uint32_t *)b)[0] == PROJ_MAGIC_L2))
-        return proj_unpack(q, b, PROJ_STORE_SIZE);
-    if (n == PROJ_STORE_SIZE && ((const uint32_t *)b)[1] >= 8u && ((const uint32_t *)b)[1] < PROJ_STORE_SIZE)
-        n = (int)((const uint32_t *)b)[1];      /* a retained slot holding an older, shorter record: its own size
-                                                 * (every format checks its magic and hash) */
-    if (n == (int)PROJ_STORE_V9 && ((const uint32_t *)b)[0] == PROJ_MAGIC_V9)
-        return proj_unpack(q, b, PROJ_STORE_V9);
-    if (n == (int)PROJ_STORE_V8 && ((const uint32_t *)b)[0] == PROJ_MAGIC_V8)
-        return proj_unpack(q, b, PROJ_STORE_V8);
-    if (n == (int)PROJ_STORE_V7 && ((const uint32_t *)b)[0] == PROJ_MAGIC_V7)
-        return proj_unpack(q, b, PROJ_STORE_V7);
-    if (n == (int)sizeof *q && proj_ok((const project_t *)b)) {
-        memcpy(q, b, sizeof *q);
-        proj_drums_to_part(q);
-        proj_phys(q);
-        return 1;
-    }
-    if (!proj_import_old(q, b, n))
-        return 0;
-    proj_fm6_init(q);
-    return 1;
-}
-static int proj_import_old(project_t *q, const void *b, int n)
-{
-    if (n == (int)sizeof(project_v5_t) || n == (int)sizeof(project_v6_t)) {
-        const project_v5_t *v = b;
-        const project_v6_t *v6 = b;
-        uint32_t bytes = n, i, k;
-        chain_config_t c6;
-        if (((bytes == sizeof *v && v->magic == PROJ_MAGIC_V5) ||
-             (bytes == sizeof *v6 && v->magic == PROJ_MAGIC_V6 && chain_from_v9(&c6, &v6->chain))) &&
-            v->size == bytes && ((const uint32_t *)b)[bytes / 4u - 1u] == proj_hash(b, bytes - 4u)) {
-            memset(q, 0, sizeof *q);
-            q->magic = PROJ_MAGIC_V11; q->size = sizeof *q;
-            memcpy(q->g, v->g, sizeof q->g);
-            proj_rtype_room(q->g);
-            q->sel = v->sel; q->parts = v->parts; q->phys = v->phys;
-            for (i = 0; i < NTRK; i++) {
-                int16_t def[P_COUNT];
-                if (v->t[i].engine >= NENGINES) return 0;
-                for (k = 0; k < P_COUNT; k++) def[k] = param_desc_of(v->t[i].engine, k)->def;
-                params_by_count(q->t[i].p, v->t[i].p, 69u, def);
-                q->t[i].engine = v->t[i].engine; q->t[i].preset = v->t[i].preset;
-                for (k = 0; k < NSTEP; k++) {
-                    memcpy(&q->t[i].step[k], &v->t[i].step[k], sizeof(step10_t));
-                    q->t[i].step[k].flags &= 3u;       /* (x1: no RATCH then) */
-                }
-            }
-            if (bytes == sizeof *v6) q->chain = c6; else chain_defaults(&q->chain);
-            q->sum = proj_sum(q); proj_drums_to_part(q); proj_phys(q);
-            return 1;
-        }
-    }
-    if (proj_from_v4(q, (const project_v4_t *)b, n) || proj_from_v3(q, (const project_v3_t *)b, n) ||
-        proj_from_v2(q, (const project_v2_t *)b, n) || proj_from_v1(q, (const project_v1_t *)b, n)) {
-        proj_phys(q);                          /* (formats 1..3 had no PHYS track: only the byte) */
-        proj_grid(q);                          /* (after it: a PHYS DRUM track is DRUM now) */
-        return 1;
-    }
-    return 0;
-}
-
-/* 12 stored name bytes -> d (PROJ_NAME_LEN + 1): up to the first 0, upper case; a byte outside 32..126 makes it
- * no name (a damaged tail never refuses the project) */
-static uint32_t proj_name_get(char *d, const uint8_t *s)   /* its length */
-{
-    uint32_t i;
-    for (i = 0; i < PROJ_NAME_LEN && s[i]; i++) {
-        if (s[i] < 32u || s[i] > 126u) { i = 0; break; }
-        d[i] = (char)(s[i] >= 'a' && s[i] <= 'z' ? s[i] - 32u : s[i]);
-    }
-    d[i] = 0;
-    return i;
-}
-
-/* MIDI IN TRACK (PROJ_MIDI_OFF): G_ROUTE TRACK is stored as the block its channels make (0 1 2 3 + 4n: CH1-4 .. CH13-16),
- * else CH1-4, and the TRACK bit */
-static uint32_t proj_route_fallback(const uint8_t *mch)
-{
-    uint32_t k;
-    for (k = 1; k < NTRK; k++)
-        if (mch[k] != mch[0])
-            return 0;
-    return mch[0] % 4u || mch[0] >= 16u ? 0u : mch[0] ? mch[0] / 4u + 1u : 0u;
-}
-static void proj_midi_pack(uint8_t *b, const project_t *q)
-{
-    uint32_t k, v = 0;
-    for (k = 0; k < NTRK; k++)
-        v |= (uint32_t)(q->mch[k] < MCH_N ? q->mch[k] : 0u) << (5u * k);
-    if (q->g[G_ROUTE] == ROUTE_TRACK) {
-        int16_t r = (int16_t)proj_route_fallback(q->mch);
-        memcpy(b + 8 + 2u * G_ROUTE, &r, 2);
-        v |= 1u << 23;
-    }
-    b[PROJ_MIDI_OFF] = (uint8_t)v; b[PROJ_MIDI_OFF + 1u] = (uint8_t)(v >> 8); b[PROJ_MIDI_OFF + 2u] = (uint8_t)(v >> 16);
-}
-static void proj_midi_unpack(project_t *q, const uint8_t *b)
-{
-    uint32_t k, v = b[PROJ_MIDI_OFF] | (uint32_t)b[PROJ_MIDI_OFF + 1u] << 8 | (uint32_t)b[PROJ_MIDI_OFF + 2u] << 16, f;
-    for (k = 0; k < NTRK; k++) {
-        f = (v >> (5u * k)) & 31u;
-        q->mch[k] = (uint8_t)(f < MCH_N ? f : 0u);
-    }
-    if (v >> 23)
-        q->g[G_ROUTE] = ROUTE_TRACK;
-}
-
-typedef struct {
-    uint8_t root[4], dur[4], on, link_src[NTRK], link_retrig[NTRK], follow[NTRK];
-    uint32_t bar, base;
-} harmony_saved_t;
-static harmony_saved_t proj_harmony;             /* the decoded/staged project's Harmony/Link state */
-static void proj_harmony_off(void)
-{
-    memset(&proj_harmony, 0, sizeof proj_harmony);
-    memset(proj_harmony.follow, 1, sizeof proj_harmony.follow);
-}
-/* FUN11 stores its new state in the 84-byte chain block, not in a new project_t field: the four roots and the four
- * durations in the chain's three reserved bytes, and the 21 bits of on/off + LINK source (3 per track) + RETRIG
- * (2 per track) in the high bits of the first section row (the slot bytes' low 3 bits and the repeat's low 4 keep
- * the section itself). FUN10 wrote those high bits 0; a FUN11 is refused by older firmware by its magic. The runtime
- * chain_config never carries the high bits: encode/decode happen at the project boundary. */
-static uint32_t fun11_meta(const harmony_saved_t *h)
-{
-    uint32_t m = h->on ? 1u : 0u, i;
-    for (i = 0; i < NTRK; i++)
-        m |= ((uint32_t)h->link_src[i] & 7u) << (1u + 3u * i);
-    for (i = 0; i < NTRK; i++)
-        m |= ((uint32_t)h->link_retrig[i] & 3u) << (13u + 2u * i);
-    return m;
-}
-static void fun11_encode(chain_config_t *c, const harmony_saved_t *h)
-{
-    uint32_t m = fun11_meta(h), i;
-    c->rsv[0] = (uint8_t)((h->root[0] & 15u) | ((h->root[1] & 15u) << 4));
-    c->rsv[1] = (uint8_t)((h->root[2] & 15u) | ((h->root[3] & 15u) << 4));
-    c->rsv[2] = (uint8_t)((h->dur[0] & 3u) | ((h->dur[1] & 3u) << 2) |
-                          ((h->dur[2] & 3u) << 4) | ((h->dur[3] & 3u) << 6));
-    for (i = 0; i < NTRK; i++)
-        c->row[0].slot[i] = (uint8_t)((c->row[0].slot[i] & 7u) | (((m >> (5u * i)) & 31u) << 3));
-    c->row[0].repeat = (uint8_t)(((c->row[0].repeat - 1u) & 15u) | ((m >> 20) & 15u) << 4);
-    /* four per-track HARMONY FOLLOW bits: high five bits of row 1's first slot */
-    {
-        uint32_t f = 0;
-        for (i = 0; i < NTRK; i++)
-            f |= (h->follow[i] ? 1u : 0u) << i;
-        c->row[1].slot[0] = (uint8_t)((c->row[1].slot[0] & 7u) | (f << 3));
-    }
-}
-static int fun11_decode(chain_config_t *c, harmony_saved_t *h)
-{
-    uint32_t m = 0, i, r0 = c->row[0].repeat;
-    if (c->count > CHAIN_ROWS)
-        return 0;
-    for (i = 0; i < NTRK; i++) {
-        uint32_t sl = c->row[0].slot[i];
-        m |= ((sl >> 3) & 31u) << (5u * i);
-        c->row[0].slot[i] = (uint8_t)(sl & 7u);
-    }
-    m |= ((r0 >> 4) & 15u) << 20;
-    c->row[0].repeat = (uint8_t)((r0 & 15u) + 1u);
-    {
-        uint32_t f = (c->row[1].slot[0] >> 3) & 15u;
-        c->row[1].slot[0] &= 7u;
-        for (i = 0; i < NTRK; i++)
-            h->follow[i] = (uint8_t)((f >> i) & 1u);
-    }
-    h->root[0] = c->rsv[0] & 15u;
-    h->root[1] = c->rsv[0] >> 4;
-    h->root[2] = c->rsv[1] & 15u;
-    h->root[3] = c->rsv[1] >> 4;
-    for (i = 0; i < 4u; i++)
-        if (h->root[i] > 11u)
-            return 0;
-    h->dur[0] = (c->rsv[2] >> 0) & 3u;
-    h->dur[1] = (c->rsv[2] >> 2) & 3u;
-    h->dur[2] = (c->rsv[2] >> 4) & 3u;
-    h->dur[3] = (c->rsv[2] >> 6) & 3u;
-    h->on = (uint8_t)(m & 1u);
-    for (i = 0; i < NTRK; i++) {
-        uint32_t src = (m >> (1u + 3u * i)) & 7u, rt = (m >> (13u + 2u * i)) & 3u;
-        if (src > 4u)
-            return 0;
-        h->link_src[i] = (uint8_t)src;
-        h->link_retrig[i] = (uint8_t)rt;
-    }
-    if (!chain_valid(c))
-        return 0;
-    memset(c->rsv, 0, sizeof c->rsv);            /* Harmony was decoded into its sidecar; no wire metadata in the runtime chain */
-    return 1;
-}
-/* a FUN10's save of the 0.11 branch kept four roots and the bus on/off in the chain reserved bytes; a FUN11
- * always has the full block. The durations / links / retriggers start at their defaults. */
-static void fun10_harmony(chain_config_t *c, harmony_saved_t *h)
-{
-    uint32_t i;
-    for (i = 0; i < 4u; i++) {
-        uint32_t bit = i * 4u;
-        h->root[i] = (c->rsv[bit >> 3] >> (bit & 7u)) & 15u;
-        if (h->root[i] > 11u)
-            h->root[i] = 0;
-        h->dur[i] = 0;
-        h->link_src[i] = 0;
-        h->link_retrig[i] = 0;
-        h->follow[i] = 1;
-    }
-    h->on = (uint8_t)(c->rsv[2] & 1u);
-}
-
-/* A stable serialized schema: first header retains FUN6's fields; at byte66
- * np, format flags, then four byte-param tracks and nine-byte steps; FUN8: the patches at PROJ_FM6_OFF. */
-static int proj_pack(project_store_t *out, const project_t *q)
-{
-    uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC_V11, size = PROJ_STORE_SIZE, sum;
-    chain_config_t wc = q->chain;
-    for (t = 0; t < NTRK; t++)
-        for (i = 0; i < FM6_PACKED; i++)
-            if (q->fm6[t][i] > 127u) return 0;
-    if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
-    fun11_encode(&wc, &proj_harmony);
-    for (t = 0; t < NTRK; t++) {
-        if (!lfo2_valid(&q->lfo2[t])) return 0;
-        (void)lfo2_nonzero(&q->lfo2[t]);           /* FUN11 always carries the LFO 2 block */
-    }
-    memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
-    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = P_COUNT;
-    for (t = 0; t < NTRK; t++) {
-        for (i = 0; i < P_COUNT; i++) {
-            if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
-            b[pos++] = (uint8_t)(q->t[t].p[i] + 64);
-        }
-        b[pos++] = q->t[t].engine; b[pos++] = q->t[t].preset;
-        for (i = 0; i < NSTEP; i++) {
-            const step_t *s = &q->t[t].step[i];
-            uint32_t r = step_ratchet(s) - 1u;          /* RATCH: bit 7 of the velocity and chance bytes (see the top) */
-            uint32_t nd = (uint32_t)step_nudge(s) & 15u;   /* NUDGE (FUN10): bit j in bit 7 of note j */
-            if (s->n > 4u || s->time > ST_REST || (s->flags & ~(3u | SF_RATCH | SF_NUDGE)) || s->probability >= COND_FIRST + NCOND)
-                return 0;
-            for (uint32_t j = 0; j < 4u; j++)           /* what proj_unpack checks, so a saved project always loads: */
-                b[pos++] = (uint8_t)((s->note[j] > 127u ? 127u : s->note[j]) | (nd >> j & 1u) << 7);   /* notes and
-                                                         * velocity 0..127, accents */
-            b[pos++] = (uint8_t)(s->n | s->time << 3 | (s->flags & 3u) << 5);   /* only on hits */
-            b[pos++] = (uint8_t)((s->vel > 127u ? 127u : s->vel) | (r & 1u) << 7); b[pos++] = s->hit;
-            b[pos++] = s->acc & s->hit;
-            b[pos++] = (uint8_t)(s->probability | (r >> 1) << 7);
-        }
-    }
-    if (pos + sizeof wc + sizeof q->motion > PROJ_MIDI_OFF) return 0;
-    memcpy(b + pos, &wc, sizeof wc); pos += sizeof wc;
-    memcpy(b + pos, &q->motion, sizeof q->motion);
-    proj_midi_pack(b, q);
-    memcpy(b + PROJ_FM6_OFF, q->fm6, sizeof q->fm6);
-    if (magic == PROJ_MAGIC_V11 || magic == PROJ_MAGIC_L2) for (t = 0; t < NTRK; t++)
-        for (i = 0; i < L2_N * 8u; i++)
-            b[PROJ_FM6_OFF + t * FM6_PACKED + i] |= ((q->lfo2[t].p[i / 8u] >> (i % 8u)) & 1u) << 7;
-    {   /* the name (0-padded; stops at the first 0) */
-        char n[PROJ_NAME_LEN + 1u];
-        memcpy(b + PROJ_NAME_OFF, n, proj_name_get(n, (const uint8_t *)q->name));
-    }
-    sum = proj_hash(b, PROJ_STORE_SIZE - 4u); memcpy(b + PROJ_STORE_SIZE - 4u, &sum, 4);
-    return 1;
-}
-/* the motion of a FUN7 / FUN8 written with np parameters (np < P_COUNT: a FUN7 of 89 before the chord keys, every
- * FUN8 of 91 before the DRUM lane levels) -> today's ids: an event names a parameter id, and the ids from that
- * store's P_E0 (np - 8) on moved up with P_E0, as its values did (params_by_count); the ones below kept theirs. A
- * lock's bit 7 (MOTION_LOCK) stays: the id moves under it (a FUN8 / FUN7 of a 1.1 development build may hold
- * locks). 0: an id that store could not have named (np or more) */
-static int proj_motion_ids(motion_store_t *m, uint32_t np)
-{
-    uint32_t i;
-    for (i = 0; i < m->count && i < MOTION_MAX; i++) {
-        uint32_t id = MOTION_ID(&m->event[i]);
-        if (MOTION_IS_FX(&m->event[i]) && np >= 111u && np <= P_COUNT && m->rsv[1] == 0xF1u) continue;
-        if (id >= np) return 0;
-        if (np < P_COUNT && id >= np - 8u)
-            m->event[i].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | (id + P_COUNT - np));
-    }
-    return 1;
-}
-/* the motion block of a FUN7 / FUN8 / FUN9 (PROJ_MOTION_V9 bytes at b: count, on, 2 reserved, 64 x (place, id, i16
- * value LE)) -> m: its records as they are (values -64..127, as motion_valid wanted then), the rest 0. 0: not one */
-static int proj_motion_v9(motion_store_t *m, const uint8_t *b)
-{
-    uint32_t i;
-    memset(m, 0, sizeof *m);
-    if (b[0] > 64u)
-        return 0;
-    m->count = b[0];
-    m->on = b[1];
-    for (i = 0; i < m->count; i++) {
-        const uint8_t *e = b + 4u + 4u * i;
-        int32_t v = (int16_t)(e[2] | e[3] << 8);
-        if (v < -64 || v > 127)
-            return 0;
-        m->event[i].place = e[0];
-        m->event[i].param = e[1];
-        m->event[i].value = (int8_t)v;
-    }
-    return 1;
-}
-/* a stored FUN10 (st = PROJ_STORE_SIZE), FUN9 (PROJ_STORE_V9: 64 motion records of 4 bytes, no nudges), FUN8
- * (PROJ_STORE_V8: FUN9 with its tail 64 bytes shorter) or FUN7 (PROJ_STORE_V7: no patches, the init one) */
-static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
-{
-    uint32_t pos = 68u, t, i, magic, size, sum, np = b[66], v7 = st == PROJ_STORE_V7, v11, v10;
-    uint32_t name_off = st - 4u - PROJ_NAME_LEN, end = v7 ? name_off : name_off - NTRK * FM6_PACKED;
-    uint32_t mot, chn;
-    memcpy(&magic, b, 4); memcpy(&size, b + 4, 4); memcpy(&sum, b + st - 4u, 4);
-    v11 = st == PROJ_STORE_SIZE && magic == PROJ_MAGIC_V11;
-    v10 = st == PROJ_STORE_SIZE && !v11;
-    mot = (v10 || v11) ? sizeof q->motion : PROJ_MOTION_V9;
-    chn = (v10 || v11) ? sizeof q->chain : sizeof(chain_v9_t);
-    if ((!(v10 && (magic == PROJ_MAGIC_DX || magic == PROJ_MAGIC_L2)) && magic != (v11 ? PROJ_MAGIC_V11 : v7 ? PROJ_MAGIC_V7 : st == PROJ_STORE_V8 ? PROJ_MAGIC_V8 : st == PROJ_STORE_V9 ? PROJ_MAGIC_V9 : PROJ_MAGIC)) ||
-        size != st || sum != proj_hash(b, st - 4u) ||
-        np < 8u || np > P_COUNT || 68u + NTRK * (np + 2u + NSTEP * 9u) + chn + mot > end) {
-        return 0;
-    }
-    memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC_V11; q->size = sizeof *q;
-    memcpy(q->g, b + 8, sizeof q->g); q->sel = b[62]; q->parts = b[63]; q->phys = b[64];
-    if (v7 && (q->g[G_RTYPE] < 0 || q->g[G_RTYPE] > 1))   /* a FUN7 may still hold the old drum channel there */
-        proj_rtype_room(q->g);
-    for (t = 0; t < NTRK; t++) {
-        int16_t values[P_COUNT], def[P_COUNT];
-        for (i = 0; i < np; i++) { if (b[pos] > 191u) return 0; values[i] = (int16_t)b[pos++] - 64; }
-        q->t[t].engine = b[pos++]; q->t[t].preset = b[pos++];
-        if (q->t[t].engine >= NENGINES) return 0;
-        for (i = 0; i < P_COUNT; i++) def[i] = param_desc_of(q->t[t].engine, i)->def;
-        params_by_count(q->t[t].p, values, np, def);
-        for (i = 0; i < NSTEP; i++) {
-            step_t *s = &q->t[t].step[i]; uint32_t meta, nd = 0;
-            for (uint32_t j = 0; j < 4u; j++) {         /* (FUN10: bit 7 of note j is bit j of the nudge) */
-                if (b[pos] > 127u && !(v10 || v11)) return 0;
-                nd |= (uint32_t)(b[pos] >> 7) << j;
-                s->note[j] = b[pos++] & 127u;
-            }
-            meta = b[pos++];
-            s->n = meta & 7u; s->time = (meta >> 3) & 3u; s->flags = (meta >> 5) & 3u;
-            s->vel = b[pos] & 127u; meta |= (b[pos++] & 128u) << 1;      /* (RATCH bit 0 at bit 8 of meta) */
-            s->hit = b[pos++]; s->acc = b[pos++];
-            s->probability = b[pos] & 127u; meta |= (b[pos++] & 128u) << 2;   /* (bit 1 at bit 9) */
-            if ((meta & 255u) > 127u || s->n > 4u || s->time > ST_REST || s->probability >= COND_FIRST + NCOND) return 0;
-            if (s->acc & ~s->hit) return 0;
-            step_set_ratchet(s, (meta >> 8) + 1u);
-            step_set_nudge(s, (int32_t)(nd ^ 8u) - 8);
-        }
-    }
-    if (v11) {                                          /* FUN11: the compact chain + the FUN11 block */
-        memcpy(&q->chain, b + pos, sizeof q->chain);
-        if (!fun11_decode(&q->chain, &proj_harmony)) return 0;
-    } else if (v10) {                                   /* FUN10: sections, a slot per track */
-        chain_config_t c;
-        memcpy(&c, b + pos, sizeof c);
-        if (!chain_valid(&c)) return 0;
-        fun10_harmony(&c, &proj_harmony);
-        q->chain = c;
-    } else {
-        chain_v9_t c9;
-        memset(&proj_harmony, 0, sizeof proj_harmony);
-        for (i = 0; i < NTRK; i++)
-            proj_harmony.follow[i] = 1;
-        memcpy(&c9, b + pos, sizeof c9);
-        if (!chain_from_v9(&q->chain, &c9)) return 0;
-    }
-    pos += chn;
-    if (v10 || v11)
-        memcpy(&q->motion, b + pos, sizeof q->motion);
-    else if (!proj_motion_v9(&q->motion, b + pos))
-        return 0;
-    if (!proj_motion_ids(&q->motion, np) || !chain_valid(&q->chain) || !motion_valid(&q->motion)) return 0;
-    if (v10 || v11)
-        proj_midi_unpack(q, b);                         /* (1.5.5: 0 in every FUN10 before, FUN9..FUN7 have none) */
-    for (t = 0; t < NTRK; t++) {
-        if (v7)
-            memcpy(q->fm6[t], FM6_INIT, FM6_PACKED);
-        else
-            for (i = 0; i < FM6_PACKED; i++)
-                q->fm6[t][i] = b[end + t * FM6_PACKED + i] & 0x7Fu;
-    }
-    {
-        char n[PROJ_NAME_LEN + 1u];
-        memcpy(q->name, n, proj_name_get(n, b + name_off));
-    }
-    for (t = 0; t < NTRK; t++) if (q->t[t].engine == ENGI_DRUM && q->t[t].p[P_E0] == DX_KIT_ID) {
-        dx_config_t cfg;
-        if ((!(magic == PROJ_MAGIC_DX || magic == PROJ_MAGIC_L2 || magic == PROJ_MAGIC_V11)) || !dx_decode(&cfg, q->fm6[t])) return 0;
-    }
-    if (magic == PROJ_MAGIC_V11 || magic == PROJ_MAGIC_L2) for (t = 0; t < NTRK; t++) {
-        for (i = 0; i < L2_N * 8u; i++)
-            q->lfo2[t].p[i / 8u] |= (b[end + t * FM6_PACKED + i] >> 7) << (i % 8u);
-        if (!lfo2_valid(&q->lfo2[t])) return 0;
-        for (i = L2_N * 8u; i < FM6_PACKED; i++) if (b[end + t * FM6_PACKED + i] & 128u) return 0;
-    }
-    q->sum = proj_sum(q); proj_drums_to_part(q); proj_phys(q);
-    return 1;
-}
+/* FORMAT 2 projects: complete HPM2 containers and native FUNW working copies.
+ * Legacy import/conversion is intentionally absent. */
+#include "project_format2.c"
 
 #ifndef PROJ_HOST
 /* the GM drum part of a project of before 1.0 (proj_drums_to_part): DRUM's first kit, as a preset load sets it
  * (until 1.0.2 the SAMPLE engine's PERC set, retired since) */
-static void proj_legacy_drums(track_t *t)
-{
-    static const uint8_t FX_DEF[4] = {0, 24, 28, 36};
-    const preset_t *pr = &ENGINES[ENGI_DRUM]->presets[0];
-    uint32_t i;
-    t->eng_req = ENGI_DRUM;
-    t->preset = 0;
-    for (i = 0; i < P_E0; i++)
-        if (!param_kept(i))
-            t->p[i] = TP[i].def;
-    for (i = 0; i < 8u; i++)
-        t->p[P_E0 + i] = pr->e[i];
-    t->p[P_ATK] = pr->env[0];
-    t->p[P_DEC] = pr->env[1];
-    t->p[P_SUS] = pr->env[2];
-    t->p[P_REL] = pr->env[3];
-    t->p[P_ED_FLT] = pr->fenv;
-    t->p[P_VOICE] = pr->mono ? V_LEGATO : V_POLY;
-    for (i = 0; i < 4u; i++)
-        t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
-}
+
 
 static project_t proj_scratch               /* decoded main-loop work, never audio ISR */
     __attribute__((section(".pool")));
@@ -1023,9 +81,7 @@ static void proj_bound(project_t *q)
         }
         for (i = 0; i < P_COUNT; i++) {
             /* Keep disabled SLICE's source settings intact in saved-slot caches and exports. */
-#if !FELUCCA_SLICE
             if (q->t[t].engine == 13u && i >= P_E0) continue;
-#endif
             const param_desc_t *d = param_desc_of(q->t[t].engine % NENGINES, i);
             q->t[t].p[i] = (int16_t)param_fit(d, q->t[t].p[i]);   /* (a retired KIT: the kit it plays) */
         }
@@ -1093,7 +149,6 @@ static void project_capture(project_t *p)
     p->sel = song.sel;
     p->parts = NPART;
     p->phys = PROJ_PHYS;
-    p->chain = chain_config;
     harmony_save(&proj_harmony);
     for (i = 0; i < NTRK; i++) {
         for (uint32_t j = 0; j < P_COUNT; j++) p->t[i].p[j] = motion_base_value(&trk[i], j);
@@ -1106,10 +161,6 @@ static void project_capture(project_t *p)
     motion_fx_snapshot(&p->motion, (1u << NTRK) - 1u);
     memcpy(p->mch, song.mch, sizeof p->mch);
     motion_unguard(f);
-    for (i = 0; i < NTRK; i++) {
-        if (p->t[i].engine == ENGI_DRUM && p->t[i].p[P_E0] == DX_KIT_ID) dx_pack(i, p->fm6[i]);
-        else fm6_pack(fm6_patch[i], p->fm6[i]);
-    }
     memcpy(p->name, proj_name, str_len(proj_name));
 #if FELUCCA_PAIR_MORPH
     for (uint32_t t = 0; t < NTRK; t++)
@@ -1134,7 +185,7 @@ static int project_save_as(uint32_t slot, const char *name)
 #endif
 
     project_t *p = &proj_scratch;
-    if (chain_busy()) {                                /* SONG plays from its own frozen pattern cache */
+    if (0) {                                /* SONG plays from its own frozen pattern cache */
         ui_message("STOP SONG FIRST");
         return 1;
     }
@@ -1315,6 +366,7 @@ static void project_init_runtime(void)
 #endif
     mom_back(0);
     fm1_irq_off();
+    chordext_reset_runtime();
     seq_stop();
     transport_req = 0;
     song.rec = step_record_mask = 0;
@@ -1333,7 +385,6 @@ static void project_init_runtime(void)
     memset(motion_fx_owner, 0, sizeof motion_fx_owner);
     motion_fx_recording = 0;
     motion_base_valid = 0;
-    chain_defaults(&chain_config);
     harmony_perf_clear();
     harmony_on = 0;
     harmony_bar = 0;
@@ -1349,9 +400,7 @@ static void project_init_runtime(void)
     fm1_irq_on();
     ml_off();
     undo_depth++;
-    fm6_init();
     for (uint32_t k = 0; k < NTRK; k++) {
-        dx_reset(k);
         track_t *t = &trk[k];
         fm1_irq_off();
         memset(t->step, 0, sizeof t->step);
@@ -1445,23 +494,17 @@ static int project_restore_runtime(const project_t *input)
     memset(drum_mute, 0, sizeof drum_mute);       /* (1.4.1: the DRUM lanes' mutes, performance state) */
     if (p != input) memcpy(p, input, sizeof *p);
     /* Only the approved working copy is converted. Stored originals stay intact. */
-#if !FELUCCA_SLICE
     if (compat & 1u) for (uint32_t t = 0; t < NTRK; t++)
         if (p->t[t].engine == 13u) p->t[t].engine = 0;
-#endif
 #if CARAVEL_REVERB_MINIMAL
     if (compat & 6u) p->g[G_RTYPE] = 2;
 #endif
-    proj_drums_to_part(p);                              /* a RAM slot of firmware before 1.0 */
-    proj_phys(p);                                       /* .. before PHYS lost DUST and DRUM */
-    proj_fm4(p);                                        /* .. that had DIGITAL tracks */
-    proj_perc(p);                                       /* .. or SAMPLE PERC tracks */
     transport_req = 2;
     panic_req = (1u << NTRK) - 1u;
     fm1_irq_off();                                      /* the audio ISR must not see half a project */
+    chordext_reset_runtime();
     seq_stop();
     transport_req = 0;
-    chain_config = p->chain;
     harmony_restore(&proj_harmony);
     harmony_perf_clear();
     harmony_bar = 0;
@@ -1490,18 +533,9 @@ static int project_restore_runtime(const project_t *input)
             const param_desc_t *d = param_desc_of(e, i);
             t->p[i] = (int16_t)param_fit(d, s->p[i]);
         }
-        t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
+        t->preset = (uint8_t)(ENGINES[e]->npresets ? s->preset % ENGINES[e]->npresets : 0u);
         memcpy(t->step, s->step, sizeof t->step);
         proj_steps(t->step);
-        {   /* the project's own FM6 patch, never reloaded from SLOT: F n if it is that factory patch, else OWN */
-            uint8_t v[FP_SIZE + 1u];
-            if (dx_track(t)) {
-                if (!dx_unpack(k, p->fm6[k])) dx_reset(k);
-                fm6_unpack(FM6_INIT, v);
-            } else fm6_unpack(p->fm6[k], v);
-            fm6_set_patch(k, v);
-            fm6_adopt(k);
-        }
     }
     song.sel = (uint8_t)(p->sel < NTRK ? p->sel : 0u);
     fm1_irq_on();
@@ -1510,25 +544,7 @@ static int project_restore_runtime(const project_t *input)
     pat_from_set(0);                                    /* (project_load: its slot; the header's letter) */
     undo.trk = 0;                                       /* (ui.c) the undo copy belongs to the old project */
     undo_depth++;                                       /* and these loads take none */
-    for (k = 0; k < NTRK; k++) {                        /* the power-on sounds: format 1 (tracks 2..4), old drums */
-        track_t *t = &trk[k];
-        int16_t keep[P_COUNT];
-        if (p->t[k].preset == PROJ_DEF_SOUND) {
-            fx_fresh++;                                 /* (a stored project's power-on sound, with its sends) */
-            apply_preset_to(t, TRK_DEF[k][1]);
-            fx_fresh--;
-            track_defaults_steps(t);
-        } else if (p->t[k].preset == PROJ_DEF_KEEP) {   /* the steps, LEVEL PAN MUTE, LEN DIV SWING GATE kept */
-            memcpy(keep, t->p, sizeof keep);
-            fm1_irq_off();                           /* publish the legacy sound as one bounded parameter batch */
-            proj_legacy_drums(t);                     /* (keeps the SLICER: param_kept) */
-            t->p[P_REV] = keep[P_REV];                  /* and the drums' reverb send */
-            for (i = P_AMODE; i <= P_TRANS; i++)        /* the drum part had no arp or scale */
-                t->p[i] = TP[i].def;
-            fm1_irq_on();
-        }
-        pat_sig[k] = ~steps_sig(t);                     /* a project's steps are the user's */
-    }
+    for(k=0;k<NTRK;k++)pat_sig[k]=~steps_sig(&trk[k]);
     undo_depth--;
     sync_reload = 1;
     ui.force = 1;
@@ -1572,9 +588,6 @@ static void project_load(uint32_t slot)
 /* settings + learned panel table: one flash object. The flash copy wins at
  * boot (the .noinit copies are garbage after a power-off). */
 #include "settings_persist.c"
-#if FELUCCA_FLASH && FELUCCA_SLICE
-#include "slice_store.c"                          /* SLICE's MAN slices, kept in the user slots */
-#endif
 #if FELUCCA_FLASH
 static persist_t persist_saved __attribute__((section(".pool")));
 static uint8_t persist_pending;                 /* 1 requested, 2 waiting after a flash error */
@@ -1596,14 +609,6 @@ static void persist_boot(void)                    /* before settings_init / pane
         return;
     fl_plain_window_init();                        /* flash above 0x93000 reads as plaintext through XIP
                                                     * (user sample sets are played from there) */
-#if FELUCCA_SLICE
-    slc_store_boot();                              /* (the scans read each slot's stored slices) */
-#endif
-    {
-        uint32_t k;
-        for (k = 0; k < SMP_USER_SLOTS; k++)
-            smp_user_scan(k);
-    }
     {
         int n = st_load(OBJ_SETTINGS, &p, sizeof p);
         if (settings_import(&p, n))
@@ -1641,45 +646,7 @@ static void project_sound_prepare(const project_t *p)
             live_sound.p[k][j] = (int16_t)param_fit(param_desc_of(e, j), p->t[k].p[j]);
         live_sound.preset[k] = (uint8_t)(ENGINES[e]->npresets ?
             p->t[k].preset % ENGINES[e]->npresets : 0u);
-        if (p->t[k].preset >= PROJ_DEF_KEEP) {
-            /* Formats 1/2 can request a power-on sound or the former GM kit.
-             * Resolve those sentinels here, as stopped LOAD does afterwards. */
-            int16_t *v = live_sound.p[k];
-            int16_t rev = v[P_REV];
-            uint32_t pi = p->t[k].preset == PROJ_DEF_SOUND ? TRK_DEF[k][1] : 0u;
-            const preset_t *pr = &ENGINES[e]->presets[pi % ENGINES[e]->npresets];
-            static const uint8_t fxdef[4] = {0, 24, 28, 36};
-            for (uint32_t j = 0; j < P_E0; j++) if (!param_kept(j)) v[j] = TP[j].def;
-            for (uint32_t j = 0; j < 8u; j++) v[P_E0 + j] = pr->e[j];
-            v[P_ATK] = pr->env[0]; v[P_DEC] = pr->env[1]; v[P_SUS] = pr->env[2]; v[P_REL] = pr->env[3];
-            v[P_ED_FLT] = pr->fenv; v[P_VOICE] = pr->mono ? V_LEGATO : V_POLY;
-            for (uint32_t j = 0; j < 4u; j++) v[P_DIST + j] = pr->fx[j] ? pr->fx[j] - 1 : fxdef[j];
-            if (p->t[k].preset == PROJ_DEF_KEEP) {
-                v[P_REV] = rev;
-                for (uint32_t j = P_AMODE; j <= P_TRANS; j++) v[j] = TP[j].def;
-            }
-            live_sound.preset[k] = (uint8_t)pi;
-        }
-        if (e == ENGI_DRUM && live_sound.p[k][P_E0] == DX_KIT_ID) {
-            dx_config_t *d = &live_sound.dx[k];
-            if (!dx_decode(d, p->fm6[k])) {
-                memset(d, 0, sizeof *d);
-                memcpy(d->lane, DX_KIT_DEF, sizeof DX_KIT_DEF);
-                memcpy(d->layer, DX_LAY_DEF, sizeof DX_LAY_DEF);
-            }
-            fm6_unpack(FM6_INIT, live_sound.patch[k]);
-        } else fm6_unpack(p->fm6[k], live_sound.patch[k]);
-        /* fm6_poll must not reload a factory/bank slot over the saved patch.
-         * Do the adoption search here, with audio interrupts enabled. */
-        if (e == ENGI_FM6) {
-            uint8_t v[FP_SIZE + 1u];
-            uint32_t f;
-            for (f = 0; f < FM6_NFACTORY; f++) {
-                fm6_unpack(FM6_FACTORY[f], v);
-                if (!memcmp(v, live_sound.patch[k], FP_SIZE)) break;
-            }
-            live_sound.p[k][P_E7] = (int16_t)f;
-        }
+
     }
 }
 static uint32_t project_pattern_queue(uint32_t slot)
@@ -1687,7 +654,7 @@ static uint32_t project_pattern_queue(uint32_t slot)
     uint32_t k, j, full = (ui_prefs2 & (PREF_FULL_LOAD >> 16)) != 0u;
     project_t *p = &proj_scratch;
     if (slot >= 4u || !proj_import(p, &proj_slot[slot], sizeof(project_store_t))) return 1;
-    if (chain.running || chain.armed) return 2;
+    if (0u || 0u) return 2;
     if (!song.playing) return 4;
     if (full && project_compat_flags(p)) return 5; /* stop, then confirm a test load */
     proj_bound(p);
@@ -1695,86 +662,35 @@ static uint32_t project_pattern_queue(uint32_t slot)
         if (!full && p->t[k].engine != trk[k].eng_req) return 3;
     /* Withdraw before writing the shared buffer; the ISR never sees a partial copy. */
     fm1_irq_off();
-    chain.live_pending = 0;
+    LAUNCH_STATE.live_pending = 0;
     fm1_irq_on();
     if (full) project_sound_prepare(p);
-    chain.source[0].motion = p->motion;
-    motion_fx_compact_off(&chain.source[0].motion, (1u << NTRK) - 1u);
+    LAUNCH_PATTERN.motion = p->motion;
+    motion_fx_compact_off(&LAUNCH_PATTERN.motion, (1u << NTRK) - 1u);
     for (k = 0; k < NTRK; k++) {
-        chain.live_engine[k] = p->t[k].engine;
-        memcpy(chain.source[0].step[k], p->t[k].step, sizeof p->t[k].step);
-        proj_steps(chain.source[0].step[k]);
-        chain.source[0].qnt[k] = p->t[k].p[P_SQNT] != 0;
+        LAUNCH_STATE.live_engine[k] = p->t[k].engine;
+        memcpy(LAUNCH_PATTERN.step[k], p->t[k].step, sizeof p->t[k].step);
+        proj_steps(LAUNCH_PATTERN.step[k]);
+        LAUNCH_PATTERN.qnt[k] = p->t[k].p[P_SQNT] != 0;
         for (j = 0; j < 4u; j++)
-            chain.source[0].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
+            LAUNCH_PATTERN.timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
                 TP[P_SLEN + j].min, TP[P_SLEN + j].max);
     }
     fm1_irq_off();
     if (!song.playing) { fm1_irq_on(); return 4; }
-    chain.live_full = (uint8_t)full;
+    LAUNCH_STATE.live_full = (uint8_t)full;
     RING_PUBLISH();
-    chain.live_pending = (uint8_t)(slot + 1u);
+    LAUNCH_STATE.live_pending = (uint8_t)(slot + 1u);
     fm1_irq_on();
     return 0;
 }
 
-static uint32_t chain_prepare(void)
-{
-    uint32_t i, k, j, used = 0;
-    if (transport_busy())
-        return 2;
-    if (!chain_valid(&chain_config) || !chain_config.count)
-        return 1;
-    for (i = 0; i < chain_config.count; i++)            /* the slots the lanes play (not the silent ones) */
-        for (k = 0; k < NTRK; k++) {
-            uint32_t s = chain_config.row[i].slot[k];
-            if (s >= 4u || ((used >> s) & 1u))
-                continue;
-            if (!project_used(s))
-                return 3u + s;
-            used |= 1u << s;
-        }
-    chain.config = chain_config;
-    for (i = 0; i < 4u; i++)
-        if ((used >> i) & 1u) {
-            project_t *p = &proj_scratch;
-            if (!proj_import(p, &proj_slot[i], sizeof(project_store_t))) return 3u + i;
-            chain.source[i].motion = p->motion;
-            motion_fx_compact_off(&chain.source[i].motion, (1u << NTRK) - 1u);
-            /* A song keeps its current instruments. Engine-specific motion from
-             * another instrument would change a kit/wave/algorithm unexpectedly. */
-            {
-                motion_store_t *m = &chain.source[i].motion; uint32_t n = 0;
-                for (uint32_t e = 0; e < m->count; e++) {
-                    const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
-                    if (!MOTION_IS_FX(v) && MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req) continue;
-                    m->event[n++] = *v;
-                }
-                m->count = (uint8_t)n;
-            }
-            for (k = 0; k < NTRK; k++) {
-                memcpy(chain.source[i].step[k], p->t[k].step, sizeof p->t[k].step);
-                proj_steps(chain.source[i].step[k]);
-                chain.source[i].qnt[k] = p->t[k].p[P_SQNT] != 0;
-                for (j = 0; j < 4u; j++)
-                    chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
-                        TP[P_SLEN + j].min, TP[P_SLEN + j].max);
-            }
-        }
-    RING_PUBLISH();
-    chain.armed = 1;
-    transport_req = 1;
-    return 0;
-}
 
 static void settings_poll(void)
 {
     project_save_poll();                               /* queued A-D snapshots: commit only after STOP */
 #if FELUCCA_FLASH
     persist_t p;
-#if FELUCCA_SLICE
-    slc_store_poll();                              /* SLICE's slices edited on the SLICES page */
-#endif
     if (!persist_pending || !flash_ok || transport_busy() ||
         (persist_pending == 2u && (uint32_t)(fm1_ms - persist_retry_ms) < 1000u))
         return;
@@ -1851,8 +767,6 @@ static uint32_t autosave_sig(void)
         h = as_mix(h, &t->eng_req, 1);
         h = as_mix(h, &t->preset, 1);
         h = as_mix(h, t->step, sizeof t->step);
-        if (t->eng_req == ENGI_DRUM && motion_base_value(t, P_E0) == DX_KIT_ID) h = as_mix(h, dx_of(i), sizeof(dx_config_t));
-        h = as_mix(h, fm6_patch[i], sizeof fm6_patch[i]);
         h = as_mix(h, &lfo2_config[i], sizeof lfo2_config[i]);
     }
     for (i = 0; i < G_COUNT; i++)
@@ -1860,7 +774,6 @@ static uint32_t autosave_sig(void)
             h = as_mix(h, &song.g[i], sizeof song.g[i]);
     h = as_mix(h, song.mch, sizeof song.mch);           /* (1.5.5: MIDI IN TRACK's channels, the project's) */
     h = as_mix(h, &motion, sizeof motion);
-    h = as_mix(h, &chain_config, sizeof chain_config);
     h = as_mix(h, harmony_root, sizeof harmony_root);    /* (round 7: FUN11 puts HARMONY / LINK in the project; the transient bar and SHIFT stay out) */
     h = as_mix(h, harmony_dur, sizeof harmony_dur);
     h = as_mix(h, link_src, sizeof link_src);
@@ -1892,6 +805,7 @@ static void autosave_poll(void)
     hp_autosave_poll(); return;
 #endif
     if (project_compat_state.hold_autosave) return;
+    if (f2_old & F2_OLD_AUTO) return;                 /* (FORMAT 2: an old autosave stays until the notice is answered) */
 
 #if FELUCCA_FLASH
     uint32_t sig;
@@ -1922,8 +836,10 @@ static void autosave_poll(void)
 /* power-on, after the defaults (main.c): the autosave becomes the music when `allowed` (no crash, hang or failed boot
  * before) and RESTORE LAST is ON; an autosave that does not load (none, torn, damaged, another format) is ignored.
  * The music now (restored or not) is what is saved: nothing is written until it changes. 1 = restored */
+static void f2_boot(void);                      /* ui_f2.c */
 static int autosave_boot(int allowed)
 {
+    f2_boot();                                  /* (once: what an older version left, before anything is read or written) */
 #if FELUCCA_HOME_PERF
     if(hp_autosave_boot(allowed)) return 1;
     if (ui.confirm == CF_COMPAT_PROJECT) return 0;

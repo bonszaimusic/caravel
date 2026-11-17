@@ -21,7 +21,7 @@ const btn=k=>{x.web_buttons(1<<k);render(60);x.web_buttons(0);render(60);};
 const key=k=>{x.web_keys(1<<k);render(50);x.web_keys(0);render(50);};
 const select=t=>{x.web_p12_test_select_track(t);render(40);};
 const setup=(k,n)=>{x.web_action_setup_knob(k,n);render(40);};
-x._initialize();x.web_nor_erase();x.web_boot();render(1100);
+x._initialize();x.web_nor_erase();x.web_boot(); if (x.web_test_build) x.web_test_build();render(1100);
 btn(6);btn(6);
 ok(x.web_action_state()&1,"ACTION not enabled");
 for(let k=0;k<7 && (x.web_action_state()>>8&255)!==6;k++)key(22);

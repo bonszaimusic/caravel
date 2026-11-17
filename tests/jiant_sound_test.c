@@ -4,7 +4,7 @@
  * exercise real UI, storage, MOD, MIDI Learn and locks, including a 111-value
  * FUN10 file with engine locks and Bonszai FX events. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static uint32_t legacy_fun10(project_store_t *wire, const project_t *q)
 {

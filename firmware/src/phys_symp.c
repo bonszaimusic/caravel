@@ -142,12 +142,12 @@ static __attribute__((noinline)) void px_symp_run(px_symp_t *Y, const int32_t *i
         }
     }
     for (i = 0; i < m; i++) {
-        out[2 * i] = in[2 * i] + ((yl + acc[i]) << 7);
-        out[2 * i + 1] = in[2 * i + 1] + (acc[i] << 8);
+        out[2 * i] = in[2 * i] + (int32_t)((uint32_t)(yl + acc[i]) << 7);
+        out[2 * i + 1] = in[2 * i + 1] + (int32_t)((uint32_t)acc[i] << 8);
         yl = acc[i];
     }
     if (n & 1u)
-        out[n - 1u] = in[n - 1u] + (yl << 8);
+        out[n - 1u] = in[n - 1u] + (int32_t)((uint32_t)yl << 8);
     Y->wp = (Y->wp - m) & PX_YMASK;
     Y->yl = yl;
     Y->dcx = dcx;

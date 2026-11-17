@@ -1,0 +1,570 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * Copyright (C) 2026 bonszaimusic
+ *
+ * CARAVEL_UX_CAPTURE (enabled in the 1.0 target: plays notes from the block that counts the bars and keeps
+ * 2 KB of event rings: 4 tracks x (live ring + loop) x 64 events x 4 bytes): CAPTURE, E8 / E38 / E41 of the decisions log. Each track has a LIVE ring of the notes played
+ * (keys and MIDI IN, while the clock runs, raw timing) and one LOOP. REC takes the last 1/2/4/8 bars of the ring as the
+ * loop (an existing loop receives an overdub; E45, the live ring continues); the loop's notes go
+ * through input_on / input_off, so ARP, LATCH and HARMONY act on them as on played notes, and are not recorded again.
+ * Times are perf_bars_q16 (bars in Q16), which runs only while the clock does. Not saved in the project (E8).
+ *
+ * ONE OWNER (device plan C-a): the rings, the loops, the phases and the serial numbers are read and written only by the
+ * audio context (the key and MIDI inputs, cap_idle at the top of a block, cap_tick). The UI never touches them: it posts
+ * commands (cap_post: REC, TOGGLE, WIPE, ALL_PAUSE) into a small queue that cap_idle empties at the start of the next
+ * block, and takes the outcomes (cap_result, for its message) from a second queue, in the same order. Each queue has one
+ * writer and one reader and volatile indices, as transport_req and panic_req.
+ *
+ * THE DISPLAY (C-b) reads a snapshot, never the live state: once per block (end of cap_idle) the audio context publishes
+ * two words per track (cap_pub: state, loop events, ring events and head, bars, the origin or paused phase); the UI takes
+ * them with cap_view and then reads the event arrays only (a note being written shows one frame late; cap_gen counts the
+ * writes so that the UI can draw again when one fell inside a frame). cap_dring is gone: the band's notes of a running
+ * loop are derived from the loop itself (they are the notes as captured, not as HARMONY or CHRD made them). */
+#if CARAVEL_UX_CAPTURE
+#define CAP_N 64u
+#define CAP_HN (CAP_N / 2u)            /* every admitted raw note reserves its end */
+/* An event is 4 bytes (device plan C-c): t in 1/4096 bar (about 0.5 ms at 120 BPM, 1.5 ms at 40 BPM), vel 0: the note ends.
+ * In the live ring t is the bar clock modulo 16 bars; the ring keeps 8 bars (cap_trim), so an age is never ambiguous. In a loop
+ * t is the place inside it (0 .. length - 1; the loop is 1, 2, 4 or 8 bars, so its length in these units divides 65536). */
+typedef struct { uint16_t t; uint8_t note, vel; } cap_ev_t;
+typedef char cap_ev_size_must_be_4[sizeof(cap_ev_t) == 4 ? 1 : -1];
+#define CAP_U(q16) ((uint32_t)(q16) >> 4)                        /* bars in Q16 -> 1/4096 bar */
+#define CAP_KEEP_U (8u << 12)                                    /* the live ring keeps 8 bars: the longest REC window */
+static uint32_t cap_age(uint32_t now_q16, uint16_t t) { return (uint16_t)(CAP_U(now_q16) - t); }
+static cap_ev_t cap_ring[NTRK][CAP_N], cap_loop[NTRK][CAP_N];
+static volatile uint8_t cap_gen[NTRK];                           /* counts every write to a ring or a loop (audio): the display's check */
+static uint8_t cap_rn[NTRK], cap_rh[NTRK];                       /* the ring: events kept, next to write */
+static uint8_t cap_full[NTRK], cap_rejected;               /* full/rejected capture: no partial takes */
+static uint8_t cap_wait[NTRK];                           /* paused by transport, not by SEQ/PANIC */
+static uint8_t cap_ln[NTRK], cap_st[NTRK];                       /* the loop: events; 0 none, 1 running, 2 paused */
+static uint32_t cap_len[NTRK], cap_o[NTRK], cap_pph[NTRK];       /* length (Q16 bars), the bar clock at its start, paused phase */
+static uint32_t cap_serial[NTRK], cap_taken_serial[NTRK]; /* event watermark: equal-time REC must not copy old notes */
+static uint32_t cap_tt[NTRK];                                    /* when the last take (or overdub) was: an overdub adds only what came after */
+static int32_t cap_last[NTRK];                                   /* the phase the last block ended at (-1: none yet) */
+static uint32_t cap_held[NTRK][4];                               /* the loop's notes sounding (bit per note) */
+static uint8_t cap_replay;                                       /* 1 while the loop plays a note: not recorded */
+/* The block-time counter (device plan C-e): what CAPTURE costs in the audio block, in timer ticks (FM1_TICKS_PER_US per us), read on
+ * the device with the console command "cap" (and reset with "cap reset"). cap_p_cur is the block being run (cap_idle opens it,
+ * cap_tick adds to it); the previous one is closed into last / max / sum when the next begins. */
+static uint32_t cap_p_cur, cap_p_fired, cap_p_all;               /* this block: ticks, events fired, 1 = all four loops run */
+static volatile uint32_t cap_p_last, cap_p_max, cap_p_sum, cap_p_blocks, cap_p_fired_max, cap_p_busy_max, cap_p_take_last, cap_p_take_max, cap_p_takes;
+static uint8_t cap_li = 1;                                       /* the length chosen: 1 2 4 8 bars */
+static const uint8_t CAP_BARS[4] = {1, 2, 4, 8};
+static void input_on(track_t *t, uint32_t note, uint32_t vel);
+static void input_off(track_t *t, uint32_t note);
+static uint32_t fm1_ticks(void);                                  /* the timer (hal/fm1_time.h; the emulator's own): for the block counter */
+
+static uint32_t cap_owner(uint32_t i)
+{
+#if FELUCCA_PAIR_MORPH
+    return trk_index(pair_owner(&trk[i]));
+#else
+    return i;
+#endif
+}
+static uint32_t cap_selected(void) { return cap_owner(song.sel); }
+
+/* Observe the monotonic audio clock to distinguish first boot from its Q16 wrap. */
+static uint32_t cap_clock_prev;
+static uint8_t cap_clock_wrapped;
+static uint32_t cap_clock_now(void)
+{
+    uint32_t now=perf_bars_q16;
+    if(now<cap_clock_prev)cap_clock_wrapped=1;
+    cap_clock_prev=now;
+    return now;
+}
+static uint32_t cap_open[NTRK][4];                               /* the notes sounding in the live ring (bit per note): each gets its end */
+static void cap_log(uint32_t i, uint32_t note, uint32_t vel)
+{
+    cap_ev_t *e = &cap_ring[i][cap_rh[i]];
+    cap_serial[i]++;
+    cap_gen[i]++;
+    e->t = (uint16_t)CAP_U(cap_clock_now());
+    e->note = (uint8_t)note;
+    e->vel = (uint8_t)vel;
+    cap_rh[i] = (uint8_t)((cap_rh[i] + 1u) % CAP_N);
+    if (cap_rn[i] < CAP_N)
+        cap_rn[i]++;
+}
+static void cap_put(uint32_t i, uint32_t note, uint32_t vel)
+{
+    uint32_t w = (note >> 5) & 3u, b = 1u << (note & 31);
+    if (cap_replay || i >= NTRK)
+        return;
+    if (vel) {                                                   /* a note begins: only while the clock runs */
+        if (!song.playing)
+            return;
+        if (cap_open[i][w] & b)                                  /* (again without an end: the old one ends first) */
+            cap_log(i, note, 0);
+        cap_open[i][w] |= b;
+        cap_log(i, note, vel);
+    } else if (cap_open[i][w] & b) {                             /* its end: always, also after the clock stopped */
+        cap_open[i][w] &= ~b;
+        cap_log(i, note, 0);
+    }
+}
+static void cap_close_live(uint32_t i)                           /* every sounding live note ends (STOP, PANIC: their key-ups may never come) */
+{
+    uint32_t n;
+    for (n = 0; n < 128u; n++)
+        if (cap_open[i][n >> 5] & (1u << (n & 31)))
+            cap_log(i, n, 0);
+    memset(cap_open[i], 0, sizeof cap_open[i]);
+}
+static const cap_ev_t *cap_ring_at(uint32_t i, uint32_t k)       /* k-th oldest */
+{
+    return &cap_ring[i][(cap_rh[i] + CAP_N - cap_rn[i] + k) % CAP_N];
+}
+/* The loop plays RAW notes (the keys as pressed, E8); HARMONY, the chord and ARP / LATCH act on them as it plays, as on keys:
+ * the note follows the HARMONY chord of the moment (as key_on does), CHRD builds its chord, input_on does the rest. What a note
+ * became is kept (cap_hn) so its end ends the same notes, and cap_held / the band show the notes that sound. */
+typedef struct { uint8_t raw, n, note[CHORD_MAX]; } cap_hn_t;
+static cap_hn_t cap_hn[NTRK][CAP_HN];
+static uint32_t cap_latched[NTRK][4]; /* released loop pitches still sounding through LATCH */
+static uint8_t cap_raw[27];                                      /* the key's note as pressed, before HARMONY (seq.c key_on) */
+static uint8_t cap_skip;                                         /* 1 while key_off ends the notes of a key (it logged the raw end itself) */
+static int cap_note_held(const track_t *t,uint32_t note)
+{
+    return (cap_held[trk_index(t)][note>>5]>>(note&31u))&1u;
+}
+static int cap_mapping_held(uint32_t i,uint32_t note)
+{
+    uint32_t j,k;
+    for(j=0;j<CAP_HN;j++)for(k=0;k<cap_hn[i][j].n;k++)
+        if(cap_hn[i][j].note[k]==note)return 1;
+    return 0;
+}
+static void cap_play_on(uint32_t i, uint32_t raw, uint32_t vel)
+{
+    track_t *t = &trk[i];
+    cap_hn_t *h = 0;
+    uint8_t ch[CHORD_MAX];
+    uint32_t n, j, note = raw;
+    for (j = 0; j < CAP_HN; j++)
+        if (!cap_hn[i][j].n) { h = &cap_hn[i][j]; break; }
+    if (!h) return;                      /* cannot occur for an admitted <=64-event loop */
+    /* E8: each new loop set releases the old latched set, even in STACK.
+     * Still-held live/MIDI/loop owners are protected by the normal input guards. */
+    if(latch_mode(t)!=LT_OFF) {
+        if(!t->p[P_AMODE]) {
+            latch_free(t);
+            memset(cap_latched[i],0,sizeof cap_latched[i]);
+        } else if(!t->arp_phys) {
+            t->nheld=0;
+        }
+    }
+    if (harmony_on && harmony_follow[i] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
+        note = harmony_snap(t, note);
+    cap_replay = 1; /* harmonic mapping is replay too: it cannot teach a live CHORD source */
+    n = chord_build(t, note, ch);
+    if (n > CHORD_MAX) n = CHORD_MAX;
+    h->raw = (uint8_t)raw;
+    h->n = (uint8_t)n;
+    for (j = 0; j < n; j++) {
+        uint32_t x=ch[j],w=x>>5,b=1u<<(x&31u);
+        h->note[j] = ch[j];
+        if(!(cap_held[i][w]&b)) {
+            if(!midi_local_held(t,x) && !midi_note_held(t,x)) input_on(t,x,vel);
+        }
+        cap_held[i][w]|=b;
+        cap_latched[i][w]&=~b;
+    }
+    cap_replay = 0;
+}
+static void cap_play_off(uint32_t i, uint32_t raw)
+{
+    uint32_t j, k;
+    for (j = 0; j < CAP_HN; j++)
+        if (cap_hn[i][j].n && cap_hn[i][j].raw == raw) {
+            uint32_t n=cap_hn[i][j].n;
+            cap_hn[i][j].n=0;             /* other mapped loop inputs can still own the same pitch */
+            cap_replay = 1;
+            for (k = 0; k < n; k++) {
+                uint32_t x = cap_hn[i][j].note[k],w=x>>5,b=1u<<(x&31u);
+                if(!cap_mapping_held(i,x)) {
+                    cap_held[i][w]&=~b;
+                    input_off(&trk[i],x);
+                    if(!midi_local_held(&trk[i],x) && !midi_note_held(&trk[i],x) && lat_get(lat_stay[i],x))
+                        cap_latched[i][w]|=b;
+                }
+            }
+            cap_replay = 0;
+            return;
+        }
+}
+static void cap_fire(uint32_t i, const cap_ev_t *e)
+{
+    cap_p_fired++;
+    if (e->vel)
+        cap_play_on(i, e->note, e->vel);
+    else
+        cap_play_off(i, e->note);
+}
+static void cap_release(uint32_t i)                              /* end only this loop's input ownership */
+{
+    uint32_t n,held[4],latched[4];
+    track_t *t=&trk[i];
+    memcpy(held,cap_held[i],sizeof held);memcpy(latched,cap_latched[i],sizeof latched);
+    memset(cap_held[i],0,sizeof cap_held[i]);memset(cap_hn[i],0,sizeof cap_hn[i]);
+    memset(cap_latched[i],0,sizeof cap_latched[i]);
+    cap_replay = 1;
+    for (n = 0; n < 128u; n++) {
+        uint32_t w=n>>5,b=1u<<(n&31u);
+        if(held[w]&b) input_off(t,n);
+        if(((held[w]|latched[w])&b) && !midi_local_held(t,n) && !midi_note_held(t,n)) {
+            arp_drop(t,n);
+            lat_put(lat_stay[i],n,0);lat_put(lat_bus_other[i],n,0);
+            trk_note_off(t,n);
+        }
+    }
+    if(t->p[P_AMODE] && !t->nheld)arp_silence(t);
+    cap_replay = 0;
+}
+/* REC: the notes played live become the loop. No loop yet: the last nb bars of the ring, a loop starting now. A loop already
+ * there: OVERDUB (E45): the notes played live during its last length are added where they fall in the loop (its phase), the
+ * length stays. Returns the new notes (0: nothing played in the window); *over = 1 for an overdub. */
+static uint32_t cap_take(uint32_t i, uint32_t nb, uint32_t *over)
+{
+    /* Times inside here are in 1/4096 bar (CAP_U); the lengths divide 65536 of them, so a 16 bit difference is exact modulo them. */
+    uint32_t now = cap_clock_now(), k, n = 0, ons = 0, open[4] = {0, 0, 0, 0}, len, origin, window, now_u, len_u, origin_u, window_u, relnow;
+    int add = cap_ln[i] && cap_len[i];
+    cap_ev_t tmp[CAP_N];
+    uint32_t pending = 0;
+    cap_rejected = 0;
+    *over = (uint32_t)add;
+    if (add) {
+        if(cap_serial[i]==cap_taken_serial[i])return 0;
+        len = cap_len[i];
+        origin = cap_st[i] == 2u ? now - cap_pph[i] : cap_o[i];
+        memcpy(tmp, cap_loop[i], cap_ln[i] * sizeof tmp[0]);
+        n = cap_ln[i];
+    } else {
+        len = nb << 16;
+        origin = !cap_clock_wrapped && now < len ? 0u : now - len;
+    }
+    window = !cap_clock_wrapped && now < len ? now : len;
+    if (add && now - cap_tt[i] < window)
+        window = now - cap_tt[i];
+    now_u = CAP_U(now); len_u = CAP_U(len); origin_u = CAP_U(origin); window_u = CAP_U(window);
+    relnow = add ? (now_u - origin_u) % len_u : len_u - 1u;
+    {   /* a note struck BEFORE the window and still sounding at its start (held, or let go inside it) goes in from the start (E49) */
+        uint32_t pre[4] = {0, 0, 0, 0}, seen[4] = {0, 0, 0, 0}, relmin = ((now_u - window_u) - origin_u) % len_u;
+        uint8_t pv[128];
+        memset(pv, 100, sizeof pv);
+        for (k = 0; k < cap_rn[i]; k++) {
+            const cap_ev_t *e = cap_ring_at(i, k);
+            if(add && (int32_t)(cap_serial[i]-cap_rn[i]+k+1u-cap_taken_serial[i])<=0)continue;
+            uint32_t w = e->note >> 5, b = 1u << (e->note & 31);
+            if (cap_age(now, e->t) <= window_u) {
+                if (e->vel)
+                    seen[w] |= b;
+                continue;
+            }
+            if (e->vel) {
+                pre[w] |= b;
+                pv[e->note & 127u] = e->vel;
+            } else {
+                pre[w] &= ~b;
+            }
+        }
+        for (k = 0; k < 128u; k++) {                             /* (held now, its begin lost from the ring: it counts too) */
+            uint32_t w = k >> 5, b = 1u << (k & 31);
+            if (!add && (cap_open[i][w] & b) && !(seen[w] & b))
+                pre[w] |= b;
+        }
+        for (k = 0; k < 128u; k++)
+            if (pre[k >> 5] & (1u << (k & 31))) {
+                if (n + pending + 2u > CAP_N) goto full;
+                pending++;
+                tmp[n++] = (cap_ev_t){(uint16_t)relmin, (uint8_t)k, pv[k]};
+                open[k >> 5] |= 1u << (k & 31);
+                ons++;
+            }
+    }
+    for (k = 0; k < cap_rn[i]; k++) {
+        const cap_ev_t *e = cap_ring_at(i, k);
+        uint32_t w = e->note >> 5, b = 1u << (e->note & 31), rel;
+        if ((add && (int32_t)(cap_serial[i]-cap_rn[i]+k+1u-cap_taken_serial[i])<=0) || cap_age(now, e->t) > window_u)
+            continue;
+        rel = (uint32_t)(uint16_t)(e->t - (uint16_t)origin_u) % len_u;
+        if (e->vel) {
+            if (n + pending + 2u > CAP_N) goto full;
+            if (!(open[w] & b)) pending++;
+            tmp[n++] = (cap_ev_t){(uint16_t)rel, e->note, e->vel};
+            open[w] |= b;
+            ons++;
+        } else if (open[w] & b) {
+            tmp[n++] = (cap_ev_t){(uint16_t)rel, e->note, 0};
+            open[w] &= ~b;
+            pending--;
+        }
+    }
+    for (k = 0; k < 128u && n < CAP_N; k++)                      /* a note still held: ends with the window */
+        if (open[k >> 5] & (1u << (k & 31)))
+            tmp[n++] = (cap_ev_t){(uint16_t)relnow, (uint8_t)k, 0};
+    if (!ons)
+        return 0;
+    /* Stable phase order also keeps overdubs chronological. No audio-block sort. */
+    for(k=1;k<n;k++) {
+        cap_ev_t e=tmp[k];uint32_t j=k;
+        while(j && tmp[j-1u].t>e.t) {tmp[j]=tmp[j-1u];j--;}
+        tmp[j]=e;
+    }
+    cap_gen[i]++;
+    memcpy(cap_loop[i], tmp, n * sizeof tmp[0]);
+    cap_ln[i] = (uint8_t)n;
+    cap_full[i] = n == CAP_N;
+    cap_tt[i] = now;
+    cap_taken_serial[i]=cap_serial[i];
+    if (!add) {
+        cap_release(i);
+        cap_len[i] = len;
+        cap_o[i] = now;
+        cap_last[i] = -1;
+        cap_st[i] = 1;
+    }
+    return ons;
+full:
+    cap_full[i] = cap_rejected = 1;
+    return 0;                       /* old loop, take time and origin untouched */
+}
+static void cap_pause(uint32_t i)
+{
+    cap_wait[i]=0;
+    if (cap_st[i] == 1u) {
+        cap_pph[i] = (perf_bars_q16 - cap_o[i]) % cap_len[i];
+        cap_release(i);
+        cap_st[i] = 2;
+    }
+}
+static void cap_resume(uint32_t i)
+{
+    cap_wait[i]=0;
+    if (cap_st[i] == 2u) {
+        cap_o[i] = perf_bars_q16 - cap_pph[i];
+        cap_last[i] = -1;
+        cap_st[i] = 1;
+    }
+}
+static void cap_clear(uint32_t i)
+{
+    cap_release(i);
+    cap_gen[i]++;
+    cap_ln[i] = 0;
+    cap_full[i] = cap_wait[i] = 0;
+    cap_st[i] = 0;
+}
+/* each block, with the bar clock: the loops' notes that fall since the last block */
+static void cap_tick(void)
+{
+    uint32_t i, k, now = cap_clock_now(), t_in = fm1_ticks();
+    for (i = 0; i < NTRK; i++) {
+        uint32_t len, ph;
+        int32_t last;
+        if (cap_st[i] != 1u || !cap_ln[i] || !cap_len[i])
+            continue;
+        len = cap_len[i];
+        ph = CAP_U((now - cap_o[i]) % len);                      /* the place in the loop, in 1/4096 bar like the events */
+        last = cap_last[i];
+        /* A wrapped block crosses the old tail before the new head. */
+        if(last>=0 && ph<(uint32_t)last)
+            for(k=0;k<cap_ln[i];k++)
+                if(cap_loop[i][k].t>(uint32_t)last)cap_fire(i,&cap_loop[i][k]);
+        for(k=0;k<cap_ln[i];k++) {
+            uint32_t r=cap_loop[i][k].t;
+            if(r<=ph && (last<0 || ph<(uint32_t)last || r>(uint32_t)last))
+                cap_fire(i,&cap_loop[i][k]);
+        }
+        cap_last[i] = (int32_t)ph;
+    }
+    cap_p_cur += fm1_ticks() - t_in;
+}
+static void cap_all_pause(void) { uint32_t i; for (i = 0; i < NTRK; i++) { cap_pause(i); cap_close_live(i); } }
+static void cap_wipe(uint32_t i)                                 /* SEQ held: the loop and the live notes are gone */
+{
+    cap_clear(i);
+    cap_gen[i]++;
+    cap_rn[i] = 0;
+    cap_rh[i] = 0;
+    memset(cap_open[i], 0, sizeof cap_open[i]);
+}
+/* ---- the UI's commands to the audio context, and the outcomes back (device plan C-a) ---- */
+enum { CAP_OP_REC = 1, CAP_OP_TOGGLE, CAP_OP_WIPE, CAP_OP_ALL_PAUSE };
+enum { CAPR_NONE, CAPR_CAPTURED, CAPR_OVERDUB, CAPR_NOTHING, CAPR_NOTHING_ADD, CAPR_FULL, CAPR_PAUSED, CAPR_RUNS,
+       CAPR_NO_LOOP, CAPR_NO_CLOCK, CAPR_CLEARED };
+#define CAP_Q 8u                                                 /* a power of two */
+static volatile uint16_t cap_cq[CAP_Q];                          /* op | track << 4 | bars << 8 */
+static volatile uint8_t cap_cq_w, cap_cq_r;                      /* UI writes cap_cq_w, audio writes cap_cq_r */
+static volatile uint8_t cap_rq[CAP_Q];                           /* the outcomes, in the order of the commands */
+static volatile uint8_t cap_rq_w, cap_rq_r;                      /* audio writes cap_rq_w, UI writes cap_rq_r */
+/* UI: 1 = posted, 0 = the queue is full (cannot happen at the speed of buttons; the caller says so) */
+static uint32_t cap_post(uint32_t op, uint32_t track, uint32_t bars)
+{
+    uint8_t w = cap_cq_w;
+    if ((uint8_t)(w - cap_cq_r) >= CAP_Q)
+        return 0;
+    cap_cq[w & (CAP_Q - 1u)] = (uint16_t)(op | track << 4 | bars << 8);
+    cap_cq_w = (uint8_t)(w + 1u);
+    return 1;
+}
+/* UI: the next outcome (CAPR_*), 0 = none */
+static uint32_t cap_result(void)
+{
+    uint8_t r = cap_rq_r;
+    uint32_t code;
+    if (r == cap_rq_w)
+        return CAPR_NONE;
+    code = cap_rq[r & (CAP_Q - 1u)];
+    cap_rq_r = (uint8_t)(r + 1u);
+    return code;
+}
+static void cap_answer(uint32_t code)
+{
+    uint8_t w = cap_rq_w;
+    if ((uint8_t)(w - cap_rq_r) >= CAP_Q)
+        return;                                                  /* (a message nobody took: the oldest stays) */
+    cap_rq[w & (CAP_Q - 1u)] = (uint8_t)code;
+    cap_rq_w = (uint8_t)(w + 1u);
+}
+/* audio, the top of a block: every posted command, in order */
+static void cap_commands(void)
+{
+    while (cap_cq_r != cap_cq_w) {
+        uint32_t c = cap_cq[cap_cq_r & (CAP_Q - 1u)], op = c & 15u, i = (c >> 4) & 15u, nb = c >> 8;
+        cap_cq_r = (uint8_t)(cap_cq_r + 1u);
+        if (op == CAP_OP_ALL_PAUSE) {
+            cap_all_pause();
+        } else if (i >= NTRK) {
+            continue;
+        } else if (op == CAP_OP_REC) {
+            uint32_t over = 0, ons;
+            if (!song.playing) {
+                cap_answer(CAPR_NO_CLOCK);
+                continue;
+            }
+            {   uint32_t t0 = fm1_ticks(), d;
+                ons = cap_take(i, nb, &over);
+                d = fm1_ticks() - t0;
+                cap_p_take_last = d; cap_p_takes++;
+                if (d > cap_p_take_max) cap_p_take_max = d;
+            }
+            cap_answer(ons ? (over ? CAPR_OVERDUB : CAPR_CAPTURED) : cap_rejected ? CAPR_FULL : over ? CAPR_NOTHING_ADD : CAPR_NOTHING);
+        } else if (op == CAP_OP_TOGGLE) {
+            if (!cap_st[i]) {
+                cap_answer(CAPR_NO_LOOP);
+            } else if (cap_st[i] == 1u) {
+                cap_pause(i);
+                cap_answer(CAPR_PAUSED);
+            } else if (!song.playing) {
+                cap_answer(CAPR_NO_CLOCK);
+            } else {
+                cap_resume(i);
+                cap_answer(CAPR_RUNS);
+            }
+        } else if (op == CAP_OP_WIPE) {
+            cap_wipe(i);
+            cap_answer(CAPR_CLEARED);
+        }
+    }
+}
+/* ---- the snapshot for the display (device plan C-b) ---- */
+typedef struct { volatile uint32_t w0, w1; } cap_pub_t;
+static cap_pub_t cap_pub[NTRK];
+typedef struct { uint8_t st, full, ln, rn, rh, bars, wrapped; uint32_t o; } cap_view_t;   /* o: the bar clock at the loop's start (running) or its phase (paused) */
+/* audio, once per block, after the commands and the idle logic */
+static void cap_publish(void)
+{
+    uint32_t i;
+    for (i = 0; i < NTRK; i++) {
+        uint32_t w0 = (uint32_t)cap_st[i] | (uint32_t)(cap_full[i] & 1u) << 2 | (uint32_t)cap_ln[i] << 3 | (uint32_t)cap_rn[i] << 10 |
+                      (uint32_t)cap_rh[i] << 17 | (cap_len[i] >> 16 & 15u) << 23 | (uint32_t)(cap_clock_wrapped & 1u) << 27;
+        cap_pub[i].w1 = cap_st[i] == 2u ? cap_pph[i] : cap_o[i];
+        cap_pub[i].w0 = w0;
+    }
+}
+/* UI: the track's snapshot (a retry when a block published while it was read) */
+static void cap_view(uint32_t i, cap_view_t *v)
+{
+    uint32_t a, b, n = 0;
+    do {
+        a = cap_pub[i].w0;
+        b = cap_pub[i].w1;
+    } while (a != cap_pub[i].w0 && ++n < 4u);
+    v->st = (uint8_t)(a & 3u);
+    v->full = (uint8_t)((a >> 2) & 1u);
+    v->ln = (uint8_t)((a >> 3) & 127u);
+    v->rn = (uint8_t)((a >> 10) & 127u);
+    v->rh = (uint8_t)((a >> 17) & 63u);
+    v->bars = (uint8_t)((a >> 23) & 15u);
+    v->wrapped = (uint8_t)((a >> 27) & 1u);
+    v->o = b;
+}
+static const cap_ev_t *cap_view_ring(const cap_view_t *v, uint32_t i, uint32_t k)   /* k-th oldest of the viewed ring */
+{
+    return &cap_ring[i][(v->rh + CAP_N - v->rn + k) % CAP_N];
+}
+static void cap_idle_body(void)                                  /* the clock stopped: the loops' notes end, they wait */
+{
+    static uint8_t was;
+    uint32_t i;
+    if (song.playing) {
+        was = 1;
+        for(i=0;i<NTRK;i++)if(cap_wait[i] && cap_st[i]==2u)cap_resume(i);
+        return;
+    }
+    if (was) {                                                   /* (once, as it stops: the live notes held end here) */
+        was = 0;
+        for (i = 0; i < NTRK; i++)
+            cap_close_live(i);
+    }
+    for (i = 0; i < NTRK; i++)
+        if (cap_st[i] == 1u) {
+            cap_pause(i);
+            cap_wait[i]=1;
+        }
+}
+static void cap_trim(void)                                       /* audio: nothing older than 8 bars stays in a live ring, so a 16 bit age is never ambiguous */
+{
+    uint32_t i, now = perf_bars_q16;
+    for (i = 0; i < NTRK; i++) {
+        uint8_t n = cap_rn[i];
+        while (cap_rn[i] && cap_age(now, cap_ring_at(i, 0)->t) > CAP_KEEP_U)
+            cap_rn[i]--;
+        if (cap_rn[i] != n)
+            cap_gen[i]++;
+    }
+}
+static void cap_idle(void)                                       /* audio, at the top of every block */
+{
+    uint32_t t0 = fm1_ticks(), i, busy = 0;
+    if (cap_p_blocks | cap_p_cur) {                                /* the previous block is over: close its numbers */
+        cap_p_last = cap_p_cur;
+        if (cap_p_cur > cap_p_max) cap_p_max = cap_p_cur;
+        cap_p_sum += cap_p_cur;
+        if (cap_p_fired > cap_p_fired_max) cap_p_fired_max = cap_p_fired;
+        if (cap_p_all && cap_p_cur > cap_p_busy_max) cap_p_busy_max = cap_p_cur;   /* (the block the plan is about: all four loops running) */
+    }
+    cap_p_blocks++;
+    cap_p_cur = 0;
+    cap_p_fired = 0;
+    cap_trim();
+    cap_commands();
+    cap_idle_body();
+    cap_publish();
+    for (i = 0; i < NTRK; i++)
+        busy += cap_st[i] == 1u;
+    cap_p_all = busy == NTRK;
+    cap_p_cur += fm1_ticks() - t0;
+}
+#define cap_key_on(k, t) do { cap_raw[k] = kb_note[k]; cap_put(trk_index(t), kb_note[k], kb_vel); } while (0)
+#define cap_key_off(k, t) do { cap_put(trk_index(t), cap_raw[k], 0); cap_skip = 1; } while (0)
+#define cap_key_done() (cap_skip = 0)
+#else
+#define cap_put(i, n, v) ((void)0)
+#define cap_tick() ((void)0)
+#define cap_idle() ((void)0)
+#define cap_key_on(k, t) ((void)0)
+#define cap_key_off(k, t) ((void)0)
+#define cap_key_done() ((void)0)
+#define cap_skip 0
+#endif

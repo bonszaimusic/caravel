@@ -898,7 +898,10 @@ static int test_save(void)
     ui_power_on();
     trk[0].p[P_E0] = 5;
     press(B_SAVE);
-    bad += check("SAVE opens USER with SAVE selected, without writing a slot",
+    bad += check("SAVE opens PROJECT with nothing picked (OCT+ does nothing yet), without writing a slot",
+                 !ui.home && cur_page()->graph == GR_SLOTS && ui.act == 0u && !up_used(0));
+    press(B_SAVE);
+    bad += check("SAVE again: USER with SAVE selected, without writing a slot (the sound's quick save, one tap on)",
                  !ui.home && cur_page()->graph == GR_USER && ui.act == 4u && !up_used(0));
     press(B_OCTUP);
     bad += check("SAVE then OCT+ opens NAME (the automatic name), writes nothing yet",
@@ -916,11 +919,15 @@ static int test_save(void)
     press(B_SAVE);
     bad += check("1.2: SAVE again: PHRASES (the patterns, after the sounds)", cur_page()->graph == GR_PATS);
     press(B_SAVE);
-    bad += check("SAVE again still cycles to PROJECT", cur_page()->graph == GR_SLOTS);
+    bad += check("SAVE again: TOOLS", cur_page()->graph == GR_TOOLS);
+    press(B_SAVE);
+    bad += check("SAVE again goes round to PROJECT, the first page", cur_page()->graph == GR_SLOTS);
     go_home();
     press(B_SAVE);
-    bad += check("SAVE from HOME returns directly to USER, even after visiting PROJECT",
-                 cur_page()->graph == GR_USER && ui.act == 4u);
+    bad += check("SAVE from HOME enters PROJECT with nothing picked, even after visiting it before",
+                 cur_page()->graph == GR_SLOTS && ui.act == 0u);
+    press(B_SAVE);
+    bad += check("..and the next tap is USER with SAVE selected", cur_page()->graph == GR_USER && ui.act == 4u);
     press(B_OCTUP);
     bad += check("direct SAVE still asks before overwriting an occupied slot",
                  ui.confirm == CF_OVR_USER && up_value(up_rec(0), P_E0) == 5);
@@ -2714,7 +2721,7 @@ static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const ste
 static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[6] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "USER"};   /* (1.5, #173) */
+    static const char *const SAVE_CYC[6] = {"PROJECT", "USER", "PRESETS", "PHRASES", "TOOLS", "PROJECT"};   /* (1.5, #173; PROJECT first since 1.0) */
     int bad = 0, ok = 1;
     uint32_t i, n0;
     step_t ref[NSTEP], want;
@@ -2726,7 +2733,7 @@ static int test_page_cycles(void)
         press(B_SAVE); frames(320);
         ok &= !ui.home && cur_page()->fam == FAM_SAVE && str_eq(cur_page()->title, SAVE_CYC[i]);
     }
-    bad += check("1.5 (#173): SAVE cycles USER > PRESETS > PHRASES > PROJECT > TOOLS > USER", ok);
+    bad += check("1.5 (#173): SAVE cycles PROJECT > USER > PRESETS > PHRASES > TOOLS > PROJECT", ok);
     ok = 1;
     for (i = 0; i < NPAGES; i++) {                       /* every page in a family its button reaches, and its LED */
         uint32_t f = PAGES[i].fam;
@@ -5246,9 +5253,9 @@ static int test_play_leds(void)
     ok = kb_map(t, 8) == 60u && play_leds() == (1u << 7 | 1u << 11);
     t->p[P_QUANT] = t->p[P_SCALE] = 0;
     bad += check("QNT SNAP: only the key of the note itself lights, not the keys rounding onto it", ok);
-    t->arp_note = 65;
+    t->arp_note = 65; t->arp_gate = 1;
     bad += check("the ARP's note lights its key too", play_leds() == (1u << 7 | 1u << 11 | 1u << 12));
-    t->arp_note = 0;
+    t->arp_note = 0; t->arp_gate = 0;
     events_block(div_samples((uint32_t)t->p[P_SDIV]) + CTL);
     bad += check("a note above the keyboard (G#7) lights nothing", t->seq_n == 1u && t->seq_notes[0] == 100u &&
                  play_leds() == 0u);
@@ -10774,7 +10781,7 @@ static int test_help(void)
     frames(2200);
     ok &= ui.help_t == 0u;
     press(B_SAVE);
-    ok &= ui.help_t > 0u && cur_page()->graph == GR_USER && str_eq(help_page(), "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS");
+    ok &= ui.help_t > 0u && cur_page()->graph == GR_SLOTS && str_eq(help_page(), "[K2]INIT, ERASE[K4]SAVE");
     press(B_HOME);
     ok &= ui.home && ui.help_t > 0u && str_eq(help_page(), H_HOME);
     menu_put(MI_HOME, HV_LEVELS);

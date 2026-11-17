@@ -41,10 +41,8 @@ static const param_desc_t *hp_desc(hp_ref_t r)
  if(r.kind==HP_TRACK){uint32_t id=hp_tid(r);return id<P_COUNT&&(r.engine==255||r.engine==trk[t].eng_req)?track_desc(&trk[t],id):0;}
  if(r.kind==HP_GLOBAL)return r.id<G_COUNT?&GP[r.id]:0;
  if(r.kind==HP_LFO2)return lfo2_desc(r.id);
- if(r.kind==HP_DX)return dx_track(&trk[t])?dx_desc(r.id):0;
  if(r.kind==HP_MACRO)return r.id<4?&HP_MDESC[r.id]:0;
  if(r.kind==HP_PAIR)return r.id<4?&HP_PDESC[r.id]:0;
- if(r.kind==HP_FM6){static const char*const names[]={"OP","STAGE","COARSE","FINE","LEVEL","MODE","DETUNE","VEL","RATE","ENV LVL"};HP_FMDESC.label=names[r.aux<10?r.aux:0];HP_FMDESC.max=fm6_max(r.id);return trk[t].eng_req==ENGI_FM6&&r.id<FP_SIZE?&HP_FMDESC:0;}
  return 0;
 }
 static int32_t hp_get(hp_ref_t r)
@@ -54,9 +52,7 @@ static int32_t hp_get(hp_ref_t r)
  if(r.kind==HP_TRACK)return trk[t].p[hp_tid(r)];
  if(r.kind==HP_GLOBAL)return song.g[r.id];
  if(r.kind==HP_LFO2)return lfo2_get(t,r.id);
- if(r.kind==HP_DX)return dx_get(t,r.id);
  if(r.kind==HP_MACRO)return song.playing?hp_macro_live[t][r.id]:hp.macro[t][r.id].base;
- if(r.kind==HP_FM6)return fm6_patch[t][r.id];
  if(r.kind==HP_PAIR){if(r.id==0)return pair_member(&trk[t])?(t==ep.a?ep.b:ep.a)+1:pair_ui_partner[t]+1;
   if(r.id==1)return pair_member(&trk[t]);if(r.id==2)return pair_member(&trk[t])?(ep.base*127+16383)/32767:0;return pair_member(&trk[t])&&ep.motion;}
  return 0;
@@ -94,9 +90,7 @@ static void hp_set(hp_ref_t r,int32_t value,int capture)
  if(r.kind==HP_TRACK){trk[t].p[hp_tid(r)]=value;if(capture)motion_capture(&trk[t],hp_tid(r),value);}
  else if(r.kind==HP_GLOBAL)song.g[r.id]=value;
  else if(r.kind==HP_LFO2)lfo2_set(t,r.id,value);
- else if(r.kind==HP_DX)dx_set(t,r.id,value);
  else if(r.kind==HP_MACRO)hp_special_set(t,r.id,value,capture);
- else if(r.kind==HP_FM6){uint8_t p[FP_SIZE+1u];memcpy(p,fm6_patch[t],FP_SIZE);p[r.id]=value;fm6_set_patch(t,p);fm6_own_ok&=~(1u<<t);fm6_slot[t]=FM6_OWN;trk[t].p[P_E7]=FM6_OWN;}
  else if(r.kind==HP_PAIR){
   if(r.id==0){if(ep.on)ui_message("UNPAIR TO CHANGE PARTNER");else {int32_t other=value-1;if(other==(int32_t)t)other+=(other>(int32_t)pair_ui_partner[t]?1:-1);if(other>=0&&other<NTRK)pair_ui_partner[t]=other;}}
   else if(r.id==1){if(value&&!ep.on){if(!pair_enable(t,pair_ui_partner[t]))ui_message(pair_last_reason);}else if(!value&&pair_member(&trk[t]))pair_disable();else if(value&&!pair_member(&trk[t]))ui_message("ONE PAIR: UNPAIR FIRST");}
@@ -146,8 +140,6 @@ static void hp_touch(uint32_t slot)
  if(pg->graph==GR_PAIR){r.kind=HP_PAIR;r.id=slot;}
  else if(pg->graph==GR_MACRO){r.kind=HP_MACRO;r.id=slot;}
  else if(lfo2_page(pg->graph)){r.kind=HP_LFO2;r.id=lfo2_page_target(pg->graph,slot);}
- else if(dx_page(pg->graph)){r.kind=HP_DX;r.id=dx_page_target(pg->graph,slot);}
- else if(fop_page(pg->graph)){uint32_t f=fop_field(slot);if(f==FO_OP||f==FO_STG)return;r.kind=HP_FM6;r.id=fop_byte(f);r.aux=f;}
  else if(pg->scope==SC_TRK){static const uint8_t ids[]={P_LEVEL,P_PAN,P_REV,P_MUTE};r=hp_track_ref(song.sel,ids[slot],ui.page);}
  else {int16_t *p;const param_desc_t*d=page_desc(pg,slot,&p);
   if(!d||!p||d->max==d->min||pg->scope==SC_STEP||pg->graph==GR_HOMEEDIT||pg->graph==GR_MACROMAP)return;
@@ -218,14 +210,13 @@ static void hp_turn(uint32_t slot,int32_t steps,int momentary)
  hp_set(r,param_turn(d,hp_get(r),accel(EN_K1+slot,steps,d->fmt==F_ENUM?0:d->max-d->min)),1);
  uint32_t t=hp_owner(r);
  if(r.kind==HP_TRACK)ml_knob(&trk[t],hp_tid(r));
- else if(r.kind==HP_LFO2||r.kind==HP_DX)ml_knob(&trk[t],r.id);
  else if(r.kind==HP_MACRO||r.kind==HP_PAIR)ml_knob(&trk[t],HP_VFIRST+(r.kind==HP_PAIR?4:0)+r.id);
 }
 static uint32_t hp_lock_id(uint32_t k){hp_ref_t r=hp_current(k);uint32_t id=hp_tid(r);return r.kind==HP_TRACK&&hp_owner(r)==song.sel&&hp_desc(r)&&motion_param(id)?id:0xFF;}
 static void hp_lock_turn(uint32_t slot,int32_t steps,uint64_t held)
 {
  hp_ref_t r=hp_current(slot);const param_desc_t*d=hp_desc(r);uint32_t id=hp_lock_id(slot);
- if(chain_busy()){ui_message("STOP SONG TO EDIT LOCKS");return;}if(!d){ui_message("NO LOCKS FOR THIS CONTROL");return;}
+ if(0){ui_message("STOP SONG TO EDIT LOCKS");return;}if(!d){ui_message("NO LOCKS FOR THIS CONTROL");return;}
  if(id!=0xFF){motion_undo_take(TSEL,0x100|slot);for(uint32_t i=0;i<NSTEP;i++)if((held>>i)&1){int16_t v;if(!motion_lock_get(TSEL,i,id,&v))v=motion_base_value(TSEL,id);motion_set_lock(TSEL,i,id,param_turn(d,v,steps));}motion_undo_done(TSEL);}
  else if((r.kind==HP_MACRO||(r.kind==HP_PAIR&&r.id>=2))&&hp_owner(r)==song.sel){for(uint32_t i=0;i<NSTEP;i++)if((held>>i)&1)hp_event_put(r.kind==HP_PAIR&&ep.on?ep.a:song.sel,i,(r.kind==HP_PAIR?4:0)+r.id,param_turn(d,hp_get(r),steps),1);}
  else ui_message(hp_owner(r)!=song.sel&&r.kind!=HP_GLOBAL?"SELECT TARGET TRACK FOR LOCK":"NO LOCKS FOR THIS CONTROL");
@@ -278,8 +269,6 @@ static void hp_source(void)
  track_select(hp_owner(r));
  if(r.kind==HP_TRACK&&hp_tid(r)>=P_M1SRC&&hp_tid(r)<=P_M4AMT)mod_ui_slot=(hp_tid(r)-P_M1SRC)/3;
  if(r.kind==HP_PAIR){hp_open_graph(GR_PAIR);return;}if(r.kind==HP_MACRO){hp_open_graph(GR_MACRO);return;}
- if(r.kind==HP_FM6){fop_op=5-r.id/FP_OP;if(r.aux==FO_RATE||r.aux==FO_ELVL)fop_stg=(r.id%FP_OP)-FO_OFF[r.aux];}
- if(r.kind==HP_DX&&r.id>=DX_SOUND_FIRST){dx_ui_lane=(r.id-DX_SOUND_FIRST)/16;uint32_t field=(r.id-DX_SOUND_FIRST)%16;dx_ui_side=field>=5&&field<10;}
  {int has=r.kind!=HP_TRACK&&r.kind!=HP_GLOBAL;for(uint32_t k=0;r.page<NPAGES&&k<4;k++)has|=PAGES[r.page].id[k]==hp_tid(r);
   if(r.page<NPAGES&&PAGES[r.page].graph==GR_MOD&&hp_tid(r)>=P_M1SRC&&hp_tid(r)<=P_M4AMT)has=1;   /* (the MOD page shifts its ids by its slot at run time) */   /* round 7: a cell stored before LINK and HARMONY joined PAGES[] names a page that moved: only a page that holds the parameter counts */
   if(has&&r.page<NPAGES&&page_visible(r.page)){ui.home=0;ui.page=r.page;page_entered();ui.force=1;return;}}

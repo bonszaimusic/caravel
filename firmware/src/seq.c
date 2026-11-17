@@ -38,6 +38,8 @@ static uint32_t kb_prev;
 static volatile uint8_t kb_boot_hold;    /* #137: set from power-on to the end of the splash (main.c): the keys sound nothing,
                                           * and one held across its end stays silent until it is let go and pressed again */
 static uint8_t kb_note[27], kb_trk[27];  /* per key: the note it started and on which track */
+static uint8_t ret_harm;                  /* 1 while link_retrigger runs for a HARMONY bar change (not for a LINK key change) */
+static uint8_t kb_src[27];                /* per key: the note the key mapped to before HARMONY snapped it (RETRIG HARM re-snaps from it) */
 static uint8_t in_key;                   /* the key (+ 1) whose notes go into input_on now (key_on), 0: none (MIDI IN) */
 static uint8_t kb_vel = 100;             /* 1.5.6 (#84): the keys' velocity (MENU > SELECT VEL, ui_input.c sel_play) */
 /* #191: where each track's held[i] came from, so the arp maps it again as it plays (arp_list: TRN, ROOT, SCALE, QNT as
@@ -66,7 +68,7 @@ static uint16_t harmony_phase;                    /* perf_bars_q16's fraction at
 static uint8_t harmony_root[4], harmony_dur[4];
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
-static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 CHORD, 2 LINK, 3 BOTH */
+static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 HARM (was CHORD), 2 SCALE (was LINK), 3 BOTH */
 static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes); felucca_init sets it on, as INIT and every load do (round 7: an initializer would cost 64 B of RAM against the guard) */
 #if CARAVEL_ACTION_BANKS
 /* Transient performance overlay. Only events_block moves the musical playhead. */
@@ -222,11 +224,29 @@ static uint16_t harmony_mask(const track_t *t)
     return harmony_mask_bar(harmony_bar);
 }
 static int chord_kit(const track_t *t);                /* chord.c: the track's keys are a kit / slices / hits */
+/* CHORD EXT (chord.c): EXT_G the cheap guard (CHORD SOURCE HARM; 2..5, T1..T4, are not live yet: OFF), EXT_ON the answer: EXT
+ * governs the track's notes (its pool, or silence), so no HARMONY snap, no CHRD, no FOLLOW. Not for FELUCCA_FM4 (the ids are
+ * operator values there) */
+#if !FELUCCA_FM4
+/* The audio side reads CHORD SOURCE / EXT / OCT ONCE per event (ext_cfg), whatever the UI thread turns meanwhile: the pool build, the
+ * decision EXT_ON and the placement of one event all use that one copy (chord.c ext_*). */
+typedef struct { int16_t src, ext, oct; } ext_cfg_t;
+static inline ext_cfg_t ext_cfg(const track_t *t) { ext_cfg_t c; c.src = t->p[P_CSRC]; c.ext = t->p[P_CEXT]; c.oct = t->p[P_COCT]; return c; }
+static int ext_on(const track_t *t, int src);
+static inline int ext_is_on(const track_t *t, const ext_cfg_t *c) { return c->src >= 1 && c->src <= 5 && ext_on(t, c->src); }
+static inline int ext_now(const track_t *t) { int16_t s = t->p[P_CSRC]; return s >= 1 && s <= 5 && ext_on(t, s); }
+#define EXT_ON(t) ext_now(t)
+#else
+typedef struct { int16_t src, ext, oct; } ext_cfg_t;
+static inline ext_cfg_t ext_cfg(const track_t *t) { ext_cfg_t c = {0, 0, 0}; (void)t; return c; }
+static inline int ext_is_on(const track_t *t, const ext_cfg_t *c) { (void)t; (void)c; return 0; }
+#define EXT_ON(t) 0
+#endif
 static uint32_t harmony_snap(const track_t *t, uint32_t n)
 {
     uint16_t mask = harmony_mask(t);
     uint32_t d;
-    if (!mask || chord_kit(t))                      /* a note that picks a drum / slice is not a pitch to move */
+    if (!mask || chord_kit(t) || EXT_ON(t))         /* a note that picks a drum / slice is not a pitch to move; an EXT track takes its pool instead */
         return n;
     for (d = 0; d <= 6u; d++) {
         if ((mask >> ((n + d) % 12u)) & 1u)
@@ -284,7 +304,7 @@ static uint32_t trk_midi_ch(uint32_t i)
     return (b > 0 ? (uint32_t)b : 0u) + i % NTRK;
 }
 
-static int drum_track(const track_t *t) { return ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM; }
+static int drum_track(const track_t *t) { (void)t;return 0; }
 
 /* the 27 keys from F: black or white, and the key's place among the keys of its colour (white 0..15, black
  * 0..10). The DRUM grid: white keys are steps, black keys 1..8 lanes, 9 ACC, 10 / 11 the page */
@@ -431,13 +451,16 @@ static int arp_replace(const track_t *t)
     return m == LT_NEW || (t->p[P_AHOLD] && m != LT_STACK);
 }
 
+#if CARAVEL_UX_CAPTURE
+static int cap_note_held(const track_t *t,uint32_t note);
+#endif
 static int midi_note_held(const track_t *t, uint32_t note);
 static int midi_local_held(const track_t *t, uint32_t note);
 /* Before a fresh input replaces chord_last, its released pitches become older owners. */
 static void latch_bus_capture(track_t *t)
 {
     uint32_t k = trk_index(t), j;
-    if (t->p[P_CHRD] == CH_BUS && !t->p[P_AMODE] && latch_mode(t) != LT_OFF)
+    if (t->p[P_CHRD] == CH_BUS && !t->p[P_AMODE] && latch_mode(t) != LT_OFF && !EXT_ON(t))   /* (an EXT track has no CHRD BUS chord) */
         for (j = 0; j < 4u; j++)
             lat_bus_other[k][j] |= lat_stay[k][j];
     lat_bus_last[k] = 0;
@@ -449,7 +472,7 @@ static void latch_bus_release(track_t *t, const uint8_t *notes, uint32_t n)
 {
     uint32_t k = trk_index(t), j;
     int matches = n == chord_last[k].n;
-    if (t->p[P_CHRD] != CH_BUS || t->p[P_AMODE] || latch_mode(t) == LT_OFF || !n)
+    if (t->p[P_CHRD] != CH_BUS || t->p[P_AMODE] || latch_mode(t) == LT_OFF || !n || EXT_ON(t))
         return;
     for (j = 0; j < n; j++) {
         if (lat_get(lat_eat[k], notes[j])) return;
@@ -469,8 +492,11 @@ static __attribute__((noinline)) void latch_free(track_t *t)
     uint32_t k = trk_index(t), n;
     for (n = 0; n < 128u; n++)
         if (lat_get(lat_stay[k], n) || lat_get(lat_bus_other[k], n)) {
-            if (!midi_local_held(t, n) && !midi_note_held(t, n))
-                trk_note_off(t, n);
+            if (!midi_local_held(t, n) && !midi_note_held(t, n)
+#if CARAVEL_UX_CAPTURE
+                && !cap_note_held(t,n)
+#endif
+            ) trk_note_off(t, n);
             lat_vel[k][n] = 0;
         }
     memset(lat_bus_other[k], 0, sizeof lat_bus_other[k]);
@@ -513,6 +539,7 @@ static void chord_live_sync(uint32_t i)
 static void chord_panic(uint32_t i)
 {
     uint32_t k;
+    ext_window_clear(i);
     for (k = 0; k < 27u; k++)
         if (kb_trk[k] == i)
             kb_live[k] = 0;
@@ -749,7 +776,7 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
         }
     }
     {
-        int bus = !t->p[P_AMODE] && t->p[P_CHRD] == CH_BUS, newest = 0;
+        int bus = !t->p[P_AMODE] && t->p[P_CHRD] == CH_BUS && !EXT_ON(t), newest = 0;
         if (bus && lat_bus_last[k] && n == chord_last[k].n) {
             newest = 1;
             for (i = 0; i < n; i++)
@@ -841,9 +868,9 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel);
 static void rec_release(track_t *t, uint32_t note);
 static int rec_on(const track_t *t) {
 #if FELUCCA_PAIR_MORPH
-    if (pair_member(t)) return (song.rec & ~step_record_mask & ((1u << ep.a) | (1u << ep.b))) && song.playing && !chain.running;
+    if (pair_member(t)) return (song.rec & ~step_record_mask & ((1u << ep.a) | (1u << ep.b))) && song.playing && !0u;
 #endif
-    return (((song.rec & ~step_record_mask) >> trk_index(t)) & 1u) && song.playing && !chain.running;
+    return (((song.rec & ~step_record_mask) >> trk_index(t)) & 1u) && song.playing && !0u;
 }
 
 #include "motion.c"
@@ -890,6 +917,7 @@ static __attribute__((noinline)) uint32_t midi_seq_preview(const track_t *t, uin
 static void arp_forget(track_t *t)               /* (its notes ended otherwise: trk_all_off) */
 {
     t->arp_note = t->arp_ch[0] = t->arp_ch[1] = t->arp_ch[2] = 0;
+    t->arp_gate = 0;
 }
 
 /* CHORD's notes. Not inlined: they run once an arp step, and kept out of the audio ISR's loop over the tracks
@@ -898,11 +926,12 @@ static __attribute__((noinline)) void arp_chord_off(track_t *t, int rec)   /* th
 {
     uint32_t i;
     for (i = 0; i < 3u; i++)
-        if (t->arp_ch[i]) {
+        if (t->arp_gate & (2u << i)) {
             if (rec)
                 rec_release(t, t->arp_ch[i]);
             trk_note_off(t, t->arp_ch[i]);
             t->arp_ch[i] = 0;
+            t->arp_gate &= (uint8_t)~(2u << i);
         }
 }
 
@@ -910,8 +939,9 @@ static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list
 {
     uint32_t i, j, nt, o = t->arp_idx % (uint32_t)(t->p[P_AOCT] > 0 ? t->p[P_AOCT] : 1);
     uint8_t used[CHORD_MAX], nu = 0;
-    if (n > 4u)
-        n = 4u;
+    uint32_t lim = EXT_ON(t) ? 3u : 4u;             /* (CHORD EXT: the pool's three at most) */
+    if (n > lim)
+        n = lim;
     for (i = 0; i < n; i++) {
         nt = (uint32_t)clamp((int32_t)list[i] + 12 * (int32_t)o, 0, 127);
         nt = harmony_snap(t, nt);                   /* AM_CHORD follows HARMONY like every other ARP mode */
@@ -922,10 +952,11 @@ static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list
     }
     for (i = 0; i < nu; i++) {
         nt = used[i];
-        if (!t->arp_note)
+        if (!i)
             t->arp_note = (uint8_t)nt;
         else
             t->arp_ch[i - 1u] = (uint8_t)nt;
+        t->arp_gate |= (uint8_t)(1u << i);
         if (rec_on(t))
             rec_note(t, nt, 100);
         trk_note_on(t, nt, 100);
@@ -934,20 +965,25 @@ static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list
 
 static void arp_silence(track_t *t)              /* the sounding arp note(s) end */
 {
-    if (t->arp_ch[0] | t->arp_ch[1] | t->arp_ch[2])
+    if (t->arp_gate & 14u)
         arp_chord_off(t, 0);
-    trk_note_off(t, t->arp_note);
+    if (t->arp_gate & 1u)
+        trk_note_off(t, t->arp_note);
     t->arp_note = 0;
+    t->arp_gate = 0;
 }
 
 static void arp_off(track_t *t)                  /* the sounding arp note(s) end (a recorded one too) */
 {
-    if (t->arp_ch[0] | t->arp_ch[1] | t->arp_ch[2])
+    if (t->arp_gate & 14u)
         arp_chord_off(t, rec_on(t));
-    trk_note_off(t, t->arp_note);
-    if (rec_on(t))
-        rec_release(t, t->arp_note);
+    if (t->arp_gate & 1u) {
+        trk_note_off(t, t->arp_note);
+        if (rec_on(t))
+            rec_release(t, t->arp_note);
+    }
     t->arp_note = 0;
+    t->arp_gate = 0;
 }
 
 /* TURING: a 16-bit feedback register per track picks the note list's index. The taps 0,2,3,5 are the usual
@@ -1043,7 +1079,7 @@ static int seq_counting(void) { return cin_left != 0u; }
 static uint32_t click_beat_len(void) { return 4u * div_samples(2); }   /* DIV 2: 1/16 */
 static int click_wanted(void)                  /* CLICK REC: while a track is armed (not in a song: no recording) */
 {
-    return click_mode == CLICK_ON || (click_mode == CLICK_REC && song.rec && !chain.running);
+    return click_mode == CLICK_ON || (click_mode == CLICK_REC && song.rec && !0u);
 }
 /* the arp's note list (list, its length returned; 0: nothing to play): the held notes (sorted or as played) over OCT
  * octaves, *cnt of them. #191: the notes as they play now, a key's mapped again through kb_pitch (TRN, ROOT, SCALE,
@@ -1069,6 +1105,11 @@ static uint32_t arp_list(const track_t *t, uint32_t *list, uint32_t *cnt)
         if (j == n)
             list[n++] = x;
     }
+    {
+        ext_cfg_t ec = ext_cfg(t);
+        if (ext_is_on(t, &ec))                      /* CHORD EXT: each anchor becomes the pool's tones near it (none: silence) */
+            n = ext_arp(t, &ec, list, n, &last);
+    }
     *cnt = n;
     if (!t->p[P_AORDER] && t->p[P_AMODE] != AM_ORD)   /* (ORD: as pressed, held[] keeps that order) */
         for (i = 1; i < n; i++)
@@ -1090,13 +1131,13 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
 {
     uint32_t cnt, list[64], len, j;
     if (!(len = arp_list(t, list, &cnt))) {        /* (every key silent now: QNT WHITE's black keys) */
-        if (t->arp_note)
+        if (t->arp_gate)
             arp_off(t);
         return;
     }
     t->arp_idx++;
     j = t->p[P_AMODE] == AM_CHORD ? 0u : arp_pick(t, list, len);
-    if (t->arp_note)
+    if (t->arp_gate)
         arp_off(t);
     if ((uint32_t)(rng() & 127u) <= (uint32_t)t->p[P_APROB]) {
         t->arp_off = period * (uint32_t)t->p[P_AGATE] / 128u;
@@ -1105,6 +1146,7 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
             return;
         }
         t->arp_note = (uint8_t)harmony_snap(t, list[j]);   /* every ARP step, TURING included */
+        t->arp_gate = 1;
         if (rec_on(t))
             rec_note(t, t->arp_note, 100);           /* recording: what the arp plays */
         trk_note_on(t, t->arp_note, 100);
@@ -1121,7 +1163,7 @@ static __attribute__((noinline)) void arp_external_due(track_t *t, uint32_t peri
         arp_fire(t, period);
         duration = period + (uint32_t)((t->arp_idx & 1u) ? sw : -sw);
     }
-    if (t->arp_note) {
+    if (t->arp_gate) {
         if (t->arp_off <= t->arp_pos) arp_off(t);
         else t->arp_off -= t->arp_pos;
     }
@@ -1134,14 +1176,14 @@ static void arp_step(track_t *t, uint32_t n, uint32_t gate_n)
 #if FELUCCA_PAIR_MORPH
     if (pair_follower(t)) return;
 #endif
-    if (t->arp_note) {
+    if (t->arp_gate) {
         if (t->arp_off <= gate_n)
             arp_off(t);
         else
             t->arp_off -= gate_n;
     }
     if (!t->p[P_AMODE] || !t->nheld) {
-        if (!t->nheld && t->arp_note)
+        if (!t->nheld && t->arp_gate)
             arp_off(t);
         return;
     }
@@ -1345,8 +1387,24 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
     cin_up[i] &= (uint8_t)~(1u << k);
 }
 
+#include "capture.c"
+#if !FELUCCA_FM4
+static int ext_real_input(void) {
+#if CARAVEL_UX_CAPTURE
+    return !cap_replay;
+#else
+    return 1;
+#endif
+}
+#endif
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
+#if CARAVEL_UX_CAPTURE
+    if(!cap_replay) {
+        cap_latched[trk_index(t)][note>>5]&=~(1u<<(note&31u));
+        if(cap_note_held(t,note))return; /* the shared input is already down */
+    }
+#endif
     last_note = (uint8_t)note;
     lat_vel[trk_index(t)][note & 127u] = (uint8_t)clamp((int32_t)vel, 1, 127);
     lat_put(lat_stay[trk_index(t)], note, 0);       /* (LATCH: a latched note pressed again is held by the key again) */
@@ -1365,6 +1423,9 @@ static int midi_note_held(const track_t *t, uint32_t note);
 static int midi_local_held(const track_t *t, uint32_t note);
 static void input_off(track_t *t, uint32_t note)
 {
+#if CARAVEL_UX_CAPTURE
+    if((!cap_replay && cap_note_held(t,note)) || midi_local_held(t,note))return;
+#endif
     if (midi_note_held(t, note))
         return;
     if (lat_get(lat_eat[trk_index(t)], note)) {    /* (LATCH STACK: this press ended the note, nothing began) */
@@ -1462,9 +1523,12 @@ static int midi_out_held(uint32_t ignore, uint32_t trk, uint32_t note)
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
+    cap_key_on(k, t);                                   /* capture the input before harmonic mapping */
+    kb_src[k] = kb_note[k];
     if (harmony_on && harmony_follow[trk_index(t)] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
         kb_note[k] = (uint8_t)harmony_snap(t, kb_note[k]);   /* live single notes follow HARMONY */
-    uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
+    ext_cfg_t ec = ext_cfg(t);
+    uint32_t n = chord_build_c(t, &ec, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel, eat;
     kb_chn[k] = 0;
     kb_live[k] = 1;                                 /* a fresh press is eligible for retrigger */
     kb_midin[k] = (uint8_t)n;
@@ -1489,6 +1553,7 @@ static void key_on(uint32_t k, track_t *t)
 /* key k is up: the notes it started end, but those another key still holds */
 static void key_off(uint32_t k, track_t *t)
 {
+    cap_key_off(k, t);
     uint32_t n = kb_chn[k], mn = kb_midin[k], live = kb_live[k], i, mc = trk_midi_ch(trk_index(t));
     kb_chn[k] = 0;
     kb_live[k] = 0;
@@ -1512,6 +1577,7 @@ static void key_off(uint32_t k, track_t *t)
             midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
     }
     chord_live_sync(trk_index(t));
+    cap_key_done();
 }
 
 #ifdef FM1_INPUT_LAT
@@ -1532,6 +1598,12 @@ static __attribute__((noinline)) void kb_lat(uint32_t k)
 }
 #endif
 
+#ifndef CARAVEL_UX_EVOLVE
+#define CARAVEL_UX_EVOLVE 0
+#endif
+#if CARAVEL_UX_EVOLVE
+static int uxl_swallow(uint32_t k);
+#endif
 static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch, k;
@@ -1575,6 +1647,12 @@ static void keyboard_block(void)
                     perf_key_press(k, 1);
                 continue;
             }
+#if CARAVEL_UX_EVOLVE
+            if (uxl_swallow(k)) {                 /* PLAY, LFO held: D5 E5 F5 G5 are the EVOLVE verbs (ui_uxl.c) */
+                kb_note[k] = KB_SILENT;
+                continue;
+            }
+#endif
 #if CARAVEL_ACTION_BANKS
             if ((action_capture_mask & (1u << k)) && !(action_preheld & (1u << k))) {
                 kb_note[k] = KB_SILENT;  /* no note-on, recording or MIDI */
@@ -1632,7 +1710,7 @@ static void seq_start(void)
     memset(seq_extend_target, 0, sizeof seq_extend_target);
     motion_fx_close();
     motion_begin();
-    chain_start();
+    ((void)0);
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
         track_t *t = &trk[i];
         t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
@@ -1677,6 +1755,7 @@ static void seq_release(track_t *t)
 static __attribute__((noinline)) void seq_stop(void)
 {
     uint32_t i;
+    ext_sources_stop();                           /* discard a partial gesture, retain remembered harmony */
 #if CARAVEL_REVERB_MINIMAL
     stasis_transport_stop();       /* STOP must release held STASIS independently of transport */
 #endif
@@ -1685,21 +1764,21 @@ static __attribute__((noinline)) void seq_stop(void)
     memset(seq_extend_target, 0, sizeof seq_extend_target);
     motion_fx_close();
     song.playing = 0;
-    chain.live_pending = chain.live_applied = 0;
+    LAUNCH_STATE.live_pending = LAUNCH_STATE.live_applied = 0;
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
     bar_reset_req = 0;                             /* a reset armed before the stop does not fire after it */
     cin_flush = 0;
     memset(cin_n, 0, sizeof cin_n);
     if (song.g[G_CLOCK])                           /* external clock: the arp stops with the transport, */
         for (i = 0; i < NPART; i++)                /* its sounding note too (HOLD keeps the latched chord) */
-            if (trk[i].arp_note)
+            if (trk[i].arp_gate)
                 arp_off(&trk[i]);
     for (i = 0; i < NTRK; i++) {
         if (latch_mode(&trk[i]) != LT_OFF) {       /* STOP ends the latch: the latched notes and the arp's chord */
             latch_free(&trk[i]);
             if (trk[i].nheld && !trk[i].arp_phys) {
                 trk[i].nheld = 0;
-                if (trk[i].arp_note)
+                if (trk[i].arp_gate)
                     arp_silence(&trk[i]);
             }
         }
@@ -1710,7 +1789,7 @@ static __attribute__((noinline)) void seq_stop(void)
         trk[i].nd_fired = 0;
     }
     chord_stop_all();                              /* a retriggered bus chord is not in any holder list */
-    chain_stop();
+    ((void)0);
     motion_end();
 }
 
@@ -1792,17 +1871,30 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
         if (!(skip & SEQ_REP))
             t->rat_left = (uint8_t)(hits - 1u);
     }
+    ext_cfg_t ec = ext_cfg(t);
+    uint32_t ex = ext_is_on(t, &ec);                /* CHORD EXT: every note of every step takes the pool's nearest tone */
     for (i = 0; i < s->n && i < 4u; i++) {
         uint32_t x = s->note[i];
-        if (qseq) {                                 /* QNT SEQ: onto the scale now; two notes snapping */
-            x = (uint32_t)clamp(scale_snap(t, (int32_t)x + qtrn), 0, 127);   /* together play once */
+        if (ex) {                                   /* (SEQ+T's transposition stays; no scale snap, no HARMONY snap) */
+            int32_t y = ext_map(t, &ec, clamp((int32_t)x + qtrn, 0, 127));
+            if (y < 0)
+                continue;                           /* no pool (WAIT / empty): the note is not played */
+            x = (uint32_t)y;
             for (j = 0; j < m && nn[j] != x; j++)
                 ;
-            if (j < m)
+            if (j < m)                              /* two notes on one pool tone play once */
                 continue;
+        } else {
+            if (qseq) {                             /* QNT SEQ: onto the scale now; two notes snapping */
+                x = (uint32_t)clamp(scale_snap(t, (int32_t)x + qtrn), 0, 127);   /* together play once */
+                for (j = 0; j < m && nn[j] != x; j++)
+                    ;
+                if (j < m)
+                    continue;
+            }
+            if (harmony_on && (idx & 3u) == 0u)
+                x = harmony_snap(t, x);              /* HARMONIC BUS: a strong step takes a chord tone */
         }
-        if (harmony_on && (idx & 3u) == 0u)
-            x = harmony_snap(t, x);              /* HARMONIC BUS: a strong step takes a chord tone */
         nn[m] = (uint8_t)x;
         vv[m] = (uint8_t)vel;
         sk |= ((skip >> i) & 1u) << m;
@@ -1897,11 +1989,7 @@ static __attribute__((noinline)) uint32_t seq_time(track_t *t, uint32_t idx, uin
 }
 
 /* the automation a track plays: its slot's while a song plays (song_chain.c lanes; 0: a silent lane, none) */
-static const motion_store_t *chain_motion(const track_t *t)
-{
-    uint32_t s = chain.lane[trk_index(t)];
-    return !chain.running ? &motion : s < 4u ? &chain.source[s].motion : 0;
-}
+#define seq_motion_source(t) (&motion)
 
 /* step idx plays: its chance (the one roll, as seq_step made it: a step that does not play applies no lock), the
  * automation and the locks before the notes (so a note-on reads them: eng_drum's KIT, ..), the notes live recording
@@ -1909,17 +1997,22 @@ static const motion_store_t *chain_motion(const track_t *t)
 static __attribute__((noinline)) void seq_play(track_t *t, uint32_t idx, uint32_t period)
 {
     const step_t *s = &seq_steps(t)[idx];
-    const motion_store_t *m = chain_motion(t);
+    const motion_store_t *m = seq_motion_source(t);
     uint32_t skip = SEQ_ROLLED, i, k;
     if (seq_miss(t, s, idx))
         skip = SEQ_MISS;
     if (m)
         motion_step(t, idx, m, skip == SEQ_ROLLED);
     if (t->rskip_n && t->rskip_idx == idx) {
+        ext_cfg_t ec = ext_cfg(t);
+        uint32_t ex = ext_is_on(t, &ec);            /* CHORD EXT: the note that would sound is the pool tone, not the stored one (seq_step) */
+        int32_t qtrn = ex && t->p[P_QUANT] == QN_SEQT ? t->p[P_TRANS] : 0;
         for (k = 0; k < t->rskip_n; k++) {
-            for (i = 0; i < s->n; i++)
-                if (s->note[i] == t->rskip[k])
+            for (i = 0; i < s->n; i++) {
+                int32_t y = ex ? ext_map(t, &ec, clamp((int32_t)s->note[i] + qtrn, 0, 127)) : (int32_t)s->note[i];
+                if (y == (int32_t)t->rskip[k])
                     skip |= 1u << i;
+            }
             for (i = 0; i < NLANE; i++)
                 if (((s->hit >> i) & 1u) && DRUM_LANE_NOTE[i] == t->rskip[k])
                     skip |= 1u << (8u + i);
@@ -1979,7 +2072,7 @@ static __attribute__((noinline)) void seq_nd_start(track_t *t, uint32_t period, 
             seq_play(t, t->seq_idx, period);
     }
     t->nd_fired = 0;
-    if ((!chain.running || nx) && (d = seq_nudge(t, &seq_steps(t)[nx])) < 0) {
+    if ((!0u || nx) && (d = seq_nudge(t, &seq_steps(t)[nx])) < 0) {
         uint32_t at = step_samples(t, period, t->seq_idx), back = (uint32_t)-d * period / NUDGE_DIV;
         at = (at > back ? at - back : 0u) + 1u;
         t->nd_early = at < t->nd_late ? t->nd_late : at;   /* (never before this step's own late play) */
@@ -2022,9 +2115,9 @@ static void seq_tick(track_t *t, uint32_t n)
         if (t->seq_pos < cur_len && t->seq_pos != 0x7FFFFFFFu + n)
             break;
         if (t->seq_pos < 0x7FFFFFFFu)
-            motion_fx_tick(t, chain_motion(t), cur_len); /* include the old step's tail before wrapping */
+            motion_fx_tick(t, seq_motion_source(t), cur_len); /* include the old step's tail before wrapping */
         top = t->seq_pos >= 0x7FFFFFFFu;
-        t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? ((chain.running | chain.live_applied) ? chain.carry : 0u) : t->seq_pos - cur_len;
+        t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? ((0u | LAUNCH_STATE.live_applied) ? LAUNCH_STATE.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
         if (!t->seq_idx && seq_extend_end[trk_index(t)]) {
             seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
@@ -2035,9 +2128,9 @@ static void seq_tick(track_t *t, uint32_t n)
             seq_play_on(t, period);                 /* QUANTIZE ON: every step on its start, as before 1.2 */
         else
             seq_nd_start(t, period, len);
-        motion_fx_step(t, chain_motion(t));
+        motion_fx_step(t, seq_motion_source(t));
     }
-    motion_fx_tick(t, chain_motion(t), step_samples(t, period, t->seq_idx));
+    motion_fx_tick(t, seq_motion_source(t), step_samples(t, period, t->seq_idx));
     if (t->rat_left)
         seq_ratchet(t, period);
 }
@@ -2077,6 +2170,152 @@ static track_t *midi_track(uint32_t ch)
 }
 
 #include "midi_control.c"
+
+/* RETRIG = HARM / BOTH, for what a track holds besides a CHRD BUS chord: its held notes follow the bar's chord and are sounded again.
+ *   an EXT track: each owner's voicing is rebuilt from the pool of the new bar (ext_build, the key / MIDI source note as anchor);
+ *   CHRD OFF with FOLLOW: the held single note is snapped again (harmony_snap) from its key;
+ *   LATCH: a latched pitch no key holds moves the same way (its lat_stay bit goes old -> new, as retrigger_owners moves a BUS chord's).
+ * Per owner (a key, a MIDI chord), from kb_src[k] / mchord.src, not through chord_last. An owner whose list does not change is left alone
+ * (an unchanged pool is no retrigger); at most 8 owners, 12 latched pitches per trigger. The owner lists are the release identity: they
+ * are rewritten, so a key-up / note-off still ends exactly what sounds. The ARP is off here (link_retrigger returns first). */
+static uint32_t ret_new(track_t *t, const ext_cfg_t *ec, uint32_t ex, uint32_t src, uint8_t *out)
+{
+    if (ex)
+        return ext_build(t, ec, src, out);
+    out[0] = (uint8_t)harmony_snap(t, src);
+    return 1;
+}
+static int ret_same(const uint8_t *a, uint32_t na, const uint8_t *b, uint32_t nb)
+{
+    uint32_t i;
+    if (na != nb)
+        return 0;
+    for (i = 0; i < na; i++)
+        if (a[i] != b[i])
+            return 0;
+    return 1;
+}
+#if !FELUCCA_FM4
+#define RET_N 48u
+_Static_assert(8u * CHORD_MAX + 12u <= RET_N, "retrigger owner note capacity");
+static __attribute__((noinline)) void retrigger_follow(uint32_t i)
+{
+    track_t *t = &trk[i];
+    struct { uint8_t kind, idx, no, nn, vel, old[CHORD_MAX], nw[CHORD_MAX]; } ow[8];
+    uint8_t lp[12], ln[12], lv[12], on[RET_N], offs[RET_N];                     /* (8 owners x CHORD_MAX + 12 latched pitches at most) */
+    ext_cfg_t ec = ext_cfg(t);                                /* SOURCE / EXT / OCT once for the whole bar line */
+    uint32_t ex = ext_is_on(t, &ec), no = 0, nl = 0, k, m, j, n, ch, note, non = 0, noff = 0;
+    int32_t oct = clamp((int32_t)ec.oct, -2, 2);
+    for (k = 0; k < 27u && no < 8u; k++) {                    /* keys */
+        uint8_t nw[CHORD_MAX];
+        if (!kb_chn[k] || !kb_live[k] || kb_trk[k] != i)
+            continue;
+        if (lat_get(lat_eat[i], kb_chord[k][0]))             /* a LATCH STACK toggle press: it ended the latched notes and sounds nothing */
+            continue;
+        n = ret_new(t, &ec, ex, kb_src[k], nw);
+        if (ret_same(kb_chord[k], kb_chn[k], nw, n))
+            continue;
+        ow[no].kind = 0; ow[no].idx = (uint8_t)k; ow[no].no = kb_chn[k]; ow[no].nn = (uint8_t)n; ow[no].vel = lat_vel[i][kb_chord[k][0] & 127u];
+        memcpy(ow[no].old, kb_chord[k], CHORD_MAX); memcpy(ow[no].nw, nw, CHORD_MAX);
+        no++;
+    }
+    for (m = 0; m < MCHORD_N && no < 8u; m++) {               /* MIDI notes that play a chord / a mapped note */
+        mchord_t *c = &mchord[m];
+        uint8_t nw[CHORD_MAX];
+        if (c->id != i + 1u || !c->n)
+            continue;
+        if (lat_get(lat_eat[i], c->note[0]))
+            continue;
+        n = ret_new(t, &ec, ex, c->src, nw);
+        if (ret_same(c->note, c->n, nw, n))
+            continue;
+        ow[no].kind = 1; ow[no].idx = (uint8_t)m; ow[no].no = c->n; ow[no].nn = (uint8_t)n; ow[no].vel = lat_vel[i][c->note[0] & 127u];
+        memcpy(ow[no].old, c->note, CHORD_MAX); memcpy(ow[no].nw, nw, CHORD_MAX);
+        no++;
+    }
+    for (ch = 0; midi_owners[i] && ch < 16u && no < 8u; ch++) {   /* MIDI notes played as they came (no mchord entry): one now, if there is room (no MIDI owner: no scan) */
+        if (!midi_ch[ch].owned[i])
+            continue;
+        for (note = 0; note < 128u && no < 8u; note++) {
+            uint8_t nw[CHORD_MAX];
+            if ((midi_note_get(ch, note) & 0x7Fu) != i + 1u || mchord_of(ch, note, i + 1u))
+                continue;
+            if (lat_get(lat_eat[i], note))                    /* a LATCH STACK toggle press: it ended the latched notes and sounds nothing (as the key and mchord loops) */
+                continue;
+            n = ret_new(t, &ec, ex, note, nw);
+            if (n == 1u && nw[0] == note)
+                continue;
+            for (m = 0; m < MCHORD_N && mchord[m].id; m++)
+                ;
+            if (m == MCHORD_N)
+                continue;
+            mchord[m].id = (uint8_t)(i + 1u); mchord[m].ch = (uint8_t)ch; mchord[m].src = (uint8_t)note;
+            mchord[m].n = 1; mchord[m].note[0] = (uint8_t)note;
+            ow[no].kind = 1; ow[no].idx = (uint8_t)m; ow[no].no = 1; ow[no].nn = (uint8_t)n; ow[no].vel = lat_vel[i][note];
+            memset(ow[no].old, 0, CHORD_MAX); ow[no].old[0] = (uint8_t)note; memcpy(ow[no].nw, nw, CHORD_MAX);
+            no++;
+        }
+    }
+    for (j = 0; (lat_stay[i][0] | lat_stay[i][1] | lat_stay[i][2] | lat_stay[i][3]) && j < 128u && nl < 12u; j++) {   /* latched pitches no key / note holds (nothing latched: no scan) */
+        int32_t y;
+        if (!lat_get(lat_stay[i], j) || midi_local_held(t, j) || midi_note_held(t, j) || mchord_held(i + 1u, j))
+            continue;
+        y = ex ? ext_map(t, &ec, clamp((int32_t)j - 12 * oct, 0, 127)) : (int32_t)harmony_snap(t, j);
+        if (y < 0 || y == (int32_t)j)
+            continue;
+        lp[nl] = (uint8_t)j; ln[nl] = (uint8_t)y; lv[nl] = lat_vel[i][j] ? lat_vel[i][j] : 100u;
+        nl++;
+    }
+    for (k = 0; k < no; k++) {                                /* rewrite the owners first: they are the release identity */
+        for (j = 0; j < CHORD_MAX; j++) {
+            if (ow[k].kind == 0) kb_chord[ow[k].idx][j] = ow[k].nw[j]; else mchord[ow[k].idx].note[j] = ow[k].nw[j];
+        }
+        if (ow[k].kind == 0) kb_chn[ow[k].idx] = ow[k].nn; else mchord[ow[k].idx].n = ow[k].nn;
+    }
+    for (k = 0; k < nl; k++) {
+        lat_put(lat_stay[i], lp[k], 0);
+        lat_vel[i][lp[k]] = 0;
+        lat_put(lat_eat[i], lp[k], 0);
+    }
+    for (k = 0; k < nl; k++) {
+        lat_put(lat_stay[i], ln[k], 1);
+        lat_put(lat_eat[i], ln[k], 0);
+        lat_vel[i][ln[k]] = lv[k];
+    }
+    for (k = 0; k < no; k++) {
+        for (j = 0; j < ow[k].no && noff < RET_N; j++)
+            offs[noff++] = ow[k].old[j];
+        for (j = 0; j < ow[k].nn; j++) {
+            lat_put(lat_eat[i], ow[k].nw[j], 0);              /* (a stale 'this press ended it' mark would swallow a later NoteOff) */
+            lat_vel[i][ow[k].nw[j] & 127u] = ow[k].vel;       /* the voicing keeps the dynamics it was pressed with (0: sounded as 100) */
+            if (non < RET_N)
+                on[non++] = ow[k].nw[j];
+        }
+        for (j = 0; j < ow[k].no; j++)
+            lat_put(lat_eat[i], ow[k].old[j], 0);
+    }
+    for (k = 0; k < nl; k++) {
+        if (noff < RET_N) offs[noff++] = lp[k];
+        if (non < RET_N) on[non++] = ln[k];
+    }
+    for (k = 0; k < noff; k++)                                /* what no owner, key, note or latch holds any more ends */
+        if (!chord_note_held(i, offs[k])
+#if CARAVEL_UX_CAPTURE
+            && !cap_note_held(t, offs[k])                    /* a loop keeps its mapped pitch until its recorded note-off */
+#endif
+        )
+            trk_note_off(t, offs[k]);
+    for (k = 0; k < non; k++) {
+        uint32_t vel = lat_vel[i][on[k]] ? lat_vel[i][on[k]] : 100u;
+        for (j = 0; j < k && on[j] != on[k]; j++)
+            ;
+        if (j == k)
+            trk_note_on(t, on[k], vel);
+    }
+}
+#else
+static void retrigger_follow(uint32_t i) { (void)i; }   /* (FM4: the ids are operator values: no CHORD EXT) */
+#endif
 /* Resync is a phase change, not a new transport: preserve SONG, live launches,
  * held chords, live FX and the sound/automation data. Live recording and SONG
  * are refused by the caller, including if either starts after the request. */
@@ -2089,7 +2328,7 @@ static __attribute__((noinline)) void seq_resync(void)
     for (uint32_t i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         seq_release(t);
-        if (t->arp_note || t->arp_ch[0] || t->arp_ch[1] || t->arp_ch[2]) arp_silence(t);
+        if (t->arp_gate) arp_silence(t);
         t->arp_pos = 0xFFFFFFFu;
         t->arp_idx = 0xFFFFFFFFu;
         t->arp_off = t->arp_walk = 0;
@@ -2210,26 +2449,22 @@ static __attribute__((noinline)) void project_sound_apply(void)
         arp_forget(t);
         t->user = 0;
         t->preset = live_sound.preset[k];
-        t->eng_req = chain.live_engine[k];
+        t->eng_req = LAUNCH_STATE.live_engine[k];
         memcpy(t->p, live_sound.p[k], sizeof t->p);
         lfo2_load(k, &live_sound.lfo2[k]);
-        memcpy(fm6_patch[k], live_sound.patch[k], sizeof fm6_patch[k]);
-        fm6_pgen[k]++;
-        fm6_slot[k] = (uint8_t)t->p[P_E7];
-        fm6_own_ok &= (uint8_t)~(1u << k);
-        if (dx_track(t)) { dx_config[k] = live_sound.dx[k]; dx_ready[k] = 1; }
         if (active) { t->xf_on = 1; t->xf = XF_BLOCKS; }
     }
     /* A live part does not replace the master clock or the MIDI setup. */
     for (uint32_t i = G_DTIME; i <= G_CDEPTH; i++) song.g[i] = live_sound.g[i];
     song.g[G_TUNE] = live_sound.g[G_TUNE];
     song.g[G_RTYPE] = live_sound.g[G_RTYPE];
+    chordext_reset_runtime();                           /* (CHORD SOURCE / EXT follow the slot; the remembered chord does not: slice 1b) */
 }
 static __attribute__((noinline)) int project_pattern_engines_ok(void)
 {
-    if (chain.live_full) return 1;
+    if (LAUNCH_STATE.live_full) return 1;
     for (uint32_t k = 0; k < NTRK; k++)
-        if (chain.live_engine[k] != trk[k].eng_req) return 0;
+        if (LAUNCH_STATE.live_engine[k] != trk[k].eng_req) return 0;
     return 1;
 }
 
@@ -2240,41 +2475,40 @@ static __attribute__((noinline)) int project_pattern_engines_ok(void)
 static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
 {
     track_t *clock = &trk[0];
-    uint32_t length, k, slot = chain.live_pending;
-    if (!slot || !n || !song.playing || chain.running || chain.armed ||
+    uint32_t length, k, slot = LAUNCH_STATE.live_pending;
+    if (!slot || !n || !song.playing || 0u || 0u ||
         clock->seq_pos >= 0x7FFFFFFFu || clock->seq_idx + 1u != seq_loop_len(clock)) return;
     length = step_samples(clock, div_samples((uint32_t)clock->p[P_SDIV]), clock->seq_idx);
     if (clock->seq_pos + n < length) return;
-    if (chain.live_full && fm6_writing) return; /* main-loop patch write: try the next loop, never tear it */
     if (!project_pattern_engines_ok()) {
-        chain.live_pending = 0;
-        chain.live_notice = 5;          /* engine changed after queuing: refuse unsafe automation */
+        LAUNCH_STATE.live_pending = 0;
+        LAUNCH_STATE.live_notice = 5;          /* engine changed after queuing: refuse unsafe automation */
         return;
     }
-    chain.carry = clock->seq_pos + n - length; /* SONG is idle; reuse its boundary overshoot */
+    LAUNCH_STATE.carry = clock->seq_pos + n - length; /* SONG is idle; reuse its boundary overshoot */
     motion_fx_close();
     motion_end();
-    if (chain.live_full) project_sound_apply();
+    if (LAUNCH_STATE.live_full) project_sound_apply();
     song.rec = 0;                       /* a queued launch must not record into the new pattern */
     step_record_mask = 0;
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];
         seq_extend_end[k] = seq_extend_target[k] = 0;
         seq_release(t);                 /* releases old tied notes, including MIDI note-offs */
-        memcpy(t->step, chain.source[0].step[k], sizeof t->step);
-        memcpy(&t->p[P_SLEN], chain.source[0].timing[k], sizeof chain.source[0].timing[k]);
-        t->p[P_SQNT] = chain.source[0].qnt[k];
+        memcpy(t->step, LAUNCH_PATTERN.step[k], sizeof t->step);
+        memcpy(&t->p[P_SLEN], LAUNCH_PATTERN.timing[k], sizeof LAUNCH_PATTERN.timing[k]);
+        t->p[P_SQNT] = LAUNCH_PATTERN.qnt[k];
         t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
         t->seq_pos = 0x7FFFFFFFu;
         t->rh_n = t->rskip_n = t->rat_left = 0;
         t->nd_late = t->nd_early = ND_NONE;
         t->nd_fired = 0;
     }
-    motion = chain.source[0].motion;
+    motion = LAUNCH_PATTERN.motion;
     motion_begin();
-    chain.live_applied = 1;
-    chain.live_notice = (uint8_t)slot;
-    chain.live_pending = 0;
+    LAUNCH_STATE.live_applied = 1;
+    LAUNCH_STATE.live_notice = (uint8_t)slot;
+    LAUNCH_STATE.live_pending = 0;
 }
 
 static void events_block(uint32_t n)
@@ -2303,7 +2537,7 @@ static void events_block(uint32_t n)
             midi_clock.bar_tick = tick;
         } else if (cin_left)
             ;                                       /* counting in already (the UI's PLAY stops it: seq_counting) */
-        else if (cin_bars && (song.rec & ~step_record_mask) && !song.playing && !chain.armed)
+        else if (cin_bars && (song.rec & ~step_record_mask) && !song.playing && !0u)
             cin_begin();                            /* recording from stop: the count-in first */
         else
             seq_start();
@@ -2375,7 +2609,7 @@ static void events_block(uint32_t n)
             latch_free(t);
             if (arp_hold(t) && t->nheld) {
                 t->nheld = 0;
-                if (t->arp_note)
+                if (t->arp_gate)
                     arp_silence(t);
             }
         }
@@ -2384,7 +2618,7 @@ static void events_block(uint32_t n)
             t->nheld = 0;
             if (!t->p[P_AMODE])
                 t->arp_phys = 0;
-            if (t->arp_note)
+            if (t->arp_gate)
                 arp_silence(t);
         }
         if ((lat_any(lat_stay[i]) || lat_any(lat_bus_other[i]) || lat_bus_last[i]) &&
@@ -2393,6 +2627,7 @@ static void events_block(uint32_t n)
         t->armp = t->p[P_AMODE];
         t->aholdp = arp_hold(t);
     }
+    ext_source_tick();
     keyboard_block();
     motion_fx_sync();
     while (mi_r != mi_w) {                            /* USB-MIDI (and TRS) in */
@@ -2423,6 +2658,7 @@ static void events_block(uint32_t n)
                 seq_n = midi_clock_advance(fm1_ms);
         }
     }
+    cap_idle();                       /* transport pause/resume in the note-owning audio context */
     /* The beat's share of this block, advanced once (the ARP LED and the bar reset below use it). */
     uint32_t beat_n_samples = clock_mode ? midi_grid_advance(&midi_beat_grid, seq_n, 0u) : n;
 #if CARAVEL_ACTION_BANKS
@@ -2480,16 +2716,19 @@ static void events_block(uint32_t n)
         arp_bar_sync();
         if (boundary && harmony_on && (old_chord != harmony_chord_at(harmony_bar) || old_mask != harmony_mask_bar(harmony_bar)))
             for (i = 0; i < NTRK; i++)
-                if ((link_retrig[i] & 1u) && harmony_follow[i])
+                if ((link_retrig[i] & 1u) && (harmony_follow[i] || EXT_ON(&trk[i]))) {   /* (CHORD EXT overrides FOLLOW) */
+                    ret_harm = 1;                     /* (the bar line asks: link_retrigger may rebuild an EXT voicing / a single note) */
                     link_retrigger(i);
+                    ret_harm = 0;
+                }
+        cap_tick();                   /* notes on a bar line use the newly effective chord */
     }
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
     project_pattern_tick(clock_mode ? midi_seq_preview(&trk[0], seq_n) : seq_n);
-    chain_tick(clock_mode && chain.running ? midi_seq_preview(&trk[chain.clk], seq_n) : seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);
-    chain.live_applied = 0;
+    LAUNCH_STATE.live_applied = 0;
     if (cin_flush)
         cin_record();
     if (song.playing)

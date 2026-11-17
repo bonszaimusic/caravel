@@ -10,13 +10,15 @@ static void hp_pair_capture(hp_pair_store_t*p)
 }
 static int hp_ref_valid(hp_ref_t r)
 {
+#if CARAVEL_FORMAT2
+ if(r.kind==HP_DX||r.kind==HP_FM6||(r.engine!=255u&&!eng_ok(r.engine)))return 0;
+#endif
  if(!r.kind)return 1;if(r.track>=NTRK&&r.track!=255)return 0;
  if(r.kind==HP_TRACK)return r.aux<=1&&(r.aux?r.id<8&&r.engine<NENGINES:r.id<P_E0&&(r.engine==255||r.engine<NENGINES));
  if(r.kind==HP_GLOBAL)return r.id<=G_CDEPTH||r.id==G_RTYPE;
  if(r.kind==HP_PAIR||r.kind==HP_MACRO)return r.id<4;
  if(r.kind==HP_LFO2)return lfo2_target(r.id);
- if(r.kind==HP_DX)return dx_target(r.id);
- if(r.kind==HP_FM6)return r.id<FP_SIZE;
+
  return 0;
 }
 static int hp_model_valid(const hp_model_t*m)
@@ -33,9 +35,10 @@ static int hp_model_valid(const hp_model_t*m)
 #include "home_store_snapshots.h"
 static int hp_capsule_ok(const hp_store_t*p)
 {
+ if(CARAVEL_FORMAT2 && p->version!=6u)return 0;
  if(p->magic!=HP_MAGIC||p->reserved[0]!=hp_hash(p,20))return 0;
 #if HP_SNAPSHOT_STORE
- if(p->version==2||p->version==3
+ if(p->version==2||p->version==3||(CARAVEL_FORMAT2&&p->version==6)
 #if HP_EL_PROJECT
  ||p->version==4||p->version==5
 #endif
@@ -53,12 +56,19 @@ static int hp_capsule_ok(const hp_store_t*p)
 static int hp_capture(hp_store_t*p)
 {
  memset(p,0,HP_CAPTURE_BYTES);p->magic=HP_MAGIC;p->version=1;p->size=sizeof*p;
- project_capture(&proj_scratch);proj_pack(&p->native,&proj_scratch);
+ project_capture(&proj_scratch);
+#if CARAVEL_FORMAT2
+ if(!proj_pack(&p->native,&proj_scratch))return 0;
+#else
+ proj_pack(&p->native,&proj_scratch);
+#endif
 #if HP_SNAPSHOT_STORE
  p->reserved[1]=hp_v2_encode((uint8_t*)&p->model,&hp,0,hp_rm_snap);
  if(!p->reserved[1]){p->magic=0;return 0;}
  p->version=
-#if HP_EL_PROJECT
+#if CARAVEL_FORMAT2
+ 6;
+#elif HP_EL_PROJECT
  5;
 #else
  3;
@@ -74,7 +84,7 @@ static int hp_restore(const hp_store_t*p)
  if(!hp_capsule_ok(p))return 0;
 #if HP_SNAPSHOT_STORE
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
- int v2=p->version==2||p->version==3
+ int v2=p->version==2||p->version==3||(CARAVEL_FORMAT2&&p->version==6)
 #if HP_EL_PROJECT
  ||p->version==4||p->version==5
 #endif
@@ -86,8 +96,10 @@ static int hp_restore(const hp_store_t*p)
 #endif
  if(!proj_import(&proj_scratch,&hp_io.native,sizeof hp_io.native))return 0;
  hp_pair_store_t*pair=&hp_io.pair;
- if(pair->on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?pair->b:pair->a];if(!pair_engine_ok(t->engine)||t->p[P_SPRD]||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}
+ if(pair->on)for(uint32_t m=0;m<2;m++){proj_trk_t*t=&proj_scratch.t[m?pair->b:pair->a];if(!pair_engine_ok(t->engine)||(uint32_t)t->p[P_VOICE]>V_UNISON)return 0;}
  if(project_restore_runtime(&proj_scratch))return 0;
+ /* Pair mode has no SPREAD. A project saved with SPREAD set on a pair track loads with it at 0, instead of being rejected. */
+ if(pair->on)for(uint32_t m=0;m<2;m++)trk[m?pair->b:pair->a].p[P_SPRD]=0;
  uint32_t irq=perf_irq_save();
  hp=hp_io.model;for(uint32_t t=0;t<NTRK;t++){uint32_t u=hp.track[t].pad[0];if(u&&(!up_used(u-1)||up_engine(u-1)==trk[t].eng_req))trk[t].user=u;}hp_last_valid=0;hp_backup_track=255;hp_motion_stop();
  if(pair->on){
@@ -100,19 +112,29 @@ static int hp_restore(const hp_store_t*p)
 #if HP_SNAPSHOT_STORE
  hp_rm_reset_all();hp_rm_snapshot_clear();action_snap_slot=0;
  uint32_t dropped=0;
- if(p->version==3
+ if(p->version==3||(CARAVEL_FORMAT2&&p->version==6)
 #if HP_EL_PROJECT
     ||p->version==4||p->version==5
 #endif
  )memcpy(hp_rm_snap,raw+HP_HW_META,sizeof hp_rm_snap); /* v4 retains ALL v3 snapshot slots/settings */
  else if(p->version==2)dropped=hp_snapshots_migrate((const void*)(raw+HP_HW_META));   /* the old four slots, sorted into the tracks' own sets */
+#if CARAVEL_FORMAT2
+ for(uint32_t t=0;t<NTRK;t++)for(uint32_t k=0;k<HP_RM_SNAP_SLOTS;k++) {
+  hp_rm_snap_t *q=&hp_rm_snap[t][k];
+  for(uint32_t i=0;i<q->count;i++) {
+   uint32_t v=hp_take(q->refs[i],3),e=(v>>14)&31u;
+   if(e!=31u)hp_put(q->refs[i],(v&~(31u<<14))|(eng_unstore(e)<<14),3);
+  }
+ }
+ uxl.uset=raw[HP_RAW_META-HP_F2_SET_BYTES+5u];
+#endif
  hp_ps_apply(v2?hp_rm_snap:0);                  /* stored settings, or the defaults of a project made before them; a journey starts stopped */
 #if HP_EL_PROJECT
  /* project_restore_runtime calls hp_init() (defaults + no active arms).
   * v4 restores legacy BOUNCE counts; v5 uses tagged tempo subdivisions.
   * Historical untagged values remain valid and keep their original sound.
   * v1/v2/v3 load safe new defaults rather than guessing missing bytes. */
- if(p->version==4u||p->version==5u)hp_el_persist_apply(raw+HP_RAW_META_V3);
+ if(p->version==4u||p->version==5u||(CARAVEL_FORMAT2&&p->version==6u))hp_el_persist_apply(raw+HP_RAW_META_V3);
  else{uint8_t defaults[HP_EL_PERSIST_BYTES];hp_el_persist_pack(defaults,0u);hp_el_persist_apply(defaults);}
 #endif
 #endif
@@ -131,6 +153,9 @@ static uint32_t hp_signature(void)
  hp_eng_ovr=255u;
 #endif
  return autosave_sig()
+#if CARAVEL_FORMAT2
+ ^((uint32_t)uxl.uset<<24)
+#endif
 #if HP_SNAPSHOT_STORE
  ^hp_hash(hp_rm_snap,sizeof hp_rm_snap)^hp_hash(&ps,sizeof ps)
 #endif
@@ -156,15 +181,9 @@ static int hp_sound_changed(const track_t *t)
   if(!engine->npresets)return 0;
   preset_sound_values(e,t->preset,p,&l2);
  }
- for(uint32_t i=0;i<P_COUNT;i++)if(!param_kept(i)&&!(e==ENGI_FM6&&i==P_E7)&&motion_base_value(t,i)!=p[i])return 1;
+ for(uint32_t i=0;i<P_COUNT;i++)if(!param_kept(i)&&motion_base_value(t,i)!=p[i])return 1;
  if(memcmp(&l2,&lfo2_config[k],sizeof l2))return 1;
- if(e==ENGI_FM6){
-  if(u>=UP_SLOTS||upf_get(u,patch))memcpy(patch,p[P_E7]>=0&&p[P_E7]<FM6_NFACTORY?FM6_FACTORY[p[P_E7]]:FM6_INIT,128);
-  fm6_pack(fm6_patch[k],actual);return memcmp(patch,actual,128);
- }
- if(dx_track(t)&&dx_ready[k]){
-  if(u>=UP_SLOTS||upf_get(u,patch)){dx_config_t c={0};memcpy(c.lane,DX_KIT_DEF,sizeof DX_KIT_DEF);memcpy(c.layer,DX_LAY_DEF,sizeof DX_LAY_DEF);dx_pack_config(&c,patch);}
-  dx_pack_config(&dx_config[k],actual);return memcmp(patch,actual,128);
- }
+
+
  return 0;
 }

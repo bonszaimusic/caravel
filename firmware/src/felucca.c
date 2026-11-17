@@ -40,10 +40,10 @@
 #define FM1_CPU1_USED FELUCCA_CPU2   /* hal/fm1_sys.h: the second core is built in; every reset holds it first (its
                                       * waiting loop is in RAM the ROM and the SPL use at boot) */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v0.13.0" /* Caravel 0.13.0 release, based on Felucca 1.6.1; shown in the
+#define FELUCCA_VERSION "v1.0.0" /* Caravel 1.0.0, based on Felucca 1.6.1; shown in the
                                    * menu, the console and the editor; build.py --release X.Y */
 #endif
-/* 0.13.0 target profile. Native legacy references do not include
+/* 1.0.0 target profile. Native legacy references do not include
  * this target entry point; explicit build environment overrides still apply. */
 #ifndef CARAVEL_ACTION_BANKS
 #define CARAVEL_ACTION_BANKS 1
@@ -56,6 +56,9 @@
 #endif
 #ifndef CARAVEL_STASIS_EXPAND
 #define CARAVEL_STASIS_EXPAND 1
+#endif
+#ifndef CARAVEL_UX_CAPTURE
+#define CARAVEL_UX_CAPTURE 1     /* live panel / MIDI note loops; volatile, not project data */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
@@ -99,7 +102,7 @@
 #if FELUCCA_UART
 #include "midi_uart.c"
 #endif
-#include "song_chain.c"
+#include "project_launch.c"
 #include "seq.c"
 #include "audio.c"
 
@@ -126,6 +129,7 @@
 #if FELUCCA_PERF_HW
 #include "../../experiments/home-perf/home_store_hw.c"
 #endif
+#include "ui_f2.c"               /* FORMAT 2: the first start with an older version's data (CARAVEL_FORMAT2) */
 #if FELUCCA_OTA
 #include "ota.c"
 #include "ota_hw.c"

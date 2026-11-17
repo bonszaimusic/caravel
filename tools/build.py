@@ -55,12 +55,14 @@ VERSION = None                      # versioned-build override (default: firmwar
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (1.6.1): the second core is built in, its entry and
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
 # (OFF by default: one core, as 1.6). FELUCCA_CPU2=0: none of it is built (1.6's one-core code and RAM)
-# 0.6.0 production profile: D3 HOME/PAIR plus HALL/STASIS, with SLICE omitted.
-# Native legacy tests set their own compile flags and retain the full reference.
+# FORMAT 2 production profile: six engines, complete HOME/PAIR project container.
 # Setting CPU2=0
 # omits the worker but retains HOME/PAIR/storage. Native legacy tests set their
 # own compile-time options and remain independent from this target profile.
 for _feature in ("FELUCCA_HOME_PERF", "FELUCCA_PAIR_MORPH", "FELUCCA_PERF_HW"):
+    os.environ.setdefault(_feature, "1")
+# CARAVEL_UX_CAPTURE belongs to the production profile: a plain build ships CAPTURE (CARAVEL_UX_CAPTURE=0 builds without it).
+for _feature in ("CARAVEL_SLIM", "CARAVEL_FORMAT2", "CARAVEL_UX_LAYERS", "CARAVEL_UX_EVOLVE", "CARAVEL_ELASTIC_P1", "CARAVEL_ELASTIC_PLAYABLE", "CARAVEL_UX_CAPTURE"):
     os.environ.setdefault(_feature, "1")
 os.environ.setdefault("CARAVEL_REVERB_MINIMAL", "1")
 os.environ.setdefault("FELUCCA_SLICE", "0")
@@ -115,9 +117,7 @@ def generate():
             [tools / "gen_aa_icons.py", GEN / "ui_icons.h"],
             [tools / "gen_aa_keycaps.py", GEN / "ui_keycaps.h"],
             [tools / "gen_ui_palettes.py", GEN / "ui_palettes.h"],
-            [tools / "gen_tables.py", GEN / "felucca_tables.h"],
-            [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"],
-            [tools / "gen_samples.py", GEN / "felucca_samples.h"]]
+            [tools / "gen_tables.py", GEN / "felucca_tables.h"]]
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -208,7 +208,7 @@ def build_app():
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
                  "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_PAIR_MORPH", "FELUCCA_HOME_PERF", "FELUCCA_PERF_HW", "CARAVEL_DUALCORE_D1", "CARAVEL_REVERB_MINIMAL",
-                 "CARAVEL_ACTION_BANKS", "FELUCCA_RANDOM_MORPH", "CARAVEL_STASIS_EXPAND", "CARAVEL_AUDIO_RAM", "CARAVEL_ELASTIC_P1", "CARAVEL_ELASTIC_PLAYABLE"):
+                 "CARAVEL_ACTION_BANKS", "FELUCCA_RANDOM_MORPH", "CARAVEL_STASIS_EXPAND", "CARAVEL_AUDIO_RAM", "CARAVEL_ELASTIC_P1", "CARAVEL_ELASTIC_PLAYABLE", "CARAVEL_UX_LAYERS", "CARAVEL_UX_EVOLVE", "CARAVEL_SLIM", "CARAVEL_FORMAT2", "CARAVEL_UX_CAPTURE"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")

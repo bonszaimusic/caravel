@@ -14,7 +14,7 @@
  * The editor protocol (STEP_SET / TRACK_STEP, INFO 52 01 04) is in tests/editor_test.c. Built and run by
  * tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 /* track 1 alone, a one-step loop: step 0 NOTE 60 (flags), RATCH hits, GATE 64, no swing; the transport started */
 static track_t *one_step(uint32_t hits, uint32_t flags)
@@ -91,17 +91,10 @@ static int play(void)
     run(t, step_len(t, 0) / CTL + step_len(t, 1) / CTL - 1u, 0, 0, 0);
     bad += check("  nor ties out: a TIE after a ratcheted step holds nothing", !t->seq_n);
 
-    t = one_step(4, 0);                               /* the DRUM grid: hits of BD (accented) and CH */
-    set_engine_of(t, ENGI_DRUM);
-    t->engine = t->eng_req;
-    t->step[0] = (step_t){{0}, 0, ST_NOTE, 0, 100, 1u << DV_KICK | 1u << DV_HATC, 1u << DV_KICK};
-    step_set_ratchet(&t->step[0], 3);
-    seq_start();
-    n = run(t, passes(t, 1), 0, 0, 0);
-    ok = 0;
-    for (h = 0; h < NVOICE; h++)
-        ok |= t->v[h].note == DRUM_LANE_NOTE[DV_KICK] && t->v[h].vel == 127u;
-    bad += check("  DRUM grid: BD + CH at x3, 6 hits, BD accented", n == 6u && ok);
+    t=one_step(4,0);t->p[P_VOICE]=V_POLY;t->step[0]=(step_t){{36,42},2,ST_NOTE,SF_ACCENT,100};
+    step_set_ratchet(&t->step[0],3);seq_start();n=run(t,passes(t,1),0,0,0);ok=0;
+    for(h=0;h<NVOICE;h++)ok|=t->v[h].note==36&&t->v[h].vel==127u;
+    bad+=check("two-note accented chord at x3 produces six note triggers",n==6u&&ok);
     step_set_chance(&t->step[0], 0);
     seq_start();
     bad += check("  chance 0: no part plays", run(t, passes(t, 2), 0, 0, 0) == 0u);
@@ -163,17 +156,17 @@ static int projects(void)
         step_set_ratchet(&t->step[i], 1u + i % 4u);
         step_set_chance(&t->step[i], i < 4u ? 100u : i == 4u ? 0u : 30u);
     }
-    trk[3].step[5].hit = 0x81; trk[3].step[5].acc = 0x80; trk[3].step[5].time = ST_NOTE;
+    trk[3].step[5].note[0]=48;trk[3].step[5].n=1; trk[3].step[5].time = ST_NOTE;
     step_set_ratchet(&trk[3].step[5], 4);
     project_capture(&before);
     ok = proj_pack(&packed, &before) && proj_import(&after, &packed, sizeof packed) && !memcmp(&before, &after, sizeof before);
     for (i = 0; ok && i < 8u; i++)
         ok &= step_ratchet(&after.t[0].step[i]) == 1u + i % 4u && step_chance(&after.t[0].step[i]) == step_chance(&before.t[0].step[i]) &&
               after.t[0].step[i].vel == before.t[0].step[i].vel;
-    bad += check("FUN8: x1..x4 round trip with their velocity, accent, chance (0 and 30 %) and lane hits", ok &&
-                 step_ratchet(&after.t[3].step[5]) == 4u && after.t[3].step[5].hit == 0x81);
-    pos = 68u + P_COUNT + 2u + 3u * 9u;              /* step 3 of track 1: x4 -> bit 7 of its velocity and chance */
-    bad += check("  x4 is bit 7 of the velocity and the chance bytes", (packed.raw[pos + 5] & 128u) && (packed.raw[pos + 8] & 128u) &&
+    bad += check("FUNW: x1..x4, velocity, accent, chance (0 and 30 %) and notes", ok &&
+                 step_ratchet(&after.t[3].step[5]) == 4u && after.t[3].step[5].note[0]==48 && !after.t[3].step[5].hit);
+    pos = 68u + P_COUNT + 2u + 3u * PROJ_STEP_SIZE;              /* step 3 of track 1: x4 -> bit 7 of its velocity and chance */
+    bad += check("  x4 is bit 7 of the velocity and the chance bytes", (packed.raw[pos + 5] & 128u) && (packed.raw[pos + 6] & 128u) &&
                  (packed.raw[pos + 5] & 127u) == before.t[0].step[3].vel);
     for (k = 0; k < NTRK; k++)
         for (i = 0; i < NSTEP; i++)
@@ -181,37 +174,14 @@ static int projects(void)
     project_capture(&before);
     proj_pack(&packed, &before);
     ok = 1;
-    for (k = 0, pos = 68u; k < NTRK; k++, pos += P_COUNT + 2u + NSTEP * 9u)
+    for (k = 0, pos = 68u; k < NTRK; k++, pos += P_COUNT + 2u + NSTEP * PROJ_STEP_SIZE)
         for (i = 0; i < NSTEP; i++)
-            ok &= packed.raw[pos + P_COUNT + 2u + i * 9u + 5u] < 128u && packed.raw[pos + P_COUNT + 2u + i * 9u + 8u] < 128u;
+            ok &= packed.raw[pos + P_COUNT + 2u + i * PROJ_STEP_SIZE + 5u] < 128u && packed.raw[pos + P_COUNT + 2u + i * PROJ_STEP_SIZE + 6u] < 128u;
     bad += check("  a project without ratchets: every velocity and chance byte below 128, as firmware before wrote", ok);
-    {   /* a FUN7 image (its tracks without patches) as firmware before RATCH wrote it: x1 */
-        project_store_t old;
-        uint32_t sum, magic = PROJ_MAGIC_V7, size = PROJ_STORE_V7;
-        project_t fun7;
-        memcpy(&old, &packed, sizeof old);
-        memcpy(old.raw, &magic, 4); memcpy(old.raw + 4, &size, 4);
-        memset(old.raw + PROJ_STORE_V7 - 4u - PROJ_NAME_LEN, 0, PROJ_NAME_LEN);
-        sum = proj_hash(old.raw, PROJ_STORE_V7 - 4u); memcpy(old.raw + PROJ_STORE_V7 - 4u, &sum, 4);
-        ok = proj_import(&fun7, &old, PROJ_STORE_V7);
-        for (k = 0; ok && k < NTRK; k++)
-            for (i = 0; i < NSTEP; i++)
-                ok &= step_ratchet(&fun7.t[k].step[i]) == 1u;
-        bad += check("  FUN7 of before: every step x1", ok && fun7.t[0].step[1].flags == SF_ACCENT);
-    }
-    {   /* FUN6 (10-byte steps): only accent and slide come over, x1 */
-        project_v6_t v6;
-        memset(&v6, 0, sizeof v6);
-        v6.magic = PROJ_MAGIC_V6; v6.size = sizeof v6; v6.parts = NPART; v6.phys = PROJ_PHYS;
-        memcpy(v6.g, before.g, sizeof v6.g);
-        memset(&v6.chain, 0, sizeof v6.chain);
-        for (k = 0; k < NTRK; k++) {
-            for (i = 0; i < 69u; i++) v6.t[k].p[i] = TP[i < 61u ? i : i - 61u + P_E0].def;
-            v6.t[k].step[0] = (step10_t){{60}, 1, ST_NOTE, 0xFBu, 100, 0, 0};   /* (stray high bits) */
-        }
-        v6.sum = proj_hash(&v6, sizeof v6 - 4u);
-        bad += check("  FUN6: x1, accent and slide kept", proj_import(&after, &v6, sizeof v6) &&
-                     step_ratchet(&after.t[0].step[0]) == 1u && after.t[0].step[0].flags == (SF_ACCENT | SF_SLIDE));
+    for(uint32_t magic=0x46554e36u;magic<=0x46554e37u;magic++) {
+        project_store_t old=packed;memcpy(old.raw,&magic,4);
+        uint32_t sum=proj_hash(old.raw,sizeof old-4);memcpy(old.raw+sizeof old-4,&sum,4);
+        bad+=check("old FUN6/FUN7 payload is refused",!proj_import(&after,&old,sizeof old));
     }
     ui_power_on();                                   /* a real save and load */
     step_set_ratchet(&trk[1].step[7], 3);
@@ -246,7 +216,7 @@ static int presets(void)
                  step_ratchet(&t->step[2]) == 3u && step_ratchet(&t->step[5]) == 4u && t->step[5].flags & SF_ACCENT &&
                  step_ratchet(&t->step[0]) == 1u && r.flags[2] == 2u << SF_RATCH_SH);
     k = 0;                                           /* UP_PUT: slot, engine, name, values, 16 x (note, flags) */
-    a[k++] = 3; a[k++] = (uint8_t)t->eng_req;
+    a[k++] = 3; a[k++] = (uint8_t)eng_store(t->eng_req);
     memcpy(a + k, "RAT", 4); k += 4;
     for (i = 0; i < P_COUNT; i++) { a[k++] = (uint8_t)((t->p[i] + 8192) & 127); a[k++] = (uint8_t)((t->p[i] + 8192) >> 7); }
     for (i = 0; i < 16u; i++) { a[k++] = r.note[i]; a[k++] = r.flags[i]; }
@@ -254,15 +224,7 @@ static int presets(void)
     memset(&r, 0, sizeof r);
     bad += check("  UP_PUT keeps a pattern's ratchet", !up_parse(a, n, &r, &slot) && r.flags[2] == 2u << SF_RATCH_SH &&
                  r.flags[5] == (SF_ACCENT | 3u << SF_RATCH_SH));
-    set_engine_of(t, ENGI_DRUM);                     /* a drum grid record: no room, x1 */
-    t->engine = t->eng_req;
-    track_defaults_steps(t);
-    t->step[0] = (step_t){{0}, 0, ST_NOTE, 0, 100, 1u << DV_KICK};
-    step_set_ratchet(&t->step[0], 2);
-    up_store(4, "GRID");
-    up_pat_load(t, 4);
-    bad += check("  a DRUM grid record loads its hits x1", up_grid(up_rec(4)) && t->step[0].hit == 1u << DV_KICK &&
-                 step_ratchet(&t->step[0]) == 1u);
+    /* FORMAT 2 has no drum-grid preset representation. */
     return bad;
 }
 
@@ -310,12 +272,12 @@ static int screens(void)
         for (k = 0; k < 4u; k++) {
             t->step[0] = kind[k];
             step_set_ratchet(&t->step[0], 2);
-            memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
+            memset(host_screen, 0, sizeof host_screen); proll.init=0; ui.force = 1; ui_draw();
             dim[k] = card_px(3, T_DIM); thm[k] = card_px(3, T_THEME);
         }
         t->step[0] = kind[3]; t->step[0].hit = 1u;   /* a NOTE step of lane hits only: it plays */
         step_set_ratchet(&t->step[0], 2);
-        memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
+        memset(host_screen, 0, sizeof host_screen); proll.init=0; ui.force = 1; ui_draw();
         ok = card_px(3, T_DIM) == dim[0] && card_px(3, T_THEME) == thm[0];
         for (k = 1; k < 4u; k++)
             ok &= dim[k] > dim[0] && thm[k] < thm[0];
@@ -330,7 +292,7 @@ static int screens(void)
     t->step[3] = t->step[1];
     step_set_ratchet(&t->step[1], 2);
     go_page(GR_ROLL); ui.cursor = 8; ui.bank = 0;
-    memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
+    memset(host_screen, 0, sizeof host_screen); proll.init=0; ui.force = 1; ui_draw();
     y = Y_GRAPH + (uint32_t)pr_row_y(60) + 2u;
     x = PR_X0 + 1u * PR_CW;
     ok = pr_is_bar(x + 3u, y) && pr_is_bar(x + 9u, y) && !pr_is_bar(x + 6u, y);
@@ -340,21 +302,12 @@ static int screens(void)
     t->step[3].flags = SF_SLIDE;
     t->step[1].flags |= SF_SLIDE;                     /* (x2 kept) */
     t->step[2] = t->step[4];
-    memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
+    memset(host_screen, 0, sizeof host_screen); proll.init=0; ui.force = 1; ui_draw();
     bad += check("  a slide line from an x1 SLIDE step, none from an x2 one", pr_slide_px(3, 60, 64) > 0u &&
                  pr_slide_px(1, 60, 64) == 0u);
     t->step[1].flags &= (uint8_t)~SF_SLIDE; t->step[3].flags = 0;
     t->step[2] = t->step[4] = (step_t){{0}, 0, ST_REST, 0, 0};
-    set_engine_of(t, ENGI_DRUM);                     /* the grid: x3 in three bars */
-    t->engine = t->eng_req;
-    t->step[1] = (step_t){{0}, 0, ST_NOTE, 0, 100, 1u};
-    step_set_ratchet(&t->step[1], 3);
-    ui.lane = 1;
-    memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-    y = Y_GRAPH + 6u + 4u + 6u;                      /* lane 0's hits: y 12 .. 21 of the panel */
-    x = 40u + 12u;
-    bad += check("  the DRUM grid draws an x3 hit in three parts", pr_is_bar(x, y) && !pr_is_bar(x + 2u, y) &&
-                 pr_is_bar(x + 3u, y) && !pr_is_bar(x + 5u, y) && pr_is_bar(x + 6u, y));
+    /* Retired drum-grid raster assertion is replaced by the melodic roll checks above. */
     return bad;
 }
 

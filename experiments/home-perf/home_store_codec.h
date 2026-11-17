@@ -12,8 +12,16 @@
 #define HP_HW_DATA (sizeof(project_store_t)+HP_HW_META)
 static void hp_put(uint8_t*p,uint32_t v,uint32_t n){while(n--){*p++=(uint8_t)v;v>>=8;}}
 static uint32_t hp_take(const uint8_t*p,uint32_t n){uint32_t v=0;while(n)v=(v<<8)|p[--n];return v;}
-static uint32_t hp_ref_pack(hp_ref_t r){return r.id|(uint32_t)r.aux<<11|(uint32_t)(r.engine==255?31:r.engine)<<15|(uint32_t)(r.track==255?7:r.track)<<20|(uint32_t)r.kind<<23|(uint32_t)(r.page<63?r.page:63)<<26;}
-static hp_ref_t hp_ref_unpack(uint32_t v){hp_ref_t r={0};r.id=v&2047;r.aux=(v>>11)&15;r.engine=(v>>15)&31;if(r.engine==31)r.engine=255;r.track=(v>>20)&7;if(r.track==7)r.track=255;r.kind=(v>>23)&7;r.page=v>>26;if(r.page==63)r.page=0xFFFF;return r;}
+static uint32_t hp_ref_pack(hp_ref_t r){
+#if CARAVEL_FORMAT2
+ if(r.engine!=255u)r.engine=(uint8_t)eng_store(r.engine);
+#endif
+ return r.id|(uint32_t)r.aux<<11|(uint32_t)(r.engine==255?31:r.engine)<<15|(uint32_t)(r.track==255?7:r.track)<<20|(uint32_t)r.kind<<23|(uint32_t)(r.page<63?r.page:63)<<26;}
+static hp_ref_t hp_ref_unpack(uint32_t v){hp_ref_t r={0};r.id=v&2047;r.aux=(v>>11)&15;r.engine=(v>>15)&31;if(r.engine==31)r.engine=255;
+#if CARAVEL_FORMAT2
+ else {uint32_t e=eng_unstore(r.engine);r.engine=(uint8_t)(e==255u?254u:e);}
+#endif
+r.track=(v>>20)&7;if(r.track==7)r.track=255;r.kind=(v>>23)&7;r.page=v>>26;if(r.page==63)r.page=0xFFFF;return r;}
 /* Encode into independent pending RAM. Decode backwards also supports expansion
  * in-place from hp_io.model; destination fields always lie at or above the input. */
 static void hp_meta_pack(uint8_t*out,const hp_model_t*m,const hp_pair_store_t*p){

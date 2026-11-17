@@ -26,7 +26,7 @@ async function device(saved) {
   ex._initialize();
   ex.web_nor_erase();
   if (saved) restoreSectors(new Uint8Array(mem.buffer, ex.web_nor(), ex.web_nor_size()), saved);
-  ex.web_boot();
+  ex.web_boot(); if (ex.web_test_build) ex.web_test_build();
   const d = { ex, mem, peak: 0, sig: 0, rec: false, frames: 0, kept: [] };
   d.render = (ms) => {
     const n = Math.round(ms * 44.1);

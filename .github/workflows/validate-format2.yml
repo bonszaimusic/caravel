@@ -1,0 +1,155 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: Caravel FORMAT 2 Validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install Pillow fonttools
+      - run: sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+      - name: Fetch and hash-verify pinned JieLi AC79 SDK files
+        shell: bash
+        run: |
+          # Only three SDK binaries are used by our package builder. Gitee
+          # full-repository git clones can stall indefinitely: first try raw
+          # downloads; independently verify exact versioned SHA-256 hashes.
+          set -eu
+          root="$RUNNER_TEMP/ac79-sdk/cpu/wl82/tools"
+          base="https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK/raw/AC79NN_SDK_V1.2.1_2023-12-13/cpu/wl82/tools"
+          mkdir -p "$root/cfg"
+          ok=1
+          for f in uboot.boot cfg_tool.bin cfg/eq_cfg_hw.bin; do
+            curl -fLsS --connect-timeout 8 --max-time 25 --retry 2 --retry-delay 2 \
+              -o "$root/$f" "$base/$f" || ok=0
+          done
+          if [ "$ok" -eq 1 ] && python3 - <<'PY'
+          import hashlib, pathlib, os
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"ac79-sdk/cpu/wl82/tools"
+          expected={
+              "uboot.boot":"4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4",
+              "cfg_tool.bin":"276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b",
+              "cfg/eq_cfg_hw.bin":"41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
+          }
+          assert all((root/name).exists() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha
+                     for name,sha in expected.items()), "SDK raw downloads did not match locked hashes"
+          print("SDK binaries match pinned SHA-256 fingerprints")
+          PY
+          then
+            echo "Using verified pinned SDK binaries"
+          else
+            echo "Raw SDK unavailable/mismatched; retrying bounded full-repo clone"
+            rm -rf "$RUNNER_TEMP/ac79-sdk"
+            timeout 240 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 clone \
+              --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79-sdk"
+          fi
+      - name: Build the actual production-profile target (version string 1.0.0 for this test build), then prepare full host fixtures
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          CARAVEL_REVERB_MINIMAL: '1'
+        run: |
+          export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
+          export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
+          sh build.sh --binary-version 1.0.0
+          cp build/caravel-1.0.0.fwsc build/caravel.fwsc
+          mkdir -p build/validation-sdk
+          cp -R "$AC79_SDK/cpu" build/validation-sdk/
+          python3 tools/validate_all.py inventory
+          git rev-parse HEAD > build/validation-source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-inputs
+          retention-days: 7
+          path: |
+            build/gen/
+            build/caravel.fwsc
+            build/caravel-1.0.0.fwsc
+            build/felucca.bin
+            build/felucca.dis
+            build/felucca.elf
+            build/loader/ota.bin
+            build/validation-sdk/
+            build/validation-source-sha.txt
+            build/validation/host-inventory.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-build-diagnostics
+          retention-days: 7
+          path: |
+            build/*.txt
+            build/*.json
+  host:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [storage_usb, synthesis_midi, ui_storage, effects, cpu_dual, engines_samples, sanitizers, web_target]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: python -m pip install Pillow fonttools
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-inputs
+          path: build
+      - name: Pin DaisySP float reference for PHYS
+        if: matrix.shard == 'engines_samples'
+        run: |
+          git init "$RUNNER_TEMP/DaisySP"
+          git -C "$RUNNER_TEMP/DaisySP" remote add origin https://github.com/daisyaudio/DaisySP.git
+          git -C "$RUNNER_TEMP/DaisySP" fetch --depth 1 origin 2c72eaf9eac5fc0dca1919d65d606da907832618
+          git -C "$RUNNER_TEMP/DaisySP" checkout --detach FETCH_HEAD
+      - name: Install pinned Emscripten for required browser tests
+        if: matrix.shard == 'web_target'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.64
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.64
+      - name: Run registered FORMAT 2 shard, no baseline updates
+        env:
+          CC: cc -include stdint.h
+          FELUCCA_SLICE: '0'
+          CARAVEL_REVERB_MINIMAL: '1'
+          AC79_SDK: ${{ github.workspace }}/build/validation-sdk
+          DAISYSP: ${{ runner.temp }}/DaisySP
+          TSAN: '1'
+          SANITIZE: '1'
+          ASAN_OPTIONS: detect_leaks=0
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/emsdk/emsdk_env.sh" ]; then . "$RUNNER_TEMP/emsdk/emsdk_env.sh"; fi
+          python3 tools/validate_all.py "${{ matrix.shard }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.shard }}
+          retention-days: 14
+          path: |
+            build/validation/
+            build/ui_new/*.txt
+            build/ui_new/*.tsv
+            build/ui_new/sheet*.png
+            build/ui_fm4/*.txt
+            build/ui_slot/*.png
+            build/host/*.json

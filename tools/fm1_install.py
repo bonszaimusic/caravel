@@ -9,12 +9,16 @@ step 2, the loader reads the whole package and writes it. In both steps the
 device asks (SysEx read requests on the logical image) and we answer. Then
 the FM-1 restarts and the installed identity is checked.
 
-  fm1_install.py PACKAGE.fwsc [--port NAME] [--yes] [--force]
-  fm1_install.py FM-1.fwsc            (the official V15 file: back to the stock firmware)
+  fm1_install.py PACKAGE.fwsc --target-generation 2 [--release-record release-build.json]
+  fm1_install.py CLASSIC.fwsc --target-generation 1 --classic-backup old.zip
+  fm1_install.py FM-1.fwsc --target-generation stock  (the pinned official V15)
   fm1_install.py --info [--port NAME]
 
-If the FM-1 is still in update mode (an earlier install was cut off), the
-install finishes the write. Needs mido with python-rtmidi.
+The 1.x target needs the matching release-build.json beside the package or
+selected with --release-record; its schema, version, product and package SHA
+must agree. This checks artifact identity, not a publisher signature.
+If the FM-1 is already in update mode, also select --recovery-backup with
+a saved matching archive. Needs mido with python-rtmidi.
 
 Exit codes: 0 done, 1 cancelled or other error, 2 bad arguments or package,
 3 FM-1 not found, 4 connection lost or the device stopped, 5 timeout (no
@@ -22,10 +26,15 @@ loader / no restart), 6 wrong model, or another identity after the install.
 """
 import argparse
 import hashlib
+import json
+from dataclasses import dataclass
 import queue
 import re
 import sys
 import time
+from pathlib import Path
+import os
+import caravel_generation as generation
 
 HS_QUERY = bytes([0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7])
 UPGRADE = bytes([0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7])
@@ -36,10 +45,11 @@ LOADER_MARK = b"FELUCCA-LOADER-1"
 # the unmodified official FM-1 V15 (FM-1.fwsc from M-VAVE): returning to it is allowed without --force,
 # as the web installer's "Return to official V15" (web/fm1pkg.js validateStockPackage)
 STOCK_V15_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
+CLASSIC_013_SHA256 = "a1d560684519667b4051b35630380874065853a20a353a4f9d279c2bfee208b7"
 PORT_RE = re.compile(r"fm-1|felucca|caravel|ota|composite|sinco|usb-midi", re.I)   # never probe other gear
 
 RISK_NOTICE = ("Installing custom firmware is at your own risk. A failed or interrupted update can leave the FM-1 unusable and\n"
-               "need an FM-1 Transporter to recover it. This tool makes no backup: save your projects and settings first.\n"
+               "need an FM-1 Transporter to recover it. This tool saves and verifies a complete backup before updating running Caravel. Keep an earlier matching backup for loader recovery.\n"
                "More: docs/installing.md in the Caravel repository.")
 
 # seconds; the tests shorten them
@@ -55,6 +65,46 @@ class InstallError(Exception):
     def __init__(self, code, msg):
         super().__init__(msg)
         self.code = code
+
+
+@dataclass(frozen=True)
+class VerifiedTarget:
+    generation: str
+    product: str
+    image_sha256: str
+
+
+def verify_target(raw, product, image, target, record_path=None):
+    """Bind the selected target to bytes, never to a filename or text marker."""
+    digest = hashlib.sha256(raw).hexdigest()
+    if target == "1":
+        if digest != CLASSIC_013_SHA256:
+            raise InstallError("badpkg", "The Classic return requires the original published 0.13.0 package")
+    elif target == "stock":
+        if digest != STOCK_V15_SHA256:
+            raise InstallError("badpkg", "The stock return requires the pinned official V15 package")
+    elif target == "2":
+        # These exact packages may never use the normal 1.x path, even if a
+        # mistaken or fabricated record labels them as 1.x.
+        if digest in (CLASSIC_013_SHA256, STOCK_V15_SHA256):
+            raise InstallError("badpkg", "Classic/stock firmware requires its explicit return path")
+        try:
+            if record_path is None or Path(record_path).stat().st_size > 65536:
+                raise ValueError("missing or oversized release record")
+            record = json.loads(Path(record_path).read_text(encoding="utf-8"))
+            version = record.get("version", "")
+            if (record.get("schema") != 1 or not isinstance(version, str)
+                    or not re.fullmatch(r"1\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?", version)
+                    or record.get("product") != product
+                    or record.get("binaries", {}).get(f"caravel-{version}.fwsc") != digest):
+                raise ValueError("release schema/version/product/package hash mismatch")
+        except (OSError, ValueError, AttributeError, TypeError) as error:
+            raise InstallError("badpkg", "1.x target requires its matching release-build.json: " + str(error)) from error
+    else:
+        raise InstallError("usage", "Select --target-generation 2, 1 (explicit Classic return), or stock")
+    if product_of(raw) != product or logical_image(raw) != image:
+        raise InstallError("badpkg", "Verified package and update image differ")
+    return VerifiedTarget(target, product, hashlib.sha256(image).hexdigest())
 
 
 # ------------------------------------------------------------ wire format ---
@@ -318,8 +368,13 @@ class Updater:
 
     def check(self, dev, image, step):
         """step 1: the running firmware checks the package and starts the loader"""
+        try:
+            source, _, _ = generation.identify(dev.link)
+        except (ValueError, TimeoutError) as error:
+            dev.link.close()
+            raise InstallError("generation", str(error)) from error
         step("start", dev.id.text)
-        dev.link.send(UPGRADE)
+        dev.link.send(generation.update_entry(source))
         time.sleep(DELAY["start"])
         served, finished, lost = self.serve(dev.link, image, FINISH_CHECK, DELAY["idle_check"],
                                             lambda k, end: step("check", k))
@@ -362,9 +417,13 @@ class Updater:
         step("done", back.id.text)
         return back.id.text
 
-    def install(self, dev, image, product, step=lambda *a: None):
+    def install(self, dev, image, product, step=lambda *a: None, *, verified_target=None):
         """running firmware -> loader -> new firmware; dev from find(). A device already in
         update mode only needs the write."""
+        if (not isinstance(verified_target, VerifiedTarget) or verified_target.product != product
+                or verified_target.image_sha256 != hashlib.sha256(image).hexdigest()):
+            dev.link.close()
+            raise InstallError("badpkg", "Verify the target package and release record before installing")
         if model_of(dev.id.text) != model_of(product):
             dev.link.close()
             raise InstallError("model", f"the device is {dev.id.text}, the package is for {product}")
@@ -375,7 +434,7 @@ class Updater:
 
 # ------------------------------------------------------------------- CLI ---
 
-def load_package(path, force):
+def load_package(path, force, *, with_raw=False):
     try:
         raw = open(path, "rb").read()
     except OSError as e:
@@ -388,7 +447,8 @@ def load_package(path, force):
         raise InstallError("badpkg", f"{path}: no Felucca update loader in this package; only Felucca's own "
                                      "packages and the unmodified official V15 (FM-1.fwsc) are installed "
                                      "(--force overrides)")
-    return product, logical_image(raw)
+    result = (product, logical_image(raw))
+    return (*result, raw) if with_raw else result
 
 
 def not_found(up):
@@ -433,21 +493,67 @@ def run(a, backend, out, ask):
         mode = "update loader (update not finished)" if dev.id.loader else "running"
         print(f"{dev.id.text}  [{mode}]  port: {dev.name}", file=out)
         return 0
-    product, image = load_package(a.package, a.force)
+    product, image, raw = load_package(a.package, a.force, with_raw=True)
+    target = getattr(a, "target_generation", None)
+    if target not in ("1", "2", "stock"):
+        raise InstallError("usage", "Select --target-generation 2, 1 (explicit Classic return), or stock")
+    record = getattr(a, "release_record", None) or Path(a.package).with_name("release-build.json")
+    verified_target = verify_target(raw, product, image, target, record)
     print(f"package: {product}  ({a.package})", file=out)
     dev = up.find()
     if not dev:
         raise not_found(up)
     print(f"device:  {dev.id.text}  ({dev.name})" + ("  in update mode: the write will be finished" if dev.id.loader else ""),
           file=out)
+    if model_of(dev.id.text) != model_of(product):
+        dev.link.close()
+        raise InstallError("model", f"the device is {dev.id.text}, the package is for {product}")
     print(RISK_NOTICE, file=out)
+    # The command-line route has the same generation and complete-backup gate.
+    import caravel_backup as backup
+    if target == "1":
+        previous = getattr(a, "classic_backup", None)
+        if not previous:
+            dev.link.close()
+            raise InstallError("usage", "Select --classic-backup with the pre-upgrade Classic 0.13 archive")
+        fmt, items = backup.load_archive(previous)
+        cap = items.get(0, b"")
+        if fmt != 1 or len(cap) != 7200 or int.from_bytes(cap[4:8], "little") not in (4,5):
+            dev.link.close()
+            raise InstallError("generation", "The return needs a valid pre-upgrade Classic 0.13 backup")
+    if dev.id.loader:
+        previous = getattr(a, "recovery_backup", None)
+        if not previous:
+            dev.link.close()
+            raise InstallError("usage", "Recovery cannot discover the former firmware; select --recovery-backup")
+        fmt, _ = backup.load_archive(previous)
+        if target in ("1","2") and fmt != int(target):
+            dev.link.close()
+            raise InstallError("generation", "Recovery backup and selected target generations differ")
+    else:
+        source, _, header = generation.identify(dev.link)
+        if target == "1" and source != 2:
+            dev.link.close()
+            raise InstallError("generation", "Classic return requires a running 1.x device")
+        client = backup.Client(dev.link, header)
+        catalog = client.catalog()
+        items = {k: client.get(k,catalog[k]) for k in backup.FORMATS[source][1]}
+        for k, data in items.items():
+            backup.validate(k,data,source)
+        directory = Path(getattr(a,"backup_dir","."))
+        name = directory / f"CaravelBackup{source}-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.time_ns()}.zip"
+        with name.open("xb") as stream:
+            backup.save_archive(stream,items,source)
+        if backup.load_archive(name) != (source,items):
+            raise InstallError("backup", "Saved backup did not verify; update refused")
+        print(f"Complete backup saved and verified: {name}", file=out)
     if not a.yes and not ask("Install? Do not unplug the FM-1 while writing. [y/N] "):
         dev.link.close()
         print("cancelled", file=out)
         return 1
     prog = Progress(out)
     try:
-        up.install(dev, image, product, prog)
+        up.install(dev, image, product, prog, verified_target=verified_target)
     finally:
         prog.end()
     return 0
@@ -467,6 +573,11 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     ap.add_argument("--port", metavar="NAME", help="MIDI port to use (part of its name)")
     ap.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     ap.add_argument("--force", action="store_true", help="install a package without the Felucca loader marker")
+    ap.add_argument("--target-generation", choices=("1","2","stock"), help="required install target; 1 is the explicit Classic 0.13 return")
+    ap.add_argument("--release-record", type=Path, help="verified 1.x release-build.json (default: beside the package)")
+    ap.add_argument("--classic-backup", type=Path, help="pre-upgrade Classic 0.13 ZIP backup for a return")
+    ap.add_argument("--recovery-backup", type=Path, help="saved matching ZIP backup when already in the update loader")
+    ap.add_argument("--backup-dir", type=Path, default=Path("."), help="directory for the automatically verified pre-update backup")
     a = ap.parse_args(argv)
     if bool(a.info) == bool(a.package):
         ap.error("give a PACKAGE.fwsc or --info")

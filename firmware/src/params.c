@@ -40,6 +40,13 @@ static uint32_t esync_idx(int32_t v) { return (uint32_t)(v & 127) * ESYNC_N >> 7
 static const char *const N_QUANT[] = {"OFF", "SNAP", "WHITE", "SEQ", "SEQ+T"};
 /* chord keys (chord.c): OFF, the diatonic triad / seventh of the track's ROOT and SCALE on the key, fixed shapes */
 static const char *const N_LATCH[] = {"OFF", "NEW", "STACK"};
+#if !FELUCCA_FM4
+/* CHORD SOURCE / EXT (core.h P_CSRC, P_CEXT: ids 76, 77): SOURCE's six names are ready, its descriptor allows 0..1 (OFF, HARM)
+ * until the live sources T1..T4 (2..5) exist. EXT's names are at most 5 characters (param_format copies 5) and in the stored
+ * order (core.h chordext_disp) */
+static const char *const N_CSRC[] = {"OFF", "HARM", "T1", "T2", "T3", "T4"};
+static const char *const N_CEXT[] = {"7+9", "7", "ALL"};
+#endif
 static const char *const N_CHRD[] = {"OFF", "DIA3", "DIA7", "MAJ", "MIN", "DOM7", "MAJ7", "MIN7", "SUS4", "POW", "BUS"};
 static const char *const N_VOIC[] = {"CLOSE", "OPEN", "INV1", "INV2", "+OCT"};   /* VC_CLOSE .. VC_BASS */
 static const char *const N_VOICE[] = {"POLY", "MONO", "LEG", "UNI"};   /* V_POLY .. V_UNISON */
@@ -91,11 +98,7 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
 };
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
                                              "DRUM", "NOISE", "FM6",
-#if FELUCCA_SLICE
-                                             "SLICE",
-#else
                                              "-",
-#endif
                                              "SEM", "HADES", "DRONE", "ENSEMB",
 };
 
@@ -164,14 +167,25 @@ static const param_desc_t TP[P_COUNT] = {
 #undef MSLOT
 /* the OP ENV / OP LEVEL values of DIGITAL (ids 61..80): with FELUCCA_FM4 its operator envelopes; without it
  * inert, on no page and in no editor layout, read only when a DIGITAL sound converts (fm4_convert.c). Their labels
- * stay: the editor's library files key parameters by label ("ATK#2" ..), so an old file's values still find them */
-#define FMOP(k) [P_FM##k##_ATK] = PD("ATK", F_TIME, 0, 127, 0), \
-                [P_FM##k##_DEC] = PD("DEC", F_TIME, 0, 127, 0), \
-                [P_FM##k##_SUS] = PD("SUS", F_PCT, 0, 127, 127), \
-                [P_FM##k##_REL] = PD("REL", F_TIME, 0, 127, 0), \
-                [P_FM##k##_LEVEL] = PD("LVL", F_PCT, 0, 127, 127)
-    FMOP(1), FMOP(2), FMOP(3), FMOP(4),
-#undef FMOP
+ * stay: the editor's library files key parameters by label ("ATK#2" ..), so an old file's values still find them.
+ * Except three: without FELUCCA_FM4 the ids 76, 77, 79 (operator 4's ATK, DEC, REL) are CHORD SOURCE, EXT and OCT
+ * (core.h P_CSRC ..), with labels of their own (the library key must differ from ATK/DEC/REL); param_desc_of gives
+ * DIGITAL's conversion the operator values' range back */
+#define FMOP_ADR(k) [P_FM##k##_ATK] = PD("ATK", F_TIME, 0, 127, 0), \
+                    [P_FM##k##_DEC] = PD("DEC", F_TIME, 0, 127, 0), \
+                    [P_FM##k##_REL] = PD("REL", F_TIME, 0, 127, 0)
+#define FMOP_SL(k) [P_FM##k##_SUS] = PD("SUS", F_PCT, 0, 127, 127), \
+                   [P_FM##k##_LEVEL] = PD("LVL", F_PCT, 0, 127, 127)
+    FMOP_ADR(1), FMOP_SL(1), FMOP_ADR(2), FMOP_SL(2), FMOP_ADR(3), FMOP_SL(3), FMOP_SL(4),
+#if FELUCCA_FM4
+    FMOP_ADR(4),
+#else
+    [P_CSRC] = {"CSRC", F_ENUM, 0, 5, 0, N_CSRC, 0},
+    [P_CEXT] = PE("CEXT", N_CEXT, 0),
+    [P_COCT] = {"COCT", F_INT, -2, 2, 0, 0, "oct"},
+#endif
+#undef FMOP_ADR
+#undef FMOP_SL
     [P_CHRD] = PE("CHRD", N_CHRD, 0),
     [P_VOIC] = PE("VOIC", N_VOIC, 0),
 /* the DRUM engine's lane levels (eng_drum.c, #97): 100 % = the kit as designed (the sound before 1.1) */
@@ -277,7 +291,7 @@ static const param_desc_t L2_DESC[L2_N] = {
     PE("SYNC", N_LSYNC, 0), PE("TRIG", N_LTRIG, 0), PE("POL", N_LPOL, 0),
 };
 static const param_desc_t *lfo2_desc(uint32_t id) { return lfo2_target(id) ? &L2_DESC[id - L2_FIRST] : 0; }
-static int virtual_target(uint32_t id) { return lfo2_target(id) || dx_target(id)
+static int virtual_target(uint32_t id) { return lfo2_target(id)
 #if FELUCCA_HOME_PERF
  || hp_virtual(id)
 #endif
@@ -308,7 +322,6 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
         return ins_desc(t->p[P_ITYPE], id - P_IA);
     if (t->p[P_ESYNC] && (id == P_ATK || id == P_DEC || id == P_REL))   /* ENV SYNC: note values (1.5, #175) */
         return &ESYNC_DESC[id == P_ATK ? 0 : id == P_DEC ? 1 : 2];
-    if (id == P_MORPH && dx_track(t)) return &DX_MORPH_DESC;
     if (id == P_FTYPE && t->eng_req == ENGI_SEM) return &SEM_TYPE;
     return &TP[id];
 }
@@ -326,12 +339,7 @@ static const param_desc_t *param_desc_of(uint32_t e, uint32_t id)
  * (tools/gen_samples.py SMP_SET_ORIG); DRUM KIT 1..3, once HAND CYM H+CYM, play 66 10 77 (eng_drum.c DK_PLAYS).
  * It shows the original's name; knobs step over it and the editor's SET lands on the original. -> the value v
  * stands for */
-static int32_t enum_orig(const param_desc_t *d, int32_t v)
-{
-    if (d->names == N_DRUM_KIT)
-        return v >= 0 && v < DK_COUNT ? (int32_t)DK_PLAYS[v] : v;
-    return d->names == SMP_ALL_NAMES && v >= 0 && v < SMP_NSETS ? SMP_SET_ORIG[v] : v;
-}
+static int32_t enum_orig(const param_desc_t*d,int32_t v){(void)d;return v;}
 
 /* a stored value as the parameter takes it (projects, user presets, motion): inside d's range, and a retired
  * DRUM KIT (1..3) as the kit it plays, so KIT never holds one again. (SAMPLE / GRAIN's aliases keep their
@@ -339,16 +347,18 @@ static int32_t enum_orig(const param_desc_t *d, int32_t v)
  * bank slot: 9..40 (1.4.1's B1..B32; 1.0.2's B1..B27 were 8..34) is 8, OWN, and the patch comes with what is loaded */
 static int32_t param_fit(const param_desc_t *d, int32_t v)
 {
+#if !FELUCCA_FM4
+    if (d->names == N_CSRC && (v < d->min || v > d->max))   /* CHORD SOURCE: a value outside its range (an old operator value) is OFF, not the last source */
+        return 0;
+#endif
     v = clamp(v, d->min, d->max);
-    if (d->names == N_FM6_PATCH)
-        return v > (int32_t)FM6_OWN ? (int32_t)FM6_OWN : v;
-    return d->names == N_DRUM_KIT ? enum_orig(d, v) : v;
+    return v;
 }
 
 /* v is a value a knob passes over: an alias, or one of FM6's bank slots without a voice */
 static int enum_skip(const param_desc_t *d, int32_t v)
 {
-    return enum_orig(d, v) != v || (d->names == N_FM6_PATCH && !fm6_slot_ok(v));
+    return enum_orig(d, v) != v;
 }
 /* a knob moved an F_ENUM from `from` to v: past any value it skips in that direction; with none left to the end, the
  * last one it does not skip on the way from `from` (else `from`) */
@@ -562,6 +572,9 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
 #if CARAVEL_STASIS_EXPAND
        , GR_STGRAIN
 #endif
+#if CARAVEL_UX_EVOLVE
+       , GR_EVOLVE
+#endif
 };
 
 typedef struct {
@@ -575,7 +588,9 @@ static const page_t PAGES[] = {
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_NONE, {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},   /* (P_ED_FX: no longer a sound parameter, LATCH is on the CHORD page);
                                                                              * 1.5: ESYNC, ENV's times as note values */
 #if FELUCCA_HOME_PERF
+#if !CARAVEL_UX_EVOLVE                                 /* (E69: PAIR is MOVE's, in the LFO block: at the end of the table) */
     {"PAIR", FAM_ENV, SC_TRACK, GR_PAIR, {0xFF,0xFF,0xFF,0xFF}},
+#endif
     {"MACRO", FAM_ENV, SC_TRACK, GR_MACRO, {0xFF,0xFF,0xFF,0xFF}},
     {"MACRO MAP", FAM_ENV, SC_TRACK, GR_MACROMAP, {0xFF,0xFF,0xFF,0xFF}},
 #endif
@@ -636,14 +651,12 @@ static const page_t PAGES[] = {
      * track's engine does not have is empty (more_slot_ok), so KNOB 1 is always SPREAD */
     {"MORE", FAM_EDIT, SC_TRACK, GR_NONE, {P_SPRD, P_MORPH, P_PD_FB, 0xFF}},
     /* 1.2 (Discussion #153): a family's pages go round in this order, a tap of its button each (ui.c open_family) */
-    {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's only page (1.2; up to 1.1.5 SEQ's) */
-    /* SAVE's taps (1.5, #173): USER (SAVE from another page: the quick save, SAVE OCT+ OCT+), PRESETS (the engines and
-     * sounds one tap on; up to 1.4.1 the last), PHRASES, PROJECT, TOOLS */
+    /* SAVE's pages go round PROJECT (the whole music: what is saved first), USER, PRESETS, PHRASES, TOOLS. SAVE from another page
+     * enters PROJECT too (ui.c open_family; up to 1.0 USER, the quick save of 1.5, #173), whatever the order here */
+    {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
-    {"PHRASES", FAM_SAVE, SC_GLOBAL, GR_PATS, {0xFF, 0xFF, 0xFF, 0xFF}},    /* pattern loader: PAT LOAD (ui.c pat_load);
-                                                                             * the tap after PRESETS (up to 1.1.5 SEQ's) */
-    {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},
+    {"PHRASES", FAM_SAVE, SC_GLOBAL, GR_PATS, {0xFF, 0xFF, 0xFF, 0xFF}},    /* pattern loader: PAT LOAD (ui.c pat_load) */
     {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_TOOLS, {G_CLRSEQ, G_INITSND, 0xFF, 0xFF}},
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
@@ -673,8 +686,20 @@ static const page_t PAGES[] = {
     {"PAIR", FAM_TRK, SC_TRACK, GR_PAIR, {0xFF, 0xFF, 0xFF, 0xFF}},
 #endif
 #endif
-#if FELUCCA_HOME_PERF
+#if FELUCCA_HOME_PERF && !CARAVEL_UX_EVOLVE             /* (E69: HOME is dissolved, no page to edit it) */
     {"HOME EDIT", FAM_TRK, SC_TRACK, GR_HOMEEDIT, {0xFF,0xFF,0xFF,0xFF}},
+#endif
+#if CARAVEL_UX_EVOLVE
+    /* the setup of the EVOLVE verbs (E58): what is chosen once, the live part is in PLAY (ui_uxl.c) */
+    {"RANDOM", FAM_LFO, SC_TRACK, GR_EVOLVE, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"JOURNEY", FAM_LFO, SC_TRACK, GR_EVOLVE, {0xFF, 0xFF, 0xFF, 0xFF}},
+#if CARAVEL_ELASTIC_P1
+    {"SPRING", FAM_LFO, SC_TRACK, GR_EVOLVE, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"SPRINGS", FAM_LFO, SC_TRACK, GR_EVOLVE, {0xFF, 0xFF, 0xFF, 0xFF}},
+#endif
+#if FELUCCA_PAIR_MORPH && FELUCCA_HOME_PERF
+    {"PAIR", FAM_LFO, SC_TRACK, GR_PAIR, {0xFF, 0xFF, 0xFF, 0xFF}},
+#endif
 #endif
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
@@ -701,6 +726,9 @@ static const param_desc_t ST_GRAIN_DESC[4] = {
 #endif
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
+    /* A descriptor-only query need not request the writable value pointer. */
+    int16_t *unused;
+    if (!valp) valp = &unused;
     uint32_t id = pg->id[slot];
 #if CARAVEL_STASIS_EXPAND
     if(pg->graph==GR_STGRAIN){

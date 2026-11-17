@@ -1,0 +1,20 @@
+# SOURCE HARM, bus enabled: Slice 1 commit d03a32f (before T1-T4 implementation)
+# Same differential harness, CE_F2_HARM=1, RETRIG OFF; frozen pre-feature.
+poly_keys       audio=55c143f7f6f95f9b events=ffce2f4e82e0e6e7 midiout=6566dbbf27780785 blocks=2068 noteevents=22 midiout_packets=22
+mono_keys       audio=b365a4d76d3d20c2 events=91785eadd0c63f8e midiout=4824c049ce5a5a42 blocks=3170 noteevents=28 midiout_packets=22
+unison_keys     audio=3d1c094599e4fe30 events=12ce2e856429d101 midiout=5ed4d16fcf07cde7 blocks=2757 noteevents=68 midiout_packets=10
+chrd_dia3_voic  audio=6934d063bd50f461 events=ae98aedb924e9eb1 midiout=3e13cdb29d59c84b blocks=3032 noteevents=30 midiout_packets=30
+chrd_shapes     audio=fd4513f4b36ee778 events=f4144d9692b9368b midiout=5e3366a53c8251b5 blocks=2757 noteevents=46 midiout_packets=46
+chrd_bus        audio=2480e9ab7eae6504 events=6c7d605f3da22447 midiout=024a7b85d2c8c945 blocks=6891 noteevents=14 midiout_packets=14
+chrd_midi       audio=cf3779b51dfe68a0 events=575d3ac17f5b8232 midiout=cbf29ce484222325 blocks=2619 noteevents=22 midiout_packets=0
+latch_new       audio=8738312622ff5384 events=c1b5e0204f8cf40a midiout=828f8e79d33c9247 blocks=2757 noteevents=36 midiout_packets=26
+latch_stack     audio=85ae78ffad9df36b events=4e457ac5eb949303 midiout=e313a83a6baea302 blocks=2619 noteevents=26 midiout_packets=28
+arp_modes_a     audio=d3441fd925239f2a events=4154c237e1327ef4 midiout=d79defc75c126119 blocks=4893 noteevents=82 midiout_packets=8
+arp_modes_b     audio=f3faf247532afe58 events=9b15bd753d295121 midiout=3032c944d8901f8a blocks=5375 noteevents=116 midiout_packets=6
+arp_hold_chord  audio=366824cf3c06f131 events=0add1b7f788d6984 midiout=08547ddb7f65aa83 blocks=6202 noteevents=254 midiout_packets=10
+seq_harmony     audio=1bd57b1b4d0b8def events=689d33999ea1f07c midiout=cbf29ce484222325 blocks=6340 noteevents=340 midiout_packets=0
+link_retrig     audio=53b72948ff8df8a2 events=b402b0339b20b5e2 midiout=77b34a3b93aff10a blocks=4962 noteevents=8 midiout_packets=6
+midi_channels   audio=438fa7cfa5031602 events=b792cbb6d52fe915 midiout=cbf29ce484222325 blocks=2757 noteevents=36 midiout_packets=0
+midi_track_sel  audio=d74f94929792ffb1 events=2959e80752af317b midiout=cbf29ce484222325 blocks=2343 noteevents=26 midiout_packets=0
+sustain_panic   audio=6257b15e456fd2dd events=3ba48ae6d7f72e6b midiout=9837f8b533e2bfac blocks=2619 noteevents=36 midiout_packets=4
+follow          audio=9e17a8f597f8f6a7 events=e9a85d5a8f36d860 midiout=ed0005c4ff1ba246 blocks=4962 noteevents=214 midiout_packets=14

@@ -434,7 +434,7 @@ static void nm_draw_panel(void)
 static void nm_draw_foot(void)
 {
     khint_t a[3], b[3];
-    int ok = nm.kind == NK_PROJ_SAVE ? !chain_busy() : !transport_busy();
+    int ok = nm.kind == NK_PROJ_SAVE ? !0 : !transport_busy();
     a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE" : "RENAME"};
     a[1] = (khint_t){KC_OCTDN, "CANCEL"};
     a[2] = (khint_t){KC_K3, nm.kind <= NK_USER_RENAME ? "CATEGORY" : "RANDOM"};   /* (1.2: the category, a random name) */

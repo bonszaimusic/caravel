@@ -3,6 +3,8 @@
 /* Felucca UI input: LEDs, knobs and buttons, SEQ step entry, panel setup. */
 #include "ui_name.c"                                    /* NAME: naming user presets and projects */
 uint8_t link_setup_row;                              /* LINK page: 0 LINK, 1 HARMONY SETUP */
+uint8_t chord_ext_row;                               /* CHORD page: 0 CHORD KEYS, 1 CHORD EXT (a virtual row: no page of its own) */
+#define CHORD_EXT_UI 1                               /* (tests: the row exists) */
 /* ----------------------------------------------------------- LEDs --- */
 /* The LED picture is built off-line and copied one byte per column: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker. */
@@ -89,7 +91,8 @@ static int mom_turn(uint32_t k, int32_t s)
     } else {
         if (act_cols() || lock_held() || !(pg->scope == SC_TRACK || pg->scope == SC_ENGINE || pg->scope == SC_GLOBAL) ||
             pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_BROWSE || pg->graph == GR_USER ||
-            pg->graph == GR_PATS || (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u))
+            pg->graph == GR_PATS || (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u) ||
+            (pg->graph == GR_CHORD && chord_ext_row))   /* (CHORD EXT's knobs are no CHRD / VOIC / LATCH) */
             return 0;
         d = page_desc(pg, k, &vp);
     }
@@ -278,10 +281,10 @@ static uint32_t play_leds(void)
     uint32_t n = t->seq_n < 4u + NLANE ? t->seq_n : 4u + NLANE, i, k, note, used = 0, m = 0, hit;
     for (i = 0; i < n; i++)
         s[i] = t->seq_notes[i];
-    if (t->arp_note)
+    if (t->arp_gate & 1u)
         s[n++] = t->arp_note;
     for (i = 0; i < 3u; i++)                            /* (the ARP's CHORD) */
-        if (t->arp_ch[i])
+        if (t->arp_gate & (2u << i))
             s[n++] = t->arp_ch[i];
     for (k = 0; n && k < 27u; k++) {
         note = kb_map(t, k);
@@ -305,7 +308,7 @@ static uint32_t step_leds(void)
     const step_t *st;
     uint32_t i, k, note, used = 0, m = 0;
     if (ui.home || ui.menu || ui.confirm || !song.seq_mode || cur_page()->graph != GR_ROLL || song.playing ||
-        chain_busy() || ui.cursor >= NSTEP)
+        0 || ui.cursor >= NSTEP)
         return 0;
     st = &t->step[ui.cursor];
     if (!st->n || st->time == ST_REST)
@@ -326,9 +329,6 @@ static uint32_t step_leds(void)
 static int keys_own(void)
 {
     return (name_on() && !ui.menu) || ui.layer || grid_on()
-#if FELUCCA_SLICE
-           || (!ui.menu && !name_on() && slice_page_on())
-#endif
         ;
 }
 
@@ -376,7 +376,7 @@ static uint32_t song_leds(void);
 #define IDLE_LEDS_MS 60000u
 static int idle_leds(void)
 {
-    int due = (ui_idle & 1u) && !(ui_prefs & PREF_ANIM_OFF) && !song.playing && !seq_counting() && !chain_busy() &&
+    int due = (ui_idle & 1u) && !(ui_prefs & PREF_ANIM_OFF) && !song.playing && !seq_counting() && !0 &&
               !song.rec && !transport_req && !ui.layer && !ui.lock && !ui.menu && !ui.confirm && !ui.uboot && !name_on() &&
               !(fm1_in.notes | fm1_in.buttons) && !panel_moved && !play_leds() && fm1_ms - scrn.idle >= IDLE_LEDS_MS;
     if (!due) {
@@ -398,9 +398,9 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
         *br = 0;
     c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds(br) : grid_on() ? grid_leds() :
                  (fm1_in.notes & ~kb_layer) | play_leds() | step_leds() | (song_keys_on() ? song_leds() : 0u);
-#if FELUCCA_SLICE
-    if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
-        c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
+#if CARAVEL_UX_EVOLVE
+    if (UXL_PLAY && (fm1_in.buttons & (1u << panel.btn[B_LFO])))   /* LFO held: the four verb keys light (the EVOLVE verbs) */
+        c |= uxl_vk_mask();
 #endif
 #if CARAVEL_ACTION_BANKS
     /* The five reserved physical keys breathe, including BANK. */
@@ -442,8 +442,14 @@ static void ui_leds(void)
         led_pos_init();
         ready = 1;
     }
-    if (!ui.layer || FAM_BTN[fam] != layer_btn())
+    if (!UXL_PLAY && (!ui.layer || FAM_BTN[fam] != layer_btn()))
         led_put(nl, panel.btn[FAM_BTN[fam]], 1);
+#if CARAVEL_UX_LAYERS
+    if (UXL_PLAY) {                                    /* PLAY: the area's button lit, HOME (the way back) breathes */
+        led_put(nl, panel.btn[uxl_area_btn()], 1);
+        led_put(nb, panel.btn[B_HOME], 1);
+    }
+#endif
     if ((k = arp_led()) != 2u && (!ui.layer || layer_btn() != B_ARP))
         led_put(nl, panel.btn[B_ARP], FAM_BTN[fam] == B_ARP ? !k : (int)k);   /* (on ARP's page: dark flashes) */
     if (!ui.layer && (perf_latched || perf_k[0] || perf_k[1] || perf_k[2] || perf_k[3]))
@@ -574,47 +580,11 @@ static int roll_on(void)
 
 /* SONG: + ADD selected (song_row == count < CHAIN_ROWS): a section there, copying the one before it (the first: every
  * track on A, x1) */
-static void song_add(void)
-{
-    uint32_t n = chain_config.count;
-    if (n >= CHAIN_ROWS)
-        return;
-    chain_config.row[n] = n ? chain_config.row[n - 1u] : chain_row_of(0, 1);
-    chain_config.count = (uint8_t)(n + 1u);
-    ui.song_row = (uint8_t)n;
-}
 /* SONG's keys (song.grid 3): a press of A3 B3 C4 D4 (seq.c song_key) sets the selected cell's slot A..D (on + ADD it
  * adds the section first: a copy of the one before, the first with every track on that slot) */
-static void song_keys(uint32_t notes)
-{
-    uint32_t k;
-    for (k = 0; k < 27u; k++) {
-        int32_t s = (notes >> k) & 1u ? song_key(k) : -1;
-        if (s < 0)
-            continue;
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
-        if (ui.song_row >= chain_config.count) {
-            if (ui.song_row >= CHAIN_ROWS)
-                return;
-            song_add();
-            if (chain_config.count == 1u)
-                chain_config.row[0] = chain_row_of((uint32_t)s, 1);
-        }
-        chain_config.row[ui.song_row].slot[ui.song_trk % NTRK] = (uint8_t)s;
-        ui.force = 1;
-    }
-}
+#define song_keys(notes) ((void)0)
 /* the key LEDs of SONG: the key of the selected cell's slot (none for "-" and on + ADD) */
-static uint32_t song_leds(void)
-{
-    uint32_t k, s;
-    if (ui.song_row >= chain_config.count || (s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) >= 4u)
-        return 0;
-    for (k = 0; k < 27u; k++)
-        if (song_key(k) == (int32_t)s)
-            return 1u << k;
-    return 0;
-}
+static uint32_t song_leds(void) { return 0; }
 
 /* REC tap on every page: arm / disarm recording on the selected track without navigating; arming while stopped
  * starts the transport too (live recording), except on STEP's piano roll (1.2, Discussion #133): there it arms step
@@ -624,7 +594,7 @@ static int rec_tap(void)                                /* 1: the arming changed
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
     uint32_t f;
-    if (chain_busy()) {
+    if (0) {
         ui_message("STOP TO RECORD");
         return 0;
     }
@@ -666,7 +636,7 @@ static void step_rec_toggle(void)
     uint32_t bit = 1u << song.sel, f;
     track_t *t = TSEL;
     if (!roll_on()) { ui_message("OPEN SEQ STEP"); return; }
-    if (chain_busy()) { ui_message("STOP SONG FIRST"); return; }
+    if (0) { ui_message("STOP SONG FIRST"); return; }
     if (fm1_in.notes || t->nheld) { ui_message("RELEASE KEYS"); return; }
     f = motion_guard();
     step_record_mask ^= (uint8_t)bit;
@@ -696,7 +666,7 @@ static void cursor_move(int32_t c)
 {
     cursor_set(c);
     follow_hold();                                      /* (1.6, #242: the roll stays where the cursor is) */
-    if ((ui_prefs2 & (PREF_PREVIEW >> 16)) && !song.playing && !seq_counting() && transport_req != 1u && !chain_busy() &&
+    if ((ui_prefs2 & (PREF_PREVIEW >> 16)) && !song.playing && !seq_counting() && transport_req != 1u && !0 &&
         !ui.home && song.seq_mode && cur_page()->graph == GR_ROLL)
         aud_req = (uint16_t)((uint32_t)ui.cursor << 8 | (song.sel + 1u));
 }
@@ -735,7 +705,7 @@ static void grid_keys(uint32_t pressed)
             continue;
         if (!key_black(k)) {
             uint32_t i = ui.bank * 16u + p;
-            if (chain_busy()) { ui_message("STOP TO EDIT"); continue; }
+            if (0) { ui_message("STOP TO EDIT"); continue; }
             if (i >= len)
                 continue;                               /* past LEN: no step there */
             if (detail_on()) {                          /* DETAIL (1.5.1): the key picks the step, no hit toggled */
@@ -816,7 +786,7 @@ static void lock_turn(uint32_t k, int32_t s, uint64_t held)
 #endif
 
     const param_desc_t *d;
-    if (chain_busy()) {
+    if (0) {
         ui_message("STOP TO EDIT");
         return;
     }
@@ -865,7 +835,7 @@ static void nudge_turn(uint64_t held, int32_t steps)
     uint32_t i;
     int32_t v = 0;
     char b[16] = "NUDGE ";
-    if (chain_busy()) {
+    if (0) {
         ui_message("STOP TO EDIT");
         return;
     }
@@ -1013,6 +983,9 @@ static void edit_param(uint32_t slot, int32_t steps)
 #if CARAVEL_STASIS_EXPAND
     if(cur_page()->graph==GR_STGRAIN){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
 #endif
+#if CARAVEL_UX_EVOLVE
+    if(cur_page()->graph==GR_EVOLVE) { uxl_evp_knob(slot,steps); return; }
+#endif
 #if FELUCCA_HOME_PERF
     if(cur_page()->graph==GR_MACRO || cur_page()->graph==GR_MACROMAP || cur_page()->graph==GR_HOMEEDIT) { hp_page_knob(slot,steps); return; }
     hp_touch(slot);
@@ -1030,9 +1003,25 @@ static void edit_param(uint32_t slot, int32_t steps)
     const param_desc_t *d;
     int32_t v;
     if (lfo2_page(pg->graph)) { lfo2_knob(pg, slot, steps); return; }
-    if (dx_page(pg->graph)) { dx_knob(pg, slot, steps); return; }
     if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c) */
         ev_knob(slot, steps);
+        return;
+    }
+    if (pg->graph == GR_CHORD && chord_ext_row) {     /* CHORD EXT: K1 SOURCE, K2 EXT, K3 OCT; K4 NOTES is a display */
+        int16_t *cp = slot < 3u ? chext_vp(slot) : 0;
+        ext_info_t ei;
+        if (!cp)
+            return;
+        ext_info(song.sel, &ei);
+        if (slot && ei.state == EXT_ST_NA)            /* N/A (a kit follower): EXT and OCT have nothing to say; K1 still leaves it */
+            return;
+        if (slot == 1u)                               /* shown 7 / 7+9 / 7+9+13, stored 7+9 / 7 / 7+9+13 */
+            v = (int32_t)chext_stored((uint32_t)clamp((int32_t)chext_disp((uint32_t)chext_p(1u)) + steps, 0, 2));
+        else
+            v = clamp(chext_p(slot) + steps, chext_desc(slot)->min, chext_desc(slot)->max);
+        *cp = (int16_t)v;
+        ml_knob(TSEL, (uint32_t)(cp - TSEL->p));      /* (MIDI LEARN: picked) */
+        ui.force = 1;
         return;
     }
     if (pg->graph == GR_LINK) {                       /* K1 SOURCE, K2 RETRIG; K3/K4 show the source */
@@ -1089,30 +1078,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         }
         return;
     }
-    if (pg->graph == GR_SONG) {                       /* KNOB 1 SECTION, 2 TRACK, 3 PAT (A..D, -), 4 REPS */
-        chain_row_t *r;
-        if (slot == 0u) {
-            ui.song_row = (uint8_t)clamp((int32_t)ui.song_row + steps, 0,
-                chain_config.count < CHAIN_ROWS ? chain_config.count : CHAIN_ROWS - 1u);
-            return;
-        }
-        if (slot == 1u) {
-            ui.song_trk = (uint8_t)clamp((int32_t)ui.song_trk + steps, 0, NTRK - 1);
-            return;
-        }
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
-        if (ui.song_row >= chain_config.count) {     /* + ADD: a turn adds the section (KNOB 3: only that) */
-            song_add();
-            if (slot == 2u) return;
-        }
-        r = &chain_config.row[ui.song_row];
-        if (slot == 2u)
-            r->slot[ui.song_trk % NTRK] = (uint8_t)clamp((int32_t)r->slot[ui.song_trk % NTRK] + steps, 0, CHAIN_SILENT);
-        else
-            r->repeat = (uint8_t)clamp((int32_t)r->repeat + steps, 1, 16);
-        return;
-    }
-    if (chain_busy() && (pg->scope == SC_STEP || pg->graph == GR_STEPS ||
+    if (0 && (pg->scope == SC_STEP || pg->graph == GR_STEPS ||
         0)) {
         ui_message("STOP TO EDIT"); return;
     }
@@ -1141,13 +1107,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         }
         return;
     }
-#if FELUCCA_SLICE
-    if (pg->graph == GR_SLICES && slot < 2u) {           /* SLICES: KNOB 1 the marker, 2 moves it (ui_slice.c) */
-        if (slice_page_ok())                              /* (the engine changed before ui_draw left the page) */
-            slice_knob(slot, steps);
-        return;
-    }
-#endif
     if (pg->graph == GR_SLOTS && slot == 1u) {
         if (steps > 0) { ui.proj_erase = ui.act == 2u; ui.act = 2; }
         else if (ui.act == 2u && ui.proj_erase) ui.proj_erase = 0;
@@ -1180,10 +1139,7 @@ static void edit_param(uint32_t slot, int32_t steps)
             ui.ppick = (uint8_t)clamp((int32_t)pat_pick() + steps, 0, (int32_t)pat_count() - 1);
         return;
     }
-    if (fop_page(pg->graph)) {                           /* FM6's operators: KNOB 1 OP, 2..4 its bytes (ui_fm6op.c) */
-        fop_knob(slot, steps);
-        return;
-    }
+
     if (pg->graph == GR_INS && slot == 2u && pg->id[0] == P_ITYPE) {   /* INSERT: KNOB 3 is FX HOLD, a device setting (ui.c load_kept) */
         menu_put(MI_FXHOLD, steps > 0 ? 1u : 0u);
         settings_later();                                /* (saved when the page is left or after a pause) */
@@ -1233,7 +1189,7 @@ static void act_do(void)
         return;
     }
     if (cur_page()->graph == GR_TOOLS) {
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
+        if (0) { ui_message("STOP TO EDIT"); return; }
         if (!act_ready()) {                               /* nothing there to clear or delete */
             ui_message(c == 2u ? "NOTHING TO DELETE" : "NOTHING TO CLEAR");
             return;
@@ -1243,25 +1199,18 @@ static void act_do(void)
         return;
     }
     if (cur_page()->graph == GR_SONG) {
-        if (song.playing || chain_busy() || seq_counting()) transport_req = 2;
-        else chain_play_ui();
+        if (song.playing || 0 || seq_counting()) transport_req = 2;
+        else ((void)0);
         return;
     }
     if (cur_page()->graph == GR_PATS) {
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
+        if (0) { ui_message("STOP TO EDIT"); return; }
         if (pat_needs_confirm(TSEL))                      /* the user's steps: the dialog */
             confirm_open(CF_LOAD_PAT, song.sel);
         else                                              /* empty, or a pattern loaded and untouched */
             pat_load_ui(TSEL, pat_pick());
         return;
     }
-#if FELUCCA_SLICE
-    if (cur_page()->graph == GR_SLICES) {                 /* SPLIT / JOIN: stays picked (split again, join again) */
-        if (slice_page_ok())
-            slice_act(c);
-        return;
-    }
-#endif
     if (cur_page()->graph == GR_USER) {                   /* 1 LOAD, 2 ERASE, 3 SAVE (the NAME screen first) */
         if (c > 1u)
             ui.act = 0;
@@ -1303,7 +1252,7 @@ static void act_do(void)
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
         if (project_compat_save_blocked(k)) break;
-        if (chain_busy())
+        if (0)
             ui_message("STOP SONG FIRST");
         else if (project_used(k))
             confirm_open(CF_OVR_PROJ, k);
@@ -1311,7 +1260,7 @@ static void act_do(void)
             name_open(NK_PROJ_SAVE, k);
         break;
     case G_CLRSEQ:
-        if (chain_busy()) { ui_message("STOP TO EDIT"); break; }
+        if (0) { ui_message("STOP TO EDIT"); break; }
         confirm_open(CF_CLEAR_SEQ, song.sel);
         break;
     default:                                              /* G_INITSND */
@@ -1453,7 +1402,7 @@ static void seq_entry(uint32_t pressed)
         last_note = (uint8_t)note;
     }
     f = motion_guard();
-    if (!((song.rec >> trk_index(t)) & 1u) || chain_busy()) {
+    if (!((song.rec >> trk_index(t)) & 1u) || 0) {
         ui.entry_open = 0;
         motion_unguard(f);
         return;
@@ -1489,7 +1438,7 @@ static void presets_turn(int32_t s)
     uint32_t g = pg->graph;
     uint64_t held = lock_held();
     if (detail_on()) {                                    /* DETAIL (1.5.1): the cursor (its KNOB 1 is CHANCE) */
-        if (chain_busy())
+        if (0)
             ui_message("STOP TO EDIT");
         else
             cursor_move(ui.cursor + s);
@@ -1510,16 +1459,21 @@ static void presets_turn(int32_t s)
     }
 }
 
-/* HOME / REC / SAVE: tap on release, hold 0.7 s fires once. t0 = press time | 1,
+/* HOME / REC / SAVE: tap on release, the per-button hold threshold fires once. t0 = press time | 1,
  * bit 1 = fired (or swallowed: then the release is no tap either) */
 enum { BT_NONE, BT_TAP, BT_HOLD };
+#if CARAVEL_UX_LAYERS
+#define BTN_HOLD_MS(label) ((label)==B_HOME?1000u:700u)
+#else
+#define BTN_HOLD_MS(label) 700u
+#endif
 static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok)
 {
     uint32_t tap;
     if ((fm1_in.buttons >> panel.btn[label]) & 1u) {
         if (!*t0)
             *t0 = (now | 1u) & ~2u;
-        else if (hold_ok && !(*t0 & 2u) && now - (*t0 & ~3u) > 700u * 1000u * FM1_TICKS_PER_US) {
+        else if (hold_ok && !(*t0 & 2u) && now - (*t0 & ~3u) > BTN_HOLD_MS(label) * 1000u * FM1_TICKS_PER_US) {
             *t0 |= 2u;
             return BT_HOLD;
         }
@@ -1558,7 +1512,7 @@ static int page_tap(uint32_t b)
 {
     uint32_t f;
     if (b == B_EDIT && detail_on()) {                    /* DETAIL (1.5.1): the step's CHANCE RATCH NUDGE VEL back */
-        if (chain_busy())
+        if (0)
             ui_message("STOP TO EDIT");
         else
             sd_reset();
@@ -1567,7 +1521,7 @@ static int page_tap(uint32_t b)
     if (b == B_EDIT && song.seq_mode && !ui.home && cur_page()->graph == GR_ROLL) {   /* STEP: EDIT opens EDIT (Custom) */
         uint64_t held = lock_held();
         if (held) {                                     /* a key held, the step being entered: EDIT clears its locks */
-            if (chain_busy()) { ui_message("STOP TO EDIT"); return 1; }
+            if (0) { ui_message("STOP TO EDIT"); return 1; }
             lock_clear(held);
             return 1;
         }
@@ -1582,6 +1536,12 @@ static int page_tap(uint32_t b)
         return 1;
     }
     if (b == B_SCL && !ui.home) {                        /* one row step, then the page step */
+        if (cur_page()->graph == GR_CHORD && !chord_ext_row) {
+            chord_ext_row = 1;
+            ui_message("CHORD EXT");
+            ui.force = 1;
+            return 1;
+        }
         if (cur_page()->graph == GR_LINK && !link_setup_row) {
             link_setup_row = 1;
             ui_message("HARMONY SETUP");
@@ -1595,6 +1555,7 @@ static int page_tap(uint32_t b)
             return 1;
         }
         link_setup_row = 0;
+        chord_ext_row = 0;
         harmony_edit_dur = 0;                           /* the next SCL press is a page step */
     }
     for (f = FAM_HOME + 1u; f < FAM_COUNT; f++)        /* (GLO SEQ SAVE ..: HOME is ui_input's, home_tap) */
@@ -1737,16 +1698,16 @@ static void ui_input(void)
     }
 #endif
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
-    if (chain.live_notice) {
+    if (LAUNCH_STATE.live_notice) {
         uint32_t launched;
         fm1_irq_off();
-        launched = chain.live_notice;
-        chain.live_notice = 0;
+        launched = LAUNCH_STATE.live_notice;
+        LAUNCH_STATE.live_notice = 0;
         fm1_irq_on();
         if (launched <= 4u) {
             pat_from_set(launched);
             sync_reload = 1;             /* FULL may have replaced engines/patches; refresh the editor too */
-            if (chain.live_full) {
+            if (LAUNCH_STATE.live_full) {
                 mom.n = 0;              /* releasing a temporary edit must not restore the previous sound */
                 memset(drum_mute, 0, sizeof drum_mute);
             }
@@ -1758,12 +1719,6 @@ static void ui_input(void)
     midi_take();                                        /* (MIDI IN notes: lights, SCREEN WAKE, AUTO SELECT's) */
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
     key_link_sync();                                    /* KEY LINK (SCL + PLAY): the master's notes to all */
-    fm6_poll();                                         /* FM6: PTCH turned -> its patch */
-#if !FELUCCA_FM4
-    for (k = 0; k < NTRK; k++)                          /* a DIGITAL sound any other way (the paths convert it */
-        if (trk[k].eng_req == ENGI_DIGITAL)             /* already): FM6 (fm4_convert.c) */
-            fm4_track(&trk[k]);
-#endif
     perf_latch_on = fx_latch & 1u;                      /* (MENU > FX LATCH; a settings load sets it too) */
     fx_map_sync();                                      /* (the FX layer's key map: ui_layer.c, a settings load too) */
     fx_usb_fixed = (ui_prefs & PREF_USB_FIXED) != 0u;   /* (MENU > USB LEVEL: fx.c, audio.c) */
@@ -1775,10 +1730,19 @@ static void ui_input(void)
     follow_poll();                                      /* (1.6, #242: SEQ's roll follows the play position) */
     if (scr_input(pressed, notes))                      /* MENU > SCREEN OFF: dark, or the wake gesture: swallowed */
         return;                                         /* (before the buttons' timers: no tap or hold after it) */
+    if (f2_input(pressed))                              /* FORMAT 2: the notice about an older version's data takes everything */
+        return;
     if (mom.n && !mom_down()) {                         /* MOMENTARY: LFO let go (or the menu, a layer ..): back */
         mom_restore();
         ui_message("BACK");
     }
+#if CARAVEL_UX_LAYERS
+    if (uxl.mom && ((pressed >> panel.btn[B_OCTUP]) & 1u)) {   /* PLAY: the same for the arcs */
+        uxl.mom = 0;
+        pressed &= ~(1u << panel.btn[B_OCTUP]);
+        ui_message("KEPT");
+    }
+#endif
     if (mom.n && ((pressed >> panel.btn[B_OCTUP]) & 1u)) {   /* .. OCT+ with LFO held: kept (no octave) */
         mom.n = 0;
         pressed &= ~(1u << panel.btn[B_OCTUP]);
@@ -1786,13 +1750,24 @@ static void ui_input(void)
     }
 
 #if FELUCCA_HOME_PERF
-    if (!ui.menu && !ui.confirm && !name_on() &&
+    if (!ui.menu && !ui.confirm && !name_on() && !UXL_ON &&
         (fm1_in.buttons & (1u << panel.btn[B_GLO])) && (pressed & (1u << panel.btn[B_HOME]))) {
         hp_add_last(); hp_combo_pending=1; ui.home_t0=0; ui.pg_down &= ~(1u<<panel.btn[B_GLO]);
         ui.ly=ui.layer=ui.lock=0; ui.ly_t0=0;
         return;
     }
 #endif
+    {   /* a project, a user preset or a message may name an engine that is gone: that track plays as ANALOG (the fade does the switch) */
+        uint32_t sk;
+        for (sk = 0; sk < NTRK; sk++)
+            if (!eng_ok(trk[sk].eng_req % NENGINES) && trk[sk].eng_req == trk[sk].engine)
+                trk[sk].eng_req = (uint8_t)ENG_FALLBACK;
+    }
+#if CARAVEL_UX_LAYERS
+    if(uxl.play && (pressed || notes))uxl.hint_until=0;
+    uxl_lvl_poll(pressed, notes);
+#endif
+    uxl_panic_poll();
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
@@ -1803,13 +1778,19 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on ||
+    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || uxl_pv_on() ||
                           (cur_page()->graph == GR_HARMONY && !layer_held())
 #if FELUCCA_HOME_PERF
         || hp_oct_button(B_OCTDN) || hp_oct_button(B_OCTUP)
 #endif
     );
     oct = layer_oct(pressed, oct);
+#if CARAVEL_UX_LAYERS
+    if (uxl_pv_on() && oct) {                           /* SAFE PREVIEW: OCT+ loads the sound chosen, OCT- cancels */
+        uxl_pv_resolve((oct & 2u) != 0u);
+        oct = 0;
+    }
+#endif
 #if FELUCCA_HOME_PERF
     if(!ui.home && !ui.menu && !ui.layer && !ui.confirm && !name_on() && !ui.ml.on && oct) {
         uint32_t g=cur_page()->graph;
@@ -1850,11 +1831,11 @@ static void ui_input(void)
         for (k = 0; k < 4u; k++)                        /* KNOB 1..4: the layer's (ui_layer.c layer_knob) */
             if ((ks[k] = panel_enc(EN_K1 + k)) != 0)
                 combo = 1;
-        if ((s = panel_enc(EN_PRESET)) != 0 && ui.ly == LAYER_FX) {   /* (a stray turn would load another sound) */
+        if ((s = panel_enc(EN_PRESET)) != 0 && ui.ly == LAYER_FX && !UXL_PLAY) {   /* (a stray turn would load another sound; PLAY: the key map is BUILD's) */
             fx_assign(s);                               /* FX: the white key held takes the next effect */
             combo = 1;
         }
-        if (ui.ly == LAYER_FX && ((pressed >> panel.btn[B_EDIT]) & 1u))
+        if (ui.ly == LAYER_FX && !UXL_PLAY && ((pressed >> panel.btn[B_EDIT]) & 1u))
             fx_default();                               /* .. EDIT: its default back */
         panel_enc(EN_ALGO);                             /* (another track: OCT- puts back the layer's track only) */
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
@@ -1870,7 +1851,7 @@ static void ui_input(void)
         combo = 0;
     lytap = layer_gesture(now, combo);
     layer_show();
-    layer_keys(lkeys);
+    layer_keys(uxl_harm_keys(lkeys));
 #if CARAVEL_ACTION_BANKS
     action_dispatch(notes);
     notes &= ~action_capture_mask;
@@ -1886,6 +1867,10 @@ static void ui_input(void)
         menu_close();                                   /* the release of the hold that opened it is no tap */
         home = BT_NONE;                                 /* (menu_close went HOME already) */
     } else if (home == BT_HOLD) {                       /* HOME held: open the menu, or leave it */
+#if CARAVEL_UX_LAYERS
+        if (ui.menu) menu_close(); else uxl_toggle();
+        if (1) {} else
+#endif
         if (ui.menu) {
             menu_close();
         } else {
@@ -1897,7 +1882,7 @@ static void ui_input(void)
             song.seq_mode = 0;
         }
     }
-    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on()) {
+    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on() && !UXL_PLAY) {
         if (fm1_in.buttons & (1u << panel.btn[B_SEQ])) step_rec_toggle();
         else rec_tap();
     }
@@ -1912,14 +1897,19 @@ static void ui_input(void)
     if (name_on() && !ui.confirm) {                     /* NAME: the keys type, KNOB 1 / 2, OCT+ / OCT- (ui_name.c); */
         if (ui.save_t0)                                 /* SAVE does nothing */
             ui.save_t0 |= 2u;
-        if (((pressed >> panel.btn[B_PLAY]) & 1u) && (song.playing || chain_busy() || seq_counting()))
+        if (((pressed >> panel.btn[B_PLAY]) & 1u) && (song.playing || 0 || seq_counting()))
             transport_req = 2;                          /* PLAY stops a transport started meanwhile (MIDI Start, the
                                                          * editor) so the name can be saved; it never starts one */
         ui.pg_down = 0;
         name_input(notes, oct);
         return;
     }
-    if (save == BT_HOLD && chain_busy())
+#if CARAVEL_UX_LAYERS
+    if (uxl.play && (save == BT_HOLD || (save == BT_TAP && !ui.confirm)))
+        ui_message(save == BT_HOLD ? "UNDO: BUILD ONLY" : "SNAPSHOT: LATER");
+    else
+#endif
+    if (save == BT_HOLD && 0)
         ui_message("STOP TO UNDO");
     else if (save == BT_HOLD)                                /* SAVE held: undo the last sound load */
         undo_swap();
@@ -1945,29 +1935,20 @@ static void ui_input(void)
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);
             } else if (kind == CF_CLEAR_MOTION) {
                 track_t *t = &trk[ui.confirm_trk % NTRK];
-                if (!chain_busy()) {
+                if (!0) {
 #if FELUCCA_HOME_PERF
                     if(hp_auto_count(t,0)){perf_undo_take(t,0);motion_clear(t);motion_undo_done(t);}
                     else
 #endif
                     {load_begin(t,UNDO_PAT);motion_clear(t);load_end(t);}ui_message("AUTOMATION CLEARED");
                 }
-            } else if (kind == CF_DEL_ROW) {
-                uint32_t r = ui.confirm_trk;
-                if (!chain_busy() && r < chain_config.count) {
-                    for (; r + 1u < chain_config.count; r++) chain_config.row[r] = chain_config.row[r + 1u];
-                    chain_config.count--;
-                    if (ui.song_row > chain_config.count) ui.song_row = chain_config.count;
-                    ui_message("SECTION DELETED");
-                }
-            } else if (kind == CF_CLEAR_SONG) {
-                if (!chain_busy()) { chain_defaults(&chain_config); ui.song_row = 0; ui_message("SONG CLEARED"); }
+
             } else if (kind == CF_INIT_PROJECT) {
                 project_init_runtime();
             } else if (kind == CF_INIT_SOUND) {
-                if (!chain_busy()) { sound_init(); ui_message("SOUND INIT"); }
+                if (!0) { sound_init(); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
-                if (!chain_busy()) { clean_engine(); ui_message("CLEAN INIT"); }
+                if (!0) { clean_engine(); ui_message("CLEAN INIT"); }
             } else {
                 track_t *t = &trk[ui.confirm_trk % NTRK];
                 load_begin(t, UNDO_PAT);
@@ -1993,12 +1974,20 @@ static void ui_input(void)
         return;
     }
     if (lytap)                                          /* a layer's button acts on release (held: the layer; SEQ's */
-        layer_tap(lytap);                               /* on every page since 1.2, its tap the SEQ pages) */
+#if CARAVEL_UX_LAYERS
+        uxl_layer_tap(lytap);
+#else
+        layer_tap(lytap);
+#endif                               /* on every page since 1.2, its tap the SEQ pages) */
     if (home == BT_TAP) {                                /* HOME retains its ordinary single-tap action */
+#if CARAVEL_UX_LAYERS
+        uxl_home_tap();
+#else
 #if CARAVEL_ACTION_BANKS
         if(!action_home_double_tap())
 #endif
             home_tap();
+#endif
     }
 #if CARAVEL_ACTION_BANKS
     action_refresh();
@@ -2016,17 +2005,17 @@ static void ui_input(void)
             /* Even with the sequencer already stopped, PLAY/STOP must not
              * start a new sequence just to release a held STASIS texture. */
             if (song.g[G_RTYPE] == 3 && song.g[G_DRLVL] &&
-                !song.playing && !chain_busy() && !seq_counting()) {
+                !song.playing && !0 && !seq_counting()) {
                 transport_req = 2u;
                 break;
             }
 #endif
             if (midi_clock.resync_start || (!song.playing && transport_req >= 4u))
                 transport_req = 6;                    /* PLAY again cancels an armed external start. */
-            else if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
+            else if (song.playing || 0 || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
             else if (!ui.home && cur_page()->graph == GR_SONG)
-                chain_play_ui();
+                ((void)0);
             else if (song.g[G_CLOCK] && !(song.rec & ~step_record_mask) && !motion_fx_recording)
                 transport_req = (ui_prefs3 & (PREF_START_BAR >> 24)) ? 4u : 5u;
             else
@@ -2069,8 +2058,12 @@ static void ui_input(void)
     b = ui.pg_down & ~fm1_in.buttons;
     ui.pg_down &= (uint16_t)~b;
     for (id = 0; b; id++, b >>= 1)
-        if (b & 1u)
+        if (b & 1u) {
+#if CARAVEL_UX_LAYERS
+            if (uxl.play) uxl_page_tap(panel_btn_of(id)); else
+#endif
             page_tap(panel_btn_of(id));
+        }
     if (act_cols() && (oct & 2u)) {                     /* action pages: OCT+ does the picked action, */
         act_do();
     } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it, or (none picked) goes HOME */
@@ -2082,10 +2075,6 @@ static void ui_input(void)
         ml_oct(oct);
     }
     song.grid = (uint8_t)keys_mode();                 /* (seq.c: the keys are the grid's) */
-#if FELUCCA_SLICE
-    if (notes && slice_page_on())                       /* SLICES: a key picks the slice it plays */
-        slice_keys_pick(notes);
-#endif
     lock_keys();                                        /* (a grid key on a hit let go: the hit goes) */
     if (song.grid == 3u) {
         song_keys(notes);
@@ -2095,7 +2084,7 @@ static void ui_input(void)
         if (seq_counting() || live_rec_sel() || !((song.rec >> song.sel) & 1u)) /* LIVE REC uses the playhead;
                                                          * unarmed keys only play */
             ui.entry_open = 0;
-        else if (!chain_busy())
+        else if (!0)
             seq_entry(notes);                           /* STEP REC uses the cursor even during playback */
         else if (notes)
             ui_message("STOP TO EDIT");
@@ -2105,11 +2094,25 @@ static void ui_input(void)
      * pass runs, so one landing after the layer's read went to the page as well: KNOB 1..4 edited the layer's control
      * and the page under it (HOME's sound, motion recorded), PRESETS could load a sound. They stay for the next pass */
     kq |= lay;
-    if (!lay && (s = panel_enc(EN_PRESET)) != 0)
+    if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
+#if CARAVEL_UX_LAYERS
+        if (uxl.play) uxl_presets(s); else
+#endif
         presets_turn(s);
-    if (!lay && (s = panel_enc(EN_ALGO)) != 0)     /* ALGORITHM: the selected track, on every page */
+    }
+    if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page */
+#if CARAVEL_UX_LAYERS
+        uxl.hint_until=0;
+#endif
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
+    }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
+#if CARAVEL_UX_LAYERS
+        if (uxl.play && !glo && !lay) {                 /* PLAY: the group of the area */
+            uxl_select(s);
+        } else if (ui.home && !glo && !lay) {           /* BUILD's overview: no row to turn */
+        } else
+#endif
 #if FELUCCA_HOME_PERF
         if (!glo && !lay && ui.home) {
 #if CARAVEL_ACTION_BANKS && CARAVEL_STASIS_EXPAND
@@ -2151,7 +2154,9 @@ static void ui_input(void)
         uint64_t held;
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
-        if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */
+        if (!UXL_PLAY && (fm1_in.buttons & (1u << panel.btn[B_ENV])))
+            ui.pg_down &= (uint16_t)~(1u << panel.btn[B_ENV]); /* ENV + turn: release keeps this page */
+        if (mom_down() || (UXL_PLAY && (fm1_in.buttons & (1u << panel.btn[B_LFO]))))   /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */
             ui.pg_down &= (uint16_t)~(1u << panel.btn[B_LFO]);
         if ((held = lock_held()) != 0u) {               /* a step held on STEP: KNOB k locks (parameter locks) */
             lock_turn(k, s, held);
@@ -2159,14 +2164,30 @@ static void ui_input(void)
             ui.hot_t = 40;
             continue;
         }
-        if (mom_down() && mom_turn(k, s)) {             /* MOMENTARY: LFO held (no automation, no undo) */
+        if (!UXL_PLAY && mom_down() && mom_turn(k, s)) {   /* MOMENTARY: LFO held (no automation, no undo) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
             continue;
         }
+#if CARAVEL_UX_LAYERS
+#if CARAVEL_UX_EVOLVE
+        if (!uxl.play && uxl.inter) {                   /* BUILD, INTERACT: a knob puts its parameter into the set or out of it */
+            uxl_inter_knob(k, s);
+            continue;
+        }
+#endif
+        if (uxl.play) {                                 /* PLAY: the four arcs of the area shown */
+            uxl_knob(k, s);
+            continue;
+        }
+        if (ui.home) {                                  /* BUILD's overview: K1..K4 are the levels of T1..T4 */
+            uxl_overview_knob(k, s);
+            continue;
+        }
+#endif
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
             ((pg->graph == GR_USER || pg->graph == GR_MOD || pg->graph == GR_PATS) && k == 0u)
-            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph)) {   /* (not an empty
+            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u)) {   /* (not an empty
                                                                                                           * column) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;

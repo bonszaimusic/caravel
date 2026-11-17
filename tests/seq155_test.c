@@ -14,7 +14,7 @@
  *   DOUBLE HALF (SEQ TOOLS D5 E5) LEN x2 (up to 64) / half, ties, locks and the steps' own fields with them, one undo
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 /* track 1 alone, LEN 16 of 1/16, GATE 64, no swing; notes 60 + i on step i where on bit i; the rest REST */
 static track_t *melody(uint32_t on)
@@ -180,41 +180,6 @@ static int cond_locks_rolls(void)
 }
 
 /* SONG: each section's pattern counts from its first loop; the section's repeats are its loops */
-static int cond_song(void)
-{
-    int bad = 0, ok;
-    uint8_t nt[256];
-    uint32_t n = 0, i, c1 = 0, c4 = 0;
-    track_t *t = melody(1u | 1u << 4 | 1u << 8);
-    set_cond(&t->step[4], 3);                          /* 1:3 */
-    set_cond(&t->step[8], 9);                          /* 4:4 */
-    t->p[P_SLEN] = 12;
-    for (i = 1; i < NTRK; i++)
-        track_defaults_steps(&trk[i]);
-    project_save(0);
-    chain_config.count = 2;
-    chain_config.row[0] = (chain_row_t){{0, 0, 0, 0}, 4};
-    chain_config.row[1] = (chain_row_t){{0, 0, 0, 0}, 2};
-    ok = chain_prepare() == 0;
-    while (n < 256u && i++ < 40000u && (chain.running || chain.armed)) {
-        uint32_t v0 = vage, k;
-        events_block(CTL);
-        for (; v0 < vage; v0++)
-            for (k = 0; k < NVOICE; k++)
-                if (trk[0].v[k].age == v0 + 1u && n < 256u)
-                    nt[n++] = trk[0].v[k].note;
-    }
-    for (i = 0; i < n; i++) {
-        c1 += nt[i] == 64u;
-        c4 += nt[i] == 68u;
-    }
-    ok &= !chain.running && c1 == 3u && c4 == 1u;     /* 1:3: section 1 loops 1 4, section 2 loop 1; 4:4: section 1's 4th */
-    bad += check("conditions in a SONG: each section from its loop 1 (1:3 x3 over 4 + 2 repeats, 4:4 once)", ok);
-    chain_defaults(&chain_config);
-    memset(proj_slot, 0, sizeof proj_slot);
-    return bad;
-}
-
 /* NUDGE: step 1 played early (QUANTIZE OFF, -4/16) belongs to the loop it starts */
 static int cond_nudge(void)
 {
@@ -313,8 +278,8 @@ static int old_accepts(const project_store_t *p)   /* 1.5 / 1.5.1's proj_unpack 
     uint32_t t, i, base;
     for (t = 0; t < NTRK; t++)
         for (i = 0; i < NSTEP; i++) {
-            base = 68u + t * (P_COUNT + 2u + NSTEP * 9u) + P_COUNT + 2u + i * 9u;
-            if ((p->raw[base + 8u] & 127u) > 101u)
+            base = 68u + t * (P_COUNT + 2u + NSTEP * 7u) + P_COUNT + 2u + i * 7u;
+            if ((p->raw[base + 6u] & 127u) > 101u)
                 return 0;
         }
     return 1;
@@ -337,10 +302,10 @@ static int cond_store(void)
     ok &= proj_pack(&pk, &a) && proj_import(&b, &pk, sizeof pk);
     for (i = 0; i < NCOND; i++)
         ok &= step_cond(&b.t[0].step[i]) == 1u + i;
-    bad += check("FUN10: the conditions round trip (the chance byte 102..112), the size unchanged", ok && sizeof pk == 3840u);
+    bad += check("FUNW: the conditions round trip (the chance byte 102..112), 2784-byte native size", ok && sizeof pk == 2784u);
     bad += check("  1.5 / 1.5.1's rule refuses a project holding one (the slot reads empty there), one without loads",
                  old0 && !old_accepts(&pk));
-    pk.raw[68u + P_COUNT + 2u + 8u] = 113;
+    pk.raw[68u + P_COUNT + 2u + 6u] = 113;
     {
         uint32_t s = proj_hash(pk.raw, PROJ_STORE_SIZE - 4u);
         memcpy(pk.raw + PROJ_STORE_SIZE - 4u, &s, 4);
@@ -459,41 +424,6 @@ static int test_euclid(void)
         bad += check("  a Program Change for T2 while open (its load's undo copy): T1 turned from its own steps, OCT- "
                      "puts them back, OCT+ applies; T2's steps untouched", ok);
     }
-    {   /* DRUM: the selected lane only */
-        uint32_t m;
-        ui_power_on();
-        song.sel = 3;
-        set_engine_of(TSEL, ENGI_DRUM);
-        TSEL->engine = TSEL->eng_req;
-        track_defaults_steps(TSEL);
-        TSEL->p[P_SLEN] = 16;
-        for (i = 0; i < 16u; i += 8u)
-            grid_hit(TSEL, i, DV_KICK, 1);
-        grid_hit(TSEL, 4, DV_SNARE, 1);
-        grid_acc(TSEL, 4, DV_SNARE, 1);
-        memcpy(ref, TSEL->step, sizeof ref);
-        go_page(GR_ROLL); frame();
-        eu.steps = 0;
-        btn_down(B_SEQ); frame();
-        key_down(black(3)); frame(); key_up(black(3)); frame();   /* the closed hat */
-        tkey(7);
-        kt(EN_K1, 1);                                  /* 5 / 16 */
-        for (m = 0, i = 0; i < 16u; i++)
-            m |= ((step_lanes(&TSEL->step[i]) >> 3) & 1u) << i;
-        ok = ui.lane == 3u && m == 0x2491u;
-        for (i = 0; i < 16u; i++)
-            ok &= (step_lanes(&TSEL->step[i]) & 7u) == (step_lanes(&ref[i]) & 7u) &&
-                  step_accents(&TSEL->step[i]) == step_accents(&ref[i]);
-        bad += check("EUCLID on DRUM: the selected lane (HATCL 5 / 16), the other lanes and accents untouched", ok);
-        key_down(black(2)); frame(); key_up(black(2)); frame();   /* the clap: the preview moves there */
-        for (m = 0, i = 0; i < 16u; i++)
-            m |= ((step_lanes(&TSEL->step[i]) >> 2) & 1u) << i | ((step_lanes(&TSEL->step[i]) >> 3) & 1u) << 16;
-        ok = m == 0x2491u;
-        oct_fwd();
-        btn_up(B_SEQ); frame();
-        bad += check("  another lane picked while open: the hits go to it, the first lane as it was", ok && !eu.on);
-        ui_power_on();
-    }
     return bad;
 }
 
@@ -604,7 +534,7 @@ static int test_double_half(void)
 
 int main(void)
 {
-    int bad = conditions() + cond_locks_rolls() + cond_song() + cond_nudge() + cond_ui() + fill_key() + cond_store() + test_euclid() + test_double_half();
+    int bad = conditions() + cond_locks_rolls() + cond_nudge() + cond_ui() + fill_key() + cond_store() + test_euclid() + test_double_half();
     printf("%s\n", bad ? "SEQ 1.5.5 TEST FAILED" : "seq 1.5.5 tests passed");
     return bad != 0;
 }

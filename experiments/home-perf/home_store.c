@@ -34,7 +34,7 @@ static void hp_commit(uint32_t slot,hp_store_t*p)
 static int hp_project_save(uint32_t slot,const char*name)
 {
  if(project_compat_save_blocked(slot))return 1;
- if(slot>=4||chain_busy()){ui_message("STOP SONG FIRST");return 1;}
+ if(slot>=4||0){ui_message("STOP SONG FIRST");return 1;}
  if(!hp_capture(&hp_io)){ui_message("PROJECT TOO LARGE / NOT SAVED");return 2;}
  if(name){memset(proj_scratch.name,0,sizeof proj_scratch.name);memcpy(proj_scratch.name,name,str_len(name)<PROJ_NAME_LEN?str_len(name):PROJ_NAME_LEN);proj_scratch.sum=proj_sum(&proj_scratch);if(!proj_pack(&hp_io.native,&proj_scratch))return 2;}
  memcpy(&proj_slot[slot],&hp_io.native,sizeof hp_io.native);proj_cur=slot;pat_from_set(slot+1);proj_name_get(proj_name,(uint8_t*)proj_scratch.name);

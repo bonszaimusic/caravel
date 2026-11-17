@@ -80,7 +80,7 @@ static int ev_id_ok(const track_t *t, uint32_t id)
         return 1;
     if (id >= P_COUNT || !motion_param(id) || id == P_ED_FX || (id >= P_FM1_ATK && id <= P_FM4_LEVEL))
         return 0;
-    if (id == P_MORPH && t->eng_req != 0u && t->eng_req != 2u && t->eng_req != 3u && !dx_track(t))
+    if (id == P_MORPH && t->eng_req != 0u && t->eng_req != 2u && t->eng_req != 3u)
         return 0;
     if (id == P_PD_FB && t->eng_req != 2u)
         return 0;
@@ -331,7 +331,7 @@ static int ev_act_ready(void)
 {
     uint16_t rw[EV_ROWS];
     uint32_t c = ev_cur(rw, 0), k = c >> 8;
-    if (chain_busy())
+    if (0)
         return 0;
     if (k == EVK_TOP)
         return ev_count(TSEL,0) != 0u;
@@ -345,7 +345,7 @@ static int ev_act_ready(void)
 
 static int ev_busy(void)
 {
-    if (!chain_busy())
+    if (!0)
         return 0;
     ui_message("STOP TO EDIT");
     return 1;

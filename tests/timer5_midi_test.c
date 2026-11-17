@@ -23,7 +23,7 @@ static uint32_t host_rx_take(void) { uint32_t n = rx_pending; rx_pending = 0; rx
 /* Keep the UI's small diagnostic stub separate from the real timer fields. */
 #define felucca_dbg ui_debug_stub
 #define fm1_delay_ms unused_timer_delay
-#include "ui_test.c"
+#include "ui_harness.h"
 #undef fm1_delay_ms
 #undef felucca_dbg
 #else
@@ -61,19 +61,18 @@ int main(void) {
     int bpm_min = 240, bpm_max = 40;
     ui_power_on(); ml_clear_all(); song.g[G_CLOCK] = 2; song.g[G_ROUTE] = ROUTE_TRACK;
     song.mch[0] = 0; song.mch[1] = 1; song.mch[2] = 2; song.mch[3] = 3;
-    uint32_t decay_b = DX_SOUND_FIRST + 16u * DV_SNARE + 5u + DXP_DECAY;
-    set_engine_of(&trk[3], ENGI_DRUM); apply_preset_to(&trk[3], 4);
+    uint32_t second_p = P_E1;                    /* a second learned parameter, on another track */
     for (uint32_t k = 0; k < NTRK; k++) {
         trk[k].p[P_SLEN] = 64; trk[k].p[P_SDIV] = 2;
-        for (uint32_t i = 0; i < NSTEP; i++) trk[k].step[i] = (step_t){{(uint8_t)(k == 3 ? 38 : 60 + k)}, 1, ST_NOTE, 0, 100};
+        for (uint32_t i = 0; i < NSTEP; i++) trk[k].step[i] = (step_t){{(uint8_t)(60 + k)}, 1, ST_NOTE, 0, 100};
     }
     bad += check("learned CC controls an ANALOG parameter", ml_learn(12, 0, P_E4) == 1u);
-    bad += check("learned CC controls an exact DRUM-X A/B lane", ml_learn(13, 3, decay_b) == 1u);
+    bad += check("learned CC controls a parameter of another track", ml_learn(13, 3, second_p) == 1u);
     /* Exercise a full 64-entry map on every incoming CC. */
     for (uint32_t i = 0, cc = 2; i < ML_N - 2; cc++) {
         if (!ml_free_cc(cc) || cc == 12 || cc == 13) continue;
-        uint32_t id = DX_SOUND_FIRST + i;
-        if (id >= decay_b) id++;
+        uint32_t id = i;
+        if (id >= second_p) id++;
         bad += check("fill remaining MIDI Learn slot", ml_learn(cc, 3, id) == 1u); i++;
     }
     events_block(CTL); um_byte(0xFA); events_block(CTL);
@@ -158,7 +157,7 @@ int main(void) {
     for (uint32_t k = 1; k < NTRK; k++)
         phase_ok &= trk[k].seq_idx == trk[0].seq_idx && trk[k].seq_pos == trk[0].seq_pos;
     bad += check("all four tracks retain exactly the same sequencer phase under CC load", phase_ok);
-    bad += check("ANALOG and DRUM-X learned parameters receive their final CC values", trk[0].p[P_E4] == (int16_t)((cc_seen - 2u) & 127u) && dx_get(3, decay_b) == (int32_t)((cc_seen - 1u) & 127u));
+    bad += check("both learned parameters receive their final CC values", trk[0].p[P_E4] == (int16_t)((cc_seen - 2u) & 127u) && trk[3].p[second_p] == (int32_t)((cc_seen - 1u) & 127u));
     printf("120 BPM input: %d..%d BPM; sequence step %u, phase %u\n", bpm_min, bpm_max, trk[0].seq_idx, trk[0].seq_pos);
 #else
     mi_r = read;

@@ -43,7 +43,7 @@ static uint32_t host_rx_take(void)
 #define UI_TEST_NO_MAIN 1
 #define felucca_dbg ui_debug_stub
 #define fm1_delay_ms unused_timer_delay
-#include "ui_test.c"
+#include "ui_harness.h"
 #undef fm1_delay_ms
 #undef felucca_dbg
 static void fm1_timer5_ack(void) {}

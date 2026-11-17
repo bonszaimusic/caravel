@@ -34,6 +34,18 @@ static uint8_t hp_el_scope_track[NTRK]; /* 0=CELL, 1=ROW */
 /* Page is UI-only; live COUPLE strength ramps on the control thread.
  * Never add per-spring linkage state or DSP-side coupling matrices. */
 static uint8_t hp_el_setup_page;
+#if CARAVEL_UX_EVOLVE
+static uint8_t hp_el_free_track[NTRK];   /* PLAY: armed with free choice of the springs' parameters (ui_uxl.c): no row; zero springs is allowed */
+
+/* Per spring (E59): PULL, RETURN, BOUNCE and RANGE of each spring on its own; a new spring takes the track's values as its start */
+static hp_et_cfg_t hp_el_stimes[NTRK][HP_ER_MAX];
+static hp_elastic_cfg_t hp_el_scfg[NTRK][HP_ER_MAX];
+#define HP_SCFG(t,k) (hp_el_scfg[t][k])
+#define HP_STIMES(t,k) (hp_el_stimes[t][k])
+#else
+#define HP_SCFG(t,k) (hp_el_cfg_track[t])
+#define HP_STIMES(t,k) (hp_el_times_track[t])
+#endif
 static uint8_t hp_el_couple_live[NTRK];
 static uint32_t hp_el_couple_clock[NTRK];
 static uint8_t hp_el_pick_track[NTRK];
@@ -175,6 +187,9 @@ static void hp_elastic_p1_clear_track(uint32_t t)
     hp_et_reset(&hp_el_cell_time_track[t]);
     for(uint32_t k=0;k<HP_ER_MAX;k++)hp_et_reset(&hp_el_row_time_track[t][k]);
     hp_el_pick_track[t]=0u;hp_el_row_held_track[t]=0u;
+#if CARAVEL_UX_EVOLVE
+    hp_el_free_track[t]=0u;
+#endif
     hp_el_couple_live[t]=0u;hp_el_couple_clock[t]=fm1_ms;
     for(uint32_t k=0;k<HP_ER_MAX;k++){
         hp_el_fade[t][k]=64u;hp_el_fade_id[t][k]=0u;hp_el_fade_eng[t][k]=0u;
@@ -255,7 +270,7 @@ static int32_t hp_elastic_p13_row_x(uint32_t t,uint32_t k)
     for(uint32_t j=0;j<HP_ER_MAX;j++){
         const hp_elastic_t *e=&row->spring[j];
         travel[j]=(row->valid&(1u<<j))?
-            hp_elastic_limit(e,cfg)*256:0;
+            hp_elastic_limit(e,HP_SCFG(t,j))*256:0;
         pos[j]=(row->valid&(1u<<j))?e->x:0;
     }
     int32_t x=pos[k];
@@ -472,6 +487,9 @@ static int hp_elastic_p12_arm(void)
         if(hp_er_bind(&hp_er,k,(uint16_t)id,trk[track].p[id],
                       d->min,d->max,fm1_ms)){
             hp_et_reset(&hp_el_row_time[k]);
+#if CARAVEL_UX_EVOLVE
+            HP_STIMES(track,k)=hp_el_times_track[track];HP_SCFG(track,k)=hp_el_cfg_track[track];
+#endif
 #if FELUCCA_RANDOM_MORPH
             hp_rm_disengage(r);
 #endif
@@ -586,7 +604,7 @@ static void hp_elastic_p1_action(uint32_t key)
             uint32_t k=hp_er.last;
             if(k<HP_ER_MAX && (hp_er.valid&(1u<<k))){
                 hp_et_touch(&hp_er.spring[k],&hp_el_row_time[k],1,
-                            fm1_ms,hp_el_times,hp_el1_cfg);
+                            fm1_ms,HP_STIMES(song.sel,k),HP_SCFG(song.sel,k));
                 ui_message("ELASTIC PULSE");
             }else ui_message("TURN A ROW KNOB FIRST");
         }else if(key==2u){
@@ -716,18 +734,22 @@ static uint32_t hp_elastic_p1_poll_track(uint32_t t,uint32_t now)
                 changed=1u;continue;
             }
             int16_t before=hp_elastic_p13_row_value(t,k);
-            int32_t travel=hp_elastic_limit(&er->spring[k],cfg)*256;
+            int32_t travel=hp_elastic_limit(&er->spring[k],HP_SCFG(t,k))*256;
             int32_t shift=hp_evis_shift(hp_elastic_p13_row_x(t,k),travel);
             uint8_t phase=hp_el_row_time_track[t][k].phase;
             hp_et_poll_bpm(&er->spring[k],&hp_el_row_time_track[t][k],now,
-                           times,cfg,(uint32_t)song.g[G_BPM]);
+                           HP_STIMES(t,k),HP_SCFG(t,k),(uint32_t)song.g[G_BPM]);
             /* The 3px spring can move before the rounded parameter does.
              * Refresh the display at the existing capped 80ms cadence. */
             if(before!=hp_elastic_p13_row_value(t,k) ||
                shift!=hp_evis_shift(hp_elastic_p13_row_x(t,k),travel) ||
                phase!=hp_el_row_time_track[t][k].phase)changed=1u;
         }
+#if CARAVEL_UX_EVOLVE
+        if(!hp_er_count(er) && !hp_el_free_track[t]){hp_elastic_p1_clear_track(t);return 2u;}
+#else
         if(!hp_er_count(er)){hp_elastic_p1_clear_track(t);return 2u;}
+#endif
         hp_elastic_p1_publish_track(t);
         return changed;
     }

@@ -120,6 +120,28 @@ static int st_current(uint32_t obj, st_hdr_t *h)
     return -1;
 }
 
+/* FORMAT 2 (CARAVEL_FORMAT2): every commit record carries ST_FMT2 in rsv[0]; older firmware wrote 0xFFFFFFFF there and
+ * ignores the field. A record without the tag is OLD DATA: st_load does not hand it out (the object reads as empty),
+ * st_old tells it apart from an object that was never written, and nothing here overwrites it (the UI asks first).
+ * The settings are the one object that is kept (their layout did not change; the favorites are cleared on load). */
+#define ST_FMT2 0x32544D46u                    /* "FMT2" */
+#define ST_TAG ST_FMT2
+/* the object holds data (a length > 0) that was written without the tag: 1, else 0 (never for the settings) */
+static int st_old(uint32_t obj)
+{
+    st_hdr_t h;
+    if (obj == OBJ_SETTINGS || obj >= OBJ_COUNT || obj == OBJ_FM6BANK || obj == OBJ_UPFM6) return 0;
+    if (st_current(obj, &h) < 0) return 0;
+    return h.len > 0u && h.rsv[0] != ST_TAG;
+}
+
+/* what old data this start found (ui_f2.c f2_boot): bit 0..3 the projects A..D, 4 the autosave, 5 and 6 the user preset
+ * banks. A slot with a bit set is never written (project_compat_save_blocked, up_put, the autosave): only erased. */
+static uint8_t f2_old;
+static void f2_offer(void);                    /* ui_f2.c: a write wanted a slot that holds old data: the notice's question again */
+#define F2_OLD_AUTO 0x10u
+#define F2_OLD_BANK0 0x20u
+
 /* load the whole object into dst; returns its length, or -1 if it does not fit */
 static int st_load(uint32_t obj, void *dst, uint32_t max)
 {
@@ -127,6 +149,8 @@ static int st_load(uint32_t obj, void *dst, uint32_t max)
     st_hdr_t h;
     if (obj >= OBJ_COUNT || st_current(obj, &h) < 0 || h.len > max)
         return -1;
+    if (obj != OBJ_SETTINGS && obj != OBJ_FM6BANK && obj != OBJ_UPFM6 && h.rsv[0] != ST_TAG)
+        return -1;                                     /* old data: not handed out */
     for (i = 0; i < h.len; i++)
         ((uint8_t *)dst)[i] = st_buf[i];
     return (int)h.len;
@@ -160,7 +184,7 @@ static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)
     h.seq = seq + 1u;
     h.len = len;
     h.crc = st_crc32(st_buf, len);
-    h.rsv[0] = h.rsv[1] = 0xFFFFFFFFu;
+    h.rsv[0] = ST_TAG; h.rsv[1] = 0xFFFFFFFFu;
     h.hcrc = st_crc32(&h, sizeof h - 4u);
     if ((rc = st_prog(base, &h, sizeof h)) != 0)       /* the commit record, last */
         return rc;

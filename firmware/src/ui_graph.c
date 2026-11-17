@@ -15,45 +15,8 @@ static void pair_ui_graph(void);
 #endif
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
-#include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
 
-#if FELUCCA_FM4                                      /* (the OP1..OP4 ENV pages of DIGITAL: every other ENV page is a two-group page, ui_lfo2.c) */
-/* Matches voice.c: attack is linear, decay and release are exponential
- * (env += (target - env) * k each tick, ~99 % after the set time). Time
- * axis is the parameter value (the times themselves are exponential). */
-static void graph_adsr(const track_t *t, uint16_t c)
-{
-    const page_t *pg = cur_page();
-    int32_t a = 4 + t->p[pg->id[0]] * 50 / 127, d = 6 + t->p[pg->id[1]] * 50 / 127, r = 6 + t->p[pg->id[3]] * 60 / 127;
-    int32_t top = 6 * graph_ht / 100, bot = 88 * graph_ht / 100, sus = t->p[pg->id[2]] * 1000 / 127;   /* 0..1000 */
-    int32_t x0 = 12, x1 = x0 + a, x3 = 226 - r, i, px, py;
-    int32_t e = 32768;                                                  /* exp(-4.6 u), Q15 */
-#define EGY(lvl) (bot - (lvl) * (bot - top) / 1000)
-    cv_rect(PANEL_X0, bot + 2, PANEL_W, 1, T_RAISE);
-    cv_line_t(x0, bot, x1, top, c, 2);                                  /* attack: linear */
-    px = x1;
-    py = top;
-    for (i = 1; i <= d; i++) {                                          /* decay: exponential to SUS */
-        int32_t lvl;
-        e = (e * (32768 - 150733 / d)) >> 15;           /* k^d = exp(-4.6) */
-        lvl = sus + ((1000 - sus) * e >> 15);
-        cv_line_t(px, py, x1 + i, EGY(lvl), c, 2);
-        px = x1 + i;
-        py = EGY(lvl);
-    }
-    cv_line_t(px, py, x3, EGY(sus), c, 2);                               /* sustain */
-    px = x3;
-    py = EGY(sus);
-    e = 32768;
-    for (i = 1; i <= r; i++) {                                          /* release: exponential to 0 */
-        e = (e * (32768 - 150733 / r)) >> 15;
-        cv_line_t(px, py, x3 + i, EGY(sus * e >> 15), c, 2);
-        px = x3 + i;
-        py = EGY(sus * e >> 15);
-    }
-#undef EGY
-}
-#endif
+
 
 /* step bar x of step i of a 16-step row: 4 groups, as the footer (9 px bars, 13 px apart, 4 px between groups),
  * the row centred: x 12 .. 228 */
@@ -413,413 +376,9 @@ static uint32_t str_hash(uint32_t h, const char *s)
     return h;
 }
 
-/* One shared, reduced sample display. Decode only in the UI/main loop with a
- * private IMA state, 512 samples per frame; no audio voice state is touched.
- * Cache follows the sample zone, selected note and user-slot generation. */
-#define SAMPLE_WAVE_COLS 96u
-static struct {
-    int16_t lo[SAMPLE_WAVE_COLS], hi[SAMPLE_WAVE_COLS];
-    const smp_zone_t *zone;
-    uint32_t key, gen, pos;
-    int32_t pred, index, peak;
-    uint8_t ready;
-} sample_wave;
-
-static uint32_t sample_wave_zone(const track_t *t)
-{
-    uint32_t si = (uint32_t)t->p[P_E0] % SMP_NALL, i, zi = 0xFFFFu;
-    if (si < SMP_NSETS) {
-        const smp_set_t *set = &SMP_SETS[si];
-        for (i = 0; i < set->nz; i++)
-            if (last_note >= SMP_ZONES[set->z0 + i].lo && last_note <= SMP_ZONES[set->z0 + i].hi) zi = set->z0 + i;
-        if (zi == 0xFFFFu && set->nz) zi = set->z0;
-    } else {
-        uint32_t k = si - SMP_NSETS;
-        for (i = 0; i < usr_nz[k]; i++)
-            if (last_note >= usr_zone[k][i].lo && last_note <= usr_zone[k][i].hi) zi = 0x8000u | k << 5 | i;
-        if (zi == 0xFFFFu && usr_nz[k]) zi = 0x8000u | k << 5;
-    }
-    return zi;
-}
-
-static void sample_wave_tick(const track_t *t)
-{
-    uint32_t zi = sample_wave_zone(t), key = zi + ((uint32_t)last_note << 16), i;
-    if (key != sample_wave.key || sample_wave.gen != smp_user_gen || !sample_wave.zone) {
-        sample_wave.key = key; sample_wave.gen = smp_user_gen;
-        sample_wave.zone = zi == 0xFFFFu ? 0 : smp_zone(zi);
-        sample_wave.pos = 0; sample_wave.pred = sample_wave.index = 0;
-        sample_wave.peak = 1; sample_wave.ready = 0;
-        for (i = 0; i < SAMPLE_WAVE_COLS; i++) sample_wave.lo[i] = sample_wave.hi[i] = 0;
-    }
-    const smp_zone_t *z = sample_wave.zone;
-    if (!z || !z->n || sample_wave.ready) return;
-    for (i = 0; i < 512u && sample_wave.pos < z->n; i++) {
-        uint32_t pos = sample_wave.pos, b = SMP_DATA[z->off + (pos >> 1)];
-        uint32_t code = (pos & 1u) ? b >> 4 : b & 15u;
-        int32_t step = IMA_STEP[sample_wave.index], d = step >> 3;
-        if (code & 4u) d += step;
-        if (code & 2u) d += step >> 1;
-        if (code & 1u) d += step >> 2;
-        sample_wave.pred = clamp(sample_wave.pred + ((code & 8u) ? -d : d), -32768, 32767);
-        sample_wave.index = clamp(sample_wave.index + IMA_IDX[code & 7u], 0, 88);
-        uint32_t col = pos * SAMPLE_WAVE_COLS / z->n;
-        int32_t v = sample_wave.pred, a = v < 0 ? -v : v;
-        if (v < sample_wave.lo[col]) sample_wave.lo[col] = (int16_t)v;
-        if (v > sample_wave.hi[col]) sample_wave.hi[col] = (int16_t)v;
-        if (a > sample_wave.peak) sample_wave.peak = a;
-        sample_wave.pos++;
-    }
-    sample_wave.ready = sample_wave.pos == z->n;
-}
-
-static void graph_sample(uint16_t c)
-{
-    uint32_t i;
-    const smp_zone_t *z = sample_wave.zone;
-    cv_rect(PANEL_X0, 48, PANEL_W, 1, T_RAISE);
-    for (i = 0; i < SAMPLE_WAVE_COLS; i++) {
-        int32_t x = 12 + (int32_t)i * 216 / (SAMPLE_WAVE_COLS - 1u);
-        cv_line(x, 48 - sample_wave.hi[i] * 38 / sample_wave.peak,
-                x, 48 - sample_wave.lo[i] * 38 / sample_wave.peak, c);
-    }
-    if (z->looped && TSEL->p[P_E3]) {
-        int32_t left = 12 + (int32_t)(z->ls * 216u / z->n), right = 12 + (int32_t)(z->le * 216u / z->n);
-        cv_line(left, 4, left, 90, T_MID); cv_line(right, 4, right, 90, T_MID);
-    }
-}
-
-#if FELUCCA_SLICE
-/* SLICES (ui_slice.c): the waveform from the marker before the selected one to the one after it (the selected
- * slice tinted, its marker the accent, outside the slices DIM), under it the whole material with every marker and
- * the view; then the selected slice's length and the source */
-static void graph_slices(void)
-{
-    uint32_t a, b, len, n = slice_count(), j = slice_sel(), i, src, div, ma, mb;
-    char t[20], u[12];
-    if (!slice_src(&src, &div) || !n) {             /* (it plays a sine: eng_slice.c) */
-        panel_alert(ICON_X_NOFILE, "SAMPLE NOT FOUND");
-        return;
-    }
-    slice_view(&a, &b, &len);
-    slice_env(a, b);
-    ma = slice_mark(0);
-    mb = slice_mark(n);
-#define SPX(p) (12 + (int32_t)((uint32_t)((p) - a) * SP_COLS / (b - a)))   /* p in [a, b] */
-    if (j < n) {                                     /* the selected slice */
-        uint32_t s0 = slice_mark(j), s1 = slice_mark(j + 1u);
-        int32_t x0 = SPX(s0 > a ? s0 : a), x1 = SPX(s1 < b ? s1 : b);
-        if (x1 > x0)
-            cv_rect(x0, 6, x1 - x0, 80, T_TINT);
-    }
-    for (i = 0; i < SP_COLS; i++) {
-        uint32_t p = a + (uint32_t)((uint32_t)i * (b - a) / SP_COLS);
-        cv_line(12 + (int32_t)i, 46 - sp.hi[i] * 38 / 64, 12 + (int32_t)i, 46 - sp.lo[i] * 38 / 64,
-                p >= ma && p < mb ? T_THEME : T_DIM);
-    }
-    for (i = 0; i <= n; i++) {                       /* the markers in the view (the selected one last: on top) */
-        uint32_t p = slice_mark(i);
-        if (i != j && p >= a && p <= b)
-            cv_rect(SPX(p), 4, 1, 84, T_MID);
-    }
-    {
-        uint32_t p = slice_mark(j);
-        if (p >= a && p <= b)
-            cv_rect(SPX(p) > 226 ? 226 : SPX(p), 2, 2, 88, T_ACCENT);
-    }
-#undef SPX
-    cv_rrect(12, 96, (int32_t)SP_COLS, 3, 1, T_RAISE, T_SURF);   /* the whole: every marker, the view */
-    for (i = 0; i <= n; i++)
-        cv_rect(12 + (int32_t)((uint32_t)slice_mark(i) * (SP_COLS - 1u) / len), 94, 1, 7, i == j ? T_ACCENT : T_MID);
-    {
-        int32_t x0 = 12 + (int32_t)((uint32_t)a * SP_COLS / len), x1 = 12 + (int32_t)((uint32_t)b * SP_COLS / len);
-        cv_rect(x0, 103, x1 - x0 < 2 ? 2 : x1 - x0, 2, T_THEME);
-    }
-    str_cpy(t, "LEN ", sizeof t);
-    slice_time(u, j < n ? slice_mark(j + 1u) - slice_mark(j) : len - mb);
-    str_cpy(t + 4, u, sizeof t - 4);
-    str_cpy(t + str_len(t), " S", sizeof t - str_len(t));
-    cv_text(12, 104, &AF_M, t, T_MID);                  /* the slice's detail (M): its capitals rows 108 .. 118 */
-    cv_text_r(228, 104, &AF_M, N_SLC_SRC[src], src && src != SLC_SRC_PIANO ? T_THEME : T_DIM, T_SURF);
-}
-#endif
-
 /* WHEEL: the nine drawbars as rounded bars over RAISE slots (the bars of the knob just turned: the accent),
  * their footages under them */
-static void graph_wheel(const track_t *t, uint16_t c)
-{
-    uint32_t k;
-    static const char *const names[9] = {"16", "5.3", "8", "4", "2.7", "2", "1.6", "1.3", "1"};
-    for (k = 0; k < 9u; k++) {
-        int32_t x = 11 + (int32_t)k * 25, level = drw_level(t->p, k);
-        if (t->p[P_E4] && k == 8u) level = 0; /* DSP's percussion cancels the 1-foot bar. */
-        int hot = ui.hot_t && cur_page()->id[0] == P_E0 &&
-                  (ui.hot_col == 0u || ui.hot_col == (k < 2u ? 1u : k < 4u ? 2u : 3u));
-        cv_rrect(x + 7, 2, 4, 73, 2, T_RAISE, T_SURF);
-        if (level) cv_rrect(x + 3, 75 - level * 8, 12, level * 8, 3, hot ? T_ACCENT : c, T_SURF);
-        else cv_rrect(x + 3, 73, 12, 2, 1, hot ? T_ACCENT : T_DIM, T_SURF);
-        GFX_HOOK_ALIGN(x + 7, 0, x + 11, 0, AL_H, "wheel footage under its drawbar");
-        cv_text_in(x + 3, 82, 12, &AF_S, names[k], T_MID, T_SURF);   /* under the bar, by its ink */
-    }
-}
-/* The FM charts' parts: an operator box 21 x 17 (rows 23 px apart, columns 24), junction dots, Manhattan routes */
-#define FM_BH 17
-static void fm_dot(int32_t x, int32_t y, uint16_t c) { cv_rect(x - 1, y - 1, 3, 3, c); }
-/* a Manhattan route, 1 px: down from (x0, y0) to the jog row jy, across to x1, down to y1 */
-static void fm_route(int32_t x0, int32_t y0, int32_t x1, int32_t jy, int32_t y1, uint16_t c)
-{
-    cv_rect(x0, y0, 1, jy - y0, c);
-    cv_rect(x0 < x1 ? x0 : x1, jy, (x0 < x1 ? x1 - x0 : x0 - x1) + 1, 1, c);
-    cv_rect(x1, jy, 1, y1 - jy, c);
-}
-/* a feedback loop on the operator box at (x, y): out of its right side, up, back in on top with an arrow */
-static void fm_loop(int32_t x, int32_t y, uint16_t c)
-{
-    cv_rect(x + 11, y + 5, 5, 1, c);
-    cv_rect(x + 15, y - 4, 1, 9, c);
-    cv_rect(x, y - 4, 15, 1, c);
-    cv_rect(x, y - 4, 1, 4, c);
-    cv_line(x - 2, y - 3, x - 1, y - 2, c); cv_line(x + 2, y - 3, x + 1, y - 2, c);
-}
-/* the output bus under the carriers (the leftmost at cl, the rightmost at cr) at y bus, an arrow out on the right */
-static void fm_bus(int32_t cl, int32_t cr, int32_t bus)
-{
-    cv_rect(cl, bus, cr + 24 - cl, 1, T_MID);
-    cv_line(cr + 20, bus - 3, cr + 23, bus, T_MID); cv_line(cr + 20, bus + 3, cr + 23, bus, T_MID);
-}
 
-#ifndef FM6_CHART_HOOK
-#define FM6_CHART_HOOK(kind, a, b) ((void)0)   /* ui_render.c (host tests): the chart's parts one by one (its lint) */
-#endif
-enum { FMH_BOX, FMH_ROUTE, FMH_CAR, FMH_BUS, FMH_FB, FMH_LABEL, FMH_END };
-/* FM6's 32 algorithms as charts. FM6_CELL: per operator 1..6 its cell, the column in 24 px steps (bits 0..2) and
- * the row above the output bus (bits 4..5; row 0 = the carriers). The routes, the carriers and the feedback
- * operator are fm6_core.c's FM6_ALG itself (fm6_routes, fm6_car_ops, fm6_fb_op). ui_test.c checks the cells
- * against them (a modulator one row above what it modulates, the carriers on the bottom row and only they, one
- * operator per cell) and the routes against the 32 algorithms written out; ui_render.c lints every chart as drawn
- * (no route through a box or touching another route, no two boxes overlapping, all inside the panel). The cells:
- * a search for the fewest and shortest bends, the operators numbered left to right. */
-static const uint8_t FM6_CELL[32][6] = {
-    {0x00, 0x10, 0x01, 0x11, 0x21, 0x31}, {0x00, 0x10, 0x02, 0x12, 0x22, 0x32}, {0x00, 0x10, 0x20, 0x01, 0x11, 0x21},
-    {0x00, 0x10, 0x20, 0x01, 0x11, 0x21}, {0x00, 0x10, 0x01, 0x11, 0x02, 0x12}, {0x00, 0x10, 0x01, 0x11, 0x02, 0x12},
-    {0x00, 0x10, 0x01, 0x11, 0x12, 0x22}, {0x00, 0x10, 0x01, 0x12, 0x11, 0x21}, {0x00, 0x10, 0x02, 0x12, 0x13, 0x23},
-    {0x00, 0x10, 0x20, 0x01, 0x11, 0x12}, {0x00, 0x10, 0x20, 0x01, 0x11, 0x12}, {0x00, 0x10, 0x03, 0x12, 0x13, 0x14},
-    {0x00, 0x10, 0x02, 0x11, 0x12, 0x13}, {0x00, 0x10, 0x01, 0x11, 0x20, 0x21}, {0x00, 0x10, 0x02, 0x12, 0x21, 0x22},
-    {0x01, 0x10, 0x11, 0x21, 0x12, 0x22}, {0x01, 0x12, 0x10, 0x20, 0x11, 0x21}, {0x01, 0x10, 0x12, 0x11, 0x21, 0x31},
-    {0x00, 0x10, 0x20, 0x01, 0x02, 0x11}, {0x00, 0x01, 0x10, 0x02, 0x12, 0x13}, {0x00, 0x01, 0x10, 0x02, 0x03, 0x12},
-    {0x00, 0x10, 0x01, 0x02, 0x03, 0x12}, {0x00, 0x01, 0x11, 0x02, 0x03, 0x12}, {0x00, 0x01, 0x02, 0x03, 0x04, 0x13},
-    {0x00, 0x01, 0x02, 0x03, 0x04, 0x13}, {0x00, 0x01, 0x11, 0x02, 0x12, 0x13}, {0x00, 0x01, 0x11, 0x03, 0x13, 0x14},
-    {0x00, 0x10, 0x01, 0x11, 0x21, 0x02}, {0x00, 0x01, 0x02, 0x12, 0x03, 0x13}, {0x00, 0x01, 0x02, 0x12, 0x22, 0x03},
-    {0x00, 0x01, 0x02, 0x03, 0x04, 0x14}, {0x00, 0x01, 0x02, 0x03, 0x04, 0x05}};
-/* algorithm a's routes: m[i] bit j: operator j + 1 modulates operator i + 1. FM6_ALG runs the operators sixth
- * first, each reading a bus (or none) and writing one (or adding to it): who wrote a bus modulates its reader */
-static void fm6_routes(uint32_t a, uint8_t *m)
-{
-    const uint8_t *f = FM6_ALG[a & 31u];
-    uint8_t bus[4] = {0, 0, 0, 0};
-    uint32_t k;
-    for (k = 0; k < 6u; k++) {
-        uint32_t op = 5u - k, in = (f[k] >> 4) & 3u, o = f[k] & 3u;
-        m[op] = in ? bus[in] : 0u;
-        bus[o] = (uint8_t)(((f[k] & FM6_OADD) ? bus[o] : 0u) | 1u << op);
-    }
-}
-/* the operator with feedback in algorithm a (0..5: operator 1..6) */
-static uint32_t fm6_fb_op(uint32_t a)
-{
-    uint32_t k;
-    for (k = 0; k < 5u && (FM6_ALG[a & 31u][5u - k] & 0xC0u) != 0xC0u; k++)
-        ;
-    return k;
-}
-/* the carriers of algorithm a: bit k operator k + 1 (fm6_carriers counts the sixth first) */
-static uint32_t fm6_car_ops(uint32_t a)
-{
-    uint32_t c = fm6_carriers(a), r = 0, k;
-    for (k = 0; k < 6u; k++)
-        r |= (c >> (5u - k) & 1u) << k;
-    return r;
-}
-/* the algorithm FM6 plays on track t (0..31): ALG, or the patch's at PAT */
-static uint32_t fm6_alg_of(const track_t *t)
-{
-    return t->p[P_E0] >= 1 && t->p[P_E0] <= 32 ? (uint32_t)t->p[P_E0] - 1u : fm6_patch[(t - trk) % NTRK][FP_ALG] & 31u;
-}
-/* FM6's EDIT pages: the algorithm, drawn as graph_fm draws DIGITAL's, "ALG 05" top left; SLOT on a bank voice (B1..B32,
- * 1.4.1): its name top right. Carriers THEME with INK
- * numerals, modulators RAISE with THEME ones; an operator at output level 0: a DIM numeral (a carrier on RAISE).
- * Routes THEME, the feedback loop MID (DIM at feedback 0), the output bus MID. The knob just turned in ACCENT:
- * ALG and PTCH the label, FB the loop, MLVL the routes, MRAT MEG VMOD the modulators, DTUN the carriers.
- * sel < 6 (the OPERATOR pages, ui_fm6op.c): that operator's box ACCENT with an INK numeral, its frequency top right */
-static void graph_fm6(const track_t *t, uint16_t c, uint32_t sel)
-{
-    uint32_t alg = fm6_alg_of(t), k, j, car = fm6_car_ops(alg), top = 0, hi = 0, fbop = fm6_fb_op(alg), hotset = 0;
-    uint32_t hot = ui.hot_t ? (uint32_t)cur_page()->id[ui.hot_col & 3u] : 0u;
-    const uint8_t *pt = fm6_patch[(t - trk) % NTRK];
-    int32_t x[6], y[6], bus, cl = 240, cr = 0, fb = clamp(pt[FP_FB] + t->p[P_E1], 0, 7);
-    uint8_t m[6], fan[6] = {0, 0, 0, 0, 0, 0};
-    uint16_t rc = hot == P_E2 ? T_ACCENT : c;
-    char b[7] = {'A', 'L', 'G', ' ', (char)('0' + (alg + 1u) / 10u), (char)('0' + (alg + 1u) % 10u), 0};
-    if (hot == P_E3 || hot == P_E4 || hot == P_E5)
-        hotset = 63u & ~car;
-    else if (hot == P_E6)
-        hotset = car;
-    fm6_routes(alg, m);
-    for (k = 0; k < 6u; k++) {
-        uint32_t col = FM6_CELL[alg][k] & 7u, row = FM6_CELL[alg][k] >> 4;
-        hi = col > hi ? col : hi;
-        top = row > top ? row : top;
-        for (j = 0; j < 6u; j++)
-            fan[j] += (uint8_t)(m[k] >> j & 1u);
-    }
-    bus = 50 + (27 + 23 * (int32_t)top) / 2;         /* the chart centred on the 100 px scale */
-    for (k = 0; k < 6u; k++) {
-        x[k] = 120 + (int32_t)(FM6_CELL[alg][k] & 7u) * 24 - (int32_t)hi * 12;
-        y[k] = bus - 6 - FM_BH - 23 * (int32_t)(FM6_CELL[alg][k] >> 4);
-        if (car >> k & 1u) { cl = x[k] < cl ? x[k] : cl; cr = x[k] > cr ? x[k] : cr; }
-    }
-    for (k = 0; k < 6u; k++) {                       /* into k: its sources down to its jog row, across, down */
-        for (j = 0; j < 6u; j++)
-            if (m[k] >> j & 1u) {
-                FM6_CHART_HOOK(FMH_ROUTE, j, k);
-                fm_route(x[j], y[j] + FM_BH, x[k], y[k] - 3, y[k], rc);
-                if (fan[j] > 1u) fm_dot(x[j], y[k] - 3, rc);          /* one operator modulating several */
-                if (m[k] & (m[k] - 1u)) fm_dot(x[k], y[k] - 3, rc);   /* several modulating one */
-            }
-        if (car >> k & 1u) {
-            FM6_CHART_HOOK(FMH_CAR, k, 0);
-            cv_rect(x[k], y[k] + FM_BH, 1, bus - y[k] - FM_BH, T_MID);
-            if (x[k] != cl) fm_dot(x[k], bus, T_MID);
-        }
-    }
-    FM6_CHART_HOOK(FMH_BUS, 0, 0);
-    fm_bus(cl, cr, bus);
-    FM6_CHART_HOOK(FMH_FB, fbop, 0);
-    fm_loop(x[fbop], y[fbop], hot == P_E1 ? T_ACCENT : fb ? T_MID : T_DIM);
-    for (k = 0; k < 6u; k++) {
-        uint32_t on = pt[(5u - k) * FP_OP + FP_OL] != 0, fill_c = (car >> k & 1u) && on;
-        uint16_t f = hotset >> k & 1u ? T_ACCENT : c, fill = k == sel ? T_ACCENT : fill_c ? f : T_RAISE;
-        char n[2] = {(char)('1' + k), 0};
-        FM6_CHART_HOOK(FMH_BOX, k, 0);
-        cv_rrect(x[k] - 10, y[k], 21, FM_BH, 3, fill, T_SURF);
-        GFX_HOOK_ALIGN(x[k] - 10, y[k], x[k] + 11, y[k] + FM_BH, AL_HV, "FM6 operator number in its box");
-        cv_text_in(x[k] - 10, y[k] + CAP_IN(S, FM_BH), 21, &AF_S, n, fill_c || k == sel ? T_INK : on ? f : T_DIM, fill);
-    }
-    FM6_CHART_HOOK(FMH_LABEL, 0, 0);
-    cv_text(10, 4 - GOY, &AF_S, b, hot == P_E0 || hot == P_E7 ? T_ACCENT : T_MID);
-    if (sel < 6u) {                                  /* the operator picked: "OP3 x1.50" */
-        char fq[16] = {'O', 'P', (char)('1' + sel), ' ', 0};
-        fop_freq(pt + (5u - sel) * FP_OP, fq + 4);
-        cv_text_r(228, 4 - GOY, &AF_S, fq, T_TEXT, T_SURF);
-    } else if (fm6_bank_slot(fm6_slot[(t - trk) % NTRK]) >= 0) {   /* SLOT B1..B32: the bank voice's name */
-        char nm[11];
-        for (k = 0; k < 10u; k++)
-            nm[k] = (char)pt[FP_NAME + k];
-        for (nm[10] = 0; k && nm[k - 1] == ' '; k--)
-            nm[k - 1] = 0;
-        cv_text_r(228, 4 - GOY, &AF_S, nm, T_TEXT, T_SURF);
-    }
-    FM6_CHART_HOOK(FMH_END, alg, 0);
-}
-
-/* OP ENV (ui_fm6op.c): the picked operator's envelope as the patch has it: from L4 to L1 at R1, L2 at R2, L3 at R3, held
- * there while the key is down (a RAISE mark where it is let go), back to L4 at R4. A stage's width grows as its rate
- * falls (4..48 px: 99 is a step, 0 the longest), the levels 0..99 linearly (dB). The curve THEME, the stage KNOB 3 / 4
- * edit (STAGE) ACCENT with a dot at its target; "OP3" top left, the stage's rate and level top right */
-static void graph_fm6env(const track_t *t, uint16_t c)
-{
-    static const char *const STG[4] = {"ATK", "DEC", "SUS", "REL"};
-    const uint8_t *op = fop_bytes((uint32_t)(t - trk));
-    int32_t top = 24, bot = 88, x[6], y[6], k;
-    uint32_t sg = fop_stg & 3u;
-    char b[24] = {'O', 'P', (char)('1' + fop_op % 6u), 0};
-#define FEGY(l) (bot - (int32_t)(l) * (bot - top) / 99)
-#define FEGW(r) (4 + (99 - (int32_t)(r)) * (99 - (int32_t)(r)) * 44 / 9801)
-    x[0] = 12;
-    y[0] = FEGY(op[FP_L1 + 3]);
-    for (k = 0; k < 3; k++) {
-        x[k + 1] = x[k] + FEGW(op[FP_R1 + k]);
-        y[k + 1] = FEGY(op[FP_L1 + k]);
-    }
-    x[5] = 228;
-    x[4] = x[5] - FEGW(op[FP_R1 + 3]);
-    y[4] = y[3];
-    y[5] = y[0];
-    cv_rect(PANEL_X0, bot + 2, PANEL_W, 1, T_RAISE);
-    cv_rect(x[4], top, 1, bot - top + 1, T_RAISE);   /* the key let go */
-    for (k = 0; k < 5; k++)                          /* (3: the hold, no stage of its own) */
-        cv_line_t(x[k], y[k], x[k + 1], y[k + 1], k != 3 && (uint32_t)(k < 3 ? k : 3) == sg ? T_ACCENT : c, 2);
-    k = sg < 3u ? (int32_t)sg + 1 : 5;
-    fm_dot(x[k], y[k], T_ACCENT);
-#undef FEGY
-#undef FEGW
-    cv_text(10, 4 - GOY, &AF_S, b, T_MID);
-    str_cpy(b, STG[sg], sizeof b);
-    str_cpy(b + str_len(b), "  R ", 5);
-    fmt_int(b + str_len(b), op[FP_R1 + sg]);
-    str_cpy(b + str_len(b), "  L ", 5);
-    fmt_int(b + str_len(b), op[FP_L1 + sg]);
-    cv_text_r(228, 4 - GOY, &AF_S, b, T_TEXT, T_SURF);
-}
-
-#if FELUCCA_FM4
-/* DIGITAL's eight algorithms as FM charts, read from src/eng_digital.c's switch (alg) (ui_test.c checks
- * these tables against it). FM_CELL: per operator 1..4 its grid cell, the column in 24 px steps (bits 0..2)
- * and the row above the output bus (bits 4..5; row 0 = the carriers). FM_MOD: per destination operator d a
- * nibble at bit 4 d of the operators modulating it (bit k = operator k + 1). Operator 4 feeds itself (FB). */
-static const uint8_t FM_CELL[8][4] = {
-    {0x00, 0x10, 0x20, 0x30}, {0x01, 0x11, 0x20, 0x22}, {0x01, 0x10, 0x20, 0x12}, {0x01, 0x12, 0x10, 0x20},
-    {0x00, 0x10, 0x02, 0x12}, {0x00, 0x02, 0x04, 0x12}, {0x00, 0x02, 0x04, 0x14}, {0x00, 0x02, 0x04, 0x06}};
-static const uint16_t FM_MOD[8] = {0x0842, 0x00C2, 0x004A, 0x0806, 0x0802, 0x0888, 0x0800, 0x0000};
-/* Modulators above what they modulate, the carriers on the bottom row over the output bus (an arrow out).
- * Carriers THEME with INK numerals, modulators RAISE with THEME ones; an operator at LEVEL 0: DIM numeral.
- * Routes by IDX: DIM at 0, MID, THEME from 64; op 4's feedback loop MID (DIM at FB 0). The knob just turned
- * (an operator's ratio or level, IDX, FB): ACCENT. Junction dots where routes split or merge. */
-static void graph_fm(const track_t *t, uint16_t c)
-{
-    uint32_t alg = (uint32_t)t->p[P_E0] & 7u, k, j, mods = FM_MOD[alg], car = 0, hop = 9;
-    uint32_t hot = ui.hot_t ? (uint32_t)cur_page()->id[ui.hot_col & 3u] : 0u;
-    int32_t x[4], y[4], lo = 7, hi = 0, top = 0, bus, cl = 240, cr = 0, idx = t->p[P_E4];
-    uint16_t ec = hot == P_E4 ? T_ACCENT : !idx ? T_DIM : idx < 64 ? T_MID : c;
-    if (hot >= P_E1 && hot <= P_E3) hop = hot - P_E1 + 1u;
-    else if (hot >= P_FM1_ATK && hot < P_E0) hop = (hot - P_FM1_ATK) / 5u;
-    for (k = 0; k < 4u; k++) {
-        int32_t col = FM_CELL[alg][k] & 7, row = FM_CELL[alg][k] >> 4;
-        lo = col < lo ? col : lo; hi = col > hi ? col : hi; top = row > top ? row : top;
-    }
-    bus = 50 + (27 + 23 * top) / 2;                  /* the chart centred on the 100 px scale */
-    for (k = 0; k < 4u; k++) {
-        x[k] = 120 + (FM_CELL[alg][k] & 7) * 24 - (lo + hi) * 12;
-        y[k] = bus - 6 - FM_BH - 23 * (FM_CELL[alg][k] >> 4);
-        if (FM_CELL[alg][k] < 0x10) { car |= 1u << k; cl = x[k] < cl ? x[k] : cl; cr = x[k] > cr ? x[k] : cr; }
-    }
-    for (k = 0; k < 4u; k++) {                       /* into k: sources down to its jog row, across, down */
-        uint32_t m = (mods >> (4u * k)) & 15u;
-        for (j = 0; j < 4u; j++) if (m >> j & 1u) {
-            uint32_t fan = mods & (0x1111u << j);
-            fm_route(x[j], y[j] + FM_BH, x[k], y[k] - 3, y[k], ec);
-            if (fan & (fan - 1u)) fm_dot(x[j], y[k] - 3, ec);   /* one operator modulating several */
-        }
-        if (m & (m - 1u)) fm_dot(x[k], y[k] - 3, ec);           /* several modulating one */
-        if (car >> k & 1u) {
-            cv_rect(x[k], y[k] + FM_BH, 1, bus - y[k] - FM_BH, T_MID);
-            if (x[k] != cl) fm_dot(x[k], bus, T_MID);
-        }
-    }
-    fm_bus(cl, cr, bus);                             /* the output bus and its arrow */
-    fm_loop(x[3], y[3], hot == P_E6 ? T_ACCENT : t->p[P_E6] ? T_MID : T_DIM);   /* op 4's feedback */
-    for (k = 0; k < 4u; k++) {
-        char b[2] = {(char)('1' + k), 0};
-        uint32_t on = t->p[P_FM1_LEVEL + k * 5u] != 0, fill_c = (car >> k & 1u) && on;
-        uint16_t f = k == hop ? T_ACCENT : c, fill = fill_c ? f : T_RAISE;
-        cv_rrect(x[k] - 10, y[k], 21, FM_BH, 3, fill, T_SURF);
-        GFX_HOOK_ALIGN(x[k] - 10, y[k], x[k] + 11, y[k] + FM_BH, AL_HV, "DIGITAL operator number in its box");
-        cv_text_in(x[k] - 10, y[k] + CAP_IN(S, FM_BH), 21, &AF_S, b, fill_c ? T_INK : on ? f : T_DIM, fill);
-    }
-}
-#endif
-/* Save-bank validity is expensive (CRC/import). Refresh it once per redraw or
- * twice per second, rather than parsing four projects on every UI frame. */
 static char graph_pname[4][13];                       /* .. and the slots' names ("" none) */
 static uint16_t graph_plen[4][NTRK];                  /* .. each track's pattern length (project_info: 1/48 quarters) */
 static uint32_t graph_pden[4][NTRK];                  /* .. and its picture for SONG (project.c proj_density: 2 bits a cell) */
@@ -844,148 +403,6 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
     return graph_pname[slot & 3u];
 }
 
-/* SONG's timeline (graph_song): the sections left to right, each as wide as it plays: REPS x its clock track's pattern
- * (song_chain.c chain_clock: the first track not silent there; project_info: that track's LEN x DIV in its slot, what
- * chain_tick counts; a slot not saved, or every track silent: one bar). A short song is stretched over the strip
- * (fitted); a section under SG_MINW gets SG_MINW and the rest is shared out again; when the sections would get under
- * SG_FITBAR px a bar the song scrolls at SG_BAR px a bar, the view following the cursor's section and, playing, the
- * playing one. + ADD's slot (count < CHAIN_ROWS) at the end. Content px: 0 .. the width. Four lanes, T1 at the top */
-#define SG_X0 24                                       /* the strip: x 24 .. 234 (the lanes' cushions left of it) */
-#define SG_W 210
-#define SG_Y 3                                         /* the lanes: y 3 .. 88 */
-#define SG_LH 20                                       /* a lane's height (its letter, the pattern's picture), SG_LG between two */
-#define SG_LG 2
-#define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)
-#define SG_LY(k) (SG_Y + (int32_t)(k) * (SG_LH + SG_LG))   /* lane k's top */
-#define SG_GAP 2                                       /* between two blocks (in a block's width) */
-#define SG_MINW 16                                     /* a block's least width, its gap included: a letter in it */
-#define SG_ADDW 20                                     /* + ADD's slot */
-#define SG_BAR 6                                       /* scrolled: px a bar */
-#define SG_FITBAR 3                                    /* fitted: at least this many px a bar */
-#define SG_BARU 192u                                   /* a 4/4 bar in 1/48 quarters */
-#define SG_RY (SG_Y + SG_H + 3)                        /* the ruler's line (92); its ticks and numbers under it */
-typedef struct {
-    uint32_t n, add, fit;                              /* the rows, + ADD shown, fitted (no scrolling) */
-    uint32_t u0[CHAIN_ROWS + 1u];                      /* each row's start in 1/48 quarters; u0[n]: the song's length */
-    int32_t x[CHAIN_ROWS + 2u];                        /* each row's left edge (content px); x[n]: + ADD's; x[n + 1]: the end */
-} song_lay_t;
-static struct { int32_t off; uint32_t frame; uint8_t init, cur, play, last; } sgv;   /* the view (scrolled) */
-/* a * b / c without a 64-bit divide: a and c halved alike until a * b fits */
-static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
-{
-    while (b && a > 0xFFFFFFFFu / b) { a >>= 1; c >>= 1; }
-    return c ? a * b / c : 0u;
-}
-static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section: its clock track's (1/48 quarters) */
-{
-    uint32_t k = chain_clock(r), s = r->slot[k];
-    return s < 4u && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
-}
-static void song_layout(song_lay_t *L)
-{
-    uint32_t i, n = chain_config.count <= CHAIN_ROWS ? chain_config.count : CHAIN_ROWS, forced = 0, nf = 0, uf = 0, chg = 1;
-    uint32_t wb;
-    L->n = n;
-    L->add = n < CHAIN_ROWS;
-    L->u0[0] = 0;
-    for (i = 0; i < n; i++)
-        L->u0[i + 1u] = L->u0[i] + chain_config.row[i].repeat * song_unit(&chain_config.row[i]);
-    wb = SG_W - (L->add ? SG_ADDW : 0u);
-    while (chg) {                                      /* fitted: shared by length, SG_MINW the least */
-        chg = 0; nf = 0; uf = 0;
-        for (i = 0; i < n; i++)
-            if ((forced >> i) & 1u) nf++;
-            else uf += L->u0[i + 1u] - L->u0[i];
-        if (nf * SG_MINW > wb)
-            break;
-        for (i = 0; i < n; i++)
-            if (!((forced >> i) & 1u) && sg_muldiv(L->u0[i + 1u] - L->u0[i], wb - nf * SG_MINW, uf) < SG_MINW) {
-                forced |= 1u << i;
-                chg = 1;
-            }
-    }
-    L->fit = nf * SG_MINW <= wb && (!uf || sg_muldiv(SG_BARU, wb - nf * SG_MINW, uf) >= SG_FITBAR);
-    if (L->fit) {
-        uint32_t nb = 0, ub = 0;
-        for (i = 0; i <= n; i++) {
-            L->x[i] = (int32_t)(nb * SG_MINW + (uf ? sg_muldiv(ub, wb - nf * SG_MINW, uf) : 0u));
-            if (i < n && ((forced >> i) & 1u)) nb++;
-            else if (i < n) ub += L->u0[i + 1u] - L->u0[i];
-        }
-    } else {
-        L->x[0] = 0;
-        for (i = 0; i < n; i++) {
-            uint32_t w = ((L->u0[i + 1u] - L->u0[i]) * SG_BAR + SG_BARU / 2u) / SG_BARU;
-            L->x[i + 1u] = L->x[i] + (int32_t)(w > SG_MINW ? w : SG_MINW);
-        }
-    }
-    L->x[n + 1u] = L->x[n] + (L->add ? SG_ADDW : 0);
-}
-static int32_t song_ux(const song_lay_t *L, uint32_t u)   /* 1/48 quarters -> content px (the blocks' scale) */
-{
-    uint32_t i = 0;
-    while (i + 1u < L->n && u >= L->u0[i + 1u])
-        i++;
-    if (!L->n)
-        return 0;
-    return L->x[i] + (int32_t)sg_muldiv(u - L->u0[i], (uint32_t)(L->x[i + 1u] - L->x[i]), L->u0[i + 1u] - L->u0[i]);
-}
-static uint32_t song_cur(void) { return ui.song_row < chain_config.count ? ui.song_row : chain_config.count; }
-/* the playhead, content px: the playing section's repeats played and its clock track's step in its pattern (-1: none) */
-static int32_t song_playx(const song_lay_t *L)
-{
-    uint32_t r = chain.row, len, idx, reps;
-    const track_t *t = &trk[chain.clk % NTRK];
-    if (!chain.running || r >= L->n)
-        return -1;
-    len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u;
-    idx = t->seq_pos >= 0x7FFFFFFFu ? 0u : t->seq_idx % len;
-    reps = chain.config.row[r].repeat ? chain.config.row[r].repeat : 1u;
-    return L->x[r] + (int32_t)sg_muldiv((reps - (chain.remaining <= reps ? chain.remaining : reps)) * len + idx,
-                                        (uint32_t)(L->x[r + 1u] - L->x[r] - SG_GAP), reps * len);
-}
-/* once a frame: the view toward the cursor's block and the playing one (both when they fit, else the one that moved
- * last), a block's margin round them; halving the way with MENU > ANIM ON, at once on a redraw forced, a gap in
- * the frames or ANIM OFF. Returns the view's left edge */
-static int32_t song_follow(const song_lay_t *L)
-{
-    uint32_t c = song_cur(), p = chain.running && chain.row < L->n ? chain.row : 0xFFu;
-    int32_t a = L->x[c], b = c < L->n ? L->x[c + 1u] - SG_GAP : L->x[c] + SG_ADDW, tgt = sgv.off, d, m, end;
-    int fresh = !sgv.init || ui.frame != sgv.frame + 1u, snap = fresh || ui.force || (ui_prefs & PREF_ANIM_OFF);
-    if (sgv.init && sgv.frame == ui.frame)
-        return sgv.off;
-    if (fresh) {                                     /* the page (re)entered: the playing row first */
-        sgv.off = 0;
-        sgv.last = p != 0xFFu;
-    } else if (p != sgv.play) {
-        sgv.last = 1;
-    } else if (c != sgv.cur) {
-        sgv.last = 0;
-    }
-    if (p != 0xFFu) {
-        int32_t pa = L->x[p], pb = L->x[p + 1u] - SG_GAP;
-        if ((pb > b ? pb : b) - (pa < a ? pa : a) <= SG_W) {
-            a = pa < a ? pa : a;
-            b = pb > b ? pb : b;
-        } else if (sgv.last) {
-            a = pa;
-            b = pb;
-        }
-    }
-    m = (SG_W - (b - a)) / 2;
-    m = m > SG_MINW ? SG_MINW : m < 0 ? 0 : m;
-    if (a - m < tgt) tgt = a - m;
-    if (b + m > tgt + SG_W) tgt = b + m - SG_W;
-    end = L->x[L->n + 1u] - SG_W;
-    tgt = L->fit || end < 0 ? 0 : tgt < 0 ? 0 : tgt > end ? end : tgt;
-    d = tgt - sgv.off;
-    sgv.off = snap ? tgt : sgv.off + (d / 3 ? d / 3 : d > 0 ? 1 : d < 0 ? -1 : 0);
-    sgv.cur = (uint8_t)c;
-    sgv.play = (uint8_t)p;
-    sgv.frame = ui.frame;
-    sgv.init = 1;
-    return sgv.off;
-}
 
 /* MENU > LARGE's strip under the tall cards (ui.c LK_TALL): HOME's scope, ENV's ADSR, LFO's wave,
  * MIXER's tracks drawn small; on the other pages the page's title and number (their charts need the whole panel) */
@@ -1065,20 +482,6 @@ static uint32_t graph_signature(void)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
          ui.ppick * 1299709u;
-    if (pg->graph == GR_SONG) {
-        h ^= ui.song_row * 40503u + chain_config.count * 7919u + ui.song_trk * 3571u;
-        h = fnv(h, chain_config.row, sizeof chain_config.row);
-        h ^= chain.running ? (chain.row + 1u) * 104729u + chain.remaining * 1299709u : 0u;
-        for (i = 0; i < 4u; i++) h ^= (uint32_t)graph_project_used(i) << (24u + i);
-        h += graph_pname_sig;
-        {                                            /* the timeline: its view (following, ui_graph.c song_follow), the playhead */
-            song_lay_t L;
-            song_layout(&L);
-            h = (h ^ (uint32_t)song_follow(&L)) * 16777619u;
-            h = (h ^ (uint32_t)(song_playx(&L) + 1)) * 16777619u;
-            h ^= (ui_prefs & PREF_LARGE) ? 0x2545F491u : 0u;
-        }
-    }
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
@@ -1088,16 +491,6 @@ static uint32_t graph_signature(void)
     if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the rows, the one selected, + ADD's place, PLAY,
                                                       * QUANTIZE */
         h = (h ^ ev_sig()) * 16777619u;
-#if FELUCCA_SLICE
-    if (pg->graph == GR_SLICES && slice_page_ok()) h ^= slice_sig();
-#endif
-    if (pg->scope == SC_ENGINE && (ENGINES[t->eng_req % NENGINES] == &ENG_WHEEL || t->eng_req % NENGINES == ENGI_FM6 ||
-                                   (FELUCCA_FM4 && t->eng_req % NENGINES == ENGI_DIGITAL)))
-        h ^= (ui.hot_t ? ui.hot_col + 1u : 0u) * 65537u;
-    if ((pg->scope == SC_ENGINE || fop_page(pg->graph)) && t->eng_req % NENGINES == ENGI_FM6)   /* the patch (PAT's algorithm,
-                                                     * levels, FB; the operator pages: the operator, the stage) */
-        h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (fop_op + 1u) * 40503u + (fop_stg + 1u) * 7919u;
-    if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) h ^= sample_wave.pos * 13u + sample_wave.key;
     if (pg->graph == GR_ROLL) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
         if (ph / 16u != ui.bank)
@@ -1122,9 +515,6 @@ static uint32_t graph_signature(void)
 static const char *eng_abbr(const char *name)
 {
     static const char *const A[][2] = {{"ANALOG", "ANLG"},
-#if FELUCCA_FM4
-                                       {"DIGITAL", "DGTL"},
-#endif
                                        {"PHASE", "PHAS"}, {"LOFI", "LOFI"},
                                        {"SAMPLE", "SMPL"}, {"VOICE", "VOCL"}, {"TRIO", "TRIO"}, {"WHEEL", "WHEL"},
                                        {"GRAIN", "GRAN"}, {"PHYS", "PHYS"}, {"DRUM", "DRUM"},
@@ -1806,321 +1196,13 @@ static void draw_home_tracks(void)
 #endif
 /* oscilloscope of the output, triggered on a rising zero crossing: a RAISE centre line, the trace 2 px (in silence
  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
-static void graph_scope(uint16_t c)
+static void graph_scope(uint16_t c)                  /* (E25: no scope: a flat line, nothing sampled) */
 {
-    static int16_t snap[SCOPE_N] __attribute__((section(".pool")));
-    uint32_t w = scope_w, i, trig = 0;
-    int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h == H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
-    for (i = 0; i < SCOPE_N; i++) {
-        snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
-        if (snap[i] > peak)
-            peak = snap[i];
-        else if (-snap[i] > peak)
-            peak = -snap[i];
-    }
-    for (i = 1; i < SCOPE_N - 240u; i++)
-        if (snap[i - 1] < 0 && snap[i] >= 0) {
-            trig = i;
-            break;
-        }
+    int32_t cy = (int32_t)cv_h / 2;
+    (void)c;
     cv_rect(PANEL_X0, cy, PANEL_W, 1, T_RAISE);
-    for (x = 0; x < PANEL_W; x++) {
-        int32_t y = cy - snap[trig + (uint32_t)x] * a / peak;    /* auto-scaled */
-        if (x)
-            cv_line_t(PANEL_X0 - 1 + x, py, PANEL_X0 + x, y, c, 2);
-        py = y;
-    }
 }
 
-/* SONG is a playing order of the four stored project patterns. Letters match
- * PROJECT A..D; loading a project still restores its sound, SONG borrows steps. */
-/* SONG as a timeline (song_layout), four tall lanes (T1 at the top, each led by its track's cushion, the selected
- * lane's the accent's) over a thin bar ruler: in a lane, the sections that play the same slot one after the other
- * make one block (RAISE, the slot's letter top-left; a slot not saved only outlined, DIM). In a block the picture of
- * the track's pattern in that slot (project.c proj_density, read with the slot: graph_pden): a bar a cell, as tall as
- * the cell is busy (a mean over its steps: rests 0, ties 1, notes / hits 2, accents 3; an empty cell a faint
- * baseline), the pattern looped over the section as it plays and a notch between the section's passes (its REPS). A
- * silent section ("-") is an empty lane with a faint line. The sections' boundaries are faint lines across the lanes
- * (seen between the blocks). The cell selected (KNOB 1 the section, KNOB 2 the lane) is THEME, its bars and letter
- * INK (a slot not saved: outlined THEME 2 px; "-": a THEME outline in the gap); + ADD's slot dashed after the last
- * section. Playing: the playhead across the lanes down to the ruler (ACCENT; INK on THEME), the playing section's
- * blocks filled up to it (RAISE -> ACCENT). The ruler: a tick a bar, longer every 4 with the bar's number. Under it
- * one line (M: the selected cell's detail): the selected cell's project name (NOT SAVED, SILENT; on + ADD the hint, S as
- * every key hint) and, right, the song's length in bars where it fits. MENU > LARGE: the letters in M too (the ruler's
- * numbers stay S) */
-#define SG_PAD 3                                       /* a block's inner margin: the letter's, the picture's */
-#define SG_PH (SG_LH - 2 * SG_PAD)                     /* the picture's height (14 px: 3 levels) */
-#define SG_TX 5                                        /* the lanes' cushions (16 px) */
-#define SG_IY 119                                      /* the line under the ruler: its capitals end on row 118 */
-static void sg_dash(int32_t bx, int32_t bw, int32_t lo, int32_t hi, uint16_t c)   /* + ADD: dashed, clipped lo .. hi */
-{
-    int32_t k;
-    for (k = 0; k < bw; k++)
-        if (!((k >> 1) & 1) && bx + k >= lo && bx + k < hi) {
-            cv_rect(bx + k, SG_Y, 1, 1, c);
-            cv_rect(bx + k, SG_Y + SG_H - 1, 1, 1, c);
-        }
-    for (k = 0; k < SG_H; k++)
-        if (!((k >> 1) & 1)) {
-            if (bx >= lo) cv_rect(bx, SG_Y + k, 1, 1, c);
-            if (bx + bw <= hi) cv_rect(bx + bw - 1, SG_Y + k, 1, 1, c);
-        }
-}
-/* an outline of w x h at x, y, n px thick, clipped to lo .. hi (its ends only where not clipped) */
-static void sg_frame(int32_t bx, int32_t bw, int32_t y, int32_t h, uint32_t n, int32_t lo, int32_t hi, uint16_t c)
-{
-    int32_t x0 = bx > lo ? bx : lo, x1 = bx + bw < hi ? bx + bw : hi;
-    uint32_t k;
-    if (x1 <= x0)
-        return;
-    for (k = 0; k < n; k++) {
-        cv_rect(x0, y + (int32_t)k, x1 - x0, 1, c);
-        cv_rect(x0, y + h - 1 - (int32_t)k, x1 - x0, 1, c);
-        if (x0 == bx) cv_rect(bx + (int32_t)k, y, 1, h, c);
-        if (x1 == bx + bw) cv_rect(bx + bw - 1 - (int32_t)k, y, 1, h, c);
-    }
-}
-/* one lane's drawing state: the screen spans of the cell selected and of the playing section's part played */
-typedef struct { int32_t c0, c1, p0, p1; uint16_t pf; } sg_fill_t;
-static uint16_t sg_fill_at(const sg_fill_t *F, int32_t x)   /* the block's fill under column x */
-{
-    return x >= F->c0 && x < F->c1 ? T_THEME : x >= F->p0 && x < F->p1 ? F->pf : T_RAISE;
-}
-/* the slot's letter at x (MENU > LARGE: M), its capitals SG_PAD under the lane's top; 0: no room before x1 */
-static int32_t sg_letter(int32_t x, int32_t x1, int32_t y, uint32_t s, uint16_t ink, uint16_t bg)
-{
-    const aafont_t *f = (ui_prefs & PREF_LARGE) ? &AF_M : &AF_S;
-    char a[2] = {(char)('A' + s), 0};
-    int32_t w = text_w(f, a);
-    if (x + w + SG_PAD > x1)
-        return 0;
-    cv_text_on(x, y + SG_PAD - (f == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y), f, a, ink, bg);
-    return w;
-}
-/* the picture of slot s's track k over sections i .. j - 1 (columns x0 .. x1 on screen), but for the letters'
- * columns (skip0 .. skip1, skip2 .. skip3) */
-static void sg_picture(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i, uint32_t j, uint32_t s, int32_t x0,
-                       int32_t x1, const sg_fill_t *F, const int32_t *skip)
-{
-    int32_t y = SG_LY(k), yb = y + SG_PAD + SG_PH, x;
-    uint32_t q, plen = graph_plen[s & 3u][k], n = graph_pcell[s & 3u][k], den = graph_pden[s & 3u][k];
-    if (!plen || !n)
-        return;
-    for (q = i; q < j; q++) {
-        int32_t sx = SG_X0 + L->x[q] - off, wt = L->x[q + 1u] - L->x[q] - SG_GAP, a, b;
-        uint32_t reps = chain_config.row[q].repeat ? chain_config.row[q].repeat : 1u, unit = song_unit(&chain_config.row[q]);
-        uint32_t tot = reps * unit, pc = 0xFFFFFFFFu, pl = 0xFFFFFFFFu, pp = 0xFFFFFFFFu, gaps, notch;
-        if (wt < 1)
-            continue;
-        a = sx > x0 ? sx : x0;
-        b = q + 1u == j ? sx + wt : sx + wt + SG_GAP;  /* (inside a run: on to the next section) */
-        b = b < x1 ? b : x1;
-        gaps = sg_muldiv((uint32_t)wt, plen, tot * n) >= 3u;   /* a cell 3 px or more: a gap between two */
-        notch = reps > 1u && (uint32_t)wt / reps >= 4u;        /* the passes far enough apart: a notch between */
-        for (x = sx; x < b; x++) {
-            uint32_t r = (uint32_t)(x - sx), u = sg_muldiv(r < (uint32_t)wt ? r : (uint32_t)wt - 1u, tot, (uint32_t)wt);
-            uint32_t pos = u % plen, cell = pos * n / plen, pass = u / unit, h;
-            int edge = cell != pc || u / plen != pl, cut = notch && pass != pp && x > sx;
-            uint16_t fill, bar;
-            pc = cell;
-            pl = u / plen;
-            pp = pass;
-            if (x < a || (x >= skip[0] && x < skip[1]) || (x >= skip[2] && x < skip[3]))
-                continue;
-            fill = sg_fill_at(F, x);
-            bar = fill == T_THEME ? T_INK : T_THEME;
-            if (cut) {                                 /* a pass begins: the notch */
-                cv_rect(x, y + SG_PAD, 1, SG_PH, T_SURF);
-                continue;
-            }
-            if (gaps && edge && x > sx)
-                continue;
-            h = (den >> (2u * cell)) & 3u;
-            if (h)
-                cv_rect(x, yb - (int32_t)(h * SG_PH / 3u), 1, (int32_t)(h * SG_PH / 3u), bar);
-            else
-                cv_rect(x, yb - 1, 1, 1, ux_mix(fill, bar, 30));
-        }
-    }
-}
-/* lane k's block of sections i .. j - 1 on slot s; c: the cursor's section when it is in this lane, else past it;
- * sp: the playhead on screen (-100: none) */
-static void sg_block(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i, uint32_t j, uint32_t s, uint32_t c,
-                     int32_t sp)
-{
-    int32_t hi = SG_X0 + SG_W, y = SG_LY(k), bx = SG_X0 + L->x[i] - off, bw = L->x[j] - L->x[i] - SG_GAP, lx, w;
-    int32_t x0 = bx > SG_X0 ? bx : SG_X0, x1 = bx + bw < hi ? bx + bw : hi, skip[4] = {0, 0, 0, 0};
-    int saved = graph_project_used(s), cur = c >= i && c < j;
-    sg_fill_t F = {0, 0, 0, 0, 0};
-    uint32_t p = chain.running && chain.row >= i && chain.row < j ? chain.row : 0xFFu;
-    if (x1 <= x0)
-        return;
-    if (!saved) {                                      /* not saved: an outline, the letter DIM */
-        if (cur) {
-            int32_t cx = SG_X0 + L->x[c] - off, cw = L->x[c + 1u] - L->x[c] - SG_GAP;
-            sg_frame(bx, bw, y, SG_LH, 1, SG_X0, hi, T_DIM);
-            sg_frame(cx, cw, y, SG_LH, 2, SG_X0, hi, T_THEME);
-            sg_letter((cx > SG_X0 ? cx : SG_X0) + SG_PAD, x1, y, s, T_THEME, T_SURF);
-            return;
-        }
-        sg_frame(bx, bw, y, SG_LH, 1, SG_X0, hi, T_DIM);
-        sg_letter(x0 + SG_PAD, x1, y, s, T_DIM, T_SURF);
-        return;
-    }
-    cv_rrect(x0, y, x1 - x0, SG_LH, x0 != bx || x1 != bx + bw ? 0 : 2, T_RAISE, T_SURF);
-    if (p != 0xFFu && sp >= SG_X0) {                   /* playing here: the part played */
-        int32_t a = SG_X0 + L->x[p] - off;
-        F.pf = ux_mix(T_RAISE, T_ACCENT, 35);
-        F.p0 = a > x0 ? a : x0;
-        F.p1 = sp + 2 < x1 ? sp + 2 : x1;              /* (its right corners under the playhead) */
-        if (F.p1 > F.p0) {                             /* (no cell of its own: the letter may cross its end) */
-            int32_t e = F.p0 == bx && ux.style != ST_LINE && F.p1 - F.p0 > 2 ? 2 : 0;   /* the block's rounded end */
-            cv_rect(F.p0 + e, y, F.p1 - F.p0 - e, SG_LH, F.pf);
-            if (e) {
-                cv_rect(F.p0, y + 2, 1, SG_LH - 4, F.pf);
-                cv_rect(F.p0 + 1, y + 1, 1, SG_LH - 2, F.pf);
-            }
-        }
-    }
-    if (cur) {                                         /* the cell selected */
-        int32_t cx = SG_X0 + L->x[c] - off, cw = L->x[c + 1u] - L->x[c] - SG_GAP;
-        F.c0 = cx > SG_X0 ? cx : SG_X0;
-        F.c1 = cx + cw < hi ? cx + cw : hi;
-        if (F.c1 > F.c0)
-            cv_rrect(F.c0, y, F.c1 - F.c0, SG_LH, j - i == 1u && F.c0 == cx && F.c1 == cx + cw ? 2 : 0, T_THEME, T_SURF);
-    }
-    lx = x0 + SG_PAD;                                  /* the letters: the block's, the cell's (when it starts later) */
-    if (!(F.c1 > F.c0 && lx >= F.c0 && lx < F.c1) && (w = sg_letter(lx, F.c1 > F.c0 && F.c0 > lx ? F.c0 : x1, y, s, T_TEXT, sg_fill_at(&F, lx)))) {
-        skip[0] = lx - 1;
-        skip[1] = lx + w + 2;
-    }
-    if (F.c1 > F.c0 && (w = sg_letter(F.c0 + SG_PAD, F.c1, y, s, T_INK, T_THEME))) {
-        skip[2] = F.c0 + SG_PAD - 1;
-        skip[3] = F.c0 + SG_PAD + w + 2;
-    }
-    sg_picture(L, off, k, i, j, s, x0, x1, &F, skip);
-}
-static void graph_song(void)
-{
-    song_lay_t L;
-    const aafont_t *fl = &AF_M;                       /* the line: the selected cell's detail and the length, M */
-    int32_t off, px, sp, hi = SG_X0 + SG_W, bx, x0, ly = SG_IY - (AF_M_CAP_Y + AF_M_CAP_H);
-    uint32_t i, j, k, c = song_cur(), lane = ui.song_trk % NTRK, total, bars;
-    char b[24], a[12];
-    song_layout(&L);
-    off = song_follow(&L);
-    px = song_playx(&L);
-    sp = px >= 0 ? SG_X0 + px - off : -100;
-    total = L.u0[L.n];
-    bars = (total + SG_BARU - 1u) / SG_BARU;
-    for (k = 0; k < NTRK; k++)                        /* the lanes' cushions */
-        cv_trk(SG_TX, SG_LY(k) + (SG_LH - 16) / 2, 16, k, k == lane ? T_ACCENT : T_MID, T_SURF);
-    for (i = 1; i < L.n; i++) {                       /* the sections' boundaries, faint, behind the blocks */
-        int32_t x = SG_X0 + L.x[i] - off - 1;
-        if (x >= SG_X0 && x < hi)
-            cv_rect(x, SG_Y, 1, SG_H, T_LINE);
-    }
-    for (k = 0; k < NTRK; k++)                        /* the lanes: a block per run of one slot, "-" a faint line */
-        for (i = 0; i < L.n; i = j) {
-            uint32_t s = chain_config.row[i].slot[k];
-            for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
-                ;
-            if (s < 4u) {
-                sg_block(&L, off, k, i, j, s, k == lane ? c : CHAIN_ROWS, sp);
-            } else {
-                int32_t sx = SG_X0 + L.x[i] - off, ex = SG_X0 + L.x[j] - off - SG_GAP;
-                sx = sx > SG_X0 ? sx : SG_X0;
-                ex = ex < hi ? ex : hi;
-                if (ex > sx)
-                    cv_rect(sx, SG_LY(k) + SG_LH / 2, ex - sx, 1, T_LINE);
-                if (k == lane && c >= i && c < j)      /* the cursor on a silent cell: its outline */
-                    sg_frame(SG_X0 + L.x[c] - off, L.x[c + 1u] - L.x[c] - SG_GAP, SG_LY(k), SG_LH, 1, SG_X0, hi, T_THEME);
-            }
-        }
-    if (L.add) {                                       /* + ADD */
-        bx = SG_X0 + L.x[L.n] - off;
-        x0 = bx > SG_X0 ? bx : SG_X0;
-        if ((bx + SG_ADDW < hi ? bx + SG_ADDW : hi) > x0) {
-            int32_t x1 = bx + SG_ADDW < hi ? bx + SG_ADDW : hi;
-            sg_dash(bx, SG_ADDW, SG_X0, hi, c == L.n ? T_THEME : T_DIM);
-            if (text_w(fl, "+") <= x1 - x0 - 4) {
-                GFX_HOOK_ALIGN(x0, SG_Y, x1, SG_Y + SG_H, AL_HV, "song + ADD centred");
-                if (fl == &AF_M) cv_text_in(x0, SG_Y + CAP_IN(M, SG_H), x1 - x0, &AF_M, "+", c == L.n ? T_THEME : T_DIM, T_SURF);
-                else cv_text_in(x0, SG_Y + CAP_IN(S, SG_H), x1 - x0, &AF_S, "+", c == L.n ? T_THEME : T_DIM, T_SURF);
-            }
-        }
-    }
-    if (L.n) {                                         /* the ruler: a tick a bar, every 4th longer with its number */
-        int32_t r0 = SG_X0 + L.x[0] - off, r1 = SG_X0 + L.x[L.n] - off - SG_GAP, last = -100;
-        int32_t lx[24];                                /* the numbers, drawn after the ticks */
-        uint32_t bar, lb[24], nl = 0;
-        r0 = r0 > SG_X0 ? r0 : SG_X0;
-        r1 = r1 < hi ? r1 : hi;
-        if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
-        if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
-            for (k = 0; k < NTRK; k++) {
-                uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
-                int on = k == lane && s < 4u && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
-                         sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
-                cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < NTRK ? SG_LG : 0), on ? T_INK : T_ACCENT);
-            }
-            cv_rect(sp, SG_Y + SG_H, 2, SG_RY - SG_Y - SG_H + 6, T_ACCENT);
-        }
-        for (i = 0; i < L.n; i++) {
-            uint32_t u1 = L.u0[i + 1u], w = (uint32_t)(L.x[i + 1u] - L.x[i]);
-            bx = SG_X0 + L.x[i] - off;
-            if (bx >= hi || bx + (int32_t)w < SG_X0)
-                continue;
-            bar = (L.u0[i] + SG_BARU - 1u) / SG_BARU;  /* (from the view's left edge) */
-            if (bx < SG_X0) {
-                uint32_t uv = L.u0[i] + sg_muldiv((uint32_t)(SG_X0 - bx), u1 - L.u0[i], w);
-                bar = uv / SG_BARU > bar ? uv / SG_BARU : bar;
-            }
-            for (; bar * SG_BARU < u1 || (i + 1u == L.n && bar * SG_BARU == u1); bar++) {
-                int32_t x = SG_X0 + song_ux(&L, bar * SG_BARU) - off, lg = !(bar % 4u);
-                if (i + 1u == L.n && bar * SG_BARU == u1) x = r1 - 1;   /* (the song's end: its last section's edge) */
-                if (x > hi - 1)
-                    break;
-                if (x < SG_X0)
-                    continue;
-                cv_rect(x, SG_RY + 1, 1, lg ? 5 : 2, lg ? T_MID : T_DIM);
-                if (lg && bar * SG_BARU < total && nl < 24u) {
-                    lx[nl] = x;
-                    lb[nl++] = bar + 1u;
-                }
-            }
-        }
-        for (k = 0; k < nl; k++) {                     /* each number right of its tick, where it has room */
-            int32_t w;
-            fmt_int(a, (int32_t)lb[k]);
-            w = text_w(&AF_S, a);
-            if (lx[k] + 3 > last + 4 && lx[k] + 3 + w <= hi && (sp + 2 <= lx[k] + 2 || sp > lx[k] + 4 + w))
-                last = cv_text_on(lx[k] + 3, SG_RY + 4 - AF_S_CAP_Y, &AF_S, a, T_DIM, T_SURF);
-        }
-    }
-    /* one line: the song's length right (where it fits), the selected cell's project left */
-    x0 = hi;
-    if (L.n) {
-        fmt_int(b, (int32_t)bars);
-        str_cpy(b + str_len(b), bars == 1u ? " BAR" : " BARS", 6);
-        x0 = hi - text_w(fl, b);
-        cv_text_on(x0, ly, fl, b, T_MID, T_SURF);
-    }
-    if (c < L.n) {
-        uint32_t s = chain_config.row[c].slot[lane];
-        if (s >= 4u)
-            cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (!graph_project_used(s))
-            cv_free_text(SG_X0, ly, fl, "NOT SAVED", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (graph_project_name(s)[0])
-            cv_free_text(SG_X0, ly, fl, graph_project_name(s), T_MID, T_SURF, x0 - 10 - SG_X0);
-    } else {                                           /* + ADD: how */
-        for (i = 0; i < 4u && !graph_project_used(i); i++)
-            ;
-        cv_free_hint(SG_X0, ly + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H,   /* (a key hint: S) */
-                     i < 4u ? "[K3] ADD SECTION" : "[SAVE] PROJECT A-D", T_MID, T_SURF, x0 - 10 - SG_X0);
-    }
-}
 static void draw_graph(void)
 {
 #if FELUCCA_HOME_PERF
@@ -2128,6 +1210,9 @@ static void draw_graph(void)
 #endif
 #if FELUCCA_PAIR_MORPH
     if ((ui.home && ep.on) || (!ui.home && cur_page()->graph == GR_PAIR)) { pair_ui_graph(); return; }
+#endif
+#if CARAVEL_UX_EVOLVE
+    if (!ui.home && cur_page()->graph == GR_EVOLVE) { uxl_ev_graph(); return; }
 #endif
     const page_t *pg = cur_page();
     const track_t *t = TSEL;
@@ -2143,7 +1228,6 @@ static void draw_graph(void)
         return;
     }
 #endif
-    if (!ui.home && pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) sample_wave_tick(t);
     sig = graph_signature();
     if (!ui.force && sig == ui.graph_sig)
         return;
@@ -2157,9 +1241,6 @@ static void draw_graph(void)
         cv_oy = k == SK_ADSR ? 3 : 0;
         graph_ht = LG_H_GRAPH - 6;
         if (k == SK_SCOPE) graph_scope(c);
-#if FELUCCA_FM4
-        else if (k == SK_ADSR) graph_adsr(t, c);
-#endif
         else graph_title();
         graph_ht = 100;
     } else if (ui.home) {
@@ -2167,11 +1248,6 @@ static void draw_graph(void)
         graph_scope(c);
     } else {
         switch (pg->graph) {
-#if FELUCCA_FM4
-        case GR_ADSR:
-            graph_adsr(t, c);
-            break;
-#endif
         case GR_ROLL:
             cv_oy = 0;
             if (detail_on())                          /* 1.5.1 (#199) */
@@ -2192,10 +1268,6 @@ static void draw_graph(void)
         case GR_USER:
             cv_oy = 0;
             graph_user();
-            break;
-        case GR_SONG:
-            cv_oy = 0;
-            graph_song();
             break;
         case GR_PATS:
             cv_oy = 0;
@@ -2221,28 +1293,13 @@ static void draw_graph(void)
             break;
 #endif
 #endif
-#if FELUCCA_SLICE
-        case GR_SLICES:
-            cv_oy = 0;
-            graph_slices();
-            break;
-#endif
         case GR_FMOP:
         case GR_FMOP2:
-            if (fop_ok()) graph_fm6(t, c, fop_op % 6u);   /* the chart, the operator picked */
             break;
         case GR_FMENV:
-            if (fop_ok()) graph_fm6env(t, c);
             break;
         default:
-            if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_WHEEL) graph_wheel(t, c);
-            else if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE && sample_wave.ready) graph_sample(c);
-            else if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_FM6) graph_fm6(t, c, 6u);   /* EDIT 1 and 2 */
-#if FELUCCA_FM4
-            else if ((pg->scope == SC_ENGINE || pg->id[0] == P_FM1_LEVEL) && t->eng_req % NENGINES == ENGI_DIGITAL)
-                graph_fm(t, c);                      /* (OP LEVEL too: the levels on the chart) */
-#endif
-            else { cv_oy = 0; graph_scope(c); }
+            { cv_oy = 0; graph_scope(c); }
             break;
         }
     }

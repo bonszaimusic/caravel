@@ -323,7 +323,7 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
     }
 #endif
     int32_t m;
-    if (!held && !pf.busy && !(perf_k[0] | perf_k[1] | perf_k[2])) {   /* idle: the clock only */
+    if (!held && !pf.busy && !(perf_k[1] | perf_k[2])) {   /* idle: the clock only */
         pf.ph += n;
         pf.sync = 0;
         perf_act = 0;
@@ -348,7 +348,7 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
     }
     perf_act = pf.act;
     /* the filters: LPF from open down over a bar while its key is held, KNOB 1 left; HPF up, KNOB 1 right */
-    m = perf_k[0];
+    m = 0;                                              /* (the FILTER macro is the selected track's now: fx.c tf_eff) */
     {
         uint32_t bar = 16u * pf.P, t;
         int32_t lt = PF_TOP, ht = 0;
@@ -781,7 +781,7 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
         }
         if (pf.mode != BM_NONE)
             perf_buf(&l, &r);
-        lt = (a & PF_BIT(PF_LPF)) || perf_k[0] < 0 || pf.lc < PF_TOP ? 32768 : 0;
+        lt = (a & PF_BIT(PF_LPF)) || pf.lc < PF_TOP ? 32768 : 0;
         pf.la += clamp(lt - pf.la, -SL_SLOPE, SL_SLOPE);
         if (pf.la) {
             int32_t fl = pf_svf(clamp(l >> 2, -32767, 32767), &pf.lz[0], pf.lk, 0) << 2;
@@ -791,7 +791,7 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
         } else {
             pf.lz[0] = pf.lz[1] = pf.lz[2] = pf.lz[3] = 0;
         }
-        ht = (a & PF_BIT(PF_HPF)) || perf_k[0] > 0 || pf.hc > 0 ? 32768 : 0;
+        ht = (a & PF_BIT(PF_HPF)) || pf.hc > 0 ? 32768 : 0;
         pf.ha += clamp(ht - pf.ha, -SL_SLOPE, SL_SLOPE);
         if (pf.ha) {
             int32_t fl = pf_svf(clamp(l >> 2, -32767, 32767), &pf.hz[0], pf.hk, 1) << 2;
@@ -821,6 +821,6 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
     if ((pf.act & PF_BIT(PF_PHS)) || pf.pw)
         perf_phaser(bl, br, n);
     pf.busy = pf.act || pf.mode != BM_NONE || pf.w || pf.la || pf.ha || pf.cw || pf.td || pf.mute || pf.fw || pf.pw || pf.thr ||
-              pf.fn || perf_k[0] || perf_k[1] || perf_k[2];
+              pf.fn || perf_k[1] || perf_k[2];
 }
 

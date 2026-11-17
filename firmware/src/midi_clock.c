@@ -40,7 +40,7 @@ static __attribute__((noinline)) void midi_resync_request(uint32_t mode)
     if (!song.g[G_CLOCK] || !midi_clock.tempo_valid ||
                fm1_ms - midi_clock.last_ms > 500u) {
         midi_resync_notice = RS_STOP;
-    } else if (chain.running || chain.armed) {
+    } else if (0u || 0u) {
         midi_resync_notice = RS_SONG;
     } else if ((song.rec & ~step_record_mask) || motion_fx_recording) {
         midi_resync_notice = RS_REC;
@@ -63,7 +63,7 @@ static __attribute__((noinline)) void midi_resync_poll(void)
         transport_req = 0;
         midi_resync_request(request - 3u);
     }
-    if (midi_clock.resync && ((!song.playing && !midi_clock.resync_start) || chain.running || chain.armed ||
+    if (midi_clock.resync && ((!song.playing && !midi_clock.resync_start) || 0u || 0u ||
         fm1_ms - midi_clock.last_ms > 500u ||
         (song.rec & ~step_record_mask) || motion_fx_recording))
         midi_resync_cancel();

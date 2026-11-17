@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Real UI gestures and sequencer: cursor recording independent of playback. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void mode_gesture(void)
 {
@@ -76,9 +76,6 @@ int main(void)
     song.rec |= 2;
     bad += check("step live: another armed track still records live", !rec_on(t) && rec_on(&trk[1]));
     song.rec &= (uint8_t)~2u;
-    chain.running = 1; mode_gesture();
-    bad += check("step live: active SONG refuses mode changes", step_record_mask == 1 && msg_is("STOP SONG FIRST"));
-    chain.running = 0;
     cin_bars = 1;
     seq_stop();
     press(B_PLAY); events_block(64);

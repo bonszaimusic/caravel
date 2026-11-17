@@ -2,7 +2,7 @@
 /* SEM: audible/filter behavior, control endpoints, real Learn/storage paths,
  * fixed allocation, favorites isolation and a comparative host render timing. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #include <assert.h>
 #include <time.h>
 
@@ -86,9 +86,9 @@ static int sem_corners(void)
 static int sem_integration(void)
 {
     int bad = 0, ok = 1; sem_setup(); track_t *t = &trk[0];
-    bad += check("SEM appended at 14, existing sound ids and 114-parameter layout retained",
+    bad += check("SEM runtime ID 14, six selectable engines and 114-parameter layout",
         ENGI_SEM == 14u && P_COUNT == 114 && ENGINES[0] == &ENG_ANALOG &&
-        ENGINES[12] == &ENG_FM6 && ENGINES[ENGI_SEM] == &ENG_SEM && eng_ok(ENGI_SEM));
+        !eng_ok(12u) && NENG_SHOWN==6u && ENGINES[ENGI_SEM] == &ENG_SEM && eng_ok(ENGI_SEM));
     for (uint32_t k = 0; k < 8u; k++) {
         uint32_t id = P_E0 + k, cc = 20u + k;
         ok &= ml_learn(cc, 0, id) == 1u;
@@ -100,10 +100,10 @@ static int sem_integration(void)
     ok &= ml_learn(28, 0, P_FTYPE) == 1u;
     midi_learned(28, 127); ok &= t->p[P_FTYPE] == 2;
     bad += check("every SEM control and TYPE accepts real learned CCs; eight engine controls support automation", ok);
-    uint8_t learnt[32]; memcpy(learnt, favorites.factory[14], sizeof learnt);
+    uint8_t learnt[32]; memcpy(learnt, ml_base, sizeof learnt);
     uint8_t prefs[32]; memcpy(prefs, favorites.factory[15], sizeof prefs);
     for (uint32_t k = 0; k < 8u; k++) ok &= favorite_set(ENGI_SEM, k, 1) && favorite_has(ENGI_SEM, k);
-    ok &= !memcmp(learnt, favorites.factory[14], sizeof learnt);
+    ok &= !memcmp(learnt, ml_base, sizeof learnt);
     for (uint32_t k = 0; k < sizeof prefs; k++) if (k != 10u) ok &= prefs[k] == favorites.factory[15][k];
     bad += check("SEM favorites cannot overwrite legacy MIDI Learn, custom palette or device preferences", ok);
     persist_t saved = {0}; settings_export(&saved);
@@ -141,7 +141,7 @@ static int sem_integration(void)
     bad += check("all eight SEM controls play automation and step locks and restore their base", ok);
     sem_setup(); voice_policy = VOICE_POLICY_FIXED | 0x2222u;
     for (uint32_t p = 0; p < NPART; p++) {
-        host_preset(&trk[p], p == 3u ? ENGI_DRUM : ENGI_SEM, p == 3u ? 4u : p);
+        host_preset(&trk[p], p == 3u ? ENGI_ENSEMBLE : ENGI_SEM, p == 3u ? 0u : p);
         trk[p].p[P_VOICE] = V_POLY;
         trk_note_on(&trk[p], 48u + p, 100); trk_note_on(&trk[p], 55u + p, 100);
     }
@@ -152,7 +152,7 @@ static int sem_integration(void)
         uint32_t n = 0; for (uint32_t v = 0; v < NVOICE; v++) n += trk[p].v[v].active && trk[p].v[v].stage != 4u;
         ok &= n <= 2u;
     }
-    bad += check("SEM chords, DRUM-X and FX share the unchanged fixed voice budget", ok);
+    bad += check("SEM chords, ENSEMBLE and FX share the unchanged fixed voice budget", ok);
     return bad;
 }
 

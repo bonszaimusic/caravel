@@ -1,5 +1,57 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 extern uint8_t link_setup_row;
+extern uint8_t chord_ext_row;
+/* CHORD EXT exposes data only. BUILD's ring renderer owns presentation. */
+static const param_desc_t *chext_desc(uint32_t k) { return &TP[k == 0u ? P_CSRC : k == 1u ? P_CEXT : P_COCT]; }
+static int16_t *chext_vp(uint32_t k) { return k < 3u ? &TSEL->p[k == 0u ? P_CSRC : k == 1u ? P_CEXT : P_COCT] : 0; }
+static uint32_t chext_disp(uint32_t v) { return chordext_disp(v); }
+static uint32_t chext_stored(uint32_t v) { return chordext_stored(v); }
+static int32_t chext_p(uint32_t k) {
+    int16_t *p = chext_vp(k);
+    return p && *p >= chext_desc(k)->min && *p <= chext_desc(k)->max ? *p : 0;
+}
+typedef struct {
+    const char *label;
+    char value[12], detail[16];
+    uint8_t disabled, readonly;
+} chext_view_t;
+static void chext_view(uint32_t col, chext_view_t *out) {
+    static const char *const labels[] = {"SOURCE", "EXT", "OCT", "NOTES"};
+    static const char *const levels[] = {"7", "7+9", "7+9+13"};
+    static const char *const status[] = {"--", "N/A", "WAIT", "WAIT BUS", "AMBIG", "EMPTY"};
+    static const char *const why[] = {"", "SELF", "SRC EXT", "LANES", "PAIR", "PLAY", "BUS OFF", "KEPT", "IN SRC"};
+    ext_info_t ei;
+    memset(out, 0, sizeof *out);
+    if (col >= 4u) return;
+    ext_info(song.sel, &ei);
+    out->label = labels[col]; out->readonly = col == 3u;
+    out->disabled = ei.state == EXT_ST_NA || (col && ei.state == EXT_ST_OFF);
+    if (!col) {
+        str_cpy(out->value, N_CSRC[(uint32_t)chext_p(0)], sizeof out->value);
+        if (ei.have_chord) chord_name(out->detail, ei.root, ei.mask);
+    } else if (col == 1u) str_cpy(out->value, levels[chext_disp((uint32_t)chext_p(1))], sizeof out->value);
+    else if (col == 2u) {
+        static const char *const oct[] = {"-2", "-1", "0", "+1", "+2"};
+        str_cpy(out->value, oct[chext_p(2) + 2], sizeof out->value);
+    } else if (ei.state < EXT_ST_OK) {
+        str_cpy(out->value, status[ei.state], sizeof out->value);
+        str_cpy(out->detail, why[ei.why < NELEM(why) ? ei.why : 0u], sizeof out->detail);
+        if (ei.why == EXT_WHY_PLAY && ei.src >= 2u && ei.src <= 5u) {
+            str_cpy(out->detail, "PLAY T1", sizeof out->detail);
+            out->detail[6] = (char)('1' + ei.src - 2u);
+        }
+    } else {
+        uint32_t n = ei.npc < 3u ? ei.npc : 3u;
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t len = str_len(out->value);
+            if (i) { str_cpy(out->value + len, " ", sizeof out->value - len); len++; }
+            str_cpy(out->value + len, N_NOTE[ei.pc[i] % 12u], sizeof out->value - len);
+        }
+        str_cpy(out->detail, "N OF M", sizeof out->detail);
+        out->detail[0] = (char)('0' + (ei.mono ? 1u : n));
+        out->detail[5] = (char)('0' + (ei.mono ? n : ei.want));
+    }
+}
 static int lfo2_page(uint32_t graph) { return graph == GR_LFO2 || graph == GR_LFO2SYNC; }
 static uint32_t lfo2_page_target(uint32_t graph, uint32_t col)
 {
@@ -45,7 +97,7 @@ static void env_icon(int32_t x0, int32_t y0, int32_t w, int32_t h, int32_t atk, 
 }
 /* Pages shown as two groups at once: SHAPE / RATE above SYNC / TRIGGER and the like. The rows are normal pages (K1-4
  * edit them through the page path) except LFO2's, which come from its separate config (lfo2_knob). */
-enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS, DK_HARMONY, DK_LINK };   /* DK_GRAPH: one page above, its graph in the lower block;
+enum { DK_LFO, DK_LFO2, DK_PLAIN, DK_ENV, DK_EDIT, DK_GRAPH, DK_INS, DK_HARMONY, DK_LINK, DK_CHEXT };   /* DK_GRAPH: one page above, its graph in the lower block;
                                                                           * DK_INS: the upper group's fourth card is the type's curve (its third FX HOLD) */
 typedef struct { const char *top, *bot, *ht, *hb, *ft, *fb; uint8_t kind; } dual_t;
 static const dual_t DUALS[] = {
@@ -70,16 +122,17 @@ static const dual_t DUALS[] = {
     {"LINK", "LINK", "LINK", "HARMONY SETUP", "LINK / HARMONY SETUP", "LINK / HARMONY SETUP", DK_LINK},
     {"ARP", "ARP 2", "ARP MODE / RATE", "ARP SWING / ORDER", "ARP TOP", "ARP BOTTOM", DK_PLAIN},
     {"VOICE", "VOICE 2", "VOICE MODE / GLIDE", "VOICE ALLOC / PAN", "VOICE TOP", "VOICE BOTTOM", DK_PLAIN},
+    {"CHORD", "", "CHORD KEYS", "CHORD EXT", "CHORD", "CHORD EXT", DK_CHEXT},
 };
 /* EDIT 1 / 2 keep their normal layout for the engines whose panel is a picture of the sound (drawbars, the sample's
  * waveform, FM6's algorithm chart, DIGITAL's chart): the two-group layout has no room for it */
-static int edit_has_picture(void)
-{
-    uint32_t e = TSEL->eng_req % NENGINES;
-    return ENGINES[e] == &ENG_WHEEL || ENGINES[e] == &ENG_SAMPLE || e == ENGI_FM6 || (FELUCCA_FM4 && e == ENGI_DIGITAL);
-}
+static int edit_has_picture(void) { return 0; }
 static const dual_t *dual_of(const page_t *pg, uint32_t *bottom)
 {
+    if (pg->graph == GR_CHORD && chord_ext_row) {
+        if (bottom) *bottom = 1u;
+        return &DUALS[NELEM(DUALS) - 1u];
+    }
     if (pg < PAGES || pg >= PAGES + NPAGES)             /* (a layer's own page, LY_SCL: not one of the family's) */
         return 0;
     for (uint32_t i = 0; i < sizeof DUALS / sizeof DUALS[0]; i++) {
@@ -118,6 +171,19 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
     const param_desc_t *d;
     int16_t *vp = 0;
     *v = 0;
+    if (dd->kind == DK_CHEXT && row) {
+        static const char *const levels[] = {"7", "7+9", "7+9+13"};
+        static const char *const states[] = {"--", "N/A", "WAIT", "WAIT BUS", "AMBIG", "EMPTY", "READY"};
+        static const param_desc_t desc[] = {
+            {"SOURCE", F_ENUM, 0, 5, 0, N_CSRC, 0},
+            {"EXT", F_ENUM, 0, 2, 1, levels, 0},
+            {"OCT", F_INT, -2, 2, 0, 0, "oct"},
+            {"NOTES", F_ENUM, 0, EXT_ST_OK, 0, states, 0}};
+        if (col >= 4u) return 0;
+        if (col < 3u) *v = col == 1u ? (int32_t)chext_disp((uint32_t)chext_p(1)) : chext_p(col);
+        else { ext_info_t info; ext_info(song.sel, &info); *v = info.state; }
+        return &desc[col];
+    }
     if (dd->kind == DK_HARMONY) {
         static const char *const DUR[] = {"1 BAR", "2 BARS", "4 BARS", "8 BARS"};
         static const param_desc_t RD[4] = {
@@ -134,7 +200,7 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
     }
     if (dd->kind == DK_LINK) {
         static const char *const SRC[] = {"OFF", "T1", "T2", "T3", "T4"};
-        static const char *const RT[] = {"OFF", "CHORD", "LINK", "BOTH"};
+        static const char *const RT[] = {"OFF", "HARM", "SCALE", "BOTH"};
         static const char *const ONOFF[] = {"OFF", "ON"};
         static const param_desc_t SD = {"SOURCE", F_ENUM, 0, 4, 0, SRC, 0};
         static const param_desc_t RD = {"RETRIG", F_ENUM, 0, 3, 0, RT, 0};
@@ -283,7 +349,7 @@ static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int acti
     uint32_t src = link_src[song.sel];
     if (!row) {
         static const char *const SRC[] = {"OFF", "T1", "T2", "T3", "T4"};
-        static const char *const RT[] = {"OFF", "CHORD", "LINK", "BOTH"};
+        static const char *const RT[] = {"OFF", "HARM", "SCALE", "BOTH"};
         if (col == 0u) { lab = "SOURCE"; val = SRC[src <= 4u ? src : 0u]; }
         else if (col == 1u) { lab = "RETRIG"; val = RT[link_retrig[song.sel] & 3u]; }
         else if (col == 2u) {
@@ -373,8 +439,13 @@ static void lfo_cards(const page_t *pg)
         }
         /* Two small blits reuse the existing canvas instead of increasing pool RAM. */
         cv_begin(240, row ? 80 : 90, T_BG);
+#if CARAVEL_UX_EVOLVE
+        uint16_t edge = active ? T_ACCENT : T_RAISE;          /* (E70: the bank the knobs act on is the cyan one, as in layout C) */
+        uint16_t head = active ? T_ACCENT : T_SURF;
+#else
         uint16_t edge = active ? T_THEME : T_RAISE;
         uint16_t head = active ? T_THEME : T_SURF;
+#endif
         cv_rrect(3, y, 234, 80, 5, edge, T_BG);
         cv_rrect(5, y + 2, 230, 76, 3, T_SURF, edge);
         cv_rect(5, y + 5, 230, 16, head);
@@ -470,6 +541,9 @@ static void lfo_cards(const page_t *pg)
 #if CARAVEL_STASIS_EXPAND
             if(text_w(vf,val)>54)vf=&AF_S; /* full STASIS name in the narrow TYPE card */
 #endif
+#if CARAVEL_UX_LAYERS
+            vf = &AF_S;                      /* BUILD stays dense; both EDIT and VIEW rows are preserved */
+#endif
             cv_text_in(x, y + 27 - AF_S_CAP_Y, 56, &AF_S, d->label, disabled ? T_DIM : T_TEXT, T_SURF);
             cv_text_in(x, y + (vf == &AF_L ? 40 - AF_L_CAP_Y : vf == &AF_S ? 46 - AF_S_CAP_Y : 44 - AF_M_CAP_Y), 56, vf, val,
                        disabled ? T_DIM : T_TEXT, T_SURF);
@@ -513,3 +587,4 @@ static void lfo2_knob(const page_t *pg, uint32_t k, int32_t steps)
     load_extend(TSEL);
     ui.force = 1;
 }
+

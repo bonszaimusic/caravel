@@ -10,6 +10,9 @@
  *   tops out at 31600) with no flat tops, and leaves the limiter no busier than LOWCUT (its envelope's peak at most
  *   +0.5 dB): the harmonics of 1.4 peaked at 1.5 .. 3.5 x the kick itself, and the limiter pulled the whole mix down
  *   by up to 16 dB on every hit. The harmonics' energy against the kick's: 1.4 -5 dB, now -11 dB.
+ * BRIGHT (SPEAKER EQ 3): a high shelf fitted to +6 dB at 2.5 kHz: +2.9 dB at 2.5 kHz, +5.8 dB at 8 kHz, flat below about 500 Hz;
+ *   the output returns to 0
+ *   after a burst and nothing reaches full scale.
  * The EQ is on the master: the speaker, the headphone / line out (the same DAC) and USB audio (uac_tap reads the
  * same output) all get it. */
 #include <math.h>
@@ -37,7 +40,7 @@ static double tone_db(uint32_t mode, double f)     /* gain of a -9 dB sine throu
     uint32_t i, n = FS / 2u, skip = FS / 8u;
     double in = 0, out;
     fx_lowcut = (uint8_t)mode;
-    lc_l1 = lc_l2 = lc_r1 = lc_r2 = dc_l = dc_r = dce_l = dce_r = 0;
+    lc_l1 = lc_l2 = lc_r1 = lc_r2 = dc_l = dc_r = dce_l = dce_r = br_l = br_r = 0;
     memset(lce, 0, sizeof lce);
     sb_lp1 = sb_lp2 = sb_lp3 = sb_lp4 = sb_env = sb_h1 = sb_h2 = sb_hl = 0;
     lim_env = LIM_T;
@@ -56,7 +59,7 @@ static double tone_db(uint32_t mode, double f)     /* gain of a -9 dB sine throu
 static void master_reset(uint32_t mode)
 {
     fx_lowcut = (uint8_t)mode;
-    lc_l1 = lc_l2 = lc_r1 = lc_r2 = dc_l = dc_r = dce_l = dce_r = 0;
+    lc_l1 = lc_l2 = lc_r1 = lc_r2 = dc_l = dc_r = dce_l = dce_r = br_l = br_r = 0;
     memset(lce, 0, sizeof lce);
     sb_lp1 = sb_lp2 = sb_lp3 = sb_lp4 = sb_env = sb_h1 = sb_h2 = sb_hl = 0;
     lim_env = LIM_T;
@@ -68,28 +71,15 @@ static uint32_t kick_pattern(void)
 {
     static const char *const NAME[2] = {"PUNCH", "ROUND"};
     static float f[2 * FS];
-    static dv_coef_t c;
-    static dv_voice_t v;
-    static dv_metal_t mb;
     uint32_t type, gi, mode, i, k, fails = 0;
     for (type = 0; type < 2u; type++) {
-        dv_param_t p;
-        int32_t y[CTL], m[CTL], pk = 1;
-        dv_default(&p, type);
-        dv_setup(&c, &p);
-        dv_init(&v, c.type);
-        memset(&mb, 0, sizeof mb);
-        dv_metal_tune(&mb, &c);
-        for (i = 0; i < 2u * FS; i += CTL) {
-            if (i % (FS / 2u) < CTL)
-                dv_trigger(&v);
-            dv_metal_run(&mb, m, CTL);
-            dv_run(&c, &v, m, y, CTL);
-            for (k = 0; k < CTL; k++) {
-                f[i + k] = (float)y[k];
-                pk = abs(y[k]) > pk ? abs(y[k]) : pk;
-            }
-        }
+        int32_t pk=1;
+        const char *path=getenv("SPEAKER_FIXTURE");
+        FILE *fixture=fopen(path?path:"build/fixtures/speaker-kicks.f32","rb");
+        if(!fixture){perror("speaker fixture (run tools/validate_all.py effects)");return 1;}
+        if(fseek(fixture,(long)(type*2u*FS*sizeof(float)),SEEK_SET)||fread(f,sizeof(float),2u*FS,fixture)!=2u*FS){fclose(fixture);return 1;}
+        fclose(fixture);
+        for(i=0;i<2u*FS;i++)pk=fabsf(f[i])>pk?(int32_t)fabsf(f[i]):pk;
         for (gi = 1; gi <= 2u; gi++) {
             int32_t env[3], peak = 0;
             double ein, eb, hd;
@@ -182,6 +172,29 @@ int main(void)
     fails += sub[2] > sub[0] - 6.0;                 /* the sub is cut */
     fails += peak >= 32767 || tail > 4;
     printf("speaker: BASS+ %s\n", fails ? "FAIL" : "ok");
+    {   /* BRIGHT: the shelf's response, and a burst that settles */
+        static const double F[7] = {100, 500, 1000, 2500, 5000, 8000, 15000};
+        static const double LO[7] = {-0.3, -0.1, 0.4, 2.3, 4.2, 5.2, 5.5}, HI[7] = {0.3, 0.6, 1.4, 3.6, 5.7, 6.4, 6.8};
+        double g[7];
+        uint32_t k, bad = 0;
+        int32_t pk = 0, tl = 0;
+        for (k = 0; k < 7u; k++) {
+            g[k] = tone_db(3u, F[k]);
+            bad += g[k] < LO[k] || g[k] > HI[k];
+        }
+        master_reset(3u);
+        for (i = 0; i < FS / 2u; i++) {
+            int32_t l = i < FS / 4u ? (int32_t)(12000.0 * sin(2.0 * M_PI * 8000.0 * i / FS)) : 0, r = l;
+            master_out(&l, &r);
+            pk = abs(l) > pk ? abs(l) : pk;
+            if (i > FS / 2u - 2000u)
+                tl = abs(l) > tl ? abs(l) : tl;
+        }
+        bad += pk >= 32767 || tl > 4;
+        printf("speaker: BRIGHT 100 Hz %.1f, 500 Hz %.1f, 1 kHz %.1f, 2.5 kHz %.1f, 5 kHz %.1f, 8 kHz %.1f, 15 kHz %.1f dB; burst peak %d, tail %d %s\n",
+               g[0], g[1], g[2], g[3], g[4], g[5], g[6], pk, tl, bad ? "FAIL" : "ok");
+        fails += bad;
+    }
     fails += kick_pattern();
     return fails != 0;
 }

@@ -7,8 +7,9 @@
  * not be reached on the knob. Pre-existing (6b493ed, in 89bf631 = 0.12.0 and in the 0.13.0 line alike).
  * Build under ASan in the configurations: default, -DCARAVEL_REVERB_MINIMAL=1, + -DCARAVEL_STASIS_EXPAND=1, + -DFELUCCA_PAIR_MORPH=1.
  * Run by tests/run_tests.sh (needs build/gen from one firmware build). */
-#define EDITOR_TEST_NO_MAIN 1
-#include "editor_test.c"
+#define main hostsim_main
+#include "hostsim.c"
+#undef main
 
 int main(void)
 {

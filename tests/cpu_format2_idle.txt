@@ -1,0 +1,7 @@
+# FORMAT 2 idle control baseline, Apple clang 21 arm64 -O2, 2026-11-16.
+# Host kernel instructions per sample, NOT FM-1 cycles or an audio deadline.
+# Pre-live-source control: 362 (also on the pre-CHORD-EXT FORMAT 2 source).
+# Live-source control: 366. The same +25% / absolute-slack rule applies.
+# Engine net-work references still subtract the ORIGINAL dataset idle (286).
+# Do not rewrite cpu_baseline.txt or its preset references for this calibration.
+cpu/mix/idle 366

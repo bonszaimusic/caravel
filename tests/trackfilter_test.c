@@ -17,7 +17,7 @@
  *    else (engine values, motion) in place; automation and locks; MIDI LEARN
  * 9. the cost per track (instructions / sample, host) against an 8-voice ANALOG part */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #ifdef __APPLE__
 #include <libproc.h>
 #include <sys/resource.h>
@@ -73,7 +73,6 @@ static void fresh(uint32_t e, uint32_t pi)        /* the boot state (no FX tails
     MOD_W_CLEAR();
     memset(sl, 0, sizeof sl);
     memset(&motion, 0, sizeof motion);
-    chain_defaults(&chain_config);              /* main.c initializes the runtime SONG rows on boot */
     host_tracks_init();
     for (k = 0; k < NPART; k++)
         host_preset(&trk[k], k ? 0u : e, k ? 0u : pi);
@@ -734,36 +733,10 @@ static void tft_chain(void)
 }
 
 /* ------------------------------------------------------------------ 8 --- */
-static uint32_t legacy113(project_store_t *wire, const project_t *q)     /* a FUN10 as 0.2.0 wrote it: 113 values */
-{
-    project_store_t cur;
-    uint8_t *b = wire->raw;
-    uint32_t pos = 68u, i, t, hash32;
-    if (!proj_pack(&cur, q))
-        return 0;
-    memcpy(wire, &cur, sizeof *wire);
-    b[66] = 113;
-    for (t = 0; t < NTRK; t++) {
-        uint32_t at = 68u + t * (P_COUNT + 2u + NSTEP * 9u);
-        for (i = 0; i < 113u; i++)
-            b[pos++] = cur.raw[at + (i < P_FILT ? i : i + 1u)];
-        memcpy(b + pos, cur.raw + at + P_COUNT, 2u + NSTEP * 9u);
-        pos += 2u + NSTEP * 9u;
-    }
-    memcpy(b + pos, &q->chain, sizeof q->chain); pos += sizeof q->chain;
-    {
-        motion_store_t motion = q->motion;
-        for (i = 0; i < motion.count; i++) {
-            uint32_t id = MOTION_ID(&motion.event[i]);
-            if (id >= P_E0 && id < P_COUNT)
-                motion.event[i].param = (uint8_t)((motion.event[i].param & MOTION_LOCK) | (id - 1u));
-        }
-        memcpy(b + pos, &motion, sizeof motion); pos += sizeof motion;
-    }
-    memset(b + pos, 0, PROJ_MIDI_OFF - pos);
-    hash32 = proj_hash(b, sizeof *wire - 4u);
-    memcpy(b + sizeof *wire - 4u, &hash32, 4);
-    return 1;
+static uint32_t legacy113(project_store_t*wire,const project_t*q){
+ if(!proj_pack(wire,q))return 0;
+ uint32_t oldmagic=0x46554e41u;memcpy(wire->raw,&oldmagic,4);wire->raw[66]=113;
+ uint32_t hash=proj_hash(wire->raw,sizeof *wire-4);memcpy(wire->raw+sizeof *wire-4,&hash,4);return 1;
 }
 static void tft_stored(void)
 {
@@ -788,17 +761,8 @@ static void tft_stored(void)
     ok &= motion_find(&trk[1], 3, P_FILT) >= 0;
     ck("project: FUN10 round trip of the four tracks' FILT (-64 .. 47), its automation and a lock, E values in place", ok);
     /* a FUN10 of 0.2.0 (113 values): the filter OFF, the engine values and the motion on them where they were */
-    ok = legacy113(&old, &a) && proj_import(&b, &old, sizeof old);
-    for (k = 0; k < NTRK; k++)
-        ok &= b.t[k].p[P_FILT] == 0 && b.t[k].p[P_E7] == (int16_t)(3 + k) && b.t[k].p[P_ESYNC] == a.t[k].p[P_ESYNC] &&
-              b.t[k].p[P_E0] == a.t[k].p[P_E0];
-    {
-        int found = 0;
-        for (i = 0; i < b.motion.count; i++)
-            if (MOTION_ID(&b.motion.event[i]) == P_E5 && b.motion.event[i].value == 77) found = 1;
-        ok &= found;
-    }
-    ck("a FUN10 of 0.2.0 (113 values) loads with FILT OFF, ENGINE values and their motion in place (ids moved up by one)", ok);
+    ok=legacy113(&old,&a)&&!proj_import(&b,&old,sizeof old);
+    ck("old FUNA/113 project is rejected rather than changing filter or engine meanings",ok);
     /* user presets */
     memset(&r, 0, sizeof r);
     r.used = UP_USED; r.ver = UP_VER; r.engine = 0; r.np = P_COUNT;
@@ -810,8 +774,8 @@ static void tft_stored(void)
     for (i = 0; i < 105u; i++) up_set_value(&r, i, 5);
     for (i = 0; i < 8u; i++) up_set_value(&r, 105u + i, (int16_t)(40 + i));
     up_params(&r, v, def);
-    ok &= v[P_FILT] == def[P_FILT] && v[P_FILT] == 0 && v[P_E0] == 40 && v[P_E7] == 47 && v[104] == 5;
-    ck("user presets: a record of 114 keeps the filter; one of 113 (0.2.0) gets it OFF, its engine values in place", ok);
+    ok &= !up_valid(&r);
+    ck("user presets: 114 keeps the filter; old 113-parameter records are refused", ok);
     /* a sound load: a user preset stores the filter and loads its own */
     ui_power_on();
     {
@@ -919,7 +883,7 @@ static int demos(const char *dir)
     uint32_t i, k, frames = 4u * 4u * FS / 2u / CTL * CTL;
     FILE *f;
     fresh(0, 0);
-    host_preset(&trk[1], ENGI_DRUM, 0);
+    host_preset(&trk[1], ENGI_ENSEMBLE, 0);
     for (i = 0; i < 16u; i++) {
         uint8_t nt = LINE[i];
         put_step(&trk[0], i, nt ? 1u : 0u, &nt, nt ? ST_NOTE : ST_REST, (i % 4u) == 2u ? SF_ACCENT : 0u);
@@ -945,6 +909,59 @@ static int demos(const char *dir)
     return 1;
 }
 
+/* 10. the FX layer's FILTER macro (perf_k[0]) is the SELECTED track's filter, for as long as it is turned: the others keep theirs, a track's own
+ * P_FILT is not written, and the master's LPF / HPF stage is not run by it */
+static void tft_macro(void)
+{
+    track_t *t0 = &trk[0], *t1 = &trk[1];
+    uint32_t k;
+    int own1;
+    fresh(0, preset_by_name(0, "SAW LEAD"));
+    fresh(1, preset_by_name(0, "SAW LEAD"));
+    t0->p[P_SUS] = 127; t1->p[P_SUS] = 127;
+    t1->p[P_FILT] = 30;                                 /* track 2's own filter: a high-pass */
+    song.sel = 0;
+    perf_k[0] = 0;
+    trk_note_on(t0, 60, 110);
+    trk_note_on(t1, 60, 110);
+    mixb(FS / 4u / CTL);
+    ck("macro at rest: track 1 has no filter, track 2 its own high-pass", !tf[0].mode && tf[1].mode == 2);
+    perf_k[0] = -100;
+    mixb(FS / 4u / CTL);
+    ck("macro all the way left, track 1 selected: track 1 is a low-pass (mode 1), full wet", tf[0].mode == 1 && tf[0].w == 32768 && t0->tf_run);
+    ck("  and track 2 keeps its own high-pass (the macro does not touch it)", tf[1].mode == 2);
+    ck("  and no track's P_FILT was written (track 1 still 0, track 2 still 30)", !t0->p[P_FILT] && t1->p[P_FILT] == 30);
+    own1 = tf[1].mode;
+    song.sel = 1;
+    mixb(FS / 2u / CTL);
+    ck("the selection moves to track 2: its filter is the macro's low-pass now, track 1's is out again (at rest)",
+       tf[1].mode == 1 && !tf[0].mode && !t0->tf_run && own1 == 2);
+    perf_k[0] = 0;
+    mixb(FS / 2u / CTL);
+    ck("macro back to 0: track 2 is its own high-pass again", tf[1].mode == 2 && t1->p[P_FILT] == 30);
+    for (k = 0; k < 2u; k++)
+        trk_note_off(&trk[k], 60);
+    perf_k[0] = 0;
+    song.sel = 0;
+    t0->p[P_FILT] = -32;
+    tf_macro_turn(1);
+    ck("first turn starts at stored LP, not neutral", perf_k[0] == -49 && tf_eff(t0) == -31 && t0->p[P_FILT] == -32);
+    tf_macro_turn(-1);
+    ck("return to the gesture's anchor releases the macro", !perf_k[0] && tf_eff(t0) == -32);
+    perf_k[0] = -1; tf_macro_turn(1);
+    ck("crossing neutral skips the release sentinel", perf_k[0] == 1 && !tf_eff(t0) && t0->p[P_FILT] == -32);
+    perf_k[0] = 1; tf_macro_turn(-1);
+    ck("crossing neutral in reverse also stays active", perf_k[0] == -1 && !tf_eff(t0));
+    unsigned worst = 0;
+    for (int v = -64; v <= 63; v++) {
+        int m = v * 100 / 64, back = clamp(m * 64 / 100, -64, 63);
+        unsigned error = (unsigned)abs(back - v); if (error > worst) worst = error;
+    }
+    ck("all 128 track values round-trip within one raw filter step", worst == 1);
+    printf("trackfilter macro: measured maximum anchor rounding error %u raw step\n", worst);
+    perf_k[0] = 0; t0->p[P_FILT] = 0;
+}
+
 int main(int argc, char **argv)
 {
     tft_parameter();
@@ -955,6 +972,7 @@ int main(int argc, char **argv)
     tft_extremes();
     tft_chain();
     tft_stored();
+    tft_macro();
     tft_cost();
     if (argc > 1)
         printf("trackfilter: %d demo in %s (the acid loop, LP down and back, HP up and back)\n", demos(argv[1]), argv[1]);

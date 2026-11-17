@@ -43,6 +43,10 @@ FUNCS = sorted(NEW_LFO2) + ['ens_render', 'ens_post', 'drone_render', 'drone_leg
          "rev_room", "rev_spring", "rev_hall", "rev_side_mix",  # HALL/ABYSS share this actual DSP loop; wrappers contain only a call
          "track_insert", "ins_drive", "ins_swept",          # the per-track INSERT (fx.c, 1.5), while a TYPE plays
          "track_filter", "tf_wet_block"]                                    # the per-track FILTER (fx.c, 0.3.0), while FILT is set or fading (twice a block with SPREAD)
+# E85: retired engines are physically absent from the FORMAT 2 basis.
+RETIRED_FORMAT1_FUNCTIONS = {'digital_render_legacy', 'phase_render', 'dv_metal_run', 'lofi_render', 'drum_render', 'digital_render_custom', 'wheel_render', 'phase_render_ext', 'dv_tom_run', 'dx_run', 'dv_hat_run', 'drumx_mix', 'dv_metal_mix', 'lofi_byte', 'dv_kick_run', 'dv_clap_run', 'phase_render_f', 'digital_render', 'dx_layer', 'lofi_float', 'formant_render', 'noise_render', 'trio_render', 'dv_cym_run', 'lofi_formula_render', 'lofi_morph_render', 'sample_render', 'wheel_block', 'drumx_render', 'slice_render', 'fm6_render', 'grain_render', 'slc_rev', 'dv_out', 'dv_rim_run', 'trio_pass', 'grain_block', 'dv_snare_run', 'fm6_op_run', 'dv_bell_run', 'fm6_op_fb'}
+FUNCS = [name for name in FUNCS if name not in RETIRED_FORMAT1_FUNCTIONS]
+
 # built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 # With the SLICE-off slim profile those functions are intentionally absent.
@@ -207,6 +211,9 @@ def main():
             print(f"target: FAIL CFG {name}: {error}; conservative span estimate shown")
             fail += 1
     for n in missing:
+        if os.environ.get("CARAVEL_SLIM") == "1":     # the engines that 1.0.0 removes (E27) are not in the image: their functions are gone, which is the point
+            print(f"target: note {n} is removed by CARAVEL_SLIM")
+            continue
         print(f"target: FAIL {n} not found in {dis} (renamed? inlined? update FUNCS)")
         fail += 1
     for n, r in res.items():

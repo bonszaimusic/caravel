@@ -356,12 +356,50 @@ static void con_params(void)
     }
 }
 
+#if CARAVEL_UX_CAPTURE
+/* "cap": what CAPTURE costs in the audio block (capture.c, device plan C-e). Times in microseconds (timer ticks / FM1_TICKS_PER_US);
+ * a block is 128 frames = 2902 us at 44.1 kHz. "cap reset" starts the maxima again. */
+static void con_cap(const char *p)
+{
+    uint32_t i, run = 0, ev = 0, blocks = cap_p_blocks;
+    if (con_word(&p, "reset")) {
+        cap_p_max = cap_p_sum = cap_p_blocks = cap_p_fired_max = cap_p_busy_max = cap_p_take_max = cap_p_takes = 0;
+        con_puts("cap counters reset\r\n");
+        return;
+    }
+    for (i = 0; i < NTRK; i++) {
+        run += cap_st[i] == 1u;
+        ev += cap_ln[i];
+    }
+    con_kv("cap_loops_running", (int32_t)run);
+    con_kv("cap_loop_events", (int32_t)ev);
+    con_kv("cap_blocks", (int32_t)blocks);
+    con_kv("cap_block_last_us", (int32_t)(cap_p_last / FM1_TICKS_PER_US));
+    con_kv("cap_block_max_us", (int32_t)(cap_p_max / FM1_TICKS_PER_US));
+    con_kv("cap_block_avg_us_x10", blocks ? (int32_t)((uint32_t)(cap_p_sum / blocks) * 10u / FM1_TICKS_PER_US) : 0);
+    con_kv("cap_block_max_4loops_us", (int32_t)(cap_p_busy_max / FM1_TICKS_PER_US));
+    con_kv("cap_fired_max_per_block", (int32_t)cap_p_fired_max);
+    con_kv("cap_takes", (int32_t)cap_p_takes);
+    con_kv("cap_take_last_us", (int32_t)(cap_p_take_last / FM1_TICKS_PER_US));
+    con_kv("cap_take_max_us", (int32_t)(cap_p_take_max / FM1_TICKS_PER_US));
+    con_kv("audio_max_us", (int32_t)felucca_dbg.max_us);
+    con_kv("cpu_pct", (int32_t)(song.cpu_q8 * 100u / 256u));
+}
+#endif
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("status  dbg  inp  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
+        con_puts("status  dbg  inp  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes"
+#if CARAVEL_UX_CAPTURE
+                 "  cap [reset]"
+#endif
+                 "\r\n");
     else if (con_word(&p, "status"))
         con_status();
+#if CARAVEL_UX_CAPTURE
+    else if (con_word(&p, "cap"))
+        con_cap(p);
+#endif
     else if (con_word(&p, "dbg"))
         con_dbg();
     else if (con_word(&p, "crash"))

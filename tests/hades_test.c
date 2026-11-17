@@ -2,7 +2,7 @@
 /* HADES: independent signal checks, parameter extremes, real Learn/motion/
  * project/preset paths, PER6 migration and native render cost. No hardware claim. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #include <time.h>
 
 static void had_setup(void)
@@ -132,29 +132,25 @@ static int had_storage(void)
     int bad = 0, ok = 1; had_setup();
     uint8_t prefs[32], learn[32];
     favorites.factory[15][10] = 1; favorites.factory[15][11] = 3;
-    memcpy(prefs, favorites.factory[15], 32); memcpy(learn, favorites.factory[14], 32);
+    memcpy(prefs, favorites.factory[15], 32); memcpy(learn, ml_base, 32);
     for (uint32_t k = 0; k < 8; k++) {
         ok &= favorite_set(ENGI_SEM, k, 1) && favorite_set(ENGI_HADES, k, 1);
         ok &= favorite_has(ENGI_HADES, k) && favorite_has(ENGI_SEM, k);
     }
-    ok &= !memcmp(prefs, favorites.factory[15], 32) && !memcmp(learn, favorites.factory[14], 32);
+    ok &= !memcmp(prefs, favorites.factory[15], 32) && !memcmp(learn, ml_base, 32);
     bad += check("SEM/HADES favorites cannot alter Learn, idle animation, palette or category", ok);
     persist_t saved = {0}; settings_export(&saved);
     memset(engine_favorites, 0, sizeof engine_favorites);
     ok = settings_import(&saved, sizeof saved) == 1 && favorite_has(ENGI_SEM, 7) && favorite_has(ENGI_HADES, 7);
     ok &= !memcmp(prefs, favorites.factory[15], 32);
-    bad += check("PER7 stores both engine favorite maps independently of preferences", ok);
-    saved.magic = 0x50455236u; saved.favorites.factory[15][10] = 0xA5;
-    saved.voice_allocation = VOICE_POLICY_FIXED | 0x1111u;
-    ok = settings_import(&saved, PERSIST_PREENGINE_SIZE) == 2 && favorite_has(ENGI_SEM, 7) &&
-         favorite_has(ENGI_SEM, 5) && !favorite_has(ENGI_HADES, 0) && favorites.factory[15][10] == 1 &&
-         favorites.factory[15][11] == 3 && voice_policy == (VOICE_POLICY_FIXED | 0x1111u);
-    persist_t migrated = saved;
-    ok &= settings_import(&saved, sizeof saved) == 1 && !memcmp(&saved, &migrated, sizeof saved);
-    bad += check("PER6 migrates SEM bits once, retains idle/category/Learn and fixed voice caps", ok);
-    saved.magic = 0x50455235u;
-    ok = settings_import(&saved, PERSIST_PREVOICE_SIZE) == 2 && !voice_policy && !favorite_has(ENGI_SEM, 0);
-    bad += check("PER5 defaults new engine favorites and allocation without reading absent fields", ok);
+    bad += check("PER8 stores both engine favorite maps independently of preferences", ok);
+    persist_t before=saved;
+    saved.magic=0x50455236u;
+    ok=settings_import(&saved,PERSIST_PREENGINE_SIZE)==0 && favorite_has(ENGI_SEM,7) && favorite_has(ENGI_HADES,7);
+    bad += check("PER6 is refused without changing active engine favorites",ok);
+    saved=before;saved.magic=0x50455235u;
+    ok=settings_import(&saved,PERSIST_PREVOICE_SIZE)==0 && favorite_has(ENGI_SEM,7) && favorite_has(ENGI_HADES,7);
+    bad += check("PER5 is refused without changing active engine favorites",ok);
     return bad;
 }
 static double had_bench(uint32_t engine)

@@ -8,7 +8,7 @@
  * stored values other than 1 / 2 count as OFF; a sound load keeps LATCH; the parameter layout is unchanged.
  * Run by tests/run_tests.sh (needs build/gen from one firmware build). */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static int gate_note(const track_t *t, uint32_t note)
 {
@@ -283,10 +283,10 @@ static int rec_and_kits(void)
     bad += check("  the recorded hold ends with the key, the sound goes on", t->rh_n == 0u && gate_note(t, 60));
     song.rec = 0; song.playing = 0;
     reset();
-    song.sel = 3;                                                  /* the DRUM track: no latch */
+    song.sel = 3;                                                  /* fourth melodic track */
     trk[3].p[P_LATCH] = LT_NEW;
     key_down(K_C4);
-    bad += check("a kit has no latch mode", latch_mode(&trk[3]) == LT_OFF);
+    bad += check("fourth FORMAT 2 track supports latch", latch_mode(&trk[3]) == LT_NEW);
     key_up(K_C4);
     song.sel = 0;
     for (i = 0; i < 2u; i++) {                                     /* stored values other than 1, 2 are OFF */

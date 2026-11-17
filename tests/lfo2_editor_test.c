@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include <assert.h>
-#define EDITOR_TEST_NO_MAIN 1
-#include "editor_test.c"
+#define FORMAT2_EDITOR_MAIN format2_editor_baseline_main
+#include "format2_editor_test.c"
+#define host_wire reply
+static void reset(void){web_nor_erase();web_boot();for(uint32_t i=0;i<1200;i++)web_render(44);}
 int main(void)
 {
     reset();

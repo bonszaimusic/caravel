@@ -157,14 +157,276 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     return m;
 }
 
+/* ------------------------------------------------------------------------------------------------------------------
+ * CHORD EXT: HARM reads the current bus chord; T1..T4 remember a chord from
+ * real panel/MIDI input (chord_source.c). A source never starts a follower by itself.
+ *   ext_state / ext_on: one answer for the audio ISR and for ext_info (the UI). OFF; N/A (a kit, a pair-morph follower);
+ *        WAIT BUS (HARM with HARMONY off: no DIA3 fallback); WAIT / AMBIG for live input; OK. EXT overrides CHRD and FOLLOW (their values stay stored
+ *        and are not read for an EXT track).
+ *   ext_pool: the target tones 7 -> 9 -> 13 (EXT level 1..3) of the chord's kind, minus the tones the chord has
+ *        already (any octave), once each, never padded; the scale only picks between a primary and an alternate interval.
+ *   placement: each pool tone at the follower's register (the octave nearest the key / SEQ note / ARP anchor, a tie goes
+ *        to the lower), then OCT * 12 (folded back by octaves into 0..127). An empty pool / WAIT: the note is dropped.
+ * Every started note is kept in the owners' lists (kb_chord, mchord, arp_note, seq_notes) as before: a release never
+ * asks the resolver again. Not inlined: this runs per note event only, outside the ISR's loops. */
+#if !FELUCCA_FM4
+#define EXT_POOL_API 1                              /* (tests/chordext_api.h: ext_pool exists) */
+enum { XK_MAJ, XK_MIN, XK_DIM, XK_AUG, XK_SUS2, XK_SUS4, XK_POW };
+#include "chord_source.c"
+/* the semitones above the root of the 7th, 9th and 13th: primary | alternate << 4 (0: none) */
+static const uint8_t EXT_CAND[7][3] = {
+    {11 | 10 << 4, 2, 9},               /* maj: maj7, b7 on a V chord */
+    {10 | 11 << 4, 2 | 1 << 4, 9 | 8 << 4},   /* min */
+    {10 | 9 << 4, 2 | 1 << 4, 8},       /* dim: no 6 */
+    {10 | 11 << 4, 2, 0},               /* aug: no 13 (it rubs the #5) */
+    {10 | 11 << 4, 0, 9},               /* sus2: the 9 is its 2 */
+    {10 | 11 << 4, 2, 9},               /* sus4 */
+    {10 | 11 << 4, 2, 9},               /* power chord */
+};
+
+/* the extension tones missing from a chord: rel = its tones above the root (bit i: i semitones), root its pitch class,
+ * kind XK_*, level 1..3 (7, 7+9, 7+9+13), scale = absolute pitch classes of the source's scale (0: unknown: primaries) ->
+ * pc[] (absolute pitch classes, in order 7, 9, 13) and their number */
+static __attribute__((noinline)) uint32_t ext_pool(uint32_t rel, uint32_t root, uint32_t kind, uint32_t level, uint32_t scale, uint8_t *pc)
+{
+    uint32_t s, n = 0, i, seven = (rel & 0xC00u) || (kind == XK_DIM && (rel & 0x200u));
+    if (kind > XK_POW)
+        return 0;
+    for (s = 0; s < level && s < 3u; s++) {
+        uint32_t cand = EXT_CAND[kind][s], pri = cand & 15u, alt = cand >> 4, pick = pri, c;
+        if (!pri || (s == 0 && seven))                  /* none / a seventh is there: b7 or maj7 (a dim also its 6) */
+            continue;
+        if (scale && scale != 0xFFFu && alt && !((scale >> ((root + pri) % 12u)) & 1u) && ((scale >> ((root + alt) % 12u)) & 1u))
+            pick = alt;                                 /* the primary is outside the scale, the alternate inside it */
+        if ((rel >> pick) & 1u)
+            continue;                                   /* played already: not missing */
+        c = (root + pick) % 12u;
+        for (i = 0; i < n && pc[i] != c; i++)
+            ;
+        if (i == n)
+            pc[n++] = (uint8_t)c;
+    }
+    return n;
+}
+
+/* what CHORD EXT does on track t now: EXT_ST_OFF, _NA (why), _WAITBUS (why), or _OK (a source chord is there) */
+static __attribute__((noinline)) uint32_t ext_state(const track_t *t, int src, uint32_t *why)
+{
+    uint32_t w = EXT_WHY_NONE, st = EXT_ST_OK;
+    if (src < 1 || src > 5)
+        st = EXT_ST_OFF;
+    else if (chord_kit(t)) {
+        st = EXT_ST_NA;
+        w = EXT_WHY_KIT;
+    }
+#if FELUCCA_PAIR_MORPH
+    else if (pair_follower(t)) {
+        st = EXT_ST_NA;
+        w = EXT_WHY_PAIR;
+    }
+#endif
+    else if (src >= 2) {
+        uint32_t f = trk_index(t), source = (uint32_t)src - 2u;
+        w = ext_live_why(f, source);
+        if (w) st = EXT_ST_NA;
+        else if (xext[f].shadow != src) { st = EXT_ST_WAIT; w = EXT_WHY_PLAY; }
+        else {
+            uint32_t chord = xext[f].chord;
+            st = chord & XS_AMBIG ? EXT_ST_AMBIG : chord & XS_VALID ? EXT_ST_OK : EXT_ST_WAIT;
+            w = st == EXT_ST_AMBIG && (chord & XS_VALID) ? EXT_WHY_KEPT : st == EXT_ST_OK ? EXT_WHY_NONE : EXT_WHY_PLAY;
+        }
+    } else if (!harmony_on) {
+        st = EXT_ST_WAITBUS;
+        w = EXT_WHY_BUSOFF;
+    }
+    if (why)
+        *why = w;
+    return st;
+}
+/* EXT governs the track's notes (the pool, or silence): the ISR's one question */
+static __attribute__((noinline)) int ext_on(const track_t *t, int src)   /* (declared in seq.c, with ext_cfg / EXT_ON; src: the caller's one read of SOURCE) */
+{
+    uint32_t st = ext_state(t, src, 0);
+    return st != EXT_ST_OFF && st != EXT_ST_NA;
+}
+
+/* the whole answer: state, why, the source chord and the pool (see ext_info_t) */
+static __attribute__((noinline)) void ext_resolve(const track_t *t, const ext_cfg_t *c, ext_info_t *o)
+{
+    uint32_t context = c->src >= 2 && c->src <= 5 ? xext[trk_index(t)].chord : 0u;
+    uint32_t why, st = ext_state(t, c->src, &why), root, kind, rel;
+    uint16_t r16;
+    if (c->src >= 2 && c->src <= 5 && st != EXT_ST_NA && xext[trk_index(t)].shadow == c->src) {
+        st = context & XS_AMBIG ? EXT_ST_AMBIG : context & XS_VALID ? EXT_ST_OK : EXT_ST_WAIT;
+        why = st == EXT_ST_AMBIG && (context & XS_VALID) ? EXT_WHY_KEPT : st == EXT_ST_OK ? EXT_WHY_NONE : EXT_WHY_PLAY;
+    }
+    memset(o, 0, sizeof *o);
+    o->src = (uint8_t)c->src;
+    o->state = (uint8_t)st;
+    o->why = (uint8_t)why;
+    o->mono = trk_vmode(t) != V_POLY;
+    if (st != EXT_ST_OK && !(st == EXT_ST_AMBIG && (context & XS_VALID)))
+        return;
+    if (c->src >= 2) {
+        root = (context >> 12) & 15u;
+        r16 = (uint16_t)ext_relative(context & 0xFFFu, root);
+    } else root = harmony_live_desc(harmony_chord_at(harmony_bar), &r16);
+    rel = r16;
+    if (!rel) {                                         /* the scale has no triad: no chord to read */
+        o->state = EXT_ST_WAITBUS;
+        return;
+    }
+    o->have_chord = 1;
+    o->root = (uint8_t)root;
+    o->mask = r16;
+    /* a known root: the kind by its third (and its fifth: a dim, an aug), not the strict recogniser */
+    kind = c->src >= 2 ? (context >> 16) & 7u
+         : (rel & 0x10u) ? ((rel & 0x80u) || !(rel & 0x100u) ? XK_MAJ : XK_AUG)
+         : (rel & 0x08u) ? ((rel & 0x80u) || !(rel & 0x40u) ? XK_MIN : XK_DIM) : XK_POW;
+    o->want = (uint8_t)(chordext_disp((uint32_t)c->ext) + 1u);
+    uint32_t scale = c->src >= 2 ? scale_mask(&trk[c->src - 2]) : harmony_scale_abs();
+    o->npc = (uint8_t)ext_pool(rel, root, kind, o->want, scale, o->pc);
+    if (st == EXT_ST_AMBIG) {
+        o->state = EXT_ST_AMBIG;
+    } else if (!o->npc) {
+        o->state = EXT_ST_EMPTY;
+        o->why = EXT_WHY_INSRC;
+    } else
+        o->state = EXT_ST_OK;
+}
+
+/* AMBIG is a UI status, not silence: a valid remembered pool stays playable. */
+static inline int ext_ready(const ext_info_t *o)
+{
+    return o->state == EXT_ST_OK ||
+           (o->state == EXT_ST_AMBIG && o->have_chord && o->npc);
+}
+/* pitch class pc nearest to x (a tie goes to the lower), inside 0..127 (folded by octaves) */
+static int32_t ext_near(int32_t x, uint32_t pc)
+{
+    int32_t d = (int32_t)((pc + 12u - (uint32_t)x % 12u) % 12u), n = d > 6 ? x + d - 12 : d == 6 ? x - 6 : x + d;
+    if (n < 0)
+        n += 12;
+    if (n > 127)
+        n -= 12;
+    return n;
+}
+/* OCT: n moved by whole octaves, then folded back into 0..127 (the pitch class stays) */
+static int32_t ext_shift(const ext_cfg_t *c, int32_t n)
+{
+    n += 12 * clamp((int32_t)c->oct, -2, 2);
+    while (n < 0)
+        n += 12;
+    while (n > 127)
+        n -= 12;
+    return n;
+}
+/* the pool tone nearest x, OCT applied; -1: none */
+static int32_t ext_nearest(const ext_cfg_t *c, const ext_info_t *o, int32_t x)
+{
+    int32_t best = -1, bd = 999, y, d;
+    uint32_t i;
+    if (!ext_ready(o))
+        return -1;
+    for (i = 0; i < o->npc; i++) {
+        y = ext_near(x, o->pc[i]);
+        d = y > x ? y - x : x - y;
+        if (d < bd || (d == bd && y < best)) {
+            bd = d;
+            best = y;
+        }
+    }
+    return best < 0 ? -1 : ext_shift(c, best);
+}
+/* SEQ / mono: note x -> the pool tone nearest it (0..127), or -1: no note */
+static __attribute__((noinline)) int32_t ext_map(const track_t *t, const ext_cfg_t *c, int32_t x)
+{
+    ext_info_t o;
+    ext_resolve(t, c, &o);
+    return ext_nearest(c, &o, x);
+}
+/* a live note (key, MIDI) with the ARP off: the notes to start, ascending, once each (0..3, none: WAIT / empty). A mono part
+ * gets the one nearest tone. With the ARP on the key itself is the anchor (arp_list resolves it at every step) */
+static __attribute__((noinline)) uint32_t ext_build(const track_t *t, const ext_cfg_t *c, uint32_t root, uint8_t *out)
+{
+    ext_info_t o;
+    uint32_t n = 0, i, j;
+    int32_t y;
+    if (t->p[P_AMODE]) {
+        out[0] = (uint8_t)root;
+        return 1;
+    }
+    ext_resolve(t, c, &o);
+    if (!ext_ready(&o))
+        return 0;
+    if (o.mono) {
+        y = ext_nearest(c, &o, (int32_t)root);
+        if (y >= 0)
+            out[n++] = (uint8_t)y;
+        return n;
+    }
+    for (i = 0; i < o.npc; i++) {
+        y = ext_shift(c, ext_near((int32_t)root, o.pc[i]));
+        for (j = 0; j < n && out[j] != (uint8_t)y; j++)
+            ;
+        if (j == n)
+            out[n++] = (uint8_t)y;
+    }
+    for (i = 1; i < n; i++)                             /* ascending */
+        for (j = i; j > 0 && out[j - 1u] > out[j]; j--) {
+            uint8_t x = out[j];
+            out[j] = out[j - 1u];
+            out[j - 1u] = x;
+        }
+    return n;
+}
+/* the ARP's anchors (list[0..n)) -> the pool tones near each (at most 8 anchors), once each; *last: the last anchor's tone
+ * (REPEAT). Returns the new number of notes (0: nothing to play) */
+static __attribute__((noinline)) uint32_t ext_arp(const track_t *t, const ext_cfg_t *c, uint32_t *list, uint32_t n, uint32_t *last)
+{
+    ext_info_t o;
+    uint32_t a[8], i, j, k, m = 0, na = n < 8u ? n : 8u, lastanchor = n ? list[n - 1u] : 0u;
+    int32_t y;
+    ext_resolve(t, c, &o);
+    if (!ext_ready(&o))
+        return 0;
+    for (i = 0; i < na; i++)
+        a[i] = list[i];
+    for (i = 0; i < na; i++)
+        for (k = 0; k < o.npc; k++) {
+            y = ext_shift(c, ext_near((int32_t)a[i], o.pc[k]));
+            for (j = 0; j < m && list[j] != (uint32_t)y; j++)
+                ;
+            if (j == m)
+                list[m++] = (uint32_t)y;
+        }
+    if (n)
+        *last = (uint32_t)ext_nearest(c, &o, (int32_t)lastanchor);
+    return m;
+}
+#else
+static void chordext_reset_runtime(void) {}
+static void ext_window_clear(uint32_t source) { (void)source; }
+static void ext_sources_stop(void) {}
+static void ext_source_tick(void) {}
+static inline uint32_t ext_build(const track_t *t, const ext_cfg_t *c, uint32_t root, uint8_t *out) { (void)t; (void)c; (void)root; (void)out; return 0; }
+static inline int32_t ext_map(const track_t *t, const ext_cfg_t *c, int32_t x) { (void)t; (void)c; (void)x; return -1; }
+static inline uint32_t ext_arp(const track_t *t, const ext_cfg_t *c, uint32_t *list, uint32_t n, uint32_t *last) { (void)t; (void)c; (void)list; (void)last; return n; }
+#endif
+
 /* chord_make for a note played now: a chord is kept in chord_last (the CHORD page shows it) */
 static void latch_bus_capture(track_t *t);
 static int latch_would_toggle(const track_t *t, const uint8_t *nn, uint32_t n);
-static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
+static uint32_t chord_build_c(track_t *t, const ext_cfg_t *c, uint32_t root, uint8_t *out)   /* (c: the caller's one read of SOURCE / EXT / OCT for this event) */
 {
+    if (ext_is_on(t, c))                                 /* CHORD EXT: the pool (or the anchor for the ARP, or nothing); not chord_make, which step entry calls too */
+        return ext_build(t, c, root, out);
     int32_t r;
     uint16_t mask;
     uint32_t m = chord_make(t, root, out, &r, &mask), i, k = trk_index(t);
+#if !FELUCCA_FM4
+    if (ext_sources && !latch_would_toggle(t, out, m)) ext_source_note(t, root, r, mask);
+#endif
     if (m > 1u && !latch_would_toggle(t, out, m)) {      /* (a LATCH STACK toggle starts no new chord: chord_last stays) */
         latch_bus_capture(t);
         chord_last[k].root = (uint8_t)clamp(r, 0, 127);
@@ -179,6 +441,11 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
             chord_live[k] = 1;
     }
     return m;
+}
+static __attribute__((unused)) uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)   /* (the host tests; key_on / midi_play use chord_build_c with their one SOURCE / EXT / OCT read) */
+{
+    ext_cfg_t c = ext_cfg(t);
+    return chord_build_c(t, &c, root, out);
 }
 
 /* a chord's name from its root and tones (bit i: i semitones above the root): "C", "Cm7", "F#m7b5", "Gsus4",
@@ -263,7 +530,7 @@ static void chord_stop_all(void)
 {
     uint32_t i, j;
     for (i = 0; i < NTRK; i++) {
-        uint32_t bus = trk[i].p[P_CHRD] == CH_BUS;
+        uint32_t bus = trk[i].p[P_CHRD] == CH_BUS && !EXT_ON(&trk[i]);   /* (an EXT track has no CHRD BUS chord, whatever CHRD stores) */
         if (!bus && !chord_live[i] && !chord_last[i].n)
             continue;                                 /* round 7: a CHRD BUS chord is the engine's: it ends; a plain chord a player still holds (a key or MIDI list names the note) sounds on, as in 0.11.0; a note of the last chord nobody holds any more (an orphan) still ends, so STOP cleans up as before */
         for (j = 0; j < chord_last[i].n; j++)
@@ -277,11 +544,14 @@ static void chord_stop_all(void)
     }
 }
 
-/* HARMONY / LINK RETRIG: the last CHRD BUS chord of the track is released and sounded again with the bus' new
- * chord / the linked scale. Per track; only CHRD BUS has a held chord to follow (the sequencer and ARP retrigger
+/* RETRIG (LINK row K2: OFF, HARM = a chord change of the bus at a bar line, SCALE = a key change of the LINK source, BOTH; the values 1 / 2
+ * were named CHORD / LINK before): the last CHRD BUS chord of the track is released and sounded again with the bus' new
+ * chord / the linked scale; with HARM / BOTH an EXT voicing, a held single note (CHRD OFF, FOLLOW) and latched notes follow the bar's chord
+ * too (retrigger_follow, seq.c), and SCALE does nothing on an EXT track. Per track (the sequencer and ARP retrigger
  * their own steps anyway). */
 static void retrigger_latched(uint32_t i);
 static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, const uint8_t *new, uint32_t newn);
+static void retrigger_follow(uint32_t i);
 static void chord_live_sync(uint32_t i);
 static void chord_panic(uint32_t i);
 static int chord_owner_matches(uint32_t i, const uint8_t *old, uint32_t oldn);
@@ -292,6 +562,15 @@ static void link_retrigger(uint32_t i)
     track_t *t = &trk[i];
     if (t->p[P_AMODE])
         return;                                        /* round 7: with the ARP on, the held list is the ARP's and it follows HARMONY on every step; rewriting the key's chord would leave the old notes in that list (an arpeggio that outlives its key) */
+    if (EXT_ON(t)) {                                   /* an EXT voicing follows the bar's chord only: a LINK key change does not move the pool, SCALE has no effect here (nothing sounds again) */
+        if (ret_harm)
+            retrigger_follow(i);                       /* RETRIG HARM / BOTH: rebuilt per owner from the new pool (seq.c) */
+        return;
+    }
+    if (ret_harm && t->p[P_CHRD] == CH_OFF && harmony_on && harmony_follow[i] && !chord_kit(t)) {
+        retrigger_follow(i);                           /* a held single note / the latched pitches are snapped again to the bar's chord */
+        return;
+    }
     uint32_t k = trk_index(t), j, nn = 0, oldn = chord_last[k].n, src = chord_last[k].key;
     uint8_t out[CHORD_MAX], old[CHORD_MAX];
     int32_t r = 0;
@@ -307,7 +586,7 @@ static void link_retrigger(uint32_t i)
         chord_live[k] = 1;
     }
     if (t->p[P_CHRD] != CH_BUS || !oldn) {
-        retrigger_latched(i);                          /* LATCH without CHRD BUS */
+        retrigger_latched(i);                          /* LATCH without CHRD BUS (an EXT track never gets here: it returned above) */
         return;
     }
     /* Rebuild the bus chord for the new harmony chord; reusing the old chord_last notes would repeat the old
@@ -327,4 +606,23 @@ static void link_retrigger(uint32_t i)
     for (j = 0; j < nn; j++)
         if (out[j])
             trk_note_on(t, out[j], chord_last[k].vel ? chord_last[k].vel : 96u);
+}
+
+/* CHORD EXT status for the UI (see ext_info_t in core.h); f: the follower track. Read-only, safe from the main loop: it
+ * reads the same stored values and bus state as the audio ISR */
+static void ext_info(uint32_t f, ext_info_t *o)
+{
+    memset(o, 0, sizeof *o);
+#ifdef EXT_INFO_HOOK
+    if (EXT_INFO_HOOK(f, o))
+        return;
+#endif
+#if !FELUCCA_FM4
+    if (f < NTRK) {
+        ext_cfg_t c = ext_cfg(&trk[f]);
+        ext_resolve(&trk[f], &c, o);
+    }
+#else
+    (void)f;
+#endif
 }

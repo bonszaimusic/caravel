@@ -4,9 +4,10 @@
  * terminator) and raw USB-MIDI packets through the real usb.c / editor.c paths of the host build. run_tests.sh runs
  * it briefly under ASan / UBSan with a fixed seed.   fuzz_ed [ITERATIONS [SEED]] */
 #define EDITOR_TEST_NO_MAIN 1
-#include "editor_test.c"                                /* hostsim, the stubs, RAM flash, reset() */
+#include "editor_harness.h"                                /* hostsim, the stubs, RAM flash, reset() */
 static uint32_t rs = 0x9E3779B9u;
 static uint32_t rnd(void) { rs ^= rs << 13; rs ^= rs >> 17; rs ^= rs << 5; return rs; }
+static uint32_t usb_frame(const uint8_t *f,uint32_t n,uint8_t *u){uint32_t o=0;for(uint32_t i=0;i<n;){uint32_t k=n-i>=3u?3u:n-i;u[o++]=k==3u&&i+3u<n?4u:k==3u?7u:4u+k;u[o++]=f[i];u[o++]=k>1?f[i+1]:0;u[o++]=k>2?f[i+2]:0;i+=k;}return o;}
 static void fz_feed(const uint8_t *p, uint32_t n)
 {
     uint32_t o, tries;

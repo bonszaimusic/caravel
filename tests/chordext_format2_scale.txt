@@ -1,0 +1,20 @@
+# SOURCE OFF on unmodified FORMAT 2 97100073e05c0cfb573f07862924df2965b9ba26
+# RETRIG SCALE; Suite image GCC. Frozen before feature comparison.
+poly_keys       audio=604c6b4691c9f60b events=f32206e9f77487ee midiout=f6f75991ebd8d0aa blocks=2068 noteevents=18 midiout_packets=18
+mono_keys       audio=770181af51b768c6 events=896e19d8a359f72e midiout=ee43c096274c495a blocks=3170 noteevents=28 midiout_packets=22
+unison_keys     audio=fbf9d9998d279cbd events=8878ecfd594985f1 midiout=9cc57a5ffbb6b47f blocks=2757 noteevents=68 midiout_packets=10
+chrd_dia3_voic  audio=9e818f4813948952 events=5f031af35847e50e midiout=bd5461df2c374b2e blocks=3032 noteevents=74 midiout_packets=74
+chrd_shapes     audio=b265494bd34c0d13 events=1a7f4c3aaf9f1d7a midiout=65672183f30e2abe blocks=2757 noteevents=80 midiout_packets=80
+chrd_bus        audio=2a938eb893e3344c events=c958ba5b12fc3c79 midiout=6ec1537d60741a0f blocks=6891 noteevents=24 midiout_packets=24
+chrd_midi       audio=0278ad3ec38c3018 events=725f65d48463ad9f midiout=cbf29ce484222325 blocks=2619 noteevents=40 midiout_packets=0
+latch_new       audio=4c113ee73665ec4b events=f46f490807c0f783 midiout=837cc9f80d1dde80 blocks=2757 noteevents=28 midiout_packets=22
+latch_stack     audio=530160a2a307c958 events=0e1999b7f7f8c8c9 midiout=9e68bdbe53436baf blocks=2619 noteevents=20 midiout_packets=24
+arp_modes_a     audio=80e1b4eed70e18ff events=a758a9f242f722e0 midiout=d79defc75c126119 blocks=4893 noteevents=82 midiout_packets=8
+arp_modes_b     audio=a9e68803f47dcde4 events=e696573d1bed0861 midiout=3032c944d8901f8a blocks=5375 noteevents=116 midiout_packets=6
+arp_hold_chord  audio=d217bb2e9963d1a3 events=5998c42a6332c6c4 midiout=8ed5331eb0b03f93 blocks=6202 noteevents=214 midiout_packets=14
+seq_harmony     audio=8cb80efd9a4fcce1 events=ab2a258c4d50b9a6 midiout=cbf29ce484222325 blocks=6340 noteevents=354 midiout_packets=0
+link_retrig     audio=a7b1ed1c91b0f0cf events=71c96d15fe680796 midiout=4cfe27f807c56d0e blocks=4962 noteevents=32 midiout_packets=12
+midi_channels   audio=94e993cfaea262c3 events=c0d3f4d75d80ac81 midiout=cbf29ce484222325 blocks=2757 noteevents=38 midiout_packets=0
+midi_track_sel  audio=c6c88b4b5be32c8a events=ccdc7e8632fb102d midiout=cbf29ce484222325 blocks=2343 noteevents=20 midiout_packets=0
+sustain_panic   audio=1243213c68c3b65d events=972cb405dc7cd85b midiout=b7a4ac0aac42e13a blocks=2619 noteevents=23 midiout_packets=4
+follow          audio=b49c85f0799bf7dd events=2eb61f5b87516fd0 midiout=4f7f106c71c73426 blocks=4962 noteevents=208 midiout_packets=10

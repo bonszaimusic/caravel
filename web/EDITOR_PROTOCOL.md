@@ -1,3 +1,43 @@
+# Caravel 1.x transport: protocol 18 (FORMAT 2)
+
+Every 1.x editor request and reply uses `F0 7D 43 41 cmd args… F7`.
+Classic uses `F0 7D 46 4C cmd args… F7`; its commands never enter the
+1.x handler. A legacy INFO request receives only `00 60 02 12` (hex):
+an explicit rejection, deliberately too short to be parsed as Classic INFO.
+There is no global unlock state shared by browser tabs.
+
+A valid 1.x INFO has six engines, no SONG rows, and capability `60 02 12`.
+Discovery validates the INFO structure and matching backup LIST: version 2,
+exactly IDs 0..7. Classic discovery uses its original capability blocks and
+LIST version 1. A display name or firmware text marker is not sufficient.
+The 1.x web editor checks generation before requesting descriptors or editing.
+
+Software update entry: `F0 7D 43 41 7F 12 02 F7`.
+Explicit software recovery entry: `F0 7D 43 41 7D 12 02 F7`.
+The old `F0 22 24 35 7F/7D F7` entries are ignored by running 1.x.
+Physical recovery remains available. The separately running update loader still
+uses its original transport and cannot disclose the formerly installed generation;
+recovery requires an explicit saved-backup acknowledgement. It is not a normal
+editor session and must be checked on the FM-1 before release.
+
+Classic → 1.x uses the new installer to read/verify a Classic backup, obtain
+operator confirmation and then use Classic's own original update entry.
+The explicit 1.x → Classic route requires the saved pre-upgrade Classic backup,
+the hash-pinned original 0.13.0 package, a newly saved 1.x backup and confirmation.
+After the return, restore the old backup with the Classic editor. Reinstalling
+firmware alone does not restore overwritten music.
+
+Web backups accept their versioned JSON form and real CLI ZIP archives
+`CaravelBackup1` / `CaravelBackup2`. ZIP structure, inventory, sizes and CRCs are
+validated; FORMAT 2 capsules additionally validate HPM2 v6 and snapshot framing.
+Restore compares actual LIST generation before any destructive request.
+The CLI requires `--target-generation`, makes and verifies an archive before a
+normal update, and needs a matching `--recovery-backup` in loader mode.
+
+The following inherited reference describes historical commands/capabilities.
+Removed Classic engines, SONG, samples and FM6 are not capabilities of 1.x;
+use actual INFO and descriptors from the connected 1.x device.
+
 # Felucca editor protocol (SysEx over USB-MIDI)
 
 The firmware side is `firmware/src/editor.c`. Commands 1-15, track selection, dumps, step reads
@@ -1293,3 +1333,18 @@ category extension (always supply all those fields). Bad values reject the
 whole staged record. The editor library adds the optional seven-value `lfo2`
 array and refuses unsupported destination firmware before audition/PUT.
 Project FUNC and user record versions 8..11 are described in [the LFO2 documentation](../docs/modulation/LFO2.md).
+
+
+### FORMAT 2 CHORD EXT track settings
+
+The current six-engine firmware reuses parameter IDs 76, 77 and 79 for CSRC,
+CEXT and COCT. SOURCE stores 0 OFF / 1 HARM; EXT stores 0=7+9, 1=7, 2=7+9+13;
+OCT is a signed integer -2..+2. All default to zero. The display orders EXT as
+7 / 7+9 / 7+9+13; CC uses stored order. Live sources T1..T4 are not implemented.
+
+These are track settings: factory/user sound loads, engine changes and editor
+sound audition preserve them. Current FUNW working projects, UPB2 records and
+complete HPM2/IFP2 projects retain them without changing their size or version.
+Fresh 1.0 initialization is the supported starting point; no old-backup
+migration is added. The historical editor mock retains its legacy conversion
+cases solely as tests; those engines are not restored to FORMAT 2 firmware.

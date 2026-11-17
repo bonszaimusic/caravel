@@ -130,5 +130,5 @@ static void settings_init(void)
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
     }
     palette_apply();
-    fx_lowcut = (uint8_t)(settings.lowcut % 3u);
+    fx_lowcut = (uint8_t)(settings.lowcut % 4u);
 }

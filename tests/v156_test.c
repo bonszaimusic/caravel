@@ -13,7 +13,7 @@
  *             the keys' velocity (sounding, sent); GLO + SELECT the tempo; PAGE's bit as 1.5.5, saved; CLOCK's hint
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 /* ---------------------------------------------------------- HUMANIZE --- */
 static void mslot(track_t *t, uint32_t k, int32_t s, int32_t d, int32_t a)
@@ -208,79 +208,7 @@ static int humanize(void)
 /* (#216) DEEP TIGHT PERC: appended kit values 9..11 and DRUM presets 1..3 (the first, DRUM KIT, as it was); each lane one
  * of the five kits' (DEEP's kick tuned down); the lanes' names; they play; a project keeps them; what older firmware
  * makes of them (its KIT range ends at 77: a stored 9..11 lands there) */
-static int kits(void)
-{
-    static const uint8_t SRC[3][DV_NLANE] = {{DK_77, DK_80, DK_77, DK_80, DK_80, DK_77, DK_80, DK_10},
-                                            {DK_55, DK_66, DK_80, DK_55, DK_55, DK_55, DK_66, DK_80},
-                                            {DK_10, DK_77, DK_77, DK_66, DK_66, DK_66, DK_77, DK_66}};
-    int bad = 0, ok;
-    uint32_t k, l;
-    const param_desc_t *d = &ENG_DRUM.edit[0];
-    param_desc_t old = *d;
-    track_t *t;
-    int32_t s;
-    static int32_t kbuf[2 * CTL];
-    ok = DK_DEEP == 9 && DK_TIGHT == 10 && DK_PERC == 11 && DK_DX == 12 && DK_COUNT == 13 && DV_NKIT == 8 && d->max == DK_DX &&
-         str_eq(d->names[DK_DEEP], "DEEP") && str_eq(d->names[DK_TIGHT], "TIGHT") && str_eq(d->names[DK_PERC], "PERC");
-    for (k = 0; k < 3u; k++)
-        for (l = 0; l < DV_NLANE; l++) {
-            const dv_kit_t *a = &DV_KIT[5u + k][l], *b = &DV_KIT[SRC[k][l] - DK_80][l];
-            if (k == 0u && l == DV_KICK)
-                ok &= a->p16 == b->p16 - 32 && a->run == b->run && !memcmp(a->v, b->v, sizeof a->v);   /* (-2 st) */
-            else
-                ok &= !memcmp(a, b, sizeof *a);
-        }
-    bad += check("KITS (#216): DEEP TIGHT PERC appended (9..11), each lane one of the five kits' (DEEP's kick 2 st down)", ok);
-
-    ok = ENG_DRUM.npresets == 5u && str_eq(ENG_DRUM.presets[0].name, "DRUM KIT") && ENG_DRUM.presets[0].e[0] == DK_STD &&
-         str_eq(ENG_DRUM.presets[1].name, "DEEP KIT") && ENG_DRUM.presets[1].e[0] == DK_DEEP &&
-         str_eq(ENG_DRUM.presets[2].name, "TIGHT KIT") && ENG_DRUM.presets[2].e[0] == DK_TIGHT &&
-         str_eq(ENG_DRUM.presets[3].name, "PERC KIT") && ENG_DRUM.presets[3].e[0] == DK_PERC && str_eq(ENG_DRUM.presets[4].name, "DRUM-X") && ENG_DRUM.presets[4].e[0] == DK_DX && preset_cat(ENGI_DRUM, 4u) == CAT_DRUM;
-    for (k = 1; k < 4u; k++)
-        ok &= preset_cat(ENGI_DRUM, k) == CAT_DRUM;
-    bad += check("  DRUM's presets: DRUM KIT first as before, then DEEP KIT, TIGHT KIT, PERC KIT (category DRUM)", ok);
-
-    ui_power_on();
-    t = &trk[0];
-    host_preset(t, ENGI_DRUM, 3);
-    t->engine = t->eng_req;
-    ok = t->p[P_E0] == DK_PERC && str_eq(drum_lane_name(t, DV_TOM), "CONGA") && str_eq(drum_lane_name(t, DV_RIM), "CLAVE");
-    ok &= drum_gm(t->p, 45, &s) == DV_KTYPE(8u, DV_TOM);
-    t->p[P_E0] = DK_DEEP;
-    ok &= str_eq(drum_lane_name(t, DV_BELL), "CYM") && drum_gm(t->p, 36, &s) == DV_KTYPE(6u, DV_KICK);
-    t->p[P_E0] = DK_TIGHT;
-    ok &= str_eq(drum_lane_name(t, DV_BELL), "BELL");
-    for (k = DK_DEEP; k <= DK_PERC; k++) {              /* each plays its 8 lanes */
-        uint32_t i, live = 0;
-        t->p[P_E0] = (int16_t)k;
-        for (i = 0; i < 8u; i++)
-            trk_note_on(t, DRUM_LANE_NOTE[i], 110);
-        events_block(CTL);
-        mix_block(kbuf, CTL);
-        for (i = 0; i < DV_NLANE; i++)
-            live += drum_kit_of(t)[i].v.live;
-        ok &= live == 8u;
-        trk_all_off(t);
-    }
-    bad += check("  the lanes' names (DEEP: CYM; PERC: CONGA CLAVE), the GM notes on the kit's pieces, the 8 lanes play", ok);
-
-    t->p[P_E0] = DK_TIGHT;
-    song.playing = 0;
-    ok = project_save_as(2, "KITS") == 0;
-    t->p[P_E0] = DK_STD;
-    project_load(2);
-    ok &= t->p[P_E0] == DK_TIGHT;
-    old.max = DK_77;                                    /* (1.5.1's KIT: STD .. 77) */
-    for (k = DK_DEEP; k <= DK_PERC; k++)
-        ok &= param_fit(&old, (int32_t)k) == DK_77 && param_fit(d, (int32_t)k) == (int32_t)k;
-    bad += check("  a project keeps the kit; a 1.5.1-range KIT reads 9..11 as 77 (the README's downgrade note)", ok);
-    return bad;
-}
-
-/* -------------------------------------------------------------- LEDS --- */
-/* (#212) MENU > LEDS INV LO / INV HI: appended values (0..3 as before); INV's lit ones at the mid level (HI ~12.5 %, LO
- * ~8 %: the darker mid), the active ones dark as INV; saved as INV in the zoom field (older firmware: plain INV) with
- * the level in a spare settings byte; older settings read as before */
+/* DRUM kit test retired with the DRUM engine (E85). */
 static int leds_lit(const uint8_t *a, uint32_t id) { uint8_t q = led_pos[id]; return q != 0xFF && ((a[q >> 3] >> (q & 7u)) & 1u); }
 static int leds(void)
 {
@@ -424,7 +352,7 @@ static int select_play(void)
 
 int main(void)
 {
-    int bad = humanize() + kits() + leds() + select_play();
+    int bad = humanize() + leds() + select_play();
     printf("%s\n", bad ? "1.5.6 TEST FAILED" : "1.5.6 tests passed");
     return bad != 0;
 }

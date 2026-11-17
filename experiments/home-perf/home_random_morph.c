@@ -243,7 +243,7 @@ static uint32_t hp_rm_snapshot_count(uint32_t t,uint32_t slot)
 {
  return t<NTRK&&slot<HP_RM_SNAP_SLOTS?hp_rm_snap[t][slot].count:0u;
 }
-_Static_assert(P_COUNT<=512u && L2_FIRST+L2_N<=512u && DX_END<=512u && FP_SIZE<=512u && NENGINES<31u && NTRK<=4u,
+_Static_assert(P_COUNT<=512u && L2_FIRST+L2_N<=512u  && NENGINES<31u && NTRK<=4u,
                "Snapshot target packing must cover every parameter and engine");
 static uint32_t hp_rm_snapshot_any(uint32_t slot){uint32_t n=0;for(uint32_t t=0;t<NTRK;t++)n+=hp_rm_snapshot_count(t,slot)!=0u;return n;}
 static int hp_rm_snapshot_packable(hp_ref_t r)

@@ -753,9 +753,11 @@ stall:
 }
 
 /* SysEx assembly: only short commands matter here */
+#include "generation.h"
 static void sysex_byte(uint8_t b)
 {
-    static const uint8_t UBOOT_KEY[6] = {0xF0, 0x22, 0x24, 0x35, 0x7D, 0xF7};
+    static const uint8_t UBOOT_KEY[8] = {0xF0, CARAVEL_ED_ID0, CARAVEL_ED_ID1, CARAVEL_ED_ID2,
+                                       0x7D, CARAVEL_PROTOCOL, 2, 0xF7};
     if (b >= 0xF8u)
         return;                                        /* realtime may occur anywhere in SysEx */
     if ((b & 0x80u) && b != 0xF0u && b != 0xF7u) {
@@ -786,15 +788,21 @@ static void sysex_byte(uint8_t b)
     if (usb.sx_len < sizeof usb.sysex)
         usb.sysex[usb.sx_len++] = b;
     if (b == 0xF7) {
-        uint32_t i, ok = usb.sx_len == 6u;
-        for (i = 0; ok && i < 6u; i++)
+        uint32_t i, ok = usb.sx_len == sizeof UBOOT_KEY;
+        for (i = 0; ok && i < sizeof UBOOT_KEY; i++)
             ok = usb.sysex[i] == UBOOT_KEY[i];
         if (ok)
             usb.uboot_req = 1;
 #if FELUCCA_OTA
-        else if (usb.sx_len == 6u && usb.sysex[1] == 0x22 && usb.sysex[2] == 0x24 && usb.sysex[3] == 0x35 &&
-                 usb.sysex[4] == 0x7F)
+        else if (usb.sx_len == 8u && usb.sysex[1] == CARAVEL_ED_ID0 &&
+                 usb.sysex[2] == CARAVEL_ED_ID1 && usb.sysex[3] == CARAVEL_ED_ID2 &&
+                 usb.sysex[4] == 0x7F && usb.sysex[5] == CARAVEL_PROTOCOL && usb.sysex[6] == 2u)
             usb.ota_req = 1;
+        else if (usb.sx_len == 6u && usb.sysex[1] == 0x22 && usb.sysex[2] == 0x24 &&
+                 usb.sysex[3] == 0x35 && (usb.sysex[4] == 0x7Fu || usb.sysex[4] == 0x7Du)) {
+            /* Frozen Classic clients cannot enter either software update path.
+             * Physical recovery remains available on the unit. */
+        }
         else if (sx_collect && sx_pos) {
             sx_frame_len = sx_pos;
             RING_PUBLISH();

@@ -4,11 +4,10 @@
  * and voice code: the diatonic triads and sevenths of several scales and roots as music theory has them, the
  * fixed shapes, the voicings, at most 4 notes, the names, MONO plays the root, a key's or a MIDI note's release
  * ends exactly the notes it started (CHRD / VOIC changed while held too), shared notes, live recording writes the
- * chord into one step, the ARP gets the chord as held notes, QNT WHITE maps the key first, a kit (the DRUM engine,
- * SAMPLE PERC) ignores CHRD, MIDI OUT of the keys, and OFF plays exactly as before.
+ * chord into one step, the ARP gets the chord as held notes, QNT WHITE maps the key first, all six FORMAT 2 engines support CHRD, MIDI OUT of the keys, and OFF plays exactly as before.
  * Run by tests/run_tests.sh (needs build/gen from one firmware build). */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static int gate_note(const track_t *t, uint32_t note)
 {
@@ -295,26 +294,12 @@ static int midi_in(void)
 
 static int kits(void)
 {
-    int bad = 0;
-    track_t *d = &trk[3];
-    uint8_t out[CHORD_MAX];
-    reset();
-    song.sel = 3;                                                  /* the DRUM track */
-    d->p[P_CHRD] = CH_DIA7;
-    key_down(K_C4);
-    bad += check("DRUM: CHRD ignored (one hit per key)", chord_build(d, 36, out) == 1u && out[0] == 36 &&
-                 kb_chn[K_C4] == 1u && mo_w == 1u);
-    key_up(K_C4);
-    midi(0x93, 38, 100);
-    bad += check("  MIDI IN on the DRUM track: one hit, no chord kept", !mchord[0].id);
-    midi(0x83, 38, 0);
-    song.sel = 0;
-    trk[0].eng_req = trk[0].engine = ENGI_SAMPLE;                   /* SAMPLE: no set is a kit (PERC, retired, */
-    trk[0].p[P_CHRD] = CH_DIA3;                                     /* loads as DRUM; its SET 4 is a PIANO alias) */
-    trk[0].p[P_E0] = SMP_SET_PERC;
-    bad += check("SAMPLE SET 4 (once PERC): chords, no kit", !chord_kit(&trk[0]) && chord_build(&trk[0], 60, out) == 3u);
-    trk[0].p[P_E0] = 0;
-    bad += check("SAMPLE with a melodic set: chords", !chord_kit(&trk[0]) && chord_build(&trk[0], 60, out) == 3u);
+    int bad=0; uint8_t out[CHORD_MAX];
+    for(uint32_t e=0;e<6;e++) {
+        reset();set_engine_of(&trk[0],eng_unstore(e));
+        trk[0].p[P_CHRD]=CH_DIA3;trk[0].p[P_VOICE]=V_POLY;
+        bad+=check("all six FORMAT 2 engines support chords", !chord_kit(&trk[0]) && chord_build(&trk[0],60,out)==3u);
+    }
     return bad;
 }
 

@@ -5,7 +5,7 @@
  * A held sine with the delay on, the beat changing as an estimate does (+-0.3 % every 1/4 note): the largest sample step of the
  * output stays within a few times that of the same sound with a steady beat. Run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static int check_(const char *what, int ok)
 {

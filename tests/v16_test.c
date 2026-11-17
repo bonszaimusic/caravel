@@ -14,7 +14,7 @@
  *   resets     the transport stopped, another track
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 /* track 1 alone, `len` steps of 1/16, a note on every fourth step; the transport "playing" with the playhead at idx
  * (the sequencer itself is not run: only the UI's view of it), SEQ > STEP, the cursor on step `cur` */
@@ -114,19 +114,7 @@ static int leaves(void)
     at(t, 36);
     ok = ui.bank == 0u;
     bad += check("HOME: the bank stays", ok);
-    ui_power_on();
-    song.sel = 3;
-    t = &trk[3];
-    track_defaults_steps(t);
-    t->p[P_SLEN] = 40;
-    go_page(GR_ROLL);
-    ui.cursor = 0;
-    ui.bank = 0;
-    song.playing = 1;
-    ok = drum_track(t);
-    at(t, 36);
-    ok &= ui.bank == 0u;
-    bad += check("a DRUM track (its grid): the bank stays, the keys keep their steps", ok);
+    /* No DRUM grid exists in FORMAT 2; all four tracks use the roll. */
     return bad;
 }
 

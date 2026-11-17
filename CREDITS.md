@@ -4,8 +4,8 @@ Caravel is bonszaimusic's fork of Felucca 1.6.1, which is Leo Kuroshita's ([@kur
 [Hügelton Instruments](https://hugelton.com)); see [NOTICE](NOTICE). Caravel is not affiliated with Hügelton Instruments. It uses and
 thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICENSING.md](LICENSING.md) and [LICENSES/](LICENSES/)).
 
-- **bonszaimusic:** Caravel, the changes to Felucca 1.6.1 (renaming, the two-group menus, SEM, HADES,
-  DRONE, DRUM-X integration, LFO2, MORPH, voice reservations, clock fixes), as summarized in CHANGELOG.md and the Caravel baseline commit
+- **bonszaimusic:** Caravel 1.0 FORMAT 2, BUILD/PLAY, live-note CAPTURE, CHORD EXT source recognition and extension mapping, RETRIG integration, and the changes to Felucca 1.6.1 (renaming, the two-group menus, SEM, HADES,
+  DRONE, DRUM-X integration, LFO2, MORPH, voice reservations, clock fixes), as summarized in CHANGELOG.md and the Caravel baseline commit. The six-engine 1.0 profile retains ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE; historical components below keep their notices even when omitted from that build
 - **[Hügelton Instruments](https://hugelton.com)** (Leo Kuroshita, [@kurogedelic](https://github.com/kurogedelic)):
   Felucca itself; the PHASE engine's waveforms (a C port of the oscillator of
   [CrispyZebra](https://github.com/hugelton/CrispyZebra), GPL-3.0); the DRUM voices and kits; the Hügelton Sample

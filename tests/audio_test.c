@@ -42,7 +42,7 @@ static void fresh(void)
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
     voice_policy = voice_policy_active = 0;
-    memset(&chain, 0, sizeof chain);
+    memset(&project_launch,0,sizeof project_launch);
     host_tracks_init();
     for (p = 0; p < NPART; p++) host_preset(&trk[p], 0, 0);
     memset(&felucca_dbg, 0, sizeof felucca_dbg);
@@ -80,11 +80,11 @@ static void overload(void)
     check("a lead alone on each part stays protected", lead->gate && bass->gate && shed_count == 1u);
 
     fresh();
-    host_preset(&trk[0], ENGI_DRUM, 0);
+    host_preset(&trk[0],ENGI_ENSEMBLE,0);trk[0].p[P_VOICE]=V_POLY;
     trk_note_on(&trk[0], 36, 100); trk_note_on(&trk[0], 38, 100);
     lead = held(&trk[0], 36); extra = held(&trk[0], 38);
     shed_voice(); mix_block(out, CTL);
-    check("overload frees a held one-shot drum without waiting for its decay",
+    check("overload reclaims a held ENSEMBLE voice within one block",
           lead && extra && lead->active && !extra->active && voices_busy() == 1u);
 
     fresh();

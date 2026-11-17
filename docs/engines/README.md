@@ -13,5 +13,5 @@ from physical FM-1 acceptance.
 - [HADES](hades-engine.md): Hades-inspired bass engine, controls and limits.
 - [ENSEMBLE](ensemble-engine.md): strings, choir and dark texture with a built-in ensemble (Caravel 0.10.0).
 - [DRONE](../drone-engine.md) and its [cell modes](drone-cells.md): coupled generators, opt-in selective cells.
-- [DRUM-X](drum-x.md): synthesized drum kits with A/B patches and MORPH (adapted from JIANT).
-- [MORPH and PHASE feedback](morph-and-feedback.md) and [LOFI BYTE and FLOAT](lofi-byte-float.md) (adapted from JIANT).
+
+Historical components omitted from the 1.0 profile: [DRUM-X](drum-x.md), [PHASE feedback](morph-and-feedback.md) and [LOFI](lofi-byte-float.md). Their source and attribution remain documented; they are not current engine choices.

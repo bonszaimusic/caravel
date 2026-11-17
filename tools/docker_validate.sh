@@ -47,7 +47,7 @@ if [ "$cmd" = action ]; then
     steps='python3 tools/docker_validate/run_steps.py .github/workflows/action-banks-android.yml wasm'
     log="$out/action.log"
 else
-    rs="python3 tools/docker_validate/run_steps.py .github/workflows/validate-060.yml"
+    rs="python3 tools/docker_validate/run_steps.py .github/workflows/validate-format2.yml"
     shards=$(echo "$shard" | tr ',' ' ')
     [ "$shard" != all ] || shards="storage_usb synthesis_midi ui_storage effects cpu_dual engines_samples sanitizers web_target"
     steps="$rs prepare"

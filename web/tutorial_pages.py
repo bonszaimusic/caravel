@@ -480,8 +480,8 @@ def readme_text(data):
             "Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: "
             "[listen](https://bonszaimusic.github.io/caravel/sounds/).\n"
             + "\n".join(rows) +
-            "\n\n### Earlier tutorials\n\n[HOME, Pair Morph, macros, saving and STASIS (0.5.0 and 0.6.0)](home-and-stasis.md) · "
-            "[Random Morph and Morph Journey](random-morph-journey.md) · [Live Harmony and the HOME ACTION key map](harmony-live.md) · "
+            "\n\n### Earlier tutorials\n\n[Current performance and STASIS guide](home-and-stasis.md) · "
+            "[Random Morph and Morph Journey](random-morph-journey.md) · [HARMONY and CHORD EXT](harmony-live.md) · "
             "[0.5.0 PDF quickstart](Caravel-0.5.0-Quickstart.pdf) · [0.6.0 STASIS PDF guide](Caravel-0.6.0-STASIS-Guide.pdf)\n\n"
             "Back to the [README](../../README.md).\n")
 

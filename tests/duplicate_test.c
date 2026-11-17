@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* DUP x2 through real UI, motion, project and sequencer paths. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void dup_boot(uint32_t k, uint32_t len)
 {
@@ -177,11 +177,6 @@ int main(void)
     bad += check("DUP: layer OCT- restores all original steps and length", TSEL->p[P_SLEN] == 16 &&
         !memcmp(before, TSEL->step, sizeof before));
     btn_up(B_SEQ); frame(); usb.config = 0;
-    dup_boot(0, 16); chain.running = 1;
-    tools_key(TL_DUP);
-    bad += check("DUP: SONG retains existing STOP TO EDIT guard", msg_is("STOP TO EDIT") && TSEL->p[P_SLEN] == 16);
-    chain.running = 0;
-
     /* Playback: finish current short pass, then enter the doubled pass. */
     dup_boot(1, 16);
     TSEL->p[P_SDIV] = 2; TSEL->p[P_SSWING] = 37;
@@ -246,8 +241,8 @@ int main(void)
     TSEL->seq_idx = 15;
     TSEL->seq_pos = step_samples(TSEL, div_samples(TSEL->p[P_SDIV]), 15) - 32;
     project_pattern_tick(64);
-    bad += check("DUP: queued part uses old boundary and clears transition on all tracks", !chain.live_pending &&
-        chain.live_applied && TSEL->p[P_SLEN] == 16 && !seq_extend_end[0] && !seq_extend_end[1]);
+    bad += check("DUP: queued part uses old boundary and clears transition on all tracks", !LAUNCH_STATE.live_pending &&
+        LAUNCH_STATE.live_applied && TSEL->p[P_SLEN] == 16 && !seq_extend_end[0] && !seq_extend_end[1]);
     seq_stop();
     /* 1.6 overlap: clipped DOUBLE and HALF retain raw FX phase and conditions. */
     dup_boot(0, 40);

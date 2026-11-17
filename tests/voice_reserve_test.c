@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Exercise allocation through real note, ARP, drum, FX, UI and settings paths. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #include <assert.h>
 
 static uint32_t reserved_busy(uint32_t p)
@@ -80,7 +80,7 @@ static int reserve_drums_and_changes(void)
     int32_t out[CTL * 2u];
     for (uint32_t kit = 0; kit < 2u; kit++) {
         reserve_setup(VOICE_POLICY_FIXED | 0x3131u);
-        set_engine_of(&trk[3], ENGI_DRUM); apply_preset_to(&trk[3], kit ? 4u : 0u);
+        set_engine_of(&trk[3],kit?ENGI_PHYS:ENGI_ENSEMBLE);apply_preset_to(&trk[3],0);
         for (uint32_t p = 0; p < 3u; p++) trk_note_on(&trk[p], 48u + p, 100);
         voice_t protected[3][NVOICE];
         for (uint32_t p = 0; p < 3u; p++) memcpy(protected[p], trk[p].v, sizeof protected[p]);
@@ -95,7 +95,7 @@ static int reserve_drums_and_changes(void)
         }
         mix_block(out, CTL);
     }
-    bad += check("DRUM and DRUM-X respect caps and cannot revive a fading out-of-cap lane", ok);
+    bad += check("PHYS and ENSEMBLE respect caps and cannot revive a fading out-of-cap lane", ok);
     reserve_setup(0);
     for (uint32_t i = 0; i < NVOICE; i++) trk_note_on(&trk[0], 48u + i, 100);
     bad += check("AUTO retains the existing shared eight-voice allocation", reserved_busy(0) == 8u);
@@ -125,19 +125,19 @@ static int reserve_controls_and_settings(void)
     persist_t saved = {0};
     voice_policy |= VOICE_POLICY_FIXED;
     ui_prefs3 = 3u; ui_prefs2 = 0x80u;
-    assert(ml_learn(20, 0, DX_FIRST + DX_FB) == 1);
+    assert(ml_learn(20, 0, L2_FIRST + L2_RATE) == 1);
     settings_export(&saved);
     reserve_setup(0);
     ok = settings_import(&saved, sizeof saved) == 1 && voice_policy == (VOICE_POLICY_FIXED | 0x3131u) &&
-         ui_prefs3 == 3u && ui_prefs2 == 0x80u && ml_cc_of(0, DX_FIRST + DX_FB) == 21u;
+         ui_prefs3 == 3u && ui_prefs2 == 0x80u && ml_cc_of(0, L2_FIRST + L2_RATE) == 21u;
     persist_t again = saved; settings_export(&again);
     ok &= !memcmp(&again, &saved, sizeof saved);
-    bad += check("PER6 round trip keeps caps, CPU2, EXT START, LIVE LOAD and DRUM-X MIDI Learn", ok);
+    bad += check("PER8 round trip keeps caps, CPU2, EXT START, LIVE LOAD and LFO2 MIDI Learn", ok);
     saved.magic = 0x50455235u;
     saved.voice_allocation = 0xFFFFFFFFu;             /* not present in PER5 */
-    ok = settings_import(&saved, PERSIST_PREVOICE_SIZE) == 2 && voice_policy == 0u &&
-         ml_cc_of(0, DX_FIRST + DX_FB) == 21u && ui_prefs3 == 3u && ui_prefs2 == 0x80u;
-    bad += check("Custom18 PER5 migrates to AUTO without losing MIDI Learn or other preferences", ok);
+    ok = settings_import(&saved, PERSIST_PREVOICE_SIZE) == 0 && voice_policy == (VOICE_POLICY_FIXED | 0x3131u) &&
+         ml_cc_of(0, L2_FIRST + L2_RATE) == 21u && ui_prefs3 == 3u && ui_prefs2 == 0x80u;
+    bad += check("PER5 is refused without changing allocation, Learn or other preferences", ok);
     saved.magic = PERSIST_MAGIC; saved.voice_allocation = VOICE_POLICY_FIXED | 0x5555u;
     bad += check("invalid saved allocation falls back to AUTO", settings_import(&saved, sizeof saved) == 1 && !voice_policy);
     voice_policy = VOICE_POLICY_FIXED | 0x3131u;

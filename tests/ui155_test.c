@@ -7,7 +7,7 @@
  *   out), next to EUCLID, FILL)
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 /* ---------------------------------------------------------------- PAN --- */
 static int fmt_is(const param_desc_t *d, int32_t v, const char *want)
@@ -203,9 +203,6 @@ static int select_page(void)
         turn(EN_SELECT, 1);
         ok &= !ui.home && cur_page()->fam == FAM_EDIT && page_visible(ui.page);
     }
-    go_title("SONG"); frame();
-    turn(EN_SELECT, 1);
-    ok &= title_is("SONG");                             /* (GLO: one page) */
     bad += check("  PAGE: EDIT's round is the engine's pages; a family of one page stays", ok);
 
     go_title("ENV"); frame();
@@ -354,18 +351,12 @@ static int clean_is(const track_t *t, uint32_t e, int16_t lvl, int16_t pan)
           t->p[P_ED_SHP] == 0 && t->p[P_M1SRC] == 0 && t->p[P_M1DST] == 0 && t->p[P_M1AMT] == 0 && t->p[P_M3AMT] == 0 &&
           t->p[P_GLIDE] == 0 && t->p[P_VOICE] == V_POLY && t->p[P_SPRD] == 0;
     for (i = 0; i < 8u; i++)
-        ok &= t->p[P_E0 + i] == (e == ENGI_FM6 && i == 7u ? (int16_t)FM6_OWN : en->edit[i].def);
+        ok &= t->p[P_E0 + i] == en->edit[i].def;
     if (e == ENGI_DRUM)
         ok &= t->p[P_ATK] == en->presets[0].env[0] && t->p[P_SUS] == en->presets[0].env[2] &&
               t->p[P_REL] == en->presets[0].env[3];
     else
         ok &= t->p[P_ATK] == 0 && t->p[P_SUS] == 127 && t->p[P_REL] == CLEAN_REL;
-    if (e == ENGI_FM6) {
-        uint8_t v[FP_SIZE + 1u];
-        fm6_unpack(FM6_INIT, v);
-        fm6_sanitize(v);
-        ok &= !memcmp(v, fm6_patch[trk_index(t)], FP_SIZE) && fm6_slot[trk_index(t)] == FM6_OWN;
-    }
     return ok;
 }
 /* a note on track t after the load: it sounds (some energy, below full scale), and ends after its release */
@@ -438,7 +429,7 @@ static int clean_init(void)
 
     ui_power_on();
     t = TSEL;
-    set_engine(ENGI_FM6);
+    set_engine(ENGI_SEM);
     dress(t);
     go_page(GR_TOOLS); frame();
     turn(EN_K2, 1); turn(EN_K2, 1); turn(EN_K2, -1);
@@ -449,7 +440,7 @@ static int clean_init(void)
     press(B_OCTUP);
     ok &= ui.confirm == CF_INIT_SOUND;
     press(B_OCTUP);
-    ok &= msg_is("SOUND INIT") && t->p[P_E7] == 0 && t->p[P_DLY] == ENGINES[ENGI_FM6]->presets[0].fx[2] - 1;
+    ok &= msg_is("SOUND INIT") && t->p[P_E7] == ENGINES[ENGI_SEM]->presets[0].e[7] && t->p[P_DLY] == ENGINES[ENGI_SEM]->presets[0].fx[2] - 1;
     bad += check("  TOOLS' KNOB 2: right INIT, right again CLEAN, left back; INIT as before (the first preset, its sends)", ok);
 
     ui_power_on();

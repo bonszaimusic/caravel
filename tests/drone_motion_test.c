@@ -5,7 +5,7 @@
  * reload and user edits behave as before; the movement is audible (the same preset without it renders differently) and
  * bounded. Run by tests/run_tests.sh (needs build/gen from one firmware build). */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static int check_(const char *what, int ok)
 {

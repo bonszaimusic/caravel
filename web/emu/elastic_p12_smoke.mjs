@@ -17,7 +17,7 @@ if(ex.web_p12_pull_ms(100)!==45000 ||
    ex.web_p12_return_ms(94)!==90000 ||
    ex.web_p12_return_ms(100)!==300000)
    throw Error("PULL/RETURN durations are not the requested 45s/5m maps");
-ex._initialize();ex.web_nor_erase();ex.web_boot();
+ex._initialize();ex.web_nor_erase();ex.web_boot(); if (ex.web_test_build) ex.web_test_build();
 const render=(ms)=>{
  const n=Math.round(ms*44.1);let peak=0;
  for(let k=0;k<n;k+=128){

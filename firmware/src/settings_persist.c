@@ -35,9 +35,11 @@ typedef struct {
 #endif
     uint32_t voice_allocation;                       /* PER6: device-wide AUTO / FIXED track caps */
     uint32_t engine_favorites[ENGINE_FAV_N];          /* PER7: engines 14..21, outside Learn/preferences */
+    uint8_t learn_base[32];                         /* PER8: explicit legacy Learn entries */
 } persist_t;
-#define PERSIST_MAGIC 0x50455237u
-#define PERSIST_PREENGINE_SIZE (sizeof(persist_t) - ENGINE_FAV_N * sizeof(uint32_t))
+#define PERSIST_MAGIC 0x50455238u
+#define PERSIST_OLD7_SIZE (sizeof(persist_t)-32u)
+#define PERSIST_PREENGINE_SIZE (PERSIST_OLD7_SIZE - ENGINE_FAV_N * sizeof(uint32_t))
 #define PERSIST_PREVOICE_SIZE (PERSIST_PREENGINE_SIZE - sizeof(uint32_t))
 #if FELUCCA_DRUMX
 #define PERSIST_BASE_SIZE (PERSIST_PREVOICE_SIZE - ML_EXTRA_N * sizeof(uint32_t) - 16u * sizeof(uint16_t))
@@ -49,6 +51,16 @@ typedef struct {
 static int settings_import(persist_t *p, int n)
 {
     int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;
+    int old7 = n == (int)PERSIST_OLD7_SIZE && p->magic == 0x50455237u;
+    if (old7) {
+        memcpy(p->learn_base, p->favorites.factory[14], sizeof p->learn_base);
+        /* E73: clear favorites once, retain the device preferences in row 15. */
+        memset(p->favorites.factory,0,15u*32u);p->favorites.user=p->favorites.filter=0;
+        memset(p->engine_favorites,0,sizeof p->engine_favorites);
+        p->magic=PERSIST_MAGIC;current=1;
+    }
+    if (!current) return 0; /* no older settings migration in FORMAT 2 */
+    memcpy(ml_base,p->learn_base,sizeof ml_base);
     int old6 = n == (int)PERSIST_PREENGINE_SIZE && p->magic == 0x50455236u;
     int old3 = (n == (int)(PERSIST_BASE_SIZE - sizeof p->favorites) || n == (int)(sizeof *p - sizeof p->favorites)) && p->magic == 0x50455233u;
     int old2 = (n == (int)(PERSIST_BASE_SIZE - sizeof p->favorites - sizeof p->bold) || n == (int)(sizeof *p - sizeof p->favorites - sizeof p->bold)) && p->magic == 0x50455232u;
@@ -157,6 +169,7 @@ static void settings_export(persist_t *p)
     memcpy(p->learn_extra, ml_extra, sizeof ml_extra);
     memcpy(p->learn_virtual, ml_virtual, sizeof ml_virtual);
 #endif
+    memcpy(p->learn_base,ml_base,sizeof ml_base);
     p->magic = PERSIST_MAGIC;
     p->palette = palette_to_stored(settings.palette);
     p->lowcut = settings.lowcut;

@@ -4,7 +4,7 @@
  * through proj_import -> project_restore_runtime -> render. run_tests.sh runs it briefly under ASan / UBSan with a
  * fixed seed.   fuzz_proj [ITERATIONS [SEED]] */
 #define EDITOR_TEST_NO_MAIN 1
-#include "editor_test.c"                                /* hostsim, the stubs, RAM flash, reset() */
+#include "editor_harness.h"                                /* hostsim, the stubs, RAM flash, reset() */
 static uint32_t rs = 0x2545F491u;
 static uint32_t rnd(void) { rs ^= rs << 13; rs ^= rs >> 17; rs ^= rs << 5; return rs; }
 int main(int argc, char **argv)
@@ -34,7 +34,7 @@ int main(int argc, char **argv)
             uint32_t sum = proj_hash(st.raw, PROJ_STORE_SIZE - 4u);
             memcpy(st.raw + PROJ_STORE_SIZE - 4u, &sum, 4);
         }
-        n = rnd() % 8u == 0 ? rnd() % (PROJ_STORE_SIZE + 64u) : rnd() % 8u == 0 ? PROJ_STORE_V7 : PROJ_STORE_SIZE;
+        n = rnd() % 8u == 0 ? rnd() % (PROJ_STORE_SIZE + 64u) : rnd() % 8u == 0 ? 3840u : PROJ_STORE_SIZE;
         if (proj_import(&c, &st, (int)n)) {
             imported++;
             project_restore_runtime(&c);

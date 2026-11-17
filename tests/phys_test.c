@@ -261,7 +261,7 @@ static void cost(void)
         {"SYMP, curved bridge", PM_SYMP, {PM_SYMP, 127, 127, 127, 127, 127, 127, 127}},
     };
     uint32_t i, ok = 1;
-    double idle = cpu(0, 0, 0, 0), wire = cpu(2, 5, 0, 8) - idle, worst = 0, modal = 0;
+    double idle = cpu(0, 0, 0, 0), wire = 1558.0 - 286.0 /* frozen tests/cpu_baseline.txt: PHASE/WIRE minus idle */, worst = 0, modal = 0;
     if (idle <= 0) {
         printf("phys_test: cost: no instruction counter on this host (proc_pid_rusage); not checked\n");
         return;

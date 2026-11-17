@@ -8,10 +8,7 @@ This document describes what the engine offers and how to use it.
 
 ## Selecting SEM
 
-Select **SEM** in PRESETS or with EDIT held and KNOB 1. Engine ID 14 identifies
-SEM; SLICE retains ID 13 even in builds without SLICE. Optional legacy DIGITAL
-builds have more engines than the keyboard shortcuts: use EDIT KNOB 1 or PRESETS
-for an engine without a direct shortcut.
+In BUILD, hold EDIT to choose **SEM** and a preset. In PLAY, tap EDIT for SOUND and browse its EDIT groups. See the [1.0 tutorial](../tutorials/engine-sem.md). Internal engine numbers are not the stored FORMAT 2 engine index.
 
 ## Sound and controls
 

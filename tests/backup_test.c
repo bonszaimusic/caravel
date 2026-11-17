@@ -220,7 +220,7 @@ int main(void)
                      voice_policy == 0u);
     }
     before = erases;
-    ps.lowcut = 3;
+    ps.lowcut = 4;
     bad += check("settings with an unknown SPEAKER value are refused, nothing written",
                  put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 2u && erases == before && settings.lowcut == 2u);
     ps.lowcut = 0;

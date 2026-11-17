@@ -214,6 +214,12 @@ def checked_output(out):
     return out
 
 
+def breaking_release(version):
+    """1.0.0 and later open no data of an older release (FORMAT 2): the installer asks for a backup, a warning and a typed confirmation."""
+    m = re.match(r"(\d+)", version)
+    return bool(m and int(m.group(1)) >= 1)
+
+
 def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, check_only=False):
     expected_product = release.identity(version)
     pkg, out = Path(pkg), Path(out)
@@ -242,11 +248,12 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
     source_url = "../../firmware/" + source if not preview else "https://github.com/bonszaimusic/caravel"
     text = (HERE / "index_pkg.html").read_text(encoding="utf-8")
     lib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8"))
-                    for n in ("fm1pkg.js", "fm1ota.js", "fm1backup.js"))
+                    for n in ("generation.js", "fm1pkg.js", "fm1ota.js", "fm1backup.js"))
     # Bind the exact site-packaged binary to its verified/preview HTML before any Web MIDI access.
     meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
                        "sha256": hashlib.sha256(raw).hexdigest(), "size": len(raw),
-                       "source": source_url, "release_verified": not preview})
+                       "source": source_url, "release_verified": not preview,
+                       "breaking": breaking_release(version)})
     for mark in ("/*LIB*/", "/*META*/"):
         release.require(text.count(mark) == 1, "installer metadata/library marker count changed")
     text = source_href(text.replace("/*LIB*/", lib).replace("/*META*/", meta), source_url)
@@ -278,7 +285,7 @@ def main(pkg, version, out, *, release_dir=None, emulator=None, preview=False, c
               '<a href="../NOTICE">NOTICE</a> · <a href="../CREDITS.md">CREDITS</a></p>\n', encoding="utf-8")
         (ed / "index.html").write_text(
             site_chrome((HERE / "editor.html").read_text(encoding="utf-8"), version, emulator, label), encoding="utf-8")
-        for filename in ("fukiai.ttf", "FUKIAI-LICENSE.txt", "fm1backup.js"):
+        for filename in ("fukiai.ttf", "FUKIAI-LICENSE.txt", "generation.js", "fm1backup.js"):
             shutil.copyfile(HERE / filename, ed / filename)
         if emulator:
             dest = stage / "emulator"

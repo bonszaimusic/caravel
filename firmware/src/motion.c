@@ -98,7 +98,10 @@ static __attribute__((noinline)) uint32_t motion_fx_compact_off(motion_store_t *
     motion_unguard(f);
     return removed;
 }
-static int motion_param(uint32_t id)
+/* the ids a motion store may HOLD (motion_valid, below): every sound parameter, the CHORD settings (core.h CHORDSET_ID) among
+ * them. A store written when ids 76, 77, 79 were still operator 4's inert ATK DEC REL may carry a record on them; it must still
+ * load (motion_valid is tolerant), and project.c drops it (motion_drop_chordset) */
+static int motion_param_stored(uint32_t id)
 {
     /* Sound only: transport, routing, voice allocation and discrete engine
      * changes never become automation. FX sends and continuous mix are safe. */
@@ -110,6 +113,28 @@ static int motion_param(uint32_t id)
                                         * levels, SPREAD (#148: continuous, as PAN), 1.5's INSERT (TYPE too: a lock
                                         * switches it for a step, fx.c track_insert fades over), the track's FILTER (0.3.0: a sweep, glided in fx.c track_filter), E0..E7) */
 }
+/* what a motion record may be recorded on, edited or locked: the stored ids without the CHORD settings (SOURCE EXT OCT are
+ * the track's setting, not a sound: no step automates them; HOME's snapshots, morph and macros ask here too) */
+static int motion_param(uint32_t id)
+{
+    return motion_param_stored(id) && !CHORDSET_ID(id);
+}
+/* an older store's records on the CHORD settings' ids (they were an inert DIGITAL operator envelope) are dropped: the
+ * kept records keep their order. */
+static __attribute__((noinline)) void motion_drop_chordset(motion_store_t *m)
+{
+    uint32_t i, n = 0, c = m->count < MOTION_MAX ? m->count : MOTION_MAX;
+    for (i = 0; i < c; i++) {
+        const motion_event_t *e = &m->event[i];
+        if (CHORDSET_ID(MOTION_ID(e)))                  /* (an FX record's id is MOTION_FX_FIRST on) */
+            continue;
+        m->event[n++] = *e;
+    }
+    if (n < c) {
+        memset(m->event + n, 0, (c - n) * sizeof m->event[0]);
+        m->count = (uint8_t)n;
+    }
+}
 static int motion_valid(const motion_store_t *m)
 {
     uint32_t i, j;
@@ -119,7 +144,7 @@ static int motion_valid(const motion_store_t *m)
         if (MOTION_IS_FX(e)) {
             if (MOTION_ID(e) - MOTION_FX_FIRST >= PF_NFX || m->rsv[1] != 0xF1u ||
                 !(m->rsv[0] & (1u << (e->place >> 6)))) return 0;
-        } else if (!motion_param(MOTION_ID(e)) || e->value < -64 || e->value > 127) return 0;
+        } else if (!motion_param_stored(MOTION_ID(e)) || e->value < -64 || e->value > 127) return 0;
         for (j = 0; j < i; j++)
             if (MOTION_IS_FX(e) && MOTION_IS_FX(&m->event[j]) && m->event[j].place == e->place &&
                 (uint8_t)m->event[j].value > (uint8_t)e->value) return 0;
@@ -495,7 +520,7 @@ static int motion_move(track_t *t, uint32_t i, uint32_t step, uint32_t id, int16
 /* Engine-specific ids: EDIT E1..E8, MORPH/PHASE feedback, DIGITAL operators, DRUM lane levels. */
 static int motion_engine_id(uint32_t id)
 {
-    return id < P_COUNT && (id == P_MORPH || id == P_PD_FB || (id >= P_E0 && id <= P_E7) || (id >= P_FM1_ATK && id <= P_FM4_LEVEL) || (id >= P_LN0 && id <= P_LN7));
+    return id < P_COUNT && (id == P_MORPH || id == P_PD_FB || (id >= P_E0 && id <= P_E7) || (id >= P_FM1_ATK && id <= P_FM4_LEVEL && !CHORDSET_ID(id)) || (id >= P_LN0 && id <= P_LN7));   /* (not the CHORD settings: engine-independent) */
 }
 /* a sound load put engine `to` where `from` was: when they differ, track t's records on the engine's own ids go (their
  * meaning changed); the ones on the common parameters (LEVEL, ENV, LFO, FILTER ENV, the sends, GLIDE, PAN, DETUNE)

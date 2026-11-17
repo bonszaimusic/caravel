@@ -108,6 +108,7 @@ static void midi_release(uint32_t ch, uint32_t note)
             midi_ch[ch].targets &= (uint8_t)~(1u << (id - 1u));
     }
     if (id) {
+        cap_put(id-1u,note,0);            /* raw release, before mapped pitches; also repeated notes/CC cleanup */
         mchord_t *m = mchord_of(ch, note, id);
         uint8_t nn[CHORD_MAX];
         uint32_t n = 1, i;
@@ -135,8 +136,9 @@ static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
     uint32_t src = note;                           /* the MIDI key: release identity, never the snapped note */
     if (harmony_on && harmony_follow[trk_index(t)] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
         note = harmony_snap(t, note);              /* live MIDI notes follow HARMONY */
-    uint32_t n = chord_build(t, note, nn), i, f = 0, eat;
-    uint8_t mapped = (uint8_t)(n > 1u || nn[0] != src);
+    ext_cfg_t ec = ext_cfg(t);                     /* SOURCE / EXT / OCT once: the build and 'mapped' agree */
+    uint32_t n = chord_build_c(t, &ec, note, nn), i, f = 0, eat;
+    uint8_t mapped = (uint8_t)(n > 1u || (n && nn[0] != src) || ext_is_on(t, &ec));   /* (CHORD EXT: always: with no note (WAIT, empty) the release must not fall back to the raw key and cut a same-pitch voice another source holds) */
     if (mapped)
         for (f = 0; f < MCHORD_N && mchord[f].id; f++)
             ;
@@ -175,11 +177,13 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
             midi_hint = (uint8_t)(trk_index(t) + 1u);
         midi_seen |= (uint8_t)(1u << trk_index(t));   /* (1.5.5: only noted; the UI does the rest) */
         c->targets |= (uint8_t)(1u << trk_index(t));
+        cap_put(trk_index(t),note,vel); /* raw MIDI key, before HARMONY/CHRD */
         midi_play(t, ch, note, vel);
         midi_note_set(ch, note, trk_index(t) + 1u);
         midi_owners[trk_index(t)]++;
         c->owned[trk_index(t)]++;
     } else if (id) {
+        cap_put(id-1u,note,0);            /* physical note-off, even while the pedal sustains */
         if (c->pedal && !drum_track(&trk[id - 1u]))
             midi_note_set(ch, note, midi_note_get(ch, note) | MIDI_PEDAL_NOTE);
         else
@@ -334,15 +338,6 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
                 hp_midi_touch(HP_LFO2, k, id);
 #endif
                 lfo2_set(k, id, d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
-            } else if (dx_target(id)) {
-                uint32_t k = (e >> 7) & 3u;
-                if (dx_track(&trk[k])) {
-                    const param_desc_t *d = dx_desc(id);
-#if FELUCCA_HOME_PERF
-                    hp_midi_touch(HP_DX, k, id);
-#endif
-                    dx_set(k, id, d->min + ((int32_t)value * (d->max - d->min) + 63) / 127);
-                }
             } else if (id < P_COUNT) midi_cc_set(&trk[(e >> 7) & 3u], id, value);
             hit = 1;
         }

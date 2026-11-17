@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Live project-pattern launcher: real UI, sequencer and project paths. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void pattern(uint32_t note, uint32_t len)
 {
@@ -48,35 +48,33 @@ int main(void)
     seq_tick(&trk[0], 64);
     song.rec = 1;
     boundary(128, 64);
-    bad += check("live: wait until end of track 1", chain.live_pending == 1 && trk[0].p[P_SLEN] == 16);
+    bad += check("live: wait until end of track 1", LAUNCH_STATE.live_pending == 1 && trk[0].p[P_SLEN] == 16);
     boundary(64, 64);
-    bad += check("live: launch all tracks and automation at exact boundary", song.playing && !chain.live_pending && chain.live_applied &&
+    bad += check("live: launch all tracks and automation at exact boundary", song.playing && !LAUNCH_STATE.live_pending && LAUNCH_STATE.live_applied &&
         !song.rec && !trk[0].seq_n && trk[0].p[P_SLEN] == 8 && trk[3].step[0].note[0] == 63 && memcmp(&motion, &target, sizeof motion) == 0);
     for (uint32_t k = 0; k < NTRK; k++) seq_tick(&trk[k], 64);
-    chain.live_applied = 0;
+    LAUNCH_STATE.live_applied = 0;
     bad += check("live: first step applies automation, retains sound/tempo", trk[0].seq_idx == 0 && trk[0].seq_pos == 0 &&
         trk[0].p[P_PAN] == 20 && trk[0].eng_req == engine && trk[0].p[P_LEVEL] == level && song.g[G_BPM] == bpm);
     motion_step(&trk[0], 1, &motion, 1);
     bad += check("live: imported parameter lock executes", trk[0].p[P_PAN] == 50);
-    bad += check("live: queue B, last valid request A replaces it", project_pattern_queue(1) == 0 && project_pattern_queue(0) == 0 && chain.live_pending == 1);
-    bad += check("live: invalid request retains earlier valid queue", project_pattern_queue(3) == 1 && chain.live_pending == 1);
+    bad += check("live: queue B, last valid request A replaces it", project_pattern_queue(1) == 0 && project_pattern_queue(0) == 0 && LAUNCH_STATE.live_pending == 1);
+    bad += check("live: invalid request retains earlier valid queue", project_pattern_queue(3) == 1 && LAUNCH_STATE.live_pending == 1);
     project_pattern_queue(1);
     boundary(32, 64);
     for (uint32_t k = 0; k < NTRK; k++) seq_tick(&trk[k], 64);
-    chain.live_applied = 0;
+    LAUNCH_STATE.live_applied = 0;
     bad += check("live: overshoot retained for every track", trk[0].p[P_SLEN] == 12 && trk[0].seq_pos == 32 && trk[3].seq_pos == 32);
     project_pattern_queue(0);
     seq_stop();
-    bad += check("live: stop cancels queued launch and notes", !chain.live_pending && !song.playing && !trk[0].seq_n);
+    bad += check("live: stop cancels queued launch and notes", !LAUNCH_STATE.live_pending && !song.playing && !trk[0].seq_n);
     seq_start();
     project_pattern_queue(0);
     trk[0].eng_req = (engine + 1u) % NENGINES;
     boundary(64, 64);
-    bad += check("live: engine change after queue safely refuses", !chain.live_pending && chain.live_notice == 5 && trk[0].p[P_SLEN] == 12);
+    bad += check("live: engine change after queue safely refuses", !LAUNCH_STATE.live_pending && LAUNCH_STATE.live_notice == 5 && trk[0].p[P_SLEN] == 12);
     trk[0].eng_req = engine;
-    chain.running = 1;
-    bad += check("live: SONG cannot share live staging buffer", project_pattern_queue(0) == 2);
-    chain.running = 0;
+
     seq_stop();
     project_load(0);
     bad += check("live: stopped project LOAD retains legacy behaviour", !song.playing && trk[0].p[P_SLEN] == 8);
@@ -85,7 +83,7 @@ int main(void)
     song.g[G_SLOT] = 2;
     ui.act = 3; /* Knob 3 LOAD */
     act_do();
-    bad += check("live: PROJECT LOAD UI queues while playing", song.playing && chain.live_pending == 2);
+    bad += check("live: PROJECT LOAD UI queues while playing", song.playing && LAUNCH_STATE.live_pending == 2);
     seq_stop();
     trk[0].step[0].note[0] = 66;
     bad += check("live: launched pattern stays editable and saveable", project_save(2) == 0);
@@ -103,15 +101,15 @@ int main(void)
     fm1_ms = 2; um_byte(0xFA); events_block(CTL);
     bad += check("live: TRS Start begins playback", song.playing && trk[0].seq_idx == 0);
     bad += check("live: queue from running TRS clock", project_pattern_queue(1) == 0);
-    for (uint32_t pulse = 0; pulse < 60u && chain.live_pending; pulse++) {
+    for (uint32_t pulse = 0; pulse < 60u && LAUNCH_STATE.live_pending; pulse++) {
         fm1_ms = 2u + pulse * 125u / 6u;
         um_byte(0xF8); events_block(CTL);
     }
     bad += check("live: UART clock launches B through event block without reset", song.playing &&
-        !chain.live_pending && trk[0].p[P_SLEN] == 12 && trk[0].step[0].note[0] == 70 &&
+        !LAUNCH_STATE.live_pending && trk[0].p[P_SLEN] == 12 && trk[0].step[0].note[0] == 70 &&
         midi_clock.pos > 0 && midi_clock.rendered > 0 && midi_clock.have_pulse);
     project_pattern_queue(0);
     um_byte(0xFC); events_block(CTL);
-    bad += check("live: TRS Stop cancels queued pattern", !song.playing && !chain.live_pending);
+    bad += check("live: TRS Stop cancels queued pattern", !song.playing && !LAUNCH_STATE.live_pending);
     return bad ? 1 : 0;
 }

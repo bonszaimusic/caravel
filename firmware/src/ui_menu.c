@@ -145,15 +145,44 @@ static int32_t menu_scroll_max(void)
     return h > MENU_DOC_H ? h - MENU_DOC_H : 0;
 }
 
-static void menu_dots(void);
+/* BUILD's menu (the cog tapped twice from GLO) is in the BUILD layers' manner: the band with the chip, the hazard strip, no panel (the rows on
+ * the background, the tabs' cushions a step above it) */
+#if CARAVEL_UX_LAYERS
+static int mn_flat(void) { return uxl_menu_style(); }
+#else
+static int mn_flat(void) { return 0; }
+#endif
+static uint16_t mn_surf(void) { return mn_flat() ? T_BG : T_SURF; }
+static void menu_dots(uint16_t under);
 /* the menu's header (0..24): its icon and title, the REC mark, the way back (the tabs: HOME CLOSE before the dots) */
 static void menu_head(void)
 {
+#if CARAVEL_UX_LAYERS
+    if (mn_flat()) {
+        uint16_t band = ux_mix(T_SURF, T_ACCENT, 20);
+        int32_t cw, x;
+        const char *w = ui.menu >= 2 && !song.rec ? "BACK" : 0;     /* (HOME alone: the title and the tabs' dots leave no room for its word) */
+        cv_begin(240, H_HEAD, band);
+        cv_bg = band;
+        cw = uxl_chip(band);
+        cv_text(cw + 8, 4, &AF_M, ui.menu == 3 ? "INFO" : ui.menu == 2 ? "ABOUT" : "SYSTEM", T_TEXT);
+        if (ui.menu >= 2) {
+            x = 232 - kh_w(KC_OCTDN, w);
+            cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_OCTDN, w, 1, band);
+        } else {
+            x = 234 - kh_w(KC_HOME, w);                       /* (no dots here: the tab bar below says where you are) */
+            cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_HOME, w, 1, band);
+        }
+        draw_rec_mark(x - 20, band);
+        cv_blit(0, Y_HEAD);
+        return;
+    }
+#endif
     cv_begin(240, H_HEAD, T_BG);
     GFX_HOOK_ALIGN(0, HEAD_MY + AF_M_CAP_Y, 0, HEAD_MY + AF_M_CAP_Y + AF_M_CAP_H, AL_V, "header icon on its title's line");
     cv_icon_mid(8, H_HEAD / 2, 16, ui.menu >= 2 ? ICON_X_INFO : ICON_X_COG, T_THEME, T_BG);   /* (as draw_head's) */
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-    cv_text(30, HEAD_MY, &AF_M, ui.menu == 3 ? "INFO" : ui.menu == 2 ? "ABOUT / CREDITS" : "MENU", T_TEXT);
+    cv_text(30, HEAD_MY, &AF_M, ui.menu == 3 ? "INFO" : ui.menu == 2 ? "ABOUT / CREDITS" : UXL_ON ? "SYSTEM" : "MENU", T_TEXT);
     if (ui.menu >= 2) {                               /* the way back at the right, the REC mark before it (then */
         const char *w = song.rec ? 0 : "BACK";        /* the keycap goes without its word: no room for both) */
         int32_t x = 232 - kh_w(KC_OCTDN, w);
@@ -165,7 +194,7 @@ static void menu_head(void)
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_HOME, "CLOSE", 1, T_BG);
         draw_rec_mark(x - 20, T_BG);
-        menu_dots();
+        menu_dots(T_BG);
     }
     cv_blit(0, Y_HEAD);
 }
@@ -260,7 +289,7 @@ static void menu_tabs(void)                            /* (in screen rows: cv_oy
         cv_rule(4, MP_Y - 3, 232, 1);
     for (k = 0; k < MTAB_COUNT; k++) {
         int on = k == (uint32_t)((mt.pos + MT_ONE / 2) / MT_ONE);   /* (half way, the shown look moves over) */
-        uint16_t bg = on ? T_ACCENT : T_SURF;
+        uint16_t bg = on ? T_ACCENT : mn_flat() ? T_RAISE : T_SURF;
         cv_rrect(x[k], MT_Y, w[k], MT_H, -8, bg, T_BG);
         GFX_HOOK_ALIGN(x[k], MT_Y, x[k] + MT_IW, MT_Y + MT_H, AL_HV, "menu tab icon centred in its cushion");
         cv_icon_in(x[k], MT_Y, MT_IW, MT_H, 16, MTAB_ICON[k], on ? T_INK : T_MID, bg);
@@ -272,12 +301,12 @@ static void menu_tabs(void)                            /* (in screen rows: cv_oy
     }
 }
 /* the header's tab dots at the right, the shown tab's a THEME pill */
-static void menu_dots(void)
+static void menu_dots(uint16_t under)
 {
     uint32_t k, t = menu_tab();
     int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8);
     for (k = 0; k < MTAB_COUNT; k++) {
-        cv_rrect(x, H_HEAD / 2 - 2, k == t ? 12 : 4, 4, -2, k == t ? T_THEME : T_DIM, T_BG);
+        cv_rrect(x, H_HEAD / 2 - 2, k == t ? 12 : 4, 4, -2, k == t ? T_THEME : T_DIM, under);
         x += (k == t ? 12 : 4) + 4;
     }
 }
@@ -286,7 +315,7 @@ static void menu_dots(void)
 static void menu_switch(int32_t xr, int32_t y, int32_t h, int on, int sel)
 {
     int32_t x = xr - 26, ty = y + HALF_UP(h - 14);
-    uint16_t under = sel ? T_THEME : T_SURF;
+    uint16_t under = sel ? T_THEME : mn_surf();
     uint16_t track = sel ? (on ? T_INK : ux_mix(T_THEME, T_INK, 35)) : on ? T_THEME : T_DIM;
     uint16_t knob = sel ? (on ? T_THEME : T_INK) : on ? T_INK : T_TEXT;
     cv_rrect(x, ty, 26, 14, -7, track, under);
@@ -297,13 +326,13 @@ static void menu_row(uint32_t k, uint32_t row)
 {
     int32_t y = mr_y(k), h = mr_h(), vy = y + CAP_IN(M, h);   /* the label and its value: M (a list's rows) */
     int sel = row == ui.menu_sel;
-    uint16_t bg = sel ? T_THEME : T_SURF, fg = sel ? T_INK : T_TEXT, val = sel ? T_INK : T_THEME;
+    uint16_t bg = sel ? T_THEME : mn_surf(), fg = sel ? T_INK : T_TEXT, val = sel ? T_INK : T_THEME;
     const char *v;
     if (!sel && MI_TCH(row) && song.g[G_ROUTE] != ROUTE_TRACK)
         val = T_MID;                                   /* (1.5.5: T1..T4 CHANNEL, unused but with MIDI IN TRACK) */
     v = menu_valued(row) ? menu_vname(row, menu_get(row)) : "";
     if (sel)
-        cv_rrect(MR_X, y, MR_W, h, 6, T_THEME, T_SURF);
+        cv_rrect(MR_X, y, MR_W, h, 6, T_THEME, mn_surf());
     else if (k && row - 1u != ui.menu_sel)             /* a rule from the row above (none beside the selected one) */
         cv_rect(MR_X + 6, y - 1, MR_W - 12, 1, ux.style ? T_RULE : T_LINE);
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row name centred up/down");
@@ -380,20 +409,20 @@ static void info_rows(void)                            /* (in screen rows: cv_oy
     uint32_t k;
     char cpu[8];
     fmt_int(cpu, info.cpu);
-    if (!ux.style)                                     /* FLAT: the rows' panel */
+    if (!ux.style && !mn_flat())                       /* FLAT: the rows' panel */
         cv_rrect(4, INFO_Y, 232, (int32_t)INFO_N * (h + 2) - 2 + 2 * MP_PAD, 8, T_SURF, T_BG);
     for (k = 0; k < INFO_N; k++) {
         int32_t y = INFO_Y + MP_PAD + (int32_t)k * (h + 2), vy = y + CAP_IN(M, h);
         if (k)
             cv_rect(MR_X + 6, y - 1, MR_W - 12, 1, ux.style ? T_RULE : T_LINE);
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "info row name centred up/down");
-        cv_text_on(MR_LX, vy, &AF_M, LBL[k], T_TEXT, T_SURF);
+        cv_text_on(MR_LX, vy, &AF_M, LBL[k], T_TEXT, mn_surf());
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "info row value centred up/down");
         if (k == 2u) {                                 /* CPU: the value and its unit, as HOLD's */
             GFX_HOOK_ALIGN(0, 0, 0, vy + AF_M.asc, AL_B, "info row unit on its value's baseline");
-            cv_text_r(cv_text_r(MR_VR, vy + AF_M.asc - AF_S.asc, &AF_S, "%", T_MID, T_SURF) - 3, vy, &AF_M, cpu, T_THEME, T_SURF);
+            cv_text_r(cv_text_r(MR_VR, vy + AF_M.asc - AF_S.asc, &AF_S, "%", T_MID, mn_surf()) - 3, vy, &AF_M, cpu, T_THEME, mn_surf());
         } else {
-            cv_text_r(MR_VR, vy, &AF_M, k ? USB_N[info_usb()] : FELUCCA_VERSION, T_THEME, T_SURF);
+            cv_text_r(MR_VR, vy, &AF_M, k ? USB_N[info_usb()] : FELUCCA_VERSION, T_THEME, mn_surf());
         }
     }
 }
@@ -437,6 +466,8 @@ static void draw_menu(void)
             cv_begin(240, MP_Y - H_HEAD, T_BG);
             cv_oy = -H_HEAD;
             menu_tabs();
+            if (mn_flat())
+                uxl_hazard_rows();
             cv_oy = 0;
             cv_blit(0, H_HEAD);
         }
@@ -449,8 +480,11 @@ static void draw_menu(void)
             uint32_t top_y = pass ? 132u : (uint32_t)H_HEAD;
             cv_begin(240, pass ? 240u - 132u : 132u - H_HEAD, T_BG);
             cv_oy = -(int32_t)top_y;
-            if (!pass)
+            if (!pass) {
                 info_rows();
+                if (mn_flat())
+                    uxl_hazard_rows();
+            }
             cv_oy = 0;
             cv_blit(0, top_y);
         }
@@ -468,6 +502,8 @@ static void draw_menu(void)
             cv_scroll = 0;
             cv_rrect(235, 2, 3, MENU_DOC_H - 4, 1, T_LINE, T_BG);           /* the scroll bar */
             cv_rrect(235, 2 + (max ? scroll * (MENU_DOC_H - 4 - thumb) / max : 0), 3, thumb, 1, T_MID, T_LINE);
+            if (mn_flat() && !pass)
+                uxl_hazard_rows();
             cv_oy = 0;
             cv_blit(0, H_HEAD + pass * 124u);
         }
@@ -483,9 +519,12 @@ static void draw_menu(void)
         int32_t top_y = pass ? (int32_t)split : H_HEAD;
         cv_begin(240, pass ? 240u - split : split - H_HEAD, T_BG);
         cv_oy = -top_y;                               /* drawn in screen rows */
-        if (!pass)
+        if (!pass) {
             menu_tabs();
-        if (!ux.style)                                /* FLAT: the rows' panel */
+            if (mn_flat())
+                uxl_hazard_rows();
+        }
+        if (!ux.style && !mn_flat())                  /* FLAT: the rows' panel */
             cv_rrect(4, MP_Y, 232, mr_y(n) - mr_gap() + MP_PAD - MP_Y, 8, T_SURF, T_BG);
         for (k = 0; k < n; k++)
             if (mr_y(k) + mr_h() > top_y && mr_y(k) - 1 < top_y + (int32_t)cv_h)

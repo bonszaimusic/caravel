@@ -56,17 +56,18 @@ static void fm1_fault(const fm1_crash_t *c)
 static void felucca_init(void)
 {
     uint32_t i;
-    chain_defaults(&chain_config);
+    ((void)0);
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
     undo_depth++;                             /* (no undo copy of the power-on loads) */
-    fm6_init();                               /* every track's FM6 patch: the init voice */
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         track_defaults(t);
         fx_fresh++;                           /* (FX HOLD keeps nothing here: the power-on sound has its sends) */
         set_engine_of(t, TRK_DEF[i][0]);
         apply_preset_to(t, TRK_DEF[i][1]);    /* with its sends */
+        if (t->p[P_DLY] < 76)                 /* E76: the power-on sounds send 60 % to the delay (it was inaudible at 35 %) */
+            t->p[P_DLY] = 76;
         fx_fresh--;
         t->engine = t->eng_req;
         eng_mem_claim(t);                     /* (zeros already: no note can come before) */
@@ -171,6 +172,9 @@ static void fm1_main(void)
     hp_init();
 #endif
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
+#if CARAVEL_UX_LAYERS
+    uxl_boot();                               /* PLAY at power-on (ui_uxl.c) */
+#endif
     for (ms = 0; ms < ((ui_prefs & PREF_ANIM_OFF) ? 400u : SPL_ANIM_MS); ms += 10u) {   /* the splash, with its ship sailing (MENU > ANIM
                                                                                           * OFF: the plain 400 ms); the pot followed (MIDI IN plays under it) */
         if (!(ui_prefs & PREF_ANIM_OFF) && ms % 50u == 0u)
@@ -212,7 +216,7 @@ static void fm1_main(void)
              * go cancels it */
             static uint32_t t0;
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
-            if ((fm1_in.buttons & both) != both) {
+            if ((fm1_in.buttons & both) != both || UXL_PLAY) {   /* (PLAY: no update countdown while playing) */
                 if (ui.uboot) {
                     ui.uboot = 0;
                     ui.force = 1;                       /* what the countdown covered */
@@ -249,7 +253,7 @@ static void fm1_main(void)
             ui.force = 1;
         }
 #endif
-        if (usb.uboot_req) {                            /* SysEx F0 22 24 35 7D F7 from the host */
+        if (usb.uboot_req) {                            /* generation-2 explicit software recovery request */
             fm1_audio_stop();
             scr_wake_now();
             lcd_fill(0, 0, 240, 240, T_BG);

@@ -732,11 +732,17 @@ async function editorFm4() {
   const fm6Of = async () => E.parse[C.FM6_GET](await rq(E.req.fm6Get(0, 0))).packed;
   /* the DIGITAL values of preset k on top of the track's: what the device converts */
   const digital = (k, base) => E.FM4.presetValues(base.map((v, i) => (i < info.pe0 && ![0, 39, 40].includes(i) && !(i >= 17 && i <= 32) &&
-    !(i >= 45 && i <= 48) && i !== 81 && i !== 82 ? pdesc[i].def : v)), k, info.pe0);
+    !(i >= 45 && i <= 48) && i !== 81 && i !== 82 && ![76, 77, 79].includes(i) ? pdesc[i].def : v)), k, info.pe0);
+  /* CHORD SOURCE / EXT / OCT (ids 76 77 79, once operator 4's ATK DEC REL): the track's own, they survive a DIGITAL load */
+  ok(keys[76] === "CSRC" && keys[77] === "CEXT" && keys[79] === "COCT" && !keys.includes("ATK#5") && !keys.includes("DEC#5") && !keys.includes("REL#5"),
+    "CHORD SOURCE / EXT / OCT: library keys CSRC CEXT COCT (an old file's ATK#5 DEC#5 REL#5 find nothing)");
+  await rq(E.req.set(0, 76, 1)); await rq(E.req.set(0, 77, 2)); await rq(E.req.set(0, 79, -1));
   let d0 = E.parse[C.DUMP](await rq(E.req.dump()), info);
+  ok(d0.p[76] === 1 && d0.p[77] === 2 && d0.p[79] === -1, "CHORD SOURCE / EXT / OCT: SET 76 77 79 = 1 2 -1 (the mock's ranges)");
   await rq(E.req.set(1, 20, 1));
   let d = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  const owned = (p) => p.map((v, i) => (i === info.pe0 + 7 ? 8 : v));   /* (1.0.3: the converted patch is the track's own: SLOT OWN) */
+  /* (1.0.3: the converted patch is the track's own: SLOT OWN; the conversion zeroes 76 77 79 and the track's own settings come back, ui.c fm4_apply) */
+  const owned = (p) => p.map((v, i) => (i === info.pe0 + 7 ? 8 : [76, 77, 79].includes(i) ? d0.p[i] : v));
   let want = E.FM4.convert(digital(0, d0.p), info.pe0);
   ok(d.engine === 12 && d.preset === 0 && eq(d.p, owned(want.p)) && eq(await fm6Of(), E.FM6.pack(want.voice)),
     "DIGITAL retired: SET G_ENGSEL 1 -> FM6 with E.PIANO converted (its own patch, SLOT OWN, preset TINE EP)");
@@ -926,6 +932,15 @@ async function editorLibrarian() {
   await rq(E.req.set(0, 29, 16));
   await rq(E.req.set(0, 17, 0));
   await rq(E.req.set(0, 81, 0));
+  /* CHORD SOURCE / EXT / OCT (76 77 79) are the track's own: an audition and UP_LOAD leave them (trackOwn), a patch that holds others
+     (a file written by firmware that has them) writes nothing there */
+  await rq(E.req.set(0, 76, 1)); await rq(E.req.set(0, 77, 2)); await rq(E.req.set(0, 79, -2));
+  const withSet = { ...bell, p: bell.p.map((v, i) => (i === 76 ? 0 : i === 77 ? 1 : i === 79 ? 2 : v)) };
+  await E.auditionPatch(rq, info, withSet, { gEng: 20 });
+  const d5 = E.parse[C.DUMP](await rq(E.req.dump()), info);
+  ok(d5.p[76] === 1 && d5.p[77] === 2 && d5.p[79] === -2,
+    "librarian: an audition leaves CHORD SOURCE / EXT / OCT (76 77 79) alone, a patch holding 0 1 2 there writes nothing");
+  await rq(E.req.set(0, 76, 0)); await rq(E.req.set(0, 77, 0)); await rq(E.req.set(0, 79, 0));
 
   /* ties as the firmware keeps them: no note; a rest has no flags */
   const tied = [[60, 1], [61, 4], [0, 4], [0, 3], [64, 2]];
@@ -1676,7 +1691,7 @@ async function editorSessions() {
   const S = vm.runInNewContext(`let dev = null, lastDump = 0, libBusy = false; ${state} ${requests} ${loading} ${library}
     ;({ beginBusy, resetBusy, sessionRequest, load, libOp,
        setDevice: d => { dev = d; }, count: () => busy })`, {
-    Date, Error,
+    Date, Error, MOCK: true, // session lifecycle stand-in; real generation validation is in generation_test.mjs
     $: id => { if (!nodes.has(id)) nodes.set(id, {}); return nodes.get(id); },
     CMD: { INFO: 1, PROJECT: 2, SMP_INFO: 3, DUMP: 4 },
     parse: { 1: r => r, 2: () => ({ used: false }), 3: () => ({}), 4: r => r },
@@ -1903,8 +1918,8 @@ const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 
 /* an FM-1 on WebMIDI: identity, then "device asks, host answers" reads of the image */
 class FakeFM1 {
-  constructor(image, { unplugAfter = Infinity, names = ["Felucca Update", "Felucca"] } = {}) {
-    this.image = image; this.unplugAfter = unplugAfter; this.names = names; this.served = 0; this.bad = 0;
+  constructor(image, { unplugAfter = Infinity, names = ["Felucca Update", "Felucca"], generation = 1 } = {}) {
+    this.generation = generation; this.image = image; this.unplugAfter = unplugAfter; this.names = names; this.served = 0; this.bad = 0;
     this.access = { inputs: new Map(), outputs: new Map() };
     this.boot("FM-1_015", "FM-1");
   }
@@ -1926,7 +1941,12 @@ class FakeFM1 {
       const t = [...new TextEncoder().encode(this.identity)];
       const body = [0, 0x59, 0x11, 0, 0, 0, ...t, ...new Array(28 - t.length).fill(0)];
       this.tx([0xF0, ...pack7(body), 0xF7]);
-    } else if (eq(d, UPGRADE)) {
+    } else if (d[0] === 0xf0 && d[1] === 0x7d && (this.generation === 2 ? d[2] === 0x43 && d[3] === 0x41 : d[2] === 0x46 && d[3] === 0x4c) && [1,65].includes(d[4])) {
+      const fixture=JSON.parse(readFileSync(join(HERE,"../tests/fixtures/generation-info.json"),"utf8"));
+      const ids=this.generation === 2 ? [0,1,2,3,4,5,6,7] : [0,1,2,3,4,5,6,7,8,9,32,33,34];
+      const args=d[4] === 1 ? fixture[this.generation === 2 ? "modern" : "classic"] : [this.generation,0,ids.length,...ids.flatMap(id=>[id,0,0,0,0,0,0,0,0,0,0])];
+      this.tx([...d.slice(0,5),...args,0xf7]);
+    } else if (eq(d, this.identity.startsWith("ota-") || this.generation === 1 ? UPGRADE : [0xf0,0x7d,0x43,0x41,0x7f,18,2,0xf7])) {
       this.queue = this.identity.startsWith("ota-")
         ? [...Array.from({ length: 6 }, (_, k) => [k * 512, 512]), [0xF0000000, 8]]
         : [[0, 64], [0x40, 160], [0x1000, 512], [0xE0000000, 8]];
@@ -1970,6 +1990,16 @@ async function updater() {
   devC.boot("FM-1_900", "Caravel");
   const gotC = await new Updater(devC.access).install(image, "FM-1_900", () => {});
   ok(gotC === "FM-1_900" && devC.bad === 0, `fm1ota.js: install on a device named Caravel -> Caravel Update -> Caravel (${devC.served} reads)`);
+
+  const modern = new FakeFM1(image, {generation:2});
+  const modernGot = await new Updater(modern.access).install(image,"FM-1_900");
+  ok(modernGot === "FM-1_900" && modern.bad === 0, "fm1ota.js: protocol 18 update reaches the separate entry");
+  const wrong = new FakeFM1(image, {generation:2});
+  const refused = await new Updater(wrong.access).install(image,"FM-1_900",null,{targetGeneration:1}).then(()=>null,e=>e);
+  ok(refused?.code === "generation" && wrong.served === 0, "fm1ota.js: implicit downgrade rejected before update reads");
+  const back = new FakeFM1(image, {generation:2});
+  const backGot = await new Updater(back.access).install(image,"FM-1_900",null,{targetGeneration:1,downgrade:true});
+  ok(backGot === "FM-1_900" && back.bad === 0, "fm1ota.js: explicit Classic return transport completes in the stand-in");
 
   const dev2 = new FakeFM1(image, { unplugAfter: 3 });
   dev2.boot("ota-FM-1_900", "Felucca Update");

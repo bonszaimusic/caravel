@@ -214,7 +214,7 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
             a = 24000 + (softclip(clamp(a - 24000, 0, 1 << 20) * 2) >> 1);
             s = s < 0 ? -a : a;
         }
-        out[i] += voice_amp(s, m, i) << 1;
+        out[i] += voice_amp(s, m, i) * 2;
     }
 }
 

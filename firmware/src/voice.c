@@ -298,11 +298,7 @@ static voice_t *voice_alloc(track_t *t, uint32_t note)
 #endif
     uint32_t i, np = trk_nvoice(t), best = np, low = np, nfree = 0;
     int32_t bd = 0x7FFFFFFF;
-    if (t->engine == ENGI_DRUM) {
-        voice_t *v = drum_reuse(t, note);
-        if (v && (uint32_t)(v - t->v) < np)
-            return voice_reuse(t, v);
-    }
+
     for (i = 0; i < np; i++) {
         if (t->v[i].active && t->v[i].note == note)
             return voice_reuse(t, &t->v[i]);
@@ -794,9 +790,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     int32_t tune_fine = (song.g[G_TUNE] * 16 - tune * 100) * 2367 / 16000;   /* rest, in 1/4096 (1 ct = 2.367) */
     int32_t bend, bend16, bend_fine;
     uint32_t ti = (uint32_t)(t - trk);
-    if (ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM) {
-        midi_bend_q8[ti] = midi_bend_target[ti] = 0;
-    } else {
+ {
         int32_t d = midi_bend_target[ti] - midi_bend_q8[ti];
         /* ~6 ms smoothing, with an exact landing (no permanent small offset). */
         midi_bend_q8[ti] += d > 0 ? (d < 4 ? d : (d + 3) / 4) : (d > -4 ? d : (d - 3) / 4);

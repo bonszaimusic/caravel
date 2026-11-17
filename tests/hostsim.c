@@ -38,7 +38,7 @@ static struct { volatile uint32_t notes, buttons; } fm1_in;
 static void fm1_delay_ms(uint32_t ms) { (void)ms; }
 #include "../firmware/src/usb.c"
 #include "../firmware/src/midi_uart.c"                /* TRS MIDI IN: its parser (um_byte) feeds midi_in_q */
-#include "../firmware/src/song_chain.c"
+#include "../firmware/src/project_launch.c"
 #include "../firmware/src/seq.c"
 #define inst (trk[0])                   /* the single-part renders below: part 1 */
 
@@ -104,22 +104,12 @@ static void host_preset_values(track_t *t, uint32_t e, uint32_t pi, const preset
     for (i = 0; i < 4u; i++)
         t->p[P_DIST + i] = (int16_t)(p->fx[i] ? p->fx[i] - 1 : FX_DEF[i]);
     t->p[P_SPRD] = e == ENGI_ENSEMBLE ? ens_width(pi) : 0;   /* ui.c preset_sound_values: a factory load sets SPRD (the preset's width, else its default 0) */
-    fm6_track_loaded(t);                          /* FM6: the preset's patch (ui.c apply_preset_to) */
 }
 static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
 {
     uint32_t n = ENGINES[e]->npresets;
 #if !FELUCCA_FM4
-    if (e == ENGI_DIGITAL) {                      /* DIGITAL preset pi (retired): converted, as ui.c fm4_load_preset */
-        uint8_t v[FP_SIZE + 1u];
-        uint32_t tr = (uint32_t)(t - trk) % NTRK;
-        fm4_preset_values(t->p, pi);
-        t->preset = (uint8_t)fm4_convert(t->p, v);
-        t->eng_req = ENGI_FM6;
-        fm6_set_patch(tr, v);
-        fm6_slot[tr] = (uint8_t)t->p[P_E7];
-        return;
-    }
+
 #endif
     if (!n) {
         t->eng_req = (uint8_t)e;
@@ -138,17 +128,8 @@ static void host_preset(track_t *t, uint32_t e, uint32_t pi)
     eng_mem_claim(t);                             /* (voice.c engine_block would at the next block) */
 }
 
-/* A saved SAMPLE PERC sound, as 1.0.2 and earlier stored it (SET 4, the GM kit; retired since: every load
- * turns it into DRUM, core.h drum_from_perc). Put straight into a track it plays SET 4's alias (PIANO): only
- * for the migration tests, which pass it through a load */
-static void host_legacy_sample_perc(track_t *t)
-{
-    static const preset_t PERC = {"PERC", {SMP_SET_PERC, 0, 0, 0, 127, 0, 0, 0}, {0, 127, 127, 60}, 0, 0, PAT(12)};
-    host_preset_values(t, ENGI_SAMPLE, SMP_SET_PERC, &PERC);
-    t->engine = ENGI_SAMPLE;
-}
-/* the drums of the render tests: DRUM's kit (the power-on track 4; until 1.0.2 these used SAMPLE PERC) */
-static void host_drums(track_t *t) { host_preset(t, ENGI_DRUM, 0); }
+/* Percussive ANALOG stimulus for mixed-engine DSP tests. */
+static void host_percussive_track(track_t *t) { host_preset(t,0,8); }
 
 static void put_step(track_t *t, uint32_t i, uint32_t n, const uint8_t *notes, uint32_t time, uint32_t flags)
 {
@@ -220,7 +201,7 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
     host_preset(t1, 0, 4);
     host_preset(t2, TRK_DEF[1][0], TRK_DEF[1][1]);
     host_preset(t3, 3, 0);
-    host_drums(td);                                /* DRUM KIT (SAMPLE PERC until 1.0.2) */
+    host_percussive_track(td);                                /* DRUM KIT (SAMPLE PERC until 1.0.2) */
     for (i = 0; i < 16u; i++) {
         uint8_t n = ACID[i];
         put_step(t1, i, n ? 1u : 0u, &n, n ? ST_NOTE : ST_REST, ACIDF[i]);
@@ -853,7 +834,6 @@ int main(int argc, char **argv)
         inst.p[P_ATK] = p->env[0]; inst.p[P_DEC] = p->env[1];
         inst.p[P_SUS] = p->env[2]; inst.p[P_REL] = p->env[3]; inst.p[P_ED_FLT] = p->fenv;
     }
-    fm6_track_loaded(&inst);                            /* FM6: the preset's patch */
     inst.p[P_VOICE] = (int16_t)mono;
     inst.p[P_CHOR] = argc > 5 ? atoi(argv[5]) : 24;      /* as felucca_init */
     inst.p[P_DLY] = argc > 5 ? atoi(argv[5]) : 28;
@@ -915,7 +895,7 @@ int main(int argc, char **argv)
         }
         if (getenv("DRUMS") && fp % (FS / 8u) < CTL) {   /* part 4 DRUM: drum_hit on 16ths */
             if (!f)
-                host_drums(&trk[3]);
+                host_percussive_track(&trk[3]);
             drum_hit(f / (FS / 8u));
         }
         if (getenv("DIST"))

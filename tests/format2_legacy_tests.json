@@ -1,0 +1,106 @@
+{
+  "tests/backup_test.c": {
+    "reason": "legacy native-only archives, migrated settings, unknown bank versions; replaced by complete FORMAT 2 backup including atomic power cuts",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/bytebeat_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): bytebeat",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/digital_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): digital CHORD EXT operator-conversion cases are inapplicable: DIGITAL/FM6 stay removed; chordset tests all six retained engine/preset keeps.",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/drum_output_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): drum_output",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/drum_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): drum CHORD EXT T11 now tests eligibility of all six pitched engines; no DRUM/SAMPLE compatibility is claimed.",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/drumfuzz_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): drumfuzz",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/drumx_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): drumx",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/editor_test.c": {
+    "reason": "legacy protocol and retired commands; replaced by format2_editor, lfo2_editor, backup/presets and real USB fuzz_ed CHORD settings use active chordset with FORMAT 2 protocol, stored presets, native/container and complete archive paths.",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/fm4_div0_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): fm4_div0",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/fm4_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): fm4",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/fm6_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): fm6",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/fm6bank_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): fm6bank",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/fold155_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): fold155",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/fun10_test.c": {
+    "reason": "old project layout/FM6 patch packing and migration; replaced by independent LFO2, motion, ratchet, format2_project",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/jiant_sound_test.c": {
+    "reason": "PHASE/FM6/DRUM-X and old format integration; retained six engines tested in regress/engine-specific suites",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/noise_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): noise",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/project_compat_test.c": {
+    "reason": "old-project migration/trial behavior; replaced by FORMAT 2 WASM guard and strict codec rejection",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/project_test.c": {
+    "reason": "FUN1..FUNV migration and Chain; replaced by strict FUNW/HPM2 round-trips and old-format rejection CHORD settings fresh defaults and current FUNW/IFP2 round-trips are active in chordset; no old-backup or Song/Chain import is added.",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/reverb_test.c": {
+    "reason": "full ROOM/SPRING legacy profile; production minimal STASIS coverage is stasis/stasis_layer/stasis_continuity",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/robust_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): robust",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/sample_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): sample",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/settings_test.c": {
+    "reason": "PER1..PER7 mixed migrations; separate settings fixture, PER8 Learn/PER7 boot preference test and strict backup validation",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/slice_test.c": {
+    "reason": "Retired engine/DSP-only fixture (E85): slice",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/ui_test.c": {
+    "reason": "legacy all-engine and Song UI integration; common HAL moved to ui_harness, retained dedicated UI suites remain active CHORD EXT navigation/input and nine status-data cases are active in chordext_ui; legacy card drawing is not ported to the BUILD ring renderer.",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/union_test.c": {
+    "reason": "All historical hashes combine retained engines with retired companion engines; unchanged baseline is retained. Destination memory isolation is covered for every retained preset/precedessor in format2_engine_memory, and concurrent mixes in dualcore.",
+    "source_before_cleanup": "aac1bc2"
+  },
+  "tests/upreset_test.c": {
+    "reason": "UPB1/old record migrations; replaced by format2_presets, strict format2_backup and ratchet preset pattern checks",
+    "source_before_cleanup": "aac1bc2"
+  }
+}

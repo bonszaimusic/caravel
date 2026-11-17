@@ -4,17 +4,25 @@
 /* v3 bytes remain unchanged for old projects. v4/v5 append ELASTIC's
  * selected-track settings, never the transient spring positions/arms.
  * In production builds with ELASTIC disabled, keep the v3 writer. */
+#if CARAVEL_FORMAT2
+#define HP_F2_SET_BYTES 16u
+#else
+#define HP_F2_SET_BYTES 0u
+#endif
 #define HP_RAW_META_V3 (HP_HW_META+sizeof hp_rm_snap)
 #if CARAVEL_ELASTIC_P1 && CARAVEL_ELASTIC_PLAYABLE
 #define HP_EL_PROJECT 1
 #define HP_EL_PERSIST_BYTES (NTRK*9u)
-#define HP_RAW_META (HP_RAW_META_V3+HP_EL_PERSIST_BYTES)
+#define HP_RAW_META (HP_RAW_META_V3+HP_EL_PERSIST_BYTES+HP_F2_SET_BYTES)
 #else
 #define HP_EL_PROJECT 0
 #define HP_EL_PERSIST_BYTES 0u
-#define HP_RAW_META HP_RAW_META_V3
+#define HP_RAW_META (HP_RAW_META_V3+HP_F2_SET_BYTES)
 #endif
 _Static_assert(HP_V2_SIZE<=sizeof(hp_store_t),"v2 exceeds existing USB staging");
+#if CARAVEL_FORMAT2
+_Static_assert(HP_EL_PROJECT && HP_RAW_META==5610u,"FORMAT 2 requires the complete 5610-byte performance layout");
+#endif
 _Static_assert(HP_RAW_META<=8192u,"review codec stack before enlarging snapshot state");
 /* Literal 0..127: 1..128 bytes. Match 128..255: 3..130 bytes,
  * followed by a little-endian 1..4096 backward distance. */
@@ -193,6 +201,9 @@ static hp_ref_t hp_rm_snapshot_ref_raw(const uint8_t*b)
  hp_ref_t r={0};r.page=0xFFFFu;r.id=v&511u;r.kind=(v>>9u)&7u;
  r.track=(v>>12u)&3u;r.engine=(v>>14u)&31u;r.aux=(v>>19u)&15u;
  if(r.engine==31u)r.engine=255u;
+#if CARAVEL_FORMAT2
+ else {uint32_t e=eng_unstore(r.engine);r.engine=(uint8_t)(e==255u?254u:e);}
+#endif
  return r;
 }
 /* the targets of one slot: valid refs, values in their range, no duplicate; owner < NTRK: a track's own controls must be its own */
@@ -204,9 +215,7 @@ static int hp_snap_refs_ok(const uint8_t(*refs)[3],const int16_t*vals,uint32_t n
   if(owner<NTRK&&hp_snap_own_kind(r)&&r.track!=owner)return 0;
   if(r.kind==HP_TRACK){if(r.aux>1)return 0;d=param_desc_of(r.engine==255u?0:r.engine,hp_tid(r));}
   else if(r.kind==HP_LFO2)d=lfo2_desc(r.id);
-  else if(r.kind==HP_DX)d=dx_desc(r.id);
   else if(r.kind==HP_PAIR&&r.id==2)d=&HP_PDESC[2];
-  else if(r.kind==HP_FM6){if(vals[i]<0||vals[i]>fm6_max(r.id))return 0;continue;}
   if(!d||vals[i]<d->min||vals[i]>d->max)return 0;
   for(uint32_t j=0;j<i;j++)if(hp_rm_same(r,hp_rm_snapshot_ref_raw(refs[j])))return 0;
  }
@@ -247,6 +256,25 @@ static uint32_t hp_snapshots_migrate(const hp_rm_snap_v2_t*old)
 }
 static int hp_meta_valid(const uint8_t*b,uint32_t version)
 {
+#if CARAVEL_FORMAT2
+ if(version!=6u)return 0;
+ const uint8_t *set=b+HP_RAW_META-HP_F2_SET_BYTES;
+ if(hp_take(set,4)!=0x32544553u||set[4]!=1u||set[5]>15u)return 0;
+ for(uint32_t i=6;i<HP_F2_SET_BYTES;i++)if(set[i])return 0;
+ for(uint32_t t=0;t<NTRK;t++)if(set[5]&(1u<<t)) {
+  uint32_t v=hp_take(b+2*t,2),rows=(v&31u)+1u,n=0;
+  if(rows>31u)return 0;
+  for(uint32_t row=0;row<rows;row++)for(uint32_t k=0;k<4;k++) {
+   hp_ref_t r=hp_ref_unpack(hp_take(b+HP_HW_CELL+4*(t*128+row*4+k),4));
+   if(!r.kind)continue;
+   if(++n>32u||!hp_ref_valid(r)||(hp_snap_own_kind(r)&&r.track!=t&&r.track!=255u))return 0;
+   for(uint32_t j=0;j<row*4+k;j++) {
+    hp_ref_t a=hp_ref_unpack(hp_take(b+HP_HW_CELL+4*(t*128+j),4));
+    if(a.kind&&hp_rm_same(a,r))return 0;
+   }
+  }
+ }
+#endif
  for(uint32_t t=0;t<4;t++){
   uint32_t v=hp_take(b+2*t,2);if(((v>>5)&31u)>(v&31u)||(v>>10)>UP_SLOTS)return 0;
   for(uint32_t i=0;i<128;i++)if(!hp_ref_valid(hp_ref_unpack(hp_take(b+HP_HW_CELL+4*(t*128+i),4))))return 0;
@@ -263,13 +291,13 @@ static int hp_meta_valid(const uint8_t*b,uint32_t version)
  if(version==2u)return hp_snapshots_valid_v2((const void*)(b+HP_HW_META));
  if(!hp_snapshots_valid((hp_snaps_t)(const void*)(b+HP_HW_META)))return 0;
 #if HP_EL_PROJECT
- if((version==4u||version==5u) && !hp_el_persist_valid(b+HP_RAW_META_V3,version))return 0;
+ if((version==4u||version==5u||version==6u) && !hp_el_persist_valid(b+HP_RAW_META_V3,version))return 0;
 #endif
  return 1;
 }
 static int hp_v2_decode(const hp_store_t*p,uint8_t*raw)
 {
- return (p->version==2||p->version==3
+ return (p->version==2||p->version==3||(CARAVEL_FORMAT2&&p->version==6)
 #if HP_EL_PROJECT
  ||p->version==4||p->version==5
 #endif
@@ -283,6 +311,7 @@ static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_
 {
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
  hp_pair_store_t captured;int live=pair==0;
+ if(!hp_model_valid(m))return 0;
  /* MIDI and sequencer ISRs may edit HOME automation and Pair controls.
   * Capture one coherent input, then restore IRQs before validation/compression. */
  uint32_t irq=perf_irq_save();
@@ -292,11 +321,25 @@ static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_
 #if HP_EL_PROJECT
  hp_el_persist_pack(raw+HP_RAW_META_V3,snaps==hp_rm_snap);
 #endif
+#if CARAVEL_FORMAT2
+ for(uint32_t t=0;t<NTRK;t++)for(uint32_t k=0;k<HP_RM_SNAP_SLOTS;k++) {
+  hp_rm_snap_t *q=(void*)(raw+HP_HW_META+(t*HP_RM_SNAP_SLOTS+k)*sizeof(hp_rm_snap_t));
+  if(q->count>HP_RM_SNAP_MAX){perf_irq_restore(irq);return 0;}
+  for(uint32_t i=0;i<q->count;i++) {
+   if(!hp_ref_valid(hp_rm_snapshot_ref(q,i))){perf_irq_restore(irq);return 0;}
+   uint32_t v=hp_take(q->refs[i],3),e=(v>>14)&31u;
+   e=e==31u?31u:eng_store(e);if(e>31u){perf_irq_restore(irq);return 0;}
+   hp_put(q->refs[i],(v&~(31u<<14))|(e<<14),3);
+  }
+ }
+ uint8_t *set=raw+HP_RAW_META-HP_F2_SET_BYTES;memset(set,0,HP_F2_SET_BYTES);
+ hp_put(set,0x32544553u,4);set[4]=1;set[5]=live?uxl.uset:0;
+#endif
  if(live)for(uint32_t t=0;t<NTRK;t++){uint32_t v=hp_take(raw+2*t,2);hp_put(raw+2*t,(v&1023u)|(uint32_t)trk[t].user<<10,2);}
  perf_irq_restore(irq);
  /* Validate the version we WRITE, including the P1.3 extension.
   * Validating as v3 would allow an invalid v4 capsule that cannot LOAD. */
- if(!hp_meta_valid(raw,HP_EL_PROJECT ? 5u : 3u))return 0;
+ if(!hp_meta_valid(raw,CARAVEL_FORMAT2 ? 6u : HP_EL_PROJECT ? 5u : 3u))return 0;
  return hp_zip(out,HP_V2_META,raw,sizeof raw);
 }
 #endif

@@ -12,19 +12,19 @@ New to the FM-1 or to Caravel? Begin here.
 
 | | | |
 | --- | --- | --- |
-| <img src="img/card-start.png" width="120" alt="Firmware display: Start here"> | **[1 Start here](start-here.md)** · about 10 min | Back up, install, make a first sound and sequence, save it, and know the way back to the stock firmware. |
-| <img src="img/card-basics.png" width="120" alt="Firmware display: Basics"> | **[2 Basics](basics.md)** · about 10 min | Tracks, engine versus preset, the pages and how to move between them, saving projects and presets. |
+| <img src="img/one-sound.png" width="120" alt="Firmware display: Start here"> | **[1 Start here](start-here.md)** · about 10 min | Back up, install, make a first sound and sequence, save it, and know the way back to the stock firmware. |
+| <img src="img/one-build.png" width="120" alt="Firmware display: Basics"> | **[2 Basics](basics.md)** · about 10 min | Tracks, engine versus preset, the pages and how to move between them, saving projects and presets. |
 
 ### Engines
 
-Four engines, each with what to do first, then how the sound is made.
+Six engines: ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE.
 
 | | | |
 | --- | --- | --- |
-| <img src="img/card-sem.png" width="120" alt="Firmware display: SEM"> | **[3.1 SEM](engine-sem.md)** · about 10 min | Warm pads, brass, strings and notch sweeps. |
-| <img src="img/card-hades.png" width="120" alt="Firmware display: HADES"> | **[3.2 HADES](engine-hades.md)** · about 10 min | Basses, sub layers and dark leads. |
-| <img src="img/card-drone.png" width="120" alt="Firmware display: DRONE"> | **[3.3 DRONE](engine-drone.md)** · about 10 min | Evolving drones, beds, bells and slow textures (experimental).<br>[Watch: DRONE engine demo (YouTube)](https://www.youtube.com/watch?v=N08Vx3x7fLE) |
-| <img src="img/card-ensemble.png" width="120" alt="Firmware display: ENSEMBLE"> | **[3.4 ENSEMBLE](engine-ensemble.md)** · about 10 min | Strings, choirs and dark pads with a built-in three-tap ensemble, in stereo. |
+| <img src="img/one-sem.png" width="120" alt="Firmware display: SEM"> | **[3.1 SEM](engine-sem.md)** · about 10 min | Warm pads, brass, strings and notch sweeps. |
+| <img src="img/one-hades.png" width="120" alt="Firmware display: HADES"> | **[3.2 HADES](engine-hades.md)** · about 10 min | Basses, sub layers and dark leads. |
+| <img src="img/one-drone.png" width="120" alt="Firmware display: DRONE"> | **[3.3 DRONE](engine-drone.md)** · about 10 min | Evolving drones, beds, bells and slow textures (experimental).<br>[Watch: DRONE engine demo (YouTube)](https://www.youtube.com/watch?v=N08Vx3x7fLE) |
+| <img src="img/one-ensemble.png" width="120" alt="Firmware display: ENSEMBLE"> | **[3.4 ENSEMBLE](engine-ensemble.md)** · about 10 min | Strings, choirs and dark pads with a built-in three-tap ensemble, in stereo. |
 
 ### Play and perform
 
@@ -32,12 +32,12 @@ Sequence, arpeggiate, perform and follow a chord progression.
 
 | | | |
 | --- | --- | --- |
-| <img src="img/card-seq-arp.png" width="120" alt="Firmware display: Sequencer and arpeggiator"> | **[4 Sequencer and arpeggiator](seq-arp.md)** · about 12 min | Step entry, timing, recording while it plays, parts A to D, and the arpeggiator. |
-| <img src="img/journey-play.png" width="120" alt="Firmware display: HOME performance functions"> | **[5 HOME performance functions](home-performance.md)** · about 15 min | The ACTION banks: Random Morph and Journey, STASIS hold, Pair Morph and macros.<br>[Random Morph and Journey](https://bonszaimusic.github.io/caravel/tutorials/random-morph-journey/)<br>[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/stasis/)<br>[Pair Morph, macros and saving](home-and-stasis.md)<br>[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/) |
-| <img src="img/card-harmony.png" width="120" alt="Firmware display: HARMONY"> | **[6 HARMONY](harmony-live.md)** · about 15 min | Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH. |
-| <img src="img/elastic-cell-armed.png" width="120" alt="Firmware display: ELASTIC · First steps"> | **[6.1 ELASTIC · First steps](elastic-first-steps.md)** · about 10 min | Make one HOME control breathe, bounce and return using the ELASTIC action bank. |
-| <img src="img/elastic-row-coupled.png" width="120" alt="Firmware display: ELASTIC · Linked springs"> | **[6.2 ELASTIC · Linked springs](elastic-linked-springs.md)** · about 12 min | Connect four ROW springs with COUPLE and a reproducible SEED network. |
-| <img src="img/elastic-four-track-hud.png" width="120" alt="Firmware display: ELASTIC · Ambient recipes"> | **[6.3 ELASTIC · Ambient recipes](elastic-ambient-recipes.md)** · about 12 min | Three starting recipes for breathing drones, moving textures and two-track tides. |
+| <img src="img/one-capture.png" width="120" alt="Firmware display: Sequencer and arpeggiator"> | **[4 Sequencer and arpeggiator](seq-arp.md)** · about 12 min | Step entry, timing, recording while it plays, parts A to D, and the arpeggiator. |
+| <img src="img/one-move.png" width="120" alt="Firmware display: PLAY and BUILD performance"> | **[5 PLAY and BUILD performance](home-performance.md)** · about 15 min | SPACE, MOVE, snapshots, PAIR and STASIS in the current interface.<br>[Random Morph and Journey](https://bonszaimusic.github.io/caravel/tutorials/random-morph-journey/)<br>[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/stasis/)<br>[Pair Morph, macros and saving](home-and-stasis.md)<br>[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/) |
+| <img src="img/one-chordext.png" width="120" alt="Firmware display: HARMONY"> | **[6 HARMONY](harmony-live.md)** · about 15 min | Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH. |
+| <img src="img/one-move.png" width="120" alt="Firmware display: ELASTIC · First steps"> | **[6.1 ELASTIC · First steps](elastic-first-steps.md)** · about 10 min | Make an armed target breathe, bounce and return in PLAY / MOVE / ELASTIC. |
+| <img src="img/one-lfo.png" width="120" alt="Firmware display: ELASTIC · Linked springs"> | **[6.2 ELASTIC · Linked springs](elastic-linked-springs.md)** · about 12 min | Connect four ROW springs with COUPLE and a reproducible SEED network. |
+| <img src="img/one-capture.png" width="120" alt="Firmware display: ELASTIC · Ambient recipes"> | **[6.3 ELASTIC · Ambient recipes](elastic-ambient-recipes.md)** · about 12 min | Three starting recipes for breathing drones, moving textures and two-track tides. |
 
 ### Shape and connect
 
@@ -45,8 +45,8 @@ Filter, effects, modulation, and the outside world.
 
 | | | |
 | --- | --- | --- |
-| <img src="img/card-filter-fx.png" width="120" alt="Firmware display: Filter, FX and modulation"> | **[7 Filter, FX and modulation](filter-fx.md)** · about 12 min | The per-track filter, reverb, delay and insert effects, LFO and envelope. |
-| <img src="img/card-midi.png" width="120" alt="Firmware display: MIDI and sync"> | **[8 MIDI and sync](midi-sync.md)** · about 8 min | MIDI Learn, clock and start over USB and TRS. |
+| <img src="img/one-filter.png" width="120" alt="Firmware display: Filter, FX and modulation"> | **[7 Filter, FX and modulation](filter-fx.md)** · about 12 min | The per-track filter, reverb, delay and insert effects, LFO and envelope. |
+| <img src="img/one-capture.png" width="120" alt="Firmware display: MIDI and sync"> | **[8 MIDI and sync](midi-sync.md)** · about 8 min | MIDI Learn, clock and start over USB and TRS. |
 
 ### Help
 
@@ -54,10 +54,10 @@ When something does not work, and the way back.
 
 | | | |
 | --- | --- | --- |
-| <img src="img/card-help.png" width="120" alt="Firmware display: Help"> | **[9 Help](help.md)** · about 5 min | The FAQ, backup, update and the way back, and the known limits.<br>[Troubleshooting & FAQ](../../docs/faq.md) |
+| <img src="img/one-build.png" width="120" alt="Firmware display: Help"> | **[9 Help](help.md)** · about 5 min | The FAQ, backup, update and the way back, and the known limits.<br>[Troubleshooting & FAQ](../../docs/faq.md) |
 
 ### Earlier tutorials
 
-[HOME, Pair Morph, macros, saving and STASIS (0.5.0 and 0.6.0)](home-and-stasis.md) · [Random Morph and Morph Journey](random-morph-journey.md) · [Live Harmony and the HOME ACTION key map](harmony-live.md) · [0.5.0 PDF quickstart](Caravel-0.5.0-Quickstart.pdf) · [0.6.0 STASIS PDF guide](Caravel-0.6.0-STASIS-Guide.pdf)
+[Current performance and STASIS guide](home-and-stasis.md) · [Random Morph and Morph Journey](random-morph-journey.md) · [HARMONY and CHORD EXT](harmony-live.md) · [0.5.0 PDF quickstart](Caravel-0.5.0-Quickstart.pdf) · [0.6.0 STASIS PDF guide](Caravel-0.6.0-STASIS-Guide.pdf)
 
 Back to the [README](../../README.md).

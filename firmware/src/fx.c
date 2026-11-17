@@ -135,7 +135,8 @@ static __attribute__((noinline)) void usb_fixed_dac(int32_t *out, uint32_t n)   
         out[i] = (out[i] * m) >> 12;                /* (|out| <= 32767 after the soft clip: fits) */
 }
 static volatile uint8_t fx_lowcut;     /* settings: 1 LOWCUT 12 dB/oct ~110 Hz, 2 BASS+ (the small speaker):
-                                        * 12 dB/oct ~220 Hz plus the harmonics of the bass (spk_bass) */
+                                        * 12 dB/oct ~220 Hz plus the harmonics of the bass (spk_bass), 3 BRIGHT: a high shelf
+                                        * (+3 dB at 2.5 kHz, +6 dB from about 8 kHz up) before the limiter */
 static int32_t lc_l1, lc_l2, lc_r1, lc_r2, dc_l, dc_r, dce_l, dce_r;
 
 /* DC blocker (~2 Hz), always on: a leaky integrator of the input (Q6 state) subtracted from it.
@@ -152,6 +153,19 @@ static inline int32_t dc_block(int32_t x, int32_t *dc, int32_t *err)
 }
 
 static int32_t lce[4];
+/* BRIGHT (SPEAKER EQ 3): x plus 1.5 times its own high-pass: a one-pole low-pass at ~3.9 kHz (7/16 of the step, state in Q4)
+ * taken from x. Fitted to the +6 dB high shelf at 2.5 kHz (RBJ, Q 0.71) the owner chose by ear among the listening pairs:
+ * within 0.85 dB of it from 200 Hz to 15 kHz (+0.0 dB at 200 Hz, +0.8 at 1 kHz, +2.9 at 2.5 kHz, +5.0 at 5 kHz, +6.0 at 10 kHz).
+ * Why: the audit found every engine and the four-track mix falling 8 to 11 dB per octave above 600 Hz
+ * (validation/audio-quality-format2-2026-11-15; validation/gain-test-2026-11-15). */
+static int32_t br_l, br_r;
+static inline int32_t bright1(int32_t x, int32_t *lp)
+{
+    int32_t d = x * 16 - *lp, h;
+    *lp += (d * 7) >> 4;
+    h = x - ((*lp + 8) >> 4);
+    return x + h + (h >> 1);
+}
 static inline int32_t lowcut1(int32_t x, int32_t *lc, int32_t *err, uint32_t sh)   /* x minus its one-pole low-pass */
 {
     int32_t e = x - *lc + *err, d = e >> sh;
@@ -191,7 +205,10 @@ static inline void master_out(int32_t *l, int32_t *r)
     int32_t al, ar, a;
     *l = dc_block(*l, &dc_l, &dce_l);
     *r = dc_block(*r, &dc_r, &dce_r);
-    if (fx_lowcut) {                  /* two one-pole high-passes, error feedback as dc_block (the */
+    if (fx_lowcut == 3u) {            /* BRIGHT: the shelf, ahead of the limiter (its boost is part of what the limiter sees) */
+        *l = bright1(*l, &br_l);
+        *r = bright1(*r, &br_r);
+    } else if (fx_lowcut) {           /* two one-pole high-passes, error feedback as dc_block (the */
         uint32_t sh = fx_lowcut == 2u ? 5u : 6u;    /* rounded step stopped at |x - lc| < 32: an offset) */
         int32_t b = fx_lowcut == 2u ? spk_bass((*l + *r) >> 1) : 0;
         *l = lowcut1(*l, &lc_l1, &lce[0], sh);
@@ -1274,11 +1291,11 @@ static __attribute__((noinline)) void ins_drive(ins_t *s, const track_t *t, int3
             s->cnt--;
             y = s->hold;
         } else {
-            s->hp += ((x << 8) - s->hp) >> 8;            /* ~27 Hz low cut (Q8: no offset left by the rounding) */
+            s->hp += ((x * 256) - s->hp) >> 8;            /* ~27 Hz low cut (Q8: no offset left by the rounding) */
             v = clamp(x - (s->hp >> 8), -230000, 230000);
             y = ins_shape(ty, ((v >> 3) * g) >> 9, 0);    /* (>> 3 first: 32 bits) */
         }
-        y <<= 4;                                        /* (x16: the low cutoffs' rounding leaves no offset) */
+        y *= 16;                                        /* (x16: the low cutoffs' rounding leaves no offset) */
         v = mulq16(y - s->lp1, (uint32_t)k);             /* TONE / LPF: two one-pole low-passes */
         y = v + s->lp1;
         s->lp1 = y + v;
@@ -1288,7 +1305,7 @@ static __attribute__((noinline)) void ins_drive(ins_t *s, const track_t *t, int3
         y = (y + 8) >> 4;
         if (!crush) {
             y = (y * lvl) >> 12;                        /* LEVEL */
-            s->dc += ((y << 8) - s->dc) >> 9;           /* DC blocker, ~14 Hz (FUZZ's lopsided halves) */
+            s->dc += ((y * 256) - s->dc) >> 9;           /* DC blocker, ~14 Hz (FUZZ's lopsided halves) */
             y -= s->dc >> 8;
         }
         b[i] = pf_mix(x, y, s->w);
@@ -1392,6 +1409,25 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
  * faded out: nothing runs and the track is bit for bit as before (mix_part calls it only while P_FILT is set or track_t tf_run says it still runs).
  * State: tfilt_t per track (a few words, no pool). With SPREAD (mix_spread) the side signal d (left - right) takes the same filter in a second pair
  * of states. DRUM-X's per-lane image and lane sends (drumx_mix) are added after the strip, as they pass DIST, the INSERT and the SLICER by */
+/* The filter the track has now: its own P_FILT, and while the FX layer's FILTER macro (perf_k[0], -100 .. 100) is turned, the macro's
+ * place on the SELECTED track only (-64 .. 63): the macro is that track's filter for the time it is held (or latched), the other tracks keep theirs.
+ * (Up to now the macro filtered the whole master; the keys' LPF and HPF effects still do.) */
+static inline int32_t tf_eff(const track_t *t)
+{
+    int32_t m = perf_k[0];
+    if (m && (uint32_t)(t - trk) == (uint32_t)song.sel)
+        return clamp(m * 64 / 100, -64, 63);
+    return clamp(t->p[P_FILT], -64, 63);
+}
+/* UI delta, in macro units. Zero remains the release sentinel: no extra state.
+ * Anchor every new gesture at the selected track; returning there releases it.
+ * Across zero, +/-1 both sound neutral after tf_eff's integer conversion. */
+static void tf_macro_turn(int32_t delta)
+{
+    int32_t base = clamp(TSEL->p[P_FILT], -64, 63) * 100 / 64;
+    int32_t m = clamp((perf_k[0] ? perf_k[0] : base) + delta, -100, 100);
+    perf_k[0] = (int8_t)(m == base ? 0 : !m && base ? (delta < 0 ? -1 : 1) : m);
+}
 #define TF_TAIL 32u                     /* blocks of the filter's state to run out after the last voice (23 ms: the LP at 120 Hz rings 12 ms) */
 #define TF_STEP 192                     /* the cutoff's glide a block, Q8 rows (perform.c) */
 #define TF_ROWS 63                      /* the last row */
@@ -1454,7 +1490,7 @@ static __attribute__((noinline)) void tf_rest(track_t *t)
 static __attribute__((noinline)) void track_filter(track_t *t, int32_t *b, int32_t *d, uint32_t n)
 {
     tfilt_t *s = &tf[(uint32_t)(t - trk) % NTRK];
-    int32_t v = clamp(t->p[P_FILT], -64, 63), want = v < 0 ? 1 : v > 0 ? 2 : 0, tgt, tw, i, f;
+    int32_t v = tf_eff(t), want = v < 0 ? 1 : v > 0 ? 2 : 0, tgt, tw, i, f;
     uint32_t hp;
     if (!s->mode) {
         if (!want) {
@@ -1550,12 +1586,12 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
         glm = gl; grm = gr; gld = (gl * sp) >> 8; grd = -((gr * sp) >> 8);
     } else
         for (i = 0; i < n; i++)
-            d[i] = (d[i] << 1) - b[i];                  /* left - right */
+            d[i] = (d[i] * 2) - b[i];                  /* left - right */
     track_dist(t, b, n);
     if (t->p[P_ITYPE] | t->ins_run)
         track_insert(t, b, n);                          /* (the mono sum, as DIST) */
     slicer_track_sd(t, b, d, n);
-    if (t->p[P_FILT] | t->tf_run)
+    if (tf_eff(t) | t->tf_run)
         track_filter(t, b, d, n);                       /* the FILTER (0.3.0): the sum and the side */
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
@@ -1597,19 +1633,7 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
 
 /* one synth part into the dry mix and the sends of sm (mx[0]; mx[1] on the second core); a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
-static __attribute__((noinline)) void drumx_mix(const track_t *t, uint32_t n SM_DECL)
-{
-    uint32_t i;
-    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127];
-    if (((pf.mute >> (t - trk)) & 1u) || t->p[P_MUTE]) return;
-    for (i = 0; i < n; i++) {
-        SM(l)[i] -= ((DX_SIDE(t).sl[i] >> 2) * lvl) >> 10;
-        SM(r)[i] -= ((DX_SIDE(t).sr[i] >> 2) * lvl) >> 10;
-        SM(c)[i] += ((DX_SIDE(t).send[0][i] >> 2) * lvl) >> 10;
-        SM(d)[i] += ((DX_SIDE(t).send[1][i] >> 2) * lvl) >> 10;
-        SM(v)[i] += ((DX_SIDE(t).send[2][i] >> 2) * lvl) >> 10;
-    }
-}
+
 static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
 {
     int32_t *b = SM(b);
@@ -1617,14 +1641,13 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
 #if FELUCCA_CPU2
     uint32_t nr;
 #endif
-    dx_side_begin(t, n);
 
 #if FELUCCA_HOME_PERF
     hp_begin(t);
 #endif
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
     uint32_t ens = t->engine == ENGI_ENSEMBLE;          /* ENSEMBLE: its multi-tap ensemble runs on the part's mix below (eng_ensemble.c); with SPRD above 0 it is stereo */
-    T_SPREAD(t) = !dx_track(t) && t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON)
+    T_SPREAD(t) = t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON)
                   ? (ens ? 2u : 1u) : 0u;               /* (SPREAD, mix_spread: 1 the voices' alternation; 2 the ENSEMBLE's own stereo, eng_ensemble.c) */
 #if FELUCCA_CPU2
     nr = track_render(t, b, n);
@@ -1633,16 +1656,16 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
     if (track_render(t, b, n))
 #endif
     {
-        t->tail = t->p[P_ITYPE] ? 64 : t->p[P_FILT] ? TF_TAIL : 16;   /* blocks of DIST / INSERT / FILTER state to run out after
+        t->tail = t->p[P_ITYPE] ? 64 : tf_eff(t) ? TF_TAIL : 16;   /* blocks of DIST / INSERT / FILTER state to run out after
                                                          * the last voice (the INSERT's: 46 ms, a flanger's feedback) */
         if (ens && t->tail < ENS_TAIL_BLOCKS)
             t->tail = ENS_TAIL_BLOCKS;                  /* the ensemble's taps (at most 15 ms) run out too */
     }
-    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | t->p[P_FILT] | ens) || !--t->tail) && !slicer_busy(t)) {
+    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE] | tf_eff(t) | ens) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])
             ins_rest(t);                                /* TYPE OFF while silent: no fade-out left for the next note */
-        if (t->tf_run && !t->p[P_FILT])
+        if (t->tf_run && !tf_eff(t))
             tf_rest(t);                                 /* FILT 0 while silent: likewise */
         if (MOD(t).on)
             mod_end(t);
@@ -1661,7 +1684,7 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
         if (t->p[P_ITYPE] | t->ins_run)
             track_insert(t, b, n);                      /* the INSERT (1.5): off, nothing */
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
-        if (t->p[P_FILT] | t->tf_run)
+        if (tf_eff(t) | t->tf_run)
             track_filter(t, b, 0, n);                   /* the FILTER (0.3.0): the last stage of the track's chain */
         if ((pf.mute >> (t - trk)) & 1u)
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
@@ -1696,7 +1719,6 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
         }
         t->peak = pk;
     }
-    if (DX_SIDE(t).on && dx_track(t)) drumx_mix(t, n SM_ARG(sm));
     if (pf.thr)
         perf_throw(t, b, SM(d), SM(v), n);              /* perform.c: REV / ECHO THROW (1.5.1), the sends towards full */
     if (MOD(t).on)
@@ -1712,15 +1734,7 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
  * mix before MASTER (and before the FX layer, SPEAKER EQ and the limiter), at the level MASTER at its top gives, so its
  * size does not follow the volume. The click is in neither */
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N];
-static uint32_t scope_w;
 static volatile uint8_t scope_mix;
-static __attribute__((noinline)) void scope_take_mix(uint32_t n)
-{
-    uint32_t i;
-    for (i = 1; i < n; i += 2u)                         /* (((x >> 2) * MASTER_FULL) >> 10 is x) */
-        scope_buf[scope_w++ & (SCOPE_N - 1u)] = (int16_t)clamp(mix_l[i] + wet[i], -32767, 32767);
-}
 
 /* the master with the FX layer's effects between its level and master_out (perform.c) */
 static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
@@ -1901,8 +1915,6 @@ static void mix_block(int32_t *out, uint32_t n)
     fx_buses(send_c, send_d, send_r, wet, n);
     if (hl.side)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
-    if (scope_mix)
-        scope_take_mix(n);
     if (perf) {
         perf_master(out, n);
         return;

@@ -13,7 +13,7 @@
  *         untouched plays as before (the golden renders: tests/regress.c).
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 /* track 1 alone (ANALOG, POLY), 16 steps of 1/16, GATE 64, no swing; SEQ > STEP on step `cur` */
 static track_t *roll(uint32_t cur)
@@ -141,21 +141,10 @@ static int len_edit(void)
     ok &= note_len(t, 3) == 1u && msg_is("NOTE AHEAD") && t->step[4].hit == 1u;
     bad += check("  a REST / TIE / empty step: KNOB 3 TIME (NOTE TIE REST); a REST keeping notes or hits is kept", ok);
 
-    ui_power_on();                                    /* the DRUM grid: KNOB 3 is still HIT */
-    song.sel = 3;
-    t = &trk[3];
-    track_defaults_steps(t);
-    t->p[P_SLEN] = 16;
-    go_page(GR_ROLL);
-    ui.cursor = 2;
-    ui.lane = 0;
-    frame();
-    grid_hit(t, 2, 0, 1);
-    turn(EN_K3, 1);
-    ok = drum_track(t) && t->step[3].time != ST_TIE && (step_lanes(&t->step[2]) & 1u);
-    turn(EN_K3, -1);
-    ok &= !(step_lanes(&t->step[2]) & 1u) && t->step[3].time != ST_TIE;
-    bad += check("  the DRUM grid: KNOB 3 HIT as before, no TIE written", ok);
+    /* FORMAT 2 has no drum engine or drum-grid editing mode. */
+    ui_power_on();
+    for (uint32_t k=0;k<NTRK;k++)
+        bad += check("  FORMAT 2 default tracks use melodic step editing", !drum_track(&trk[k]));
     return bad;
 }
 

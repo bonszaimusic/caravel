@@ -54,3 +54,10 @@ Policy: https://pid.codes/1209/0001/ and https://pid.codes/1209/0002/
 Before general deployment, the maintainer must obtain suitable identifiers or written authorization / clarification from
 the allocation authority. Firmware-only downloads and end-user reflashing need policy clarification; being free does not
 establish permission. This is not a blanket prohibition on publishing source containing the test IDs.
+
+CARAVEL 1.0 PROFILE
+The shipped profile contains ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE.
+FORMAT 2 storage, BUILD/PLAY, note CAPTURE and CHORD EXT (live chord recognition,
+extension mapping and retrigger integration) are Caravel changes, Copyright (C)
+2026 bonszaimusic, GPL-3.0-only. Omitted historical components retain their own
+notices and licences in the source distribution. No upstream notice is removed.

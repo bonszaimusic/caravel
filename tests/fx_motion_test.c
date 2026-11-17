@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Real panel, sequencer, storage and editor paths for master FX automation. */
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 
 static void fx_init(void)
 {
@@ -189,10 +189,7 @@ static int ui_and_lanes(void)
     motion_fx_set_track(1);
     seq_start(); seq_tick(&trk[1], CTL);
     bad += check("FX: playback owns the source track independently of selection", perf_motion[1] == PF_BIT(PF_FRZ) && !perf_motion[0]);
-    chain.running = 1; chain.lane[1] = CHAIN_SILENT;
-    motion_fx_step(&trk[1], chain_motion(&trk[1]));
-    bad += check("FX: silent SONG lane releases its automation", !perf_motion[1]);
-    chain.running = 0; seq_stop();
+    seq_stop();
     /* Saved live part launch cancels the previous replay and begins new FX. */
     fx_init(); song.rec = 0;
     motion_fx_put(TSEL, 0, PF_LPF, 0, 1); motion_fx_put(TSEL, 1, PF_LPF, 0, 0);
@@ -201,7 +198,7 @@ static int ui_and_lanes(void)
     seq_start(); seq_tick(TSEL, CTL);
     project_pattern_queue(0); at(TSEL, 3, 255); project_pattern_tick(CTL * 2);
     seq_tick(TSEL, CTL * 2);
-    bad += check("FX: live part launch releases old FX and uses new part's timeline", chain.live_applied &&
+    bad += check("FX: live part launch releases old FX and uses new part's timeline", LAUNCH_STATE.live_applied &&
         (perf_motion[0] & PF_BIT(PF_LPF)) && !(perf_motion[0] & PF_BIT(PF_HPF)));
     seq_stop();
     /* External TRS transport drives the same timeline, including Stop. */
@@ -298,7 +295,7 @@ static int project_controls(void)
     int bad = 0, ok;
     static project_t boot, reset, q;
     static project_store_t saved;
-    ui_power_on(); fm6_init();
+    ui_power_on();
     apply_preset_to(&trk[1], TRK_DEF[1][1]); project_capture(&boot);
     bad += check("AUDIO: FX TRACK defaults T1 and is a project row", menu_get(MI_FXTRACK) == 0 &&
         menu_n(MI_FXTRACK) == 4 && MI_PROJECT(MI_FXTRACK) && MI_TAB[MI_FXTRACK] == MTAB_AUDIO);
@@ -319,7 +316,7 @@ static int project_controls(void)
     project_capture(&q); project_store_t wire;
     ok = proj_pack(&wire, &q) && proj_import(&reset, &wire, sizeof wire);
     bad += check("CONTROL: empty T4 owner survives fixed-size project serialization", ok &&
-        ((reset.motion.rsv[0] >> 4) & 3u) == 3 && sizeof wire == 3840);
+        ((reset.motion.rsv[0] >> 4) & 3u) == 3 && sizeof wire == 2784);
     project_save(0); saved = proj_slot[0]; menu_put(MI_FXTRACK, 0); project_load(0);
     bad += check("CONTROL: PROJECT LOAD restores owner T4", motion_fx_track() == 3);
     motion_clear(&trk[2]);
@@ -338,7 +335,6 @@ static int project_controls(void)
     seq_stop();
     /* INIT is reachable with KNOB2, supports cancel, and preserves saved banks. */
     uint8_t prefs = ui_prefs, prefs2 = ui_prefs2, recprefs = ui_rec_prefs;
-    uint32_t banks = fm6_bank_used;
     ml_learn(22, 0, P_LEVEL); uint32_t learn = ml_get(0);
     project_ram_set(5); ((uint8_t *)&up_bank[0])[0] = 57;
     go_page(GR_SLOTS); turn(EN_K2, 1); press(B_OCTUP);
@@ -357,13 +353,13 @@ static int project_controls(void)
     project_capture(&reset);
     bad += check("PROJECT: INIT sends held panel note-offs before clearing keys", !kb_chn[key] && mo_w > midi_before);
     bad += check("PROJECT: confirmed INIT stops transport, LIVE/STEP REC and FX", !song.playing && !song.rec &&
-        !step_record_mask && !chain_busy() && !perf_latched && !perf_held && !motion_fx_recording && !motion.count && !perf_motion[2]);
+        !step_record_mask && !perf_latched && !perf_held && !motion_fx_recording && !motion.count && !perf_motion[2]);
     ok = !memcmp(boot.g, reset.g, sizeof boot.g) && !memcmp(boot.t, reset.t, sizeof boot.t) &&
-        !memcmp(boot.fm6, reset.fm6, sizeof boot.fm6) && !memcmp(&boot.chain, &reset.chain, sizeof boot.chain);
-    bad += check("PROJECT: INIT matches boot sounds, steps, FM6 patches and globals", ok && !motion_fx_track() &&
+        !memcmp(boot.lfo2, reset.lfo2, sizeof boot.lfo2);
+    bad += check("PROJECT: INIT matches boot sounds, steps, LFO2 and globals", ok && !motion_fx_track() &&
         !song.sel && !song.octave && !proj_name[0] && proj_cur == PROJ_NO_SLOT && !undo.trk);
     bad += check("PROJECT: INIT keeps saved A-D, pending saves, USER, bank and settings", !memcmp(&saved, &proj_slot[0], sizeof saved) &&
-        project_ram_mask() == 5 && ((uint8_t *)&up_bank[0])[0] == 57 && banks == fm6_bank_used &&
+        project_ram_mask() == 5 && ((uint8_t *)&up_bank[0])[0] == 57 &&
         prefs == ui_prefs && prefs2 == ui_prefs2 && recprefs == ui_rec_prefs && ml_get(0) == learn);
     events_block(CTL);
     bad += check("PROJECT: INIT remains usable for fresh FX recording without reboot", !panic_req && !seq_counting());

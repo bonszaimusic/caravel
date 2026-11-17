@@ -1,69 +1,28 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# MIDI and sync
+<!-- Copyright (C) 2026 bonszaimusic -->
 
-Play the FM-1 from a keyboard or computer, move its controls from a controller, and run it with an external clock.
+# MIDI input, learn and sync
 
-> **In 60 seconds**
->
-> 1. **MIDI IN** and the channel of each track are on the **MIDI** tab of the menu (hold `HOME`).
-> 2. **MIDI Learn:** `GLO` + `D4`, turn a knob on the FM-1, move a control on your controller. Press `GLO` + `D4` again to finish.
-> 3. **Clock:** `GLO`, `SELECT` to the CLOCK page, `KNOB 3` chooses **INT**, **USB** or **TRS**.
-> 4. With an external clock, `GLO` + `PLAY` restarts everything on the next bar.
+Caravel **1.0.0 candidate** · BUILD / PLAY controls.
 
-## 1. Channels and routing
+> **In 60 seconds** Choose track channels in BUILD. USB and TRS notes can feed CAPTURE while transport runs; pedal CC is not recorded.
 
-Hold `HOME` for the menu and use `ALGORITHM` to choose the **MIDI** tab. **MIDI IN** decides how incoming channels are used; the factory setting is CH1-4, where MIDI channels 1 to 4 play tracks 1 to 4. **T1 CHANNEL** to **T4 CHANNEL** set each track's channel.
+## 1. Route incoming notes
 
-![The MIDI tab of the menu](img/midi-menu.png)
+Connect USB MIDI or TRS MIDI IN. In BUILD, double-tap GLO to open the menu and inspect each track's MIDI channel and routing. Panel keys play the selected track; a configured MIDI channel can play a different track. Check the channel before changing a preset.
 
-## 2. MIDI Learn
+## 2. Capture MIDI notes
 
-1. Press `GLO` and tap `D4` (the key labelled **LEARN** on the GLO map). The display says **MIDI LEARN ON**.
-2. Turn a knob on the FM-1 (a HOME card, an EDIT value): that selects what to learn.
-3. Move a control on your controller. The display says what was learned, for example **CC20 -> T1 CUT**.
-4. Press `GLO` + `D4` again to finish. The CC now moves that parameter.
+With transport running, incoming USB and TRS notes feed CAPTURE's live ring on their receiving track. Velocity and physical Note-Off are retained, including Note-On with velocity zero as a release. A sustain pedal can hold the live sound after physical Note-Off; the loop records the physical note length and does not record the pedal itself. CAPTURE playback never records itself.
 
-![GLO held: the map with LEARN](img/midi-glo-map.png)
+![CAPTURE notes](img/one-capture.png)
 
-![MIDI LEARN ON](img/midi-learn-on.png)
+## 3. Learn controllers
 
-![CC20 mapped to T1 CUT](img/midi-learn-mapped.png)
+Existing learned MIDI CC assignments work in PLAY and change their real parameters. New learning is entered in BUILD using GLO held and D4. Select the parameter to learn, then move the controller. Channel-mode messages, sustain and other reserved controls keep their defined MIDI meaning.
 
-![After switching Learn off, CC 20 moves CUT](img/midi-learn-moved.png)
+## 4. Clock and recovery
 
-This was measured on the host by sending CC 20 values through the firmware's MIDI input: after the mapping, CC 20 at 100 set CUT to 4.2 kHz and at 10 to 49 Hz. With ACTION on you can also learn the action keys and setup knobs in the banks (RANDOM, JOURNEY, HARM); see [HARMONY](harmony-live.md) and [Morph Journey](../morph-journey.md). The menu's MIDI tab has **LEARN CLEAR** to remove mappings.
+Choose internal, USB or TRS clock in the menu. An external clock must send START/CONTINUE and clock pulses; STOP pauses playback. Lost external clock stops transport rather than leaving loop notes running. A host simulation is not a guarantee about a particular MIDI interface's jitter: test the actual controller and tempo you intend to use.
 
-## 3. Clock: internal, USB or TRS
-
-Press `GLO` and turn `SELECT` to the **CLOCK** page: **BPM**, **SWG** (swing) and **CLK**, the clock source. Turn `KNOB 3` to choose **INT** (the internal clock), **USB** or **TRS** (the MIDI input jack).
-
-![CLOCK: BPM 120, swing 0, clock INT](img/basics-clock.png)
-
-![CLK set to USB](img/midi-clock-usb.png)
-
-![CLK set to TRS](img/midi-clock-trs.png)
-
-With USB or TRS selected the sequencers and arpeggiators follow the incoming clock and Start/Stop. Useful gestures (from [the external clock guide](../sequencer/external-clock.md)):
-
-- **Hold `GLO` and press `PLAY`:** restart all four sequencers and ARPs on the next counted 4/4 bar (while running this is a resync; while stopped it arms START: NEXT BAR). A bar needs a MIDI Start to have been seen; otherwise the screen says WAIT MIDI START.
-- **Hold `GLO` and tap F4:** restart at the next incoming clock pulse, for joining a running master by hand.
-- **MENU > SYSTEM > EXT START:** PULSE (the default) or BAR for a plain PLAY from stop.
-
-With the internal clock, `GLO` + `PLAY` restarts from the top and F4 is tap tempo.
-
-> [!NOTE]
-> Timing is covered by host simulations (twenty-minute runs at several tempos stayed within 2 ms of the incoming pulse count). Hardware timing and listening acceptance on a real FM-1 is pending.
-
-## 4. ELASTIC and the clock (0.13.0)
-
-The ELASTIC bank's **BOUNCE** is a musical period (1/16 to 64 BAR, see [ELASTIC first steps](elastic-first-steps.md), section 6), so a spring follows the **tempo**: the internal BPM, or, with CLK set to USB or TRS, the tempo the firmware estimates from the incoming clock.
-
-- A spring is **tempo-synchronous, not locked to the grid.** A gesture or PULSE starts at once with its own phase; it does not wait for the next step or bar, and it does not advance directly from the 24-per-quarter clock pulses, only from the tempo estimate.
-- The tempo a spring uses is limited to **20 to 300 BPM**. A running spring keeps its phase when the tempo changes.
-- **ELASTIC cannot be MIDI-learned** in 0.13.0 (the display says `ELASTIC: NO MIDI LEARN YET`); the learnable controls of the other banks keep working while ELASTIC is visible.
-- Not covered: drift over a long time with an external clock, Stop / Start / Continue behavior on a device, and whether a 1/16 spring at 240 to 300 BPM sounds smooth. The [release notes](../release-0130.md) list the clock checks that were run (on the host).
-
-## 5. Where next
-
-- [HARMONY](harmony-live.md) and [HOME performance functions](home-performance.md) can be driven by learned controllers.
-- Trouble with USB or MIDI ports: [Help](help.md).
+[HARMONY and live sources](harmony-live.md) · [Troubleshooting](../faq.md)

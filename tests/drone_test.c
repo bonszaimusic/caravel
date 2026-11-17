@@ -7,7 +7,7 @@
 #include <unistd.h>
 #endif
 #define UI_TEST_NO_MAIN 1
-#include "ui_test.c"
+#include "ui_harness.h"
 #include <time.h>
 
 /* Legacy gestures may update appended ownership bookkeeping, never the DSP prefix. */
@@ -361,7 +361,7 @@ typedef struct {
 
 static dr_parity_t dr_parity_render(uint32_t scene, int dual, const char *mask)
 {
-    static const uint8_t mixed[NPART] = {ENGI_DRONE, ENGI_HADES, ENGI_SEM, ENGI_FM6};
+    static const uint8_t mixed[NPART] = {ENGI_DRONE, ENGI_HADES, ENGI_SEM, ENGI_ENSEMBLE};
     dr_parity_t r = {.hash = 0xCBF29CE484222325ull};
     dr_setup();
     c1h_off = !dual;
@@ -425,7 +425,7 @@ static int dr_parity_fork(uint32_t scene, int dual, const char *mask, dr_parity_
 }
 static int dr_cpu2(void)
 {
-    static const char *const names[]={"4 DRONE presets 0..3", "4 DRONE presets 4,0,1,2", "DRONE HADES SEM FM6"};
+    static const char *const names[]={"4 DRONE presets 0..3", "4 DRONE presets 4,0,1,2", "DRONE HADES SEM ENSEMBLE"};
     static const char *const masks[]={"rot","auto","1","2","3","4","5","6","7","8","9","10","11","12","13","14"};
     int bad=0;
     /* Run before any parent-side DSP or threads: each fork has boot-fresh FX,

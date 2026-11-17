@@ -104,6 +104,19 @@
       <p class="small"><span data-t="brick"></span>
         <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener" style="color:inherit">FM-1-transporter</a></p>
     </section>
+    <section class="box risk" id="breaking" hidden>
+      <span class="tag" data-t="brkTag"></span>
+      <p class="lead" data-t="brkLead"></p>
+      <ul class="small">
+        <li data-t="brk1"></li>
+        <li data-t="brk2"></li>
+        <li data-t="brk3"></li>
+        <li data-t="brk4"></li>
+      </ul>
+      <p class="small"><label><input type="checkbox" id="brk-understand"> <span data-t="brkUnderstand"></span></label></p>
+      <p class="small"><label><input type="checkbox" id="brk-backup"> <span data-t="brkBackup"></span></label></p>
+      <p class="small"><label><span data-t="brkType"></span> <input id="brk-type" autocomplete="off" spellcheck="false" size="10"></label></p>
+    </section>
     <section class="box">
       <span class="tag">Install</span>
       <p data-t="intro"></p>
@@ -124,6 +137,21 @@
         <p><button id="stock-go" disabled data-t="stockGo"></button></p>
         <p class="small" data-t="stockBackup"></p>
         <p class="small"><label><input id="stock-recovery" type="checkbox"> <span data-t="stockRecovery"></span></label></p>
+      </details>
+    </section>
+    <section class="box sec" lang="en">
+      <span class="tag">Classic 0.13 return</span>
+      <details><summary>Return from 1.x to Classic 0.13.0</summary>
+        <p>Classic is no longer maintained. Reinstalling it alone does not restore your old music.
+        Choose the complete Classic backup saved before upgrading and the original 0.13.0 firmware package.</p>
+        <p><label>Saved Classic backup (.json or .zip)<br><input id="classic-backup" type="file" accept=".json,.zip"></label></p>
+        <p><label>Original Classic 0.13.0 package (.fwsc)<br><input id="classic-package" type="file" accept=".fwsc"></label></p>
+        <p><label>Type CLASSIC to confirm the return <input id="classic-confirm" autocomplete="off" size="10"></label></p>
+        <p><button id="classic-go" disabled>Back up 1.x and return to Classic</button></p>
+        <p>The installer saves a Classic restore JSON file, including when you selected a ZIP backup.
+        After installation, open that JSON file in the Classic editor to restore your music.
+        Your 1.x backup can only be restored after reinstalling 1.x. The return requires a running 1.x device;
+        interrupted updates use the recovery route separately.</p>
       </details>
     </section>
     <section class="box sec">
@@ -174,6 +202,20 @@ const TEXT = {
     preflightOk: "SHA-256、アプリ、ローダー、FM-1 パッケージの検証完了",
     leave: "書き込み中です。ページを閉じないでください。",
     license: "GPL-3.0、無保証。ライセンスとソースの提供:",
+    brkTag: "重要: 互換性のない更新",
+    brkLead: "FORMAT 2: Caravel 1.x は、旧バージョンで保存したデータを一切開けません。",
+    brk1: "0.x のプロジェクト、ユーザー音色、お気に入り、設定、バックアップは 1.0.0 では読み込めません。FM-1 のメモリには残りますが（消去するか上書き保存するまで）、読めるのは旧ファームウェアだけです。",
+    brk2: "インストーラーは書き込みの前に、全体バックアップをこのパソコンへ保存します。そのファイルを必ず保管してください。再び読み込めるのは旧バージョンのエディタです。",
+    brk3: "エンジンは ANALOG、PHYS、SEM、HADES、DRONE、ENSEMBLE の6つだけになり、操作も組み替えました。先にリリースノートを読んでください。",
+    brk4: "元に戻すには旧ファームウェアをもう一度インストールします。旧データは再び使えますが、1.0.0 で作ったデータは旧版で読めません。",
+    brkUnderstand: "旧バージョンのデータが 1.0.0 で読み込めなくなることを理解しました。",
+    brkBackup: "FM-1 のバックアップがあります（インストーラーもいま保存します）。旧ファームウェアへの戻し方も分かっています。",
+    brkType: "インストールボタンを有効にするには UPDATE と入力:",
+    brkConfirm: "全体バックアップファイルはパソコンに保存できましたか？ 続けると Caravel 1.0.0 を書き込みます。旧バージョンのプロジェクトと音色は 1.0.0 では開けません。",
+    brkNoAuto: "この FM-1 は全体バックアップに未対応です。自分で作成済みのバックアップがある場合だけ続けてください。",
+    brkNoAutoConfirm: "自動バックアップを保存できませんでした。保存済みのバックアップがない場合は、キャンセルして対応するエディタで先にバックアップしてください。",
+    brkLoader: "復旧モードではバックアップを作成できません。",
+    brkLoaderConfirm: "新しいバックアップを作成せずに書き込みを再開しますか？ 既存の完全なバックアップを保存済みの場合のみ続けてください。",
   },
   en: {
     tagline: "Multi-engine synth firmware for the FM-1",
@@ -208,6 +250,20 @@ const TEXT = {
     preflightOk: "SHA-256, application, loader and FM-1 package verified",
     leave: "Writing. Do not close the page.",
     license: "GPL-3.0, no warranty. Licences and source offer:",
+    brkTag: "Breaking update",
+    brkLead: "FORMAT 2: Caravel 1.x cannot open data saved by an older 0.x release.",
+    brk1: "Projects, user sounds, favourites, settings and backups of 0.x firmware will not load in 1.0.0. They stay untouched in the FM-1's memory until you erase or save over them, but only the old firmware can read them.",
+    brk2: "The installer saves a complete backup file to this computer before it writes anything. Keep that file: the editor of the old release is what can read it again.",
+    brk3: "Only six engines remain (ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE) and the controls were rearranged. Read the release notes first.",
+    brk4: "Going back means reinstalling Classic and restoring the Classic backup saved before upgrading. Firmware reinstall alone does not restore old data. Classic cannot read anything made in 1.x.",
+    brkUnderstand: "I understand that data of older releases will not load in 1.0.0.",
+    brkBackup: "I have a backup of my FM-1 (the installer saves one now as well) and I know how to go back to the old firmware.",
+    brkType: "Type UPDATE to enable the install button:",
+    brkConfirm: "Has the complete backup file been saved to this computer? Continue to install Caravel 1.0.0. Projects and sounds of older releases will not open in it.",
+    brkNoAuto: "This FM-1 cannot make a complete backup automatically. Continue only if you made one yourself.",
+    brkNoAutoConfirm: "No automatic backup could be saved. Do you have a backup you made yourself? If not, cancel and back up with the matching editor first.",
+    brkLoader: "Update loader detected: this device cannot export a backup in recovery mode.",
+    brkLoaderConfirm: "Resume writing WITHOUT making a new backup? Continue only if a complete backup is already saved on your computer.",
   },
 };
 let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
@@ -228,7 +284,16 @@ let image = null;
 const meta = /*META*/;
 
 let writing = false, stock = null, stockFileEpoch = 0;
-const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
+const breaking = !!meta.breaking;                    // a release that cannot open older data: backup, warning and a typed confirmation first
+$("breaking").hidden = !breaking;
+const brkReady = () => !breaking || ($("brk-understand").checked && $("brk-backup").checked && $("brk-type").value.trim().toUpperCase() === "UPDATE");
+let classicBackup = null, classicImage = null;
+const classicReady = () => classicBackup && classicImage && $("classic-confirm").value.trim().toUpperCase() === "CLASSIC";
+const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image || !brkReady(); $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on;
+  $("classic-go").disabled = on || !classicReady();
+  for (const id of ["classic-backup","classic-package","classic-confirm"]) $(id).disabled = on;
+  for (const id of ["brk-understand", "brk-backup", "brk-type"]) $(id).disabled = on; };
+for (const id of ["brk-understand", "brk-backup", "brk-type"]) $(id).addEventListener("input", () => lockInstaller(writing));
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
 (async () => {
@@ -241,16 +306,17 @@ window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault
     const verified = await validateCaravelPackage(pkg, meta);
     image = verified.image;
     sayK("preflightOk", ` (Caravel ${meta.version})`);
-    $("go").disabled = false;
+    lockInstaller(false);
   } catch (e) { sayK("loadfail", e.message); }
 })();
 
 $("go").addEventListener("click", async () => {
-  if (writing) return;
+  if (writing || !image || !brkReady()) return;
   lockInstaller(true);
   let midi;
   try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
   catch (e) { sayK("denied"); lockInstaller(false); return; }
+  let bkLink = null;
   try {
     const up = new Updater(midi, log);
     const total = 74 + 1167;
@@ -266,43 +332,98 @@ $("go").addEventListener("click", async () => {
     const ota = await up.find((id) => /^ota-/i.test(id.model));
     if (ota) {
       ota.link.close();
+      if (breaking) {
+        sayK("brkLoader"); // Recovery loader does not offer a backup channel.
+        if (!confirm(t("brkLoaderConfirm"))) return;
+      }
       sayK((await up.resume(image, step, meta.product)) ? "done" : "stopped");
     } else {
+      if (breaking) {                                     // the device runs: save everything it holds first, then ask once more
+        const device = await up.find((id) => id.model === "FM-1");
+        let saved = false;
+        if (device) {
+          const input = device.link.input, output = device.link.output; device.link.close();
+          bkLink = new BackupConnection(input, output);
+          const info = await bkLink.identify();
+          if (info.generation === 1 || info.generation === 2) {
+            const archive = await captureBackup((r,o) => bkLink.request(r,o), info.version,
+              (done,total) => sayK("backup", `${Math.round(done / Math.max(1,total) * 100)}%`));
+            saveArchive(archive); saved = true;
+          } else sayK("brkNoAuto");
+          bkLink.close(); bkLink = null;
+        }
+        if (!saved && !confirm(t("brkNoAutoConfirm"))) { lockInstaller(false); return; }
+        if (!confirm(t("brkConfirm"))) { lockInstaller(false); return; }
+      }
       await up.install(image, meta.product, step);
     }
   } catch (e) {
     if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
     else sayK("error", e && e.message);
     log(String(e && e.stack || e));
-  }
-  lockInstaller(false);
+  } finally { if (bkLink) bkLink.close(); lockInstaller(false); }
 });
 
 $("stock-file").addEventListener("change", async () => {
-  const epoch = ++stockFileEpoch, file = $("stock-file").files[0]; stock = null; lockInstaller(false);
+  const epoch = ++stockFileEpoch, file = $("stock-file").files[0]; stock = null; lockInstaller(writing);
   if (!file) return;
   try {
     if (file.size !== STOCK_V15_SIZE) throw new Error("FM-1 V15 / FM-1.fwsc");
     const verified = await validateStockPackage(new Uint8Array(await file.arrayBuffer()));
     if (epoch !== stockFileEpoch) return;
-    stock = verified; sayK("stockValid"); lockInstaller(false);
+    stock = verified; sayK("stockValid"); lockInstaller(writing);
   } catch (e) { if (epoch === stockFileEpoch) sayK("stockError", e.message); }
 });
-function saveArchive(archive) {
+function saveArchive(archive, prefix = "Caravel-backup") {
   const url = URL.createObjectURL(new Blob([JSON.stringify(archive)], {type:"application/json"}));
-  const a = document.createElement("a"); a.href = url; a.download = `Caravel-backup-${new Date().toISOString().slice(0,10)}.json`;
+  const a = document.createElement("a"); a.href = url; a.download = `${prefix}-${new Date().toISOString().slice(0,10)}.json`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function archiveInfo(a) {
-  let pos = a.indexOf(0); if (pos < 0) throw new Error("Invalid INFO");
-  const version = String.fromCharCode(...a.slice(0,pos)); pos++;
-  const engines = a[pos]; pos += 5;
-  for (let i = 0; i < engines; i++) { const end = a.indexOf(0,pos); if (end < 0) throw new Error("Invalid INFO"); pos = end + 1; }
-  const ext = a.slice(pos + 1);
-  const supported = /^(FELUCCA|CARAVEL) /i.test(version) && ext[0] === 16 && ext[1] === 0x55 && ext[2] === 1 &&
-    ext[4] === 0x4d && ext[5] === 1 && ext[8] === 0x42 && ext[9] === 1 && (ext[10] & 1);
-  return {version,supported};
-}
+
+$("classic-confirm").addEventListener("input", () => lockInstaller(writing));
+let classicBackupEpoch = 0, classicPackageEpoch = 0;
+$("classic-backup").addEventListener("change", async () => {
+  const epoch = ++classicBackupEpoch, file = $("classic-backup").files[0]; classicBackup = null; lockInstaller(writing);
+  try {
+    if (!file || file.size > 2*1024*1024) throw new Error("Choose a complete Classic backup");
+    const archive = requireClassicReturnBackup(await readBackupFile(await file.arrayBuffer()));
+    if (epoch === classicBackupEpoch) classicBackup = archive;
+  } catch (e) { say(e.message); }
+  lockInstaller(writing);
+});
+$("classic-package").addEventListener("change", async () => {
+  const epoch = ++classicPackageEpoch, file = $("classic-package").files[0]; classicImage = null; lockInstaller(writing);
+  try {
+    if (!file || file.size !== 610074) throw new Error("Choose the original Classic 0.13.0 package");
+    const verified = await validateCaravelPackage(new Uint8Array(await file.arrayBuffer()), {
+      version:"0.13.0",product:"FM-1_999",size:610074,
+      sha256:"a1d560684519667b4051b35630380874065853a20a353a4f9d279c2bfee208b7"});
+    if (epoch === classicPackageEpoch) classicImage = verified.image;
+  } catch (e) { say(e.message); }
+  lockInstaller(writing);
+});
+$("classic-go").addEventListener("click", async () => {
+  if (writing || !classicReady()) return;
+  const selected = classicImage, selectedBackup = classicBackup; lockInstaller(true); let link = null;
+  try {
+    const midi = await navigator.requestMIDIAccess({sysex:true}), up = new Updater(midi,log);
+    const device = await up.find(id => id.model === "FM-1");
+    if (!device) throw new Error("Connect the running 1.x device first");
+    const input=device.link.input, output=device.link.output; device.link.close();
+    link=new BackupConnection(input,output);
+    const info=await link.identify();
+    if (info.generation !== 2) throw new Error("This return is only for a running 1.x device");
+    saveArchive(await captureBackup((r,o)=>link.request(r,o),info.version));
+    link.close();link=null;
+    saveArchive(classicEditorBackup(selectedBackup),"Caravel-Classic-restore");
+    if (!confirm("Have BOTH files been saved: the new 1.x backup and Caravel-Classic-restore JSON? Return to Classic 0.13.0, then open the Classic restore JSON in the Classic editor?")) return;
+    await up.install(selected,"FM-1_999",(k,a)=>{log(`${k} ${a ?? ""}`);say(`${k} ${a ?? ""}`);},
+                     {targetGeneration:1,downgrade:true});
+    say("Classic installed. Open the Classic editor and restore the downloaded Caravel-Classic-restore JSON file.");
+  } catch (e) { say(e.message); }
+  finally { if (link) link.close(); lockInstaller(false); }
+});
+
 $("stock-go").addEventListener("click", async () => {
   if (!stock || writing) return;
   const selected = stock; lockInstaller(true);
@@ -323,13 +444,13 @@ $("stock-go").addEventListener("click", async () => {
       if (!device) { sayK("notfound"); return; }
       const input = device.link.input, output = device.link.output; device.link.close();
       link = new BackupConnection(input, output);
-      const info = archiveInfo(await link.request([1,[]]));
-      if (!info.supported) { sayK("stockUnsupported"); return; }
+      const info = await link.identify();
+      if (!info.generation) { sayK("stockUnsupported"); return; }
       const archive = await captureBackup((r,o) => link.request(r,o), info.version,
         (done,total) => sayK("backup", `${Math.round(done / Math.max(1,total) * 100)}%`));
       saveArchive(archive); link.close(); link = null;
       if (!confirm(t("stockConfirm"))) return;
-      await up.install(selected.image, selected.product, step);
+      await up.install(selected.image, selected.product, step, {targetGeneration:0, stock:true});
     }
   } catch (e) {
     if (e.code && TEXT[lang][e.code]) sayK(e.code,e.detail || ""); else sayK("error",e.message);

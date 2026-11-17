@@ -12,10 +12,8 @@ static uint32_t project_compat_flags(const project_t *p)
     if (p->g[G_RTYPE] == 0) flags |= 2u;
     if (p->g[G_RTYPE] == 1) flags |= 4u;
 #endif
-#if !FELUCCA_SLICE
     for (uint32_t t = 0; t < NTRK; t++)
         if (p->t[t].engine == 13u) flags |= 1u;
-#endif
     return flags;
 }
 static uint32_t project_compat_warning(void) { return project_compat_state.warning; }
@@ -34,6 +32,12 @@ static int project_compat_request(const project_t *p, uint32_t source)
 }
 static int project_compat_save_blocked(uint32_t slot)
 {
+    if (slot < 4u && ((f2_old >> slot) & 1u)) {       /* FORMAT 2: an older version's project is there: only erased, never written over */
+        f2_offer();                                   /* (the notice again: keep it, or erase it and use the slot) */
+        ui_message("OLD PROJECT HERE");
+        str_cpy(ui.msg2, "NOT OVERWRITTEN", sizeof ui.msg2);
+        return 1;
+    }
     if (slot < 4u && (project_compat_state.protected_slots & (1u << slot))) {
         ui_message("ORIGINAL PROTECTED");
         str_cpy(ui.msg2, "SAVE TO ANOTHER SLOT", sizeof ui.msg2);
@@ -54,7 +58,7 @@ static void project_compat_cancel(void)
 }
 static void project_compat_confirm(void)
 {
-    if (transport_busy() || chain_busy()) {
+    if (transport_busy() || 0) {
         project_compat_cancel();
         ui_message("STOP TO TEST LOAD");
         return;

@@ -10,6 +10,7 @@
  * what they are. Every hint fits its row with every word (tests/ui_test.c test_help: no word dropped). The setting and
  * the timer: ui.c help_on, help_start (PREF_HELP, ui.help_t) */
 
+extern uint8_t chord_ext_row;
 static const char H_EDIT[] = "[K1-4]SOUND[EDIT]HOLD: ENGINES";
 static const char H_LANES[] = "[K1-4]LANE LEVELS[EDIT]HOLD: MUTES";
 static const char H_FMOP[] = "[K1]OPERATOR[SAVE]HOLD: UNDO";
@@ -61,7 +62,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"X LAYER", "[K1]SOUND[K2]LAYER[K4]SEND"},
     {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
-    {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
+    {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]TOOLS"},
     {"PROJECT", "[K2]INIT, ERASE[K4]SAVE"},   /* (1.5.5, #199: ERASE) */
     {"TOOLS", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
@@ -88,7 +89,11 @@ static const char *help_page(void)
     uint32_t i;
     const char *t;
 #if FELUCCA_HOME_PERF
+#if CARAVEL_UX_LAYERS
+    if(ui.home)return "[K1-4]LEVELS[ALGO]TRACK[HOME]HOLD: MODE";
+#else
     if(ui.home)return "[K1-4]ROW[SELECT]ROW[ALGO]TRACK";
+#endif
     if(str_eq(cur_page()->title,"MIXER"))return "[K4]MUTE[SELECT]PAGE";
     if(str_eq(cur_page()->title,"ENV DEST"))return "[K1-4]ENV AMOUNTS[ENV]PAIR";
 #endif
@@ -97,6 +102,8 @@ static const char *help_page(void)
     if (grid_on() && !detail_on())
         return H_GRID;
     t = cur_page()->title;
+    if (cur_page()->graph == GR_CHORD && chord_ext_row)   /* the CHORD page's virtual row (ui_input.c) */
+        return "[K1]SOURCE[K2]EXT[K3]OCT";
     if (sel_mode() != SEL_BPM && str_eq(t, "CLOCK"))   /* (1.5.5: SELECT steps the pages; 1.5.6: or plays) */
         return "[K1]TEMPO[GLO]HOLD: TAP";
     for (i = 0; i < NELEM(HELP_PAGE); i++)

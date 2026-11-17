@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 // fm1backup.js against a simulated device: 7-bit packing, CRC, manifest checks, a full capture,
 // validation before the first write, restore order (live music last) and abort on a failed chunk.
-import { BACKUP_IDS, BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, readBackup, captureBackup, restoreBackup } from "./fm1backup.js";
+import { BACKUP_IDS, BACKUP_IDS_F2, BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, readBackup, captureBackup, restoreBackup } from "./fm1backup.js";
 
 let fails = 0;
 const ok = (c, what) => { console.log(`${what.padEnd(72)} ${c ? "ok" : "FAIL"}`); if (!c) fails++; };
@@ -125,6 +125,78 @@ ok(await athrows(() => restoreBackup(failing.request, file)) && failing.log.incl
   const dst = device([]); await restoreBackup(dst.request, el);
   ok(caps.every(([id, bytes]) => dst.objs.get(id).length === 7200 && dst.objs.get(id).every((v, i) => v === bytes[i])),
     "backup: HPM1 v4/v5 capsules (7200 B) in slots and WORK restore byte for byte");
+}
+
+// FORMAT 2: real fixture, simulated device for protocol 2, and CLI ZIP byte interop.
+{
+  const {readFileSync}=await import("node:fs");
+  const {execFileSync}=await import("node:child_process");
+  const {createHash}=await import("node:crypto");
+  const capsule=new Uint8Array(readFileSync(new URL("../tests/format2_project_capsule.bin",import.meta.url)));
+  const bank=new Uint8Array(3080),view=new DataView(bank.buffer);
+  view.setUint32(0,0x32425055,true);
+  view.setUint16(4,192,true);view.setUint16(6,16,true);
+  const input=[[0,capsule],[1,rnd(1200,14)],[2,capsule],[6,bank]];
+  function f2device(items) {
+    const d=device(items,{maxId:7});
+    const request=async packet=>{
+      if(packet[0]!==BACKUP_CMD.LIST)return d.request(packet);
+      const payload=[2,0,8];
+      for(const id of BACKUP_IDS_F2){
+        const bytes=d.objs.get(id)||new Uint8Array();
+        payload.push(id,...bkU32(bytes.length),...bkU32(bytes.length?bkCrc(bytes):0));
+      }
+      return payload;
+    };
+    return {...d,request};
+  }
+  const src=f2device(input),backup=await captureBackup(src.request,"CARAVEL 1.0.0");
+  ok(backup.version===2&&backup.format==="CaravelBackup2"&&backup.objects.length===8,
+     "backup: protocol 2 selects exactly IDs 0..7 and CaravelBackup2");
+  ok(backup.objects[0].size===6144&&backup.objects[6].size===3080&&
+     readBackup(JSON.stringify(backup)).objects[0].bytes.every((x,i)=>x===capsule[i]),
+     "backup: real FORMAT 2 capsule survives capture and Web JSON read");
+  const dst=f2device(input.map(([id,data])=>[id,data.slice()]));
+  await restoreBackup(dst.request,backup);
+  ok(BACKUP_IDS_F2.every(id=>{
+    const a=src.objs.get(id)||new Uint8Array(),b=dst.objs.get(id)||new Uint8Array();
+    return a.length===b.length&&a.every((x,i)=>x===b[i]);
+  })&&dst.log.at(-1)===0&&dst.log.at(-2)===1,
+     "backup: protocol 2 restore preserves every byte, restores WORK and SETTINGS last");
+  const classic=device([]),newTarget=f2device(input);
+  ok(await athrows(()=>restoreBackup(classic.request,backup))&&classic.log.length===0,
+     "backup: protocol 2 backup cannot restore onto protocol 1");
+  ok(await athrows(()=>restoreBackup(newTarget.request,file))&&newTarget.log.length===0,
+     "backup: protocol 1 backup cannot restore onto protocol 2");
+  const corrupt=JSON.parse(JSON.stringify(backup));corrupt.objects[0].crc^=1;
+  ok(await athrows(()=>restoreBackup(newTarget.request,corrupt))&&newTarget.log.length===0,
+     "backup: corrupt protocol 2 archive fails before PUT");
+  // JSON and ZIP containers are different. The uncompressed device objects must match.
+  const py=[
+    "import base64,hashlib,json,sys,tempfile",
+    "from pathlib import Path",
+    "sys.path.insert(0,'tools')",
+    "import caravel_backup as cb",
+    "archive=json.loads(sys.stdin.read())",
+    "objects={o['id']:base64.b64decode(o['data']) for o in archive['objects']}",
+    "assert tuple(objects)==cb.IDS2",
+    "for k,v in objects.items():cb.validate(k,v,2)",
+    "with tempfile.TemporaryDirectory() as t:",
+    " path=Path(t)/'objects.zip'",
+    " cb.save_archive(path,objects,2)",
+    " fmt,got=cb.load_archive(path)",
+    " assert fmt==2 and got==objects",
+    " print(json.dumps({str(k):hashlib.sha256(v).hexdigest() for k,v in got.items()},sort_keys=True))"
+  ].join("\n");
+  let equal=false;
+  try{
+    const digests=JSON.parse(execFileSync("python3",["-c",py],{
+      input:JSON.stringify(backup),encoding:"utf8"
+    }));
+    equal=backup.objects.every(o=>
+      digests[o.id]===createHash("sha256").update(Buffer.from(o.data,"base64")).digest("hex"));
+  }catch(e){console.error("FORMAT 2 CLI interoperability:",String(e.stderr||e));}
+  ok(equal,"backup: every FORMAT 2 object byte equals Python CLI ZIP roundtrip");
 }
 console.log(fails ? `BACKUP WEB TESTS FAILED (${fails})` : "backup web tests passed");
 process.exit(fails ? 1 : 0);

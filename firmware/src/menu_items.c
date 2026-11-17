@@ -169,7 +169,7 @@ static const menu_flag_t MENU_FLAGS[] = {
  * (#42: "OFF" read as the speaker off). FLAT is the old OFF (0, stored as before). The built-in speaker cannot be
  * turned off from the firmware (no amp enable or mute line is known); the EQ reaches
  * the headphone / line out and USB audio too (one DAC, uac_tap reads the master) */
-static const char *const SPK_EQ[3] = {"FLAT", "LOWCUT", "BASS+"};
+static const char *const SPK_EQ[4] = {"FLAT", "LOWCUT", "BASS+", "BRIGHT"};
 static const char *const HOLD_N[4] = {"0.3 s", "0.4 s", "0.5 s", "0.6 s"};   /* (the editor's names; the menu draws its own) */
 /* 1.1 (Discussion #131): the metronome (click.c) and the count-in (seq.c); ui.c ui_rec_prefs holds them */
 static const char *const CLICK_N[3] = {"OFF", "REC", "ON"};          /* REC: while a track is armed and playing */
@@ -227,7 +227,7 @@ static uint32_t menu_n(uint32_t row)
     if(row==MI_HPDEFAULT) return 3;
     if(row==MI_HOME||row==MI_SELECT||row==MI_BPMLOCK)return 1;
 #endif
-    return MI_VCAP(row) ? 5u : row == MI_COLOR ? palette_n() : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
+    return MI_VCAP(row) ? 5u : row == MI_COLOR ? palette_n() : row == MI_LOWCUT ? 4u : (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
            row == MI_HOLD || row == MI_FXTRACK ? 4u : row == MI_LEDS ? LEDS_ROWS : row == MI_SCROFF ? NELEM(SCROFF_N) :
            row == MI_TUNE ? TUNE_N : row == MI_MIDIIN ? NELEM(N_ROUTE) : MI_TCH(row) ? MCH_N : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT :
            row == MI_SELECT ? SEL_N : 2u;
@@ -247,7 +247,7 @@ static uint32_t menu_get(uint32_t row)
     case MI_V1: case MI_V2: case MI_V3: case MI_V4: return voice_policy_cap(voice_policy, row - MI_V1) - 1u;
     case MI_COLOR: return palette_cur();
     case MI_STYLE: return ui_style == ST_LINE;
-    case MI_LOWCUT: return settings.lowcut % 3u;
+    case MI_LOWCUT: return settings.lowcut % 4u;
     case MI_HOLD: return settings_hold % 4u;
     case MI_FXTRACK: return motion_fx_track();
     case MI_SCROFF: return scr_get();
@@ -280,7 +280,7 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     }
     case MI_COLOR: return palette_name(v);
     case MI_STYLE: return STYLE_N[v & 1u];
-    case MI_LOWCUT: return SPK_EQ[v % 3u];
+    case MI_LOWCUT: return SPK_EQ[v % 4u];
     case MI_HOLD: return HOLD_N[v & 3u];
     case MI_FXTRACK: { static const char *const names[] = {"T1", "T2", "T3", "T4"}; return names[v & 3u]; }
     case MI_CLICK: return CLICK_N[v % 3u];

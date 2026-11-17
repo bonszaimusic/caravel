@@ -2311,6 +2311,7 @@ static void al_table(void)
             al_count, al_nst, al_fail, al_lost);
 }
 
+#ifndef UI_RENDER_NO_MAIN
 int main(int argc, char **argv)
 {
     const char *out = argc > 1 ? argv[1] : "build/ui_new";
@@ -2617,5 +2618,6 @@ int main(int argc, char **argv)
            al_fail ? " (see align.txt)" : "");
     return nfind || nink || mono_bad || al_fail ? 1 : 0;
 }
+#endif
 
 

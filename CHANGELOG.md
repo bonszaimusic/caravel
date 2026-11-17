@@ -1,6 +1,17 @@
 # Changelog
 
-## [0.13.0] - prepared 2026-11-13, not published
+## [1.0.0] - candidate, not published
+
+- FORMAT 2 and six engines: ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE. No import of pre-1.0 backups; removed engines, Song/Chain and Scope. Back up first with the old matching tool.
+- BUILD / PLAY interface, PLAY first boot and one-time LEVELS; SAVE opens PROJECT; ENV + knob suppresses page advance. STEP/DETAIL/AUTOMATION keep their grids.
+- CAPTURE enabled for live panel and USB/TRS MIDI notes, with bounded retrospective loops. No audio/CC capture or recursive recording; loops are not saved.
+- CHORD EXT sources HARM and T1–T4, bounded live recognition, status/actual-note display and retained release ownership. RETRIG HARM/BOTH intentionally applies beyond EXT tracks.
+- Effective selected-track FX FILTER display, pickup from the stored filter and unlatched return; ordinary PLAY performance controls stay.
+- USB project import accepts stored PAIR SPREAD and normalizes both members on load; malformed data remains rejected.
+- Current [compatibility, limits and hardware checklist](docs/release-100.md). Not tested on an FM-1, no sound heard; final validation receipt remains separate from publication.
+
+
+## [0.13.0] - published (historical release)
 
 - **ELASTIC P1.4 (HOME ACTION, seventh bank between STASIS and PAIR):** temporary, reversible spring movement of supported HOME controls (the stored value is not changed). A1 ARM / OFF, A2 PULSE, A3 HOLD / RESUME, A4 RESET; hold the bank key for SETUP (TIMES: SCOPE CELL / ROW, PULL, RETURN, RANGE; A4 in SETUP switches to PHYSICS: BOUNCE, REFLECT, COUPLE, SEED). Four independent tracks. **BOUNCE is a musical period, one full oscillation, 1/16 to 64 BAR in 11 steps**, following the internal tempo or the external MIDI-clock estimate; a tempo change keeps the phase; a gesture starts at once and is not aligned to a step or bar. **RETURN INF** keeps the amplitude until HOLD, RESET, OFF or an invalid target. The HOME cards show a spring mark and, while moving, a spring in place of the number. No MIDI Learn for ELASTIC.
 - **HPM1 v5:** every project saved by 0.13.0 carries a v5 HOME capsule (nine ELASTIC bytes per track: SCOPE, PULL, RETURN, RANGE, BOUNCE, REFLECT, COUPLE, SEED); arms, HOLD, phase and spring positions are not saved. 0.13.0 reads v1 to v5 (v1 to v3 load with ELASTIC defaults; v4's numeric BOUNCE keeps its old behaviour until changed; a capsule that fails validation is refused before any state changes). **0.12.0 reads versions 1 to 3 only and does not accept v5. Back up first. Upgrading is safe, going back is not.** `tools/caravel_backup.py` of 0.13.0 saves and restores HPM1 v4/v5 byte-preserving (copies from 0.12.0 or earlier stop with `Invalid HPM1 capsule`); the web backup checks sizes only and has not been verified on a device with v5 projects.

@@ -301,7 +301,7 @@ static void song_setup(void)
     song.g[G_BPM] = 120;
     host_preset(t1, 0, 4);
     host_preset(t2, 1, 5);
-    host_drums(td);                                /* DRUM KIT (SAMPLE PERC until 1.0.2) */
+    host_percussive_track(td);                                /* DRUM KIT (SAMPLE PERC until 1.0.2) */
     for (i = 0; i < 16u; i++) {
         uint8_t n = ACID[i], d[4], k = 0;
         put_step(t1, i, n ? 1u : 0u, &n, n ? ST_NOTE : ST_REST, 0);
@@ -528,7 +528,7 @@ static int test_misc(void)
             bad += check(what, peak(out_l, 0, 100000) < 300000 && peak(out_r, 0, 100000) < 300000);
         }
     }
-    {   /* KNOB 1 left: a low-pass at once; KNOB 4: the REPEAT's level */
+    {   /* KNOB 1 left: no longer a master low-pass (fx.c tf_eff); KNOB 4: the REPEAT's level */
         test_signal(5000, 30000, 5000, 30000);
         host_tracks_init();
         perf_reset();
@@ -543,8 +543,8 @@ static int test_misc(void)
                 perf_block(out_l + t, out_r + t, CTL);
         }
         perf_k[0] = 0;
-        snprintf(what, sizeof what, "KNOB 1 FILTER all the way left: a 5 kHz sine down to %d", peak(out_l, 10000, 20000));
-        bad += check(what, peak(out_l, 10000, 20000) < 3000);
+        snprintf(what, sizeof what, "KNOB 1 FILTER all the way left: the master is not filtered by it (the macro is the selected track's): a 5 kHz sine stays at %d", peak(out_l, 10000, 20000));
+        bad += check(what, peak(out_l, 10000, 20000) > 20000);
     }
     {   /* THROW (KNOB 3): the dry mix into the delay and reverb sends; mutes: a track ramps out */
         static int32_t ml[CTL], mr[CTL], sd[CTL], sr[CTL];

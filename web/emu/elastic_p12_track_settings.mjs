@@ -11,7 +11,7 @@ for(const name of ["web_action_state","web_action_setup_toggle",
                    "web_p12_armed_mask","web_p12_demo_track"]) {
  if(typeof ex[name]!=="function")throw Error("Missing WASM export "+name);
 }
-ex._initialize();ex.web_nor_erase();ex.web_boot();
+ex._initialize();ex.web_nor_erase();ex.web_boot(); if (ex.web_test_build) ex.web_test_build();
 const render=(ms)=>{
  const n=Math.round(ms*44.1);
  for(let k=0;k<n;k+=128)ex.web_render(Math.min(128,n-k));

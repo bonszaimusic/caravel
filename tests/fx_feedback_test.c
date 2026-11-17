@@ -1,13 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 bonszaimusic */
-/* Independent wide-integer references for signed feedback and 64-bit host sample objects. */
+/* Independent wide-integer references for signed feedback. */
 #include <stdint.h>
-static uint32_t feedback_slots[3][0x14000u / 4u];
-#define SMP_USER_XIP(k) ((const uint8_t *)feedback_slots[(k)])
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
-_Static_assert(sizeof feedback_slots[0] == SMP_USER_SIZE, "sample slot fixture size");
 
 static int64_t floor_div(int64_t x, int64_t by)
 {
@@ -45,16 +42,7 @@ int main(void)
         }
     }
     bad += dc != 0 || lc[0] != 0 || lc[1] != 0;
-    bad += smp_data_byte(0) != SMP_DATA[0] || smp_data_byte(sizeof SMP_DATA - 1u) != SMP_DATA[sizeof SMP_DATA - 1u];
-    for (j = 0; j < SMP_USER_SLOTS; j++) {
-        uint8_t *p = (uint8_t *)feedback_slots[j] + SMP_USER_DATA;
-        uint32_t base = (uint32_t)(uintptr_t)p - (uint32_t)(uintptr_t)SMP_DATA;
-        p[0] = (uint8_t)(0x31u + j);
-        p[SMP_USER_SIZE - SMP_USER_DATA - 1u] = (uint8_t)(0x91u + j);
-        bad += smp_data_byte(base) != p[0];
-        bad += smp_data_byte(base + SMP_USER_SIZE - SMP_USER_DATA - 1u) != p[SMP_USER_SIZE - SMP_USER_DATA - 1u];
-    }
-    printf("feedback: 262144 bipolar/quiet/silence samples, DC and both lowcut references, built-in and 3 user slots: %s\n",
+    printf("feedback: 262144 bipolar/quiet/silence samples, DC and both lowcut references: %s\n",
            bad ? "FAIL" : "ok");
     return bad != 0;
 }
