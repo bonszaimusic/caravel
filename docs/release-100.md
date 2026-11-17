@@ -25,6 +25,16 @@ The web installer also supports upgrading the known pre-release 1.0 development 
 
 ## Limits and validation
 
+**AFTERBURNER RC preview:** In BUILD, tap FX through to AFTER (after REVERB).
+K1 switches it ON, K2 sets nominal low-frequency RT60 from 10 to 60 seconds,
+K3 sets AMT, K4 sets DAMP. It extends the HALL/STASIS wet return and preserves
+its own tail across reverb-type changes. It uses no synth voice. It starts OFF;
+these controls are currently session-only and reset on INIT or LOAD rather
+than being stored in FORMAT 2. There is no adaptive CPU-priority controller in
+this preview. Test 10/30/60 seconds with four tracks and dense CAPTURE on the
+FM-1; if load is excessive, use the matching build with
+`CARAVEL_AFTERBURNER=0`, which removes its DSP, buffers and AFTER page.
+
 The compressed performance capsule still has a **3,328-byte budget**. PROJECT TOO LARGE / NOT SAVED refuses a save and retains the previous copy. The pinned engine submodule is required for a reproducible source checkout. m-bootloader remains documentation-only. UC25HQ80 (`0xB36014`) is recognized but **not tested on a real unit by this project**.
 
 Host and emulator checks are being finalized for the exact candidate source; their receipt and package SHA-256 belong with the final test package. Host instruction counts are not FM-1 cycles. Device audio deadlines, arrival jitter, clock behavior, UI feel, power cycling, the DRONE level and dense CAPTURE playback still require the checklist below. GitHub-hosted CI is not available in this preparation; Docker results must be named separately, without claiming hosted CI passed.

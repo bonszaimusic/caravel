@@ -14,7 +14,7 @@ GROUPS={
  'storage_usb':'storage input midi_uart timer5_midi',
  'synthesis_midi':'scale track_mute chord chordext chordext_diff chordext_capture chordsource ux_capture ux_play_midi latch midi_control midi_resync midi_drift midi_clock_cc voice_reserve ratchet step15 seq155 detail step_play click swing',
  'ui_storage':'ux_elastic_arc harmony_roles_ui chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
- 'effects':'afterburner_host speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity',
+ 'effects':'afterburner_host afterburner_ui speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity',
  'cpu_dual':'dualcore',
  'engines_samples':'format2_engine_memory phys sem hades hades_dsp drone drone_cells drone_motion',
  'sanitizers':'', 'web_target':''}
@@ -76,7 +76,7 @@ def run(r):
   folder=ROOT/'build/fixtures';folder.mkdir(exist_ok=True);(folder/'speaker-kicks.f32').write_bytes(raw)
  for n in GROUPS[s]:
   flags=[]
-  if n in ['chordsource','ux_capture','ux_play_midi','ux_elastic_arc']:flags+=PROFILE
+  if n in ['chordsource','ux_capture','ux_play_midi','ux_elastic_arc','afterburner_ui']:flags+=PROFILE
   if n in ['dualcore']:flags+=['-pthread']
   if n in ['stasis','stasis_continuity']:flags+=['-DCARAVEL_REVERB_MINIMAL=1','-DCARAVEL_STASIS_EXPAND=1']
   if n=='stasis_layer':flags+=PROFILE
@@ -124,6 +124,7 @@ def run(r):
   r.command('phys-independent-float-reference',[exe])
  if s=='sanitizers':
   strict=['-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=undefined','-fno-omit-frame-pointer']
+  r.c('afterburner_ui',[*strict,*PROFILE],env={'ASAN_OPTIONS':'detect_leaks=0','UBSAN_OPTIONS':'halt_on_error=1'})
   for n in SANITIZED:r.c(n,[*strict,*(PROFILE if n in ['chordsource','ux_capture','ux_play_midi'] else [])],env={'ASAN_OPTIONS':'detect_leaks=0','UBSAN_OPTIONS':'halt_on_error=1'})
   for n,iters,seed in [('fuzz_ed','20000','7'),('fuzz_proj','5000','13')]:r.c(n,strict,[iters,seed],source=f'tests/{n}.c',env={'ASAN_OPTIONS':'detect_leaks=0','UBSAN_OPTIONS':'halt_on_error=1'})
   r.c('timer5_midi',[*strict,'-DTIMER5_SYNTH_TEST=1'])
@@ -140,6 +141,7 @@ def run(r):
   r.command('editor-chordext-preserve',['node','web/test_web.mjs'])
   r.command('wasm-build',['sh','web/emu/build.sh'],{'EMU_CFLAGS':'-DWEB_LCD_TRACE=1'})
   r.command('format2-wasm-old-data-guard',['node','web/emu/format2_test.mjs','build/emu/felucca.wasm'])
+  r.command('afterburner-wasm',['node','web/emu/afterburner_test.mjs','build/emu/felucca.wasm'])
   r.command('ux-layers-119',['node','web/emu/ux_layers_test.mjs'])
   r.command('frame-flicker',['node','web/emu/frame_flicker_test.mjs'])
   r.command('fx-filter-track-retention',['node','web/emu/fx_filter_track_test.mjs','build/emu/felucca.wasm'])

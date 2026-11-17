@@ -137,6 +137,10 @@ static void hp_midi_touch(uint32_t kind,uint32_t track,uint32_t id)
 static void hp_touch(uint32_t slot)
 {
  const page_t*pg=cur_page();hp_last_valid=0;hp_ref_t r={0};r.track=song.sel;r.engine=255;r.page=ui.page;
+#if CARAVEL_AFTERBURNER
+ /* Virtual session controls are not offsets into the stored song globals. */
+ if(str_eq(pg->title,"AFTER"))return;
+#endif
  if(pg->graph==GR_PAIR){r.kind=HP_PAIR;r.id=slot;}
  else if(pg->graph==GR_MACRO){r.kind=HP_MACRO;r.id=slot;}
  else if(lfo2_page(pg->graph)){r.kind=HP_LFO2;r.id=lfo2_page_target(pg->graph,slot);}

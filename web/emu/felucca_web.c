@@ -684,6 +684,31 @@ EXPORT uint32_t web_test_track_engines(void) { return (uint32_t)trk[0].eng_req |
 #endif
 EXPORT void web_test_engine(uint32_t e, uint32_t preset) { host_preset(&trk[0], e, preset); ui.force = 1; }   /* (tests, shots: track 1's engine) */
 EXPORT uint32_t web_test_page(void) { return (uint32_t)ui.page | (uint32_t)ui.home << 8 | (uint32_t)ui.layer << 9; }   /* (tests: the page shown) */
+#if CARAVEL_AFTERBURNER
+/* Read-only probes: tests edit AFTER through the real panel input path. */
+EXPORT int32_t web_test_afterburner(uint32_t field)
+{
+    switch (field) {
+    case 0: return afterburner.on;
+    case 1: return afterburner.time;
+    case 2: return afterburner.amt;
+    case 3: return afterburner.damp;
+    case 4: return !ui.home && str_eq(cur_page()->title, "AFTER");
+    case 5: return afb.active;
+    case 6: return afb.clearing;
+    default: return 0;
+    }
+}
+EXPORT double web_test_afterburner_energy(void)
+{
+    double energy = 0;
+    for (uint32_t i = 0; i < AFB_N; i++) {
+        double sample = (double)afb_line[i] / AFB_Q;
+        energy += sample * sample;
+    }
+    return energy / AFB_N;
+}
+#endif
 EXPORT int32_t web_test_p(uint32_t i) { return i < P_COUNT ? TSEL->p[i] : 0; }   /* (tests: a parameter of the selected track) */
 #if CARAVEL_UX_LAYERS && CARAVEL_UX_EVOLVE
 /* Read the actual FX card model; test setup changes only the stored track filter. */
