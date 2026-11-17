@@ -127,6 +127,16 @@ jobs:
             --release-dir "$RUNNER_TEMP/release" --check-only
       - name: Install header-generation dependencies
         run: python -m pip install Pillow fonttools
+      - name: Restore the verified frozen Classic snapshot for 1.x
+        if: startsWith(env.VER, '1.')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern Caravel-0.13.0-frozen-site.zip --dir "$RUNNER_TEMP"
+          python3 web/frozen_classic.py --archive "$RUNNER_TEMP/Caravel-0.13.0-frozen-site.zip" \
+            --out "$RUNNER_TEMP/classic-frozen"
       - name: Match the selected engine and effects profile
         run: |
           if [ "$VER" = 0.6.0 ] || [ "$VER" = 0.7.0 ] || [ "$VER" = 0.7.1 ] || [ "$VER" = 0.7.2 ] || [ "$VER" = 0.8.0 ] || [ "$VER" = 0.9.0 ] || [ "$VER" = 0.10.0 ] || [ "$VER" = 0.10.1 ] || [ "$VER" = 0.11.0 ] || [ "$VER" = 0.12.0 ] || [ "$VER" = 0.13.0 ]; then
@@ -134,7 +144,6 @@ jobs:
             echo 'FELUCCA_SLICE=0' >> "$GITHUB_ENV"
             echo 'EMU_CFLAGS=-DCARAVEL_REVERB_MINIMAL=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
           fi
-          if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-source; fi
           if [ "$VER" = 0.7.0 ] || [ "$VER" = 0.7.1 ] || [ "$VER" = 0.7.2 ] || [ "$VER" = 0.8.0 ] || [ "$VER" = 0.9.0 ] || [ "$VER" = 0.10.0 ] || [ "$VER" = 0.10.1 ] || [ "$VER" = 0.11.0 ] || [ "$VER" = 0.12.0 ] || [ "$VER" = 0.13.0 ]; then
             echo 'EMU_CFLAGS=-DCARAVEL_ACTION_BANKS=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_SLICE=0' >> "$GITHUB_ENV"
           fi
@@ -181,9 +190,18 @@ jobs:
           python3 build/site-content/tests/tutorial_pages_test.py
           python3 build/site-content/web/performance_pages.py --site site
       - name: Add current troubleshooting links without changing release artifacts
+        if: ${{ !startsWith(env.VER, '1.') }}
         run: |
           python3 build/site-content/tests/faq_links_test.py
           python3 build/site-content/web/faq_links.py --site site
+      - name: Compose generation-isolated 1.x and frozen Classic
+        if: startsWith(env.VER, '1.')
+        run: |
+          mv site build/v1-base-site
+          python3 web/v1_docs.py --source . --commit "$(git rev-parse HEAD)" \
+            --site build/v1-base-site --out build/v1-site --published
+          node web/check_generation_site.mjs build/v1-site
+          python3 web/dual_site.py --classic "$RUNNER_TEMP/classic-frozen" --v1 build/v1-site --out site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

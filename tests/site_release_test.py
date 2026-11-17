@@ -90,7 +90,7 @@ class SiteReleaseTest(unittest.TestCase):
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
         self.root = self.fixture.root
-        paths = ["index_pkg.html", "editor.html", "fm1pkg.js", "fm1ota.js", "fm1backup.js",
+        paths = ["index_pkg.html", "editor.html", "generation.js", "fm1pkg.js", "fm1ota.js", "fm1backup.js",
                  "fukiai.ttf", "FUKIAI-LICENSE.txt", "emu/index.html", "emu/worklet.js",
                  "emu/fonts/DotGothic16-subset.woff", "emu/fonts/OFL.txt"]
         for name in paths:

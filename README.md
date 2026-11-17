@@ -1,10 +1,10 @@
 # Caravel
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1. **1.0.0 candidate: prepared, not published.** The latest published version remains [0.13.0](https://github.com/bonszaimusic/caravel/releases/tag/v0.13.0).
+Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.0.0** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.0.0). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
 
-[Browser emulator](https://bonszaimusic.github.io/caravel/emulator/) · [Web installer](https://bonszaimusic.github.io/caravel/webapp/installer/) · [Web editor](https://bonszaimusic.github.io/caravel/webapp/editor/) · [Tutorials](docs/tutorials/README.md) · [FAQ](docs/faq.md)
+[Browser emulator](https://bonszaimusic.github.io/caravel/v1/emulator/) · [Web installer](https://bonszaimusic.github.io/caravel/v1/webapp/installer/) · [Web editor](https://bonszaimusic.github.io/caravel/v1/webapp/editor/) · [Tutorials](docs/tutorials/README.md) · [FAQ](docs/faq.md)
 
-The live website follows published releases; these source-tree instructions describe the 1.0 candidate.
+The website keeps Classic and 1.x separate. These instructions describe 1.0.0.
 
 ![Caravel BUILD overview](docs/tutorials/img/one-build.png)
 
@@ -31,6 +31,8 @@ Four tracks share the note/voice budget and provide envelopes, filters, ARP, mod
 
 **CAPTURE records notes, not audio:** live panel keys and USB/TRS MIDI IN, including velocity and physical note lengths. With transport running, REC takes a retrospective 1/2/4/8/16/32-bar loop with LENGTH selected independently per track; another take overdubs. Four independent loops (up to 128 events each, including note-offs) are temporary RAM state and are not saved with projects. ARP/SEQ output and loop playback do not record themselves. [CAPTURE guide](docs/tutorials/capture.md)
 
+**AFTERBURNER:** in BUILD tap FX once, then SELECT to AFTER. K1 ON, K2 TIME 10–60 s, K3 AMT, K4 DAMP. It starts OFF; settings reset on INIT/LOAD and are not saved. There is no adaptive CPU-priority controller.
+
 ## A new data generation
 
 **Back up before updating.** Keep old backups with their matching firmware and tools. 1.0 uses FORMAT 2 projects, presets and backups; it does not import pre-1.0 data. Old data is identified rather than silently migrated. The backup handshake distinguishes LIST 1 from LIST 2. SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM are absent, as are Song/Chain and Scope. See the [compatibility notes](docs/release-100.md).
@@ -39,9 +41,9 @@ The existing compressed performance-data limit is 3,328 bytes. A too-large proje
 
 ## Install, build and verify
 
-Use the [installation guide](docs/installing.md). Build instructions and the pinned toolchain are in [BUILDING.md](BUILDING.md); package construction verifies SDK hashes and provides SHA-256 manifests. A candidate test package is not installed or published automatically.
+Use the [installation guide](docs/installing.md). Build instructions and the pinned toolchain are in [BUILDING.md](BUILDING.md); package construction verifies SDK hashes and provides SHA-256 manifests. Firmware and matching source have SHA-256 manifests.
 
-The 1.0 candidate has not been tested on an FM-1 and no sound has been judged by ear. Host, emulator and static budget checks do not establish device interrupt deadlines, MIDI jitter, audio quality or power-cycle behavior. See [candidate validation and hardware checklist](docs/release-100.md). For maintainers, the [release validation map](docs/RELEASE_CHECKS.md) identifies targeted checks without repeating all evidence.
+The automated checks passed; a complete FM-1 audio, load, update and restore acceptance has not been documented. Host, emulator and static budget checks do not establish device interrupt deadlines, MIDI jitter, audio quality or power-cycle behavior. See [validation and hardware checklist](docs/release-100.md). For maintainers, the [release validation map](docs/RELEASE_CHECKS.md) identifies targeted checks without repeating all evidence.
 
 The UC25HQ80 flash chip (JEDEC `0xB36014`) and Puya P25Q80 (`0x856014`) are recognized. **This project has not tested a real UC25HQ80 unit.** m-bootloader is documented as an external recovery option and is not incorporated into the firmware.
 

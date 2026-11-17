@@ -9,6 +9,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import tempfile
+import zipfile
 from urllib.parse import quote, urlsplit, urljoin, unquote
 from urllib.request import Request, urlopen
 
@@ -134,6 +135,33 @@ def fetch(out, manifest=MANIFEST, source=None):
     return data
 
 
+def unpack(archive, out, manifest=MANIFEST):
+    """Transport the exact frozen inventory from a release asset, without building."""
+    data = inventory(manifest)
+    out = Path(out).absolute()
+    if out.exists() or out.is_symlink():
+        raise ValueError("refuse existing Classic destination")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive) as source, tempfile.TemporaryDirectory(prefix=".classic-frozen-", dir=out.parent) as temporary:
+        expected = {row["path"]: row for row in data["files"]}
+        if len(source.infolist()) != len(expected) or set(source.namelist()) != set(expected):
+            raise ValueError("Classic archive inventory differs")
+        stage = Path(temporary) / "site"
+        stage.mkdir()
+        for item in source.infolist():
+            row = expected[item.filename]
+            if item.file_size != row["size"] or item.external_attr >> 28 == 10:
+                raise ValueError("Classic archive entry refused")
+            payload = source.read(item)
+            check_bytes(row, payload)
+            path = stage / item.filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(payload)
+        verify(stage, manifest)
+        stage.rename(out)
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
@@ -141,11 +169,15 @@ def main():
     group.add_argument("--out", type=Path)
     group.add_argument("--verify", type=Path)
     parser.add_argument("--source", help="existing published byte snapshot, never source code")
+    parser.add_argument("--archive", type=Path, help="verified frozen ZIP transport instead of network fetch")
     args = parser.parse_args()
+    if args.archive and (args.verify or args.source):
+        parser.error("--archive requires --out and cannot be combined with --source")
     try:
         data = (verify(args.verify, args.manifest) if args.verify else
+                unpack(args.archive, args.out, args.manifest) if args.archive else
                 fetch(args.out, args.manifest, args.source))
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, zipfile.BadZipFile) as error:
         parser.exit(1, f"Classic snapshot refused: {error}\n")
     print(f"Frozen Classic verified: {len(data['files'])} files; no build")
 

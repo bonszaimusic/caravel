@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "web"))
 import frozen_classic as classic
@@ -60,6 +61,25 @@ class FrozenTests(unittest.TestCase):
                 self.assertEqual(p.read_bytes(), (out / p.relative_to(self.source)).read_bytes())
         with self.assertRaises(ValueError):
             classic.fetch(out, self.manifest, self.server())
+
+    def test_release_archive_preserves_bytes_and_rejects_changes(self):
+        archive = self.root / "classic.zip"
+        def pack(extra=False, changed=False):
+            with zipfile.ZipFile(archive, "w") as output:
+                for row in self.data["files"]:
+                    payload = (self.source / row["path"]).read_bytes()
+                    output.writestr(row["path"], b"x" * len(payload) if changed else payload)
+                if extra:
+                    output.writestr("../escape", b"unsafe")
+        pack()
+        classic.unpack(archive, self.root / "out", self.manifest)
+        classic.verify(self.root / "out", self.manifest)
+        for extra, changed in ((True, False), (False, True)):
+            pack(extra, changed)
+            destination = self.root / "refused"
+            with self.assertRaises(ValueError):
+                classic.unpack(archive, destination, self.manifest)
+            self.assertFalse(destination.exists())
 
     def test_changed_download_refused_atomically(self):
         (self.source / "index.html").write_bytes(b"different published bytes")

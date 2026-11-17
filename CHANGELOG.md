@@ -1,12 +1,14 @@
 # Changelog
 
-## [1.0.0] - candidate, not published
+## [1.0.0] - 2026-11-17
 
 - FORMAT 2 and six engines: ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE. No import of pre-1.0 backups; removed engines, Song/Chain and Scope. Back up first with the old matching tool.
 - BUILD / PLAY interface, PLAY first boot and one-time LEVELS; SAVE opens PROJECT; ENV + knob suppresses page advance. STEP/DETAIL/AUTOMATION keep their grids.
 - CAPTURE enabled for live panel and USB/TRS MIDI notes, with bounded retrospective loops. No audio/CC capture or recursive recording; loops are not saved.
 - CHORD EXT sources HARM and T1–T4, bounded live recognition, status/actual-note display and retained release ownership. RETRIG HARM/BOTH intentionally applies beyond EXT tracks.
-- Effective selected-track FX FILTER display, pickup from the stored filter and unlatched return; ordinary PLAY performance controls stay.
+- Track-local persistent FX FILTER: BUILD FX K1 and PLAY SPACE/FILTER change the selected track’s stored cutoff; FX + OCT− clears only that track.
+- AFTERBURNER extends HALL/STASIS tails with nominal TIME 10–60 s, AMT and DAMP. Starts OFF; session-only, resets on INIT/LOAD; no adaptive CPU-priority controller.
+- Restore HARMONY CHORDS navigation and correct SETUP values; roots and durations remain separate rows.
 - USB project import accepts stored PAIR SPREAD and normalizes both members on load; malformed data remains rejected.
 - Current [compatibility, limits and hardware checklist](docs/release-100.md). Not tested on an FM-1, no sound heard; final validation receipt remains separate from publication.
 

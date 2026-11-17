@@ -93,6 +93,19 @@ class V1DocsTests(unittest.TestCase):
         self.assertEqual(v1_docs.tree(first), v1_docs.tree(second))
         self.assertNotIn("UNCOMMITTED", (second / "tutorials/start-here/index.html").read_text())
 
+    def test_published_documentation_keeps_source_and_hardware_limits(self):
+        out = self.root / "published"
+        receipt = v1_docs.build(self.site, self.repo, self.sha, out, published=True)
+        self.assertEqual(receipt["kind"], "published-1.x-documentation")
+        landing = (out / "index.html").read_text()
+        self.assertIn("CARAVEL 1.0.0", landing)
+        self.assertNotIn("PRIVATE CANDIDATE", landing)
+        content = (out / "tutorials/index.html").read_text()
+        self.assertNotIn("not published", content)
+        self.assertIn("hardware acceptance is still open", content)
+        self.assertIn(self.sha, content)
+        self.assertEqual((out / "firmware/app.bin").read_bytes(), b"firmware")
+
     def test_navigation_status_and_source_receipt(self):
         out, _ = self.build()
         landing = (out / "index.html").read_text(); parser = References(); parser.feed(landing)

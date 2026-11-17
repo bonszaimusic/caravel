@@ -85,11 +85,11 @@ def relative(current, target):
     return posixpath.relpath(target, posixpath.dirname(current))
 
 
-def page_shell(label, body, output, commit):
+def page_shell(label, body, output, commit, published=False):
     esc = html.escape
     nav = [("Candidate guides", "tutorials/index.html"), ("Installer", "webapp/installer/index.html"),
            ("Editor", "webapp/editor/index.html"), ("Emulator", "emulator/index.html")]
-    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    result = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{esc(label)} — Caravel 1.x candidate</title><style>{STYLE}</style></head><body><nav>'
             + " ".join(f'<a href="{relative(output, target)}">{text}</a>' for text, target in nav)
             + '</nav><aside class="status"><strong>Caravel 1.x candidate — not published</strong>'
@@ -100,15 +100,27 @@ def page_shell(label, body, output, commit):
             + f'<a href="{relative(output, "tutorials/SOURCE.json")}">Source and byte-preservation receipt</a> · '
             + f'<a href="{relative(output, "firmware/caravel-1.0.0-source.tar.gz")}">Matching candidate source archive</a>'
               '</footer></body></html>\n')
+    if published:
+        result = result.replace("Candidate guides", "Guides").replace("Caravel 1.x candidate", "Caravel 1.0.0")
+        result = result.replace(" — not published", "")
+        result = result.replace("Private candidate documentation; publication review remains open.", "Release documentation.")
+        result = result.replace("Matching candidate source archive", "Matching source archive")
+    return result
 
 
-def candidate_landing(text):
+def candidate_landing(text, published=False):
     if text.count("<main>") != 1 or text.count(OLD_EDITOR_BLURB) != 1:
         raise ValueError("candidate landing markers changed")
     notice = ('<section class="box risk" id="v1-candidate-status"><span class="tag">PRIVATE CANDIDATE</span>'
               '<h2>Caravel 1.x candidate — not published</h2>'
               '<p>FM-1 hardware acceptance is still open. Publication requires separate approval.</p>'
               '<p><a href="tutorials/">TUTORIALS — current 1.x candidate guides and engine diagram drafts</a></p></section>')
+    if published:
+        notice = ('<section class="box" id="v1-release-status"><span class="tag">CARAVEL 1.0.0</span>'
+                  '<h2>Six engines, BUILD / PLAY and AFTERBURNER</h2>'
+                  '<p><a href="tutorials/">TUTORIALS — 1.x guides and engine diagrams</a> · '
+                  '<a href="tutorials/release-notes/">Release notes and compatibility</a></p>'
+                  '<p>Back up with the old matching tools before upgrading. Pre-1.0 data cannot be imported.</p></section>')
     return text.replace("<main>", "<main>\n" + notice, 1).replace(OLD_EDITOR_BLURB, NEW_EDITOR_BLURB)
 
 
@@ -175,7 +187,7 @@ def render(text, source, output, assets):
     return "\n".join(result)
 
 
-def build(site, source, commit, out):
+def build(site, source, commit, out, published=False):
     if not PIN.fullmatch(commit):
         raise ValueError("full source commit required")
     if Path(site).is_symlink() or Path(source).is_symlink():
@@ -210,9 +222,9 @@ def build(site, source, commit, out):
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".v1-docs-", dir=out.parent) as temporary:
         stage = Path(temporary) / "site"; shutil.copytree(site, stage)
-        (stage / "index.html").write_text(candidate_landing((site / "index.html").read_text(encoding="utf-8")), encoding="utf-8")
-        receipt = {"schema": 1, "kind": "private-1.x-candidate-documentation", "source_commit": commit,
-                   "hardware_acceptance": "open", "publication_review": "open", "not_a_deployment": True,
+        (stage / "index.html").write_text(candidate_landing((site / "index.html").read_text(encoding="utf-8"), published), encoding="utf-8")
+        receipt = {"schema": 1, "kind": "published-1.x-documentation" if published else "private-1.x-candidate-documentation", "source_commit": commit,
+                   "hardware_acceptance": "open", "publication_review": "owner-approved" if published else "open", "not_a_deployment": True,
                    "sources": {}, "original_site_sha256": before}
         for name, (data, blob) in sorted(sources.items()):
             target = assets.get(name) or "tutorials/source/" + name
@@ -230,15 +242,15 @@ def build(site, source, commit, out):
                     gallery += f'<figure><img src="{relative(output, png)}" alt="{diagram}" loading="lazy"><figcaption>Documentation draft · <a href="{relative(output, svg)}">Original SVG</a> · <a href="{relative(output, png)}">Original PNG</a></figcaption></figure>'
                 body = gallery + body
             path = stage / output; path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(page_shell(title(text), body, output, commit), encoding="utf-8")
+            path.write_text(page_shell(title(text), body, output, commit, published), encoding="utf-8")
         links = "<ul>" + "".join(f'<li><a href="{relative("tutorials/index.html", target)}">{html.escape(title(sources[name][0].decode()))}</a></li>' for name, target in PAGES.items()) + "</ul>"
-        (stage / "tutorials/index.html").write_text(page_shell("Caravel 1.x candidate guides", links, "tutorials/index.html", commit), encoding="utf-8")
+        (stage / "tutorials/index.html").write_text(page_shell("Caravel 1.0.0 guides" if published else "Caravel 1.x candidate guides", links, "tutorials/index.html", commit, published), encoding="utf-8")
         after = tree(stage)
         if any(after.get(name) != value for name, value in before.items() if name != "index.html"):
             raise ValueError("an existing site file changed")
         receipt["original_site_files_unchanged"] = len(before) - 1
         receipt["landing_index_sha256"] = {"before": before["index.html"], "after": after["index.html"],
-                                            "reason": "private candidate status, tutorials entry, six-engine editor description"}
+                                            "reason": "release status, tutorials entry, six-engine editor description" if published else "private candidate status, tutorials entry, six-engine editor description"}
         receipt["unchanged_runtime_subtrees"] = {}
         for prefix in ("firmware/", "webapp/editor/", "emulator/"):
             selected = {name: sha for name, sha in before.items() if name.startswith(prefix)}
@@ -257,9 +269,10 @@ def main():
     for name in ("site", "source", "out"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--published", action="store_true", help="assemble release documentation after publication approval")
     args = parser.parse_args()
     try:
-        receipt = build(args.site, args.source, args.commit, args.out)
+        receipt = build(args.site, args.source, args.commit, args.out, args.published)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"1.x documentation assembly refused: {error}\n")
     print(json.dumps({"source_commit": receipt["source_commit"], "original_site_files_unchanged": receipt["original_site_files_unchanged"],

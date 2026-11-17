@@ -1,6 +1,6 @@
-# Caravel 1.0.0 — candidate
+# Caravel 1.0.0 — 2026-11-17
 
-Prepared for validation; **not published, not installed by this task, not tested on an FM-1. No sound was heard.** The live website and latest published release remain 0.13.0 until a separately approved publication.
+Caravel 1.0.0 includes AFTERBURNER and the corrected HARMONY CHORDS page. The owner approved publication after reviewing the RC. Automated software checks passed; a complete FM-1 audio/load/update/restore acceptance is not documented.
 
 Classic 0.13.0 is frozen and no longer maintained: no 0.13.1 or further fixes. Existing Classic downloads remain available until the owner decides their retention period. Corrections continue only in 1.x.
 
@@ -16,7 +16,7 @@ The web installer also supports upgrading the known pre-release 1.0 development 
 
 - Six engines: **ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE**. SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM are removed from the shipped profile. Song/Chain and Scope are removed.
 - Start in **PLAY**, with a one-time LEVELS introduction. Hold HOME one second for BUILD/PLAY; tap it for the LEVELS explanation or the BUILD track overview. EDIT selects SOUND. SAVE opens PROJECT. BUILD uses the ring pages; STEP, DETAIL and AUTOMATION retain their grids.
-- **CAPTURE enabled by default.** It records live panel keys and USB/TRS MIDI IN before harmonic mapping: pitch, velocity, timing and physical Note-Off. REC takes 1/2/4/8/16/32 bars and overdubs; all four loops have independently remembered LENGTH selections. No audio, pedal/CC automation, ARP/SEQ output or recursive recording. Loops are temporary and are not saved/backed up. A loop has at most 128 events per track including releases; FULL refuses an entire take and retains the old loop. This extension is not FM-1-tested or release-approved.
+- **CAPTURE enabled by default.** It records live panel keys and USB/TRS MIDI IN before harmonic mapping: pitch, velocity, timing and physical Note-Off. REC takes 1/2/4/8/16/32 bars and overdubs; all four loops have independently remembered LENGTH selections. No audio, pedal/CC automation, ARP/SEQ output or recursive recording. Loops are temporary and are not saved/backed up. A loop has at most 128 events per track including releases; FULL refuses an entire take and retains the old loop. A complete FM-1 acceptance is not documented.
 - **CHORD EXT:** SOURCE OFF/HARM/T1–T4, EXT 7 / 7+9 / 7+9+13, OCT −2…+2, and read-only actual NOTES. Live sources collect real panel/MIDI Note-Ons with a 41-control-block gap and 138-block cap. They remember the last recognized chord; ambiguous gestures keep it. They never start a silent follower. They exclude generated ARP/SEQ/CAPTURE output, self-sources, EXT-source cycles and PAIR followers. A legato change with only two new tones can be ambiguous because held tones from the preceding chord are not added.
 - **RETRIG OFF/HARM/SCALE/BOTH. HARM/BOTH now applies to all eligible tracks**, including SOURCE OFF. This is an intentional behavior change for held harmony-following notes; OFF/SCALE retain their separate differential references. ARP/SEQ consult the context on their next event.
 - **FX FILTER is track-local and persistent** (#62 / draft #63): both BUILD FX K1 and PLAY SPACE/FILTER change the selected track's stored `P_FILT`. Its cutoff stays with that track when selection changes or the FX key is released; it is not a momentary global `perf_k[0]` override. CRUSH, THROW and DEPTH retain their independent live-macro behavior. FX + OCT− explicitly clears only the selected track's filter.
@@ -25,26 +25,28 @@ The web installer also supports upgrading the known pre-release 1.0 development 
 
 ## Limits and validation
 
-**AFTERBURNER RC preview:** In BUILD, tap FX once, then turn SELECT to AFTER
+**AFTERBURNER:** In BUILD, tap FX once, then turn SELECT to AFTER
 (after REVERB). Quick repeated FX taps lock its held layer instead.
 K1 switches it ON, K2 sets nominal low-frequency RT60 from 10 to 60 seconds,
 K3 sets AMT, K4 sets DAMP. It extends the HALL/STASIS wet return and preserves
 its own tail across reverb-type changes. It uses no synth voice. It starts OFF;
 these controls are currently session-only and reset on INIT or LOAD rather
 than being stored in FORMAT 2. There is no adaptive CPU-priority controller in
-this preview. Test 10/30/60 seconds with four tracks and dense CAPTURE on the
+this release. Test 10/30/60 seconds with four tracks and dense CAPTURE on the
 FM-1; if load is excessive, use the matching build with
 `CARAVEL_AFTERBURNER=0`, which removes its DSP, buffers and AFTER page.
 
 The compressed performance capsule still has a **3,328-byte budget**. PROJECT TOO LARGE / NOT SAVED refuses a save and retains the previous copy. The pinned engine submodule is required for a reproducible source checkout. m-bootloader remains documentation-only. UC25HQ80 (`0xB36014`) is recognized but **not tested on a real unit by this project**.
 
-Host and emulator checks are being finalized for the exact candidate source; their receipt and package SHA-256 belong with the final test package. Host instruction counts are not FM-1 cycles. Device audio deadlines, arrival jitter, clock behavior, UI feel, power cycling, the DRONE level and dense CAPTURE playback still require the checklist below. GitHub-hosted CI is not available in this preparation; Docker results must be named separately, without claiming hosted CI passed.
+Software validation on the executable-equivalent RC passed: all 8 FORMAT-2 groups (327 steps including compilation), 846 ASan/UBSan fuzz cases, all 11 negative mutation controls and three positive controls. All three target layouts passed with AFTER enabled and disabled. The shipped emulator was separately checked with AFTER ON at 60 seconds and four CAPTURE loops of 120 events each. The release rebuild compares firmware and WASM bytes with this tested RC; documentation and deployment changes receive targeted checks.
+
+Standard target: app 466,392 bytes, static BSS 68,224 / 73,728 bytes, pool 353,180 / 368,640 bytes. These are static budgets, not measured device deadlines. Host timings do not establish FM-1 cycles, MIDI jitter, audio quality or power-cycle safety. No GitHub-hosted firmware CI or device listening pass is claimed.
 
 ## Hardware acceptance checklist
 
 Record the installed package SHA-256, device/flash identity and each result. Stop and report a failure with the exact gesture.
 
-1. Back up 0.13.0 or Felucca, install the candidate using the matching installer and verify INFO shows v1.0.0. Test both upgrade origins on suitable hardware; do not erase the only backup.
+1. Back up 0.13.0 or Felucca, install 1.0.0 using the matching installer and verify INFO shows v1.0.0. Test both upgrade origins on suitable hardware; do not erase the only backup.
 2. On a fresh settings image, verify PLAY and LEVELS appear once. Fully power off/on; LEVELS must not repeat. Check an already-seen image as well.
 3. Inspect BUILD header/strip for flicker, SAVE/PROJECT, MIXER, GLO and menu. Check the retained STEP/DETAIL/AUTOMATION grids.
 4. Set different stored filters on two tracks. Verify BUILD FX K1 and PLAY SPACE/FILTER both modify only the selected track's persistent `P_FILT`; track switching, unlatched FX release and PLAY/BUILD transitions do not move or reset the cutoff. FX + OCT− clears only the current track. Test project save/load and listen for unintended jumps.
@@ -54,6 +56,6 @@ Record the installed package SHA-256, device/flash identity and each result. Sto
 8. Listen to DRONE gain and layered levels, with dry/wet comparisons. Test the second-core option separately if enabled.
 9. Save/load projects, stop to commit a live save, power cycle, test autosave and a complete FORMAT 2 backup/restore with the matching tool. Confirm an old-format restore is refused. Confirm a malformed import leaves saved data unchanged.
 
-Public push, tag, release assets and live-site updates need separate owner approval after review of the exact package and these results.
+The published package includes checksums, the full source and component licences. Classic remains frozen, with its old download URLs preserved.
 
 Loader-Fortsetzung: Web-Installer und CLI starten den erkannten Update-Loader mit dem passenden Einstieg für Protokoll 18 sowie dem kompatiblen Classic-Einstieg. Die Firmware-Sperre für alte Editor-/Updatezugriffe bleibt erhalten. Ein schwarzer Bildschirm im Loader ist keine laufende PLAY-/BUILD-Oberfläche; der Installer muss den Transfer und anschließenden Neustart bestätigen.
