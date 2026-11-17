@@ -165,7 +165,8 @@ static void layer_arm(uint32_t pressed, uint32_t now)
         }
 }
 
-/* the armed layer lets go (its button up, or its lock closed): FX's macros snap back (FX LATCH: they stay); one that
+/* the armed layer lets go (its button up, or its lock closed): the three live FX macros snap back (FX LATCH: they stay);
+ * FILTER is a stored track parameter and never snaps back. One that
  * opened, or a combo: KNOB 1..4 quiet for a while (#39: the knob still turning is not the page's) */
 static void layer_let_go(uint32_t quiet)
 {
@@ -173,12 +174,11 @@ static void layer_let_go(uint32_t quiet)
         eu_close(&trk[lys.trk % NTRK], 1);
 #if CARAVEL_UX_EVOLVE
     if (ui.ly == LAYER_FX && !perf_latch_on) {
-        perf_k[0] = 0; /* held FILTER is temporary; ordinary PLAY arc turns never enter this path */
         if (!UXL_PLAY) perf_k[1] = perf_k[2] = perf_k[3] = 0;
     }
 #else
     if (ui.ly == LAYER_FX && !perf_latch_on)
-        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+        perf_k[1] = perf_k[2] = perf_k[3] = 0;
 #endif
     if (lys.rp_dirty) {                                 /* REC: its settings kept, as MENU does when it closes (FX: the map) */
         lys.rp_dirty = 0;
@@ -743,10 +743,10 @@ static void layer_knob(uint32_t k, int32_t s)
         return;
     }
 #endif
-    if (l == LAYER_FX) {                                /* perform.c perf_k, not recorded */
+    if (l == LAYER_FX) {                                /* FILTER writes P_FILT; other FX knobs remain live macros */
         if (k == 3u && !perf_harm_on())
             s = -s;                                     /* DEPTH (100 - perf_k[3]) rises to the right (#40: it fell) */
-        int32_t delta = accel(EN_K1 + k, s, k ? 100 : 200);
+        int32_t delta = accel(EN_K1 + k, s, k ? 100 : 127);
         if (!k) tf_macro_turn(delta);
         else perf_k[k] = (int8_t)clamp(perf_k[k] + delta, 0, 100);
     } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER */
@@ -859,9 +859,10 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         mine &= ~2u;                                    /* (no other meaning in a SET layer) */
     }
     if (mine & 1u) {                                    /* OCT-: back to when it opened */
-        if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */
+        if (lys.l == LAYER_FX) {                        /* FX ALL OFF: clear this track's FILTER and the live FX macros */
             perf_latched = 0;
-            perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+            TSEL->p[P_FILT] = 0;                        /* E77: OCT- explicitly resets FILTER; never other tracks */
+            perf_k[1] = perf_k[2] = perf_k[3] = 0;
             ui_message("FX ALL OFF");
         } else if (lys.l == LAYER_EDIT) {
             uint32_t ld = lys.loaded;
@@ -1281,7 +1282,7 @@ static int uxl_layer_cards(uint32_t l)
         if (l==LAYER_FX) {
             static const char *const LAB[]={"FILTER","CRUSH","THROW","DEPTH"};
             label=perf_harm_on() && k==3u ? "SHIMR" : LAB[k];
-            v=k==3u && !perf_harm_on()?100-perf_k[k]:perf_k[k];
+            v=k==0u?(tf_eff(TSEL)<0?tf_eff(TSEL)*100/64:tf_eff(TSEL)*100/63):k==3u && !perf_harm_on()?100-perf_k[k]:perf_k[k];
             if(k==0u && !v) str_cpy(b,"OFF",sizeof b);
             else fmt_int(b,v<0?-v:v);
             ratio=(k==0u?v+100:v)*(k==0u?5:10);
@@ -1314,7 +1315,7 @@ static void layer_cards(uint32_t l)
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
         int32_t m = tf_eff(TSEL);
         param_format(&TP[P_FILT], m, val, &unit);
-        draw_column(0, "FILTER", val, unit, perf_k[0] ? VAL(0u) : T_DIM, RATIO(&TP[P_FILT], m), ICON_CUTOFF);
+        draw_column(0, "FILTER", val, unit, m ? VAL(0u) : T_DIM, RATIO(&TP[P_FILT], m), ICON_CUTOFF);
         fmt_int(val, perf_k[1]);
         draw_column(1, "CRUSH", perf_k[1] ? val : "OFF", perf_k[1] ? "%" : "", perf_k[1] ? VAL(1u) : T_DIM,
                     perf_k[1] * 10, ICON_BITS);
@@ -1416,7 +1417,7 @@ static void uly_model(uint32_t l, uly_t *m)
         uint32_t ed = fx_key_held() ? key_place(fx_key_held() - 1u) : PF_KEYS;
         int32_t mf = tf_eff(TSEL);
         param_format(&TP[P_FILT], mf, b, &unit);
-        uly_corner(m, 0, "FILTER", b, unit, RATIO(&TP[P_FILT], mf), !perf_k[0]);
+        uly_corner(m, 0, "FILTER", b, unit, RATIO(&TP[P_FILT], mf), !mf);
         fmt_int(b, perf_k[1]);
         uly_corner(m, 1, "CRUSH", perf_k[1] ? b : "OFF", perf_k[1] ? "%" : "", perf_k[1] * 10, !perf_k[1]);
         fmt_int(b, perf_k[2]);
