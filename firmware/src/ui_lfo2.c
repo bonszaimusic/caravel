@@ -16,7 +16,7 @@ typedef struct {
     uint8_t disabled, readonly;
 } chext_view_t;
 static void chext_view(uint32_t col, chext_view_t *out) {
-    static const char *const labels[] = {"SOURCE", "EXT", "OCT", "NOTES"};
+    static const char *const labels[] = {"CHORD SRC", "EXT", "OCT", "NOTES"};
     static const char *const levels[] = {"7", "7+9", "7+9+13"};
     static const char *const status[] = {"--", "N/A", "WAIT", "WAIT BUS", "AMBIG", "EMPTY"};
     static const char *const why[] = {"", "SELF", "SRC EXT", "LANES", "PAIR", "PLAY", "BUS OFF", "KEPT", "IN SRC"};
@@ -175,7 +175,7 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
         static const char *const levels[] = {"7", "7+9", "7+9+13"};
         static const char *const states[] = {"--", "N/A", "WAIT", "WAIT BUS", "AMBIG", "EMPTY", "READY"};
         static const param_desc_t desc[] = {
-            {"SOURCE", F_ENUM, 0, 5, 0, N_CSRC, 0},
+            {"CHORD SRC", F_ENUM, 0, 5, 0, N_CSRC, 0},
             {"EXT", F_ENUM, 0, 2, 1, levels, 0},
             {"OCT", F_INT, -2, 2, 0, 0, "oct"},
             {"NOTES", F_ENUM, 0, EXT_ST_OK, 0, states, 0}};
