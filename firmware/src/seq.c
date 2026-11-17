@@ -68,6 +68,7 @@ static uint16_t harmony_phase;                    /* perf_bars_q16's fraction at
 static uint8_t harmony_root[4], harmony_dur[4];
 /* Independent global key, legacy old projects still follow T1 until converted. */
 static uint8_t harmony_key_mode, harmony_key_root, harmony_key_scale;
+static uint8_t harmony_local_shape[NTRK];  /* last KEY chord shape per track */
 static uint32_t harmony_key_root_eff(void)
 {
     return harmony_key_mode ? harmony_key_root : (uint32_t)trk[0].p[P_ROOT];

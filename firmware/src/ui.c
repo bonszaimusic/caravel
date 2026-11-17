@@ -567,6 +567,8 @@ static int harm_has_key(const track_t *t)
 static void harm_choose_role(track_t *t, uint32_t mode)
 {
     uint32_t k = trk_index(t);
+    if (t->p[P_CHRD] >= CH_DIA3 && t->p[P_CHRD] <= CH_POW)
+        harmony_local_shape[k] = (uint8_t)t->p[P_CHRD];
     if (mode == HROLE_EXT) {
         if (!t->p[P_CSRC]) t->p[P_CSRC] = 1; /* global HARMONY by default */
         return;
@@ -577,7 +579,8 @@ static void harm_choose_role(track_t *t, uint32_t mode)
         harmony_follow[k] = mode == HROLE_FOLLOW;
     } else if (mode == HROLE_CHORD) {
         if (t->p[P_CHRD] == CH_OFF || t->p[P_CHRD] > CH_BUS)
-            t->p[P_CHRD] = CH_DIA3;
+            t->p[P_CHRD] = (int16_t)(harmony_local_shape[k] >= CH_DIA3 &&
+                harmony_local_shape[k] <= CH_POW ? harmony_local_shape[k] : CH_DIA3);
         harmony_follow[k] = t->p[P_CHRD] == CH_BUS;
     }
 }

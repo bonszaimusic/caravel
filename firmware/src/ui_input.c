@@ -1081,15 +1081,19 @@ static void edit_param(uint32_t slot, int32_t steps)
         } else if (role == HROLE_CHORD) {
             if (slot == 1u) { /* K2: CHORD FROM KEY / HARMONY */
                 if (TSEL->p[P_CHRD] == CH_BUS) {
-                    TSEL->p[P_CHRD] = CH_DIA3;
+                    uint32_t shape = harmony_local_shape[song.sel];
+                    TSEL->p[P_CHRD] = (int16_t)(shape >= CH_DIA3 && shape <= CH_POW ? shape : CH_DIA3);
                     harmony_follow[song.sel] = 0;
                 } else {
+                    /* K2 does not discard the local chord, even on project save. */
+                    harmony_local_shape[song.sel] = (uint8_t)clamp(TSEL->p[P_CHRD], CH_DIA3, CH_POW);
                     TSEL->p[P_CHRD] = CH_BUS;
                     harmony_follow[song.sel] = 1;
                 }
                 ui.force = 1;
             } else if (slot == 2u && TSEL->p[P_CHRD] != CH_BUS) {
                 TSEL->p[P_CHRD] = (int16_t)clamp((int32_t)TSEL->p[P_CHRD] + steps, CH_DIA3, CH_POW);
+                harmony_local_shape[song.sel] = (uint8_t)TSEL->p[P_CHRD];
                 ui.force = 1;
             } else if (slot == 3u) {
                 TSEL->p[P_VOIC] = (int16_t)clamp((int32_t)TSEL->p[P_VOIC] + steps, 0, 4);

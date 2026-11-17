@@ -103,6 +103,7 @@ static void harmony_save(harmony_saved_t *s)
     s->key_mode = harmony_key_mode;
     s->key_root = harmony_key_root;
     s->key_scale = harmony_key_scale;
+    memcpy(s->local_shape,harmony_local_shape,sizeof s->local_shape);
     s->on = harmony_on;
     s->bar = harmony_bar;
     s->base = harmony_base_bar;
@@ -117,6 +118,7 @@ static void harmony_restore(const harmony_saved_t *s)
     harmony_key_mode = s->key_mode;
     harmony_key_root = s->key_root;
     harmony_key_scale = s->key_scale;
+    memcpy(harmony_local_shape,s->local_shape,sizeof harmony_local_shape);
     harmony_on = s->on;
     harmony_bar = s->bar;
     harmony_base_bar = s->base;
@@ -396,6 +398,7 @@ static void project_init_runtime(void)
     harmony_key_mode = 1u;  /* fresh 1.0 project owns its global key */
     harmony_key_root = 0u;
     harmony_key_scale = 1u; /* MAJOR */
+    memset(harmony_local_shape,CH_DIA3,sizeof harmony_local_shape);
     harmony_bar = 0;
     harmony_base_bar = HARM_BAR();
     memset(harmony_root, 0, sizeof harmony_root);

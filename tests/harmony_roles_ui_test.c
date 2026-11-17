@@ -37,6 +37,8 @@ int main(void) {
 
     edit_param(0,2);assert(harm_role(TSEL)==HROLE_CHORD);
     assert(TSEL->p[P_CHRD]==CH_DIA3&&page_visible(find_page(GR_SCALE)));
+    edit_param(2,3); /* DIA3 -> MIN: remember local chord even when inactive */
+    assert(TSEL->p[P_CHRD]==CH_MIN && harmony_local_shape[0]==CH_MIN);
     edit_param(1,1); /* K2 FROM HARMONY */
     assert(TSEL->p[P_CHRD]==CH_BUS && harmony_follow[0]);
     assert(!page_visible(find_page(GR_SCALE)));
@@ -45,7 +47,7 @@ int main(void) {
     harmony_key_mode=0; /* legacy: historical local DIA3 fallback remains */
     assert(chord_make(TSEL,60,notes,&root,&mask)>0);
     harmony_key_mode=1;harmony_on=1;
-    edit_param(1,-1);assert(TSEL->p[P_CHRD]==CH_DIA3);
+    edit_param(1,-1);assert(TSEL->p[P_CHRD]==CH_MIN && harmony_local_shape[0]==CH_MIN);
     assert(page_visible(find_page(GR_SCALE)));
 
     edit_param(0,1);assert(harm_role(TSEL)==HROLE_EXT);
