@@ -41,7 +41,7 @@ The existing compressed performance-data limit is 3,328 bytes. A too-large proje
 
 Use the [installation guide](docs/installing.md). Build instructions and the pinned toolchain are in [BUILDING.md](BUILDING.md); package construction verifies SDK hashes and provides SHA-256 manifests. A candidate test package is not installed or published automatically.
 
-The 1.0 candidate has not been tested on an FM-1 and no sound has been judged by ear. Host, emulator and static budget checks do not establish device interrupt deadlines, MIDI jitter, audio quality or power-cycle behavior. See [candidate validation and hardware checklist](docs/release-100.md).
+The 1.0 candidate has not been tested on an FM-1 and no sound has been judged by ear. Host, emulator and static budget checks do not establish device interrupt deadlines, MIDI jitter, audio quality or power-cycle behavior. See [candidate validation and hardware checklist](docs/release-100.md). For maintainers, the [release validation map](docs/RELEASE_CHECKS.md) identifies targeted checks without repeating all evidence.
 
 The UC25HQ80 flash chip (JEDEC `0xB36014`) and Puya P25Q80 (`0x856014`) are recognized. **This project has not tested a real UC25HQ80 unit.** m-bootloader is documented as an external recovery option and is not incorporated into the firmware.
 
