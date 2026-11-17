@@ -26,8 +26,11 @@ const tap = b => { ex.web_buttons(1 << b); render(70); ex.web_buttons(0); render
 const turn = (slot, delta) => { ex.web_enc(3 + slot, delta); render(180); };
 render(2800);
 assert.deepEqual(values(), [0, 30, 32, 70], "fresh session defaults");
-for (let i = 0; i < 16 && !ex.web_test_afterburner(4); i++) tap(0);
-assert.equal(ex.web_test_afterburner(4), 1, "AFTER reachable by actual FX button navigation");
+tap(0);
+// Repeated quick FX taps intentionally lock its held layer. SELECT navigates
+// the FX pages without triggering that separate double-tap gesture.
+for (let i = 0; i < 16 && !ex.web_test_afterburner(4); i++) { ex.web_enc(0, 1); render(200); }
+assert.equal(ex.web_test_afterburner(4), 1, "AFTER reachable through FX and SELECT navigation");
 turn(0, 1); turn(1, 1000); turn(2, 1000); turn(3, -1000);
 assert.deepEqual(values(), [1, 60, 127, 0], "all four AFTER knobs work through panel input");
 ex.web_stasis_test_type(2); ex.web_test_scene_fx(100);

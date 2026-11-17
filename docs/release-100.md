@@ -25,7 +25,8 @@ The web installer also supports upgrading the known pre-release 1.0 development 
 
 ## Limits and validation
 
-**AFTERBURNER RC preview:** In BUILD, tap FX through to AFTER (after REVERB).
+**AFTERBURNER RC preview:** In BUILD, tap FX once, then turn SELECT to AFTER
+(after REVERB). Quick repeated FX taps lock its held layer instead.
 K1 switches it ON, K2 sets nominal low-frequency RT60 from 10 to 60 seconds,
 K3 sets AMT, K4 sets DAMP. It extends the HALL/STASIS wet return and preserves
 its own tail across reverb-type changes. It uses no synth voice. It starts OFF;
