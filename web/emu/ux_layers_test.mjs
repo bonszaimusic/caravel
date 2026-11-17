@@ -120,6 +120,9 @@ check("PLAY: OCT- and OCT+ held 700 ms: PANIC says so in the header", !same(pani
 d.settle();
 check("PLAY: the update countdown stays off while both are held (2 s)", (() => { d.hold(["OCTDN", "OCTUP"], 2600); const x = d.screen(); d.release(); return px(x, 50, 12) === tabColour; })());
 // CAPTURE (needs -DCARAVEL_UX_CAPTURE=1): play, take the last bars, the loop plays them again, SEQ pauses and clears it
+// Keep this silence assertion independent of the preview preset's release and
+// of the new default STASIS tail. Tail behavior has separate DSP coverage.
+d.ex.web_test_engine(0, 0); d.ex.web_test_scene_fx(0);
 d.tap("HOME"); d.settle();
 d.tap("PLAY"); d.render(300);
 d.ex.web_keys(1 << 7); d.render(250); d.ex.web_keys(0); d.render(250);
@@ -503,21 +506,21 @@ if (d.ex.web_test_ev) {
   check("EVOLVE: .. and they go dark when it is let go", (l.ex.web_lit_keys() & want) === 0);
   check("EVOLVE: .. and the legend goes", same(rest, l.screen()) || !same(held, l.screen()));
 }
-// SPACE's FILTER group: the FX layer's four macros as arcs, kept when FX is let go; STASIS has the filter on K4 (E74, E77)
+// SPACE FILTER and STASIS K4 edit this track's persistent filter (#62/#63).
 if (d.ex.web_test_ev) {
   const f = await device();
   f.render(2500); f.hold("HOME"); f.release(); f.settle();
   f.tap("FX"); f.render(300);                                     // SPACE is the area already: the next group is FILTER (SENDS, FILTER, STASIS)
   f.turn("K1", 20);
-  const v1 = f.ex.web_test_ev(50) << 24 >> 24;
+  const v1 = f.ex.web_test_p(105);
   check("FILTER: the group's K1 sets the FX filter", v1 !== 0);
   f.render(300);
-  check("FILTER: ordinary PLAY arc is persistent without holding FX", (f.ex.web_test_ev(50) << 24 >> 24) === v1);
-  f.hold("FX", 600); f.release(); f.render(300);                  // an unlatched hold releases FILTER in PLAY too
-  check("FILTER: ordinary PLAY arc stays until an unlatched FX hold is released", (f.ex.web_test_ev(50) << 24 >> 24) === 0);
+  check("FILTER: ordinary PLAY arc is persistent without holding FX", f.ex.web_test_p(105) === v1);
+  f.hold("FX", 600); f.release(); f.render(300);
+  check("FILTER: unlatched FX release retains the stored track filter", f.ex.web_test_p(105) === v1);
   f.tap("FX"); f.render(300);                                     // STASIS
   f.turn("K4", -5);
-  check("FILTER: K4 of the STASIS group is the same filter", (f.ex.web_test_ev(50) << 24 >> 24) !== v1);
+  check("FILTER: K4 of the STASIS group is the same filter", f.ex.web_test_p(105) !== v1);
 }
 // CAPTURE length (E78): with REC held only K1 is shown, named LENGTH with its four steps; without, the area's four arcs
 if (d.ex.web_test_cap_events) {
@@ -550,7 +553,7 @@ if (d.ex.web_test_cap_events) {
     check(`BUILD ${name} layer: .. and the page is back when it is let go`, same(rest, y.screen()));
   }
 }
-// BUILD's menu: the BUILD band with the hazard strip, and the rows without the panel's fill
+// The menu owns its header; the regular BUILD marker deliberately yields to it.
 {
   const m = await device();
   m.render(2500);
@@ -558,7 +561,7 @@ if (d.ex.web_test_cap_events) {
   m.dtap("GLO"); m.render(600);
   const h = m.screen();
   check("BUILD menu: GLO tapped twice shows the menu", !same(rest, h));
-  check("BUILD menu: .. with the BUILD band's hazard strip", [...Array(240).keys()].some((x) => px(h, x, 25) !== px(h, 0, 30)));
+  check("BUILD menu: .. with its own drawn header", [...Array(240).keys()].some((x) => px(h, x, 12) !== px(h, 0, 12)));
   check("BUILD menu: .. and no panel behind the rows (the background at the row's left edge)", px(h, 5, 130) === px(h, 2, 130));
 }
 // PLAY: HOME tapped shows how the levels are switched; any input closes it; the HOME hold still switches
@@ -604,32 +607,43 @@ if (d.ex.web_test_lvl) {
   e.web_boot(); rn(2500);
   check("the second power-on: PLAY without the LEVELS screen", e.web_test_lvl() === 0 && e.web_test_seen() === 1);
 }
-// E118: the real FX card shows the effective filter, with a quiet stored value dimmed.
+// #62/#63: the real FX card shows the persistent track filter, bright when nonzero.
 {
   const f = await device(); f.render(3500);
   const own = f.ex.web_test_filter_own, view = f.ex.web_test_filter_view;
   const text = () => { let s = ""; for (let i = 0; i < 20; i++) { const c = view(4 + i); if (!c) break; s += String.fromCharCode(c); } return s; };
   own(-32); f.hold("FX", 600); f.render(500);
-  check("FX FILTER: stored LP is shown dimmed, not OFF", text() === "50 LP" && view(0) === -32 && view(1) === 1 && view(2) === 0);
+  check("FX FILTER: stored LP is shown active, not OFF", text() === "50 LP" && view(0) === -32 && view(1) === 0 && view(2) === 0);
   const valuePixels = (frame, colour) => {
     const wire = ((colour & 255) << 8) | (colour >> 8); let n = 0;
     for (let y = 54; y < 72; y++) for (let x = 4; x < 74; x++) n += frame[y * 240 + x] === wire;
     return n;
   };
+  const brightValuePixels = (frame) => {
+    const lum = wire => { const c = ((wire & 255) << 8) | (wire >> 8); return 2 * ((c >> 11) & 31) + ((c >> 5) & 63) + 2 * (c & 31); };
+    const wire = colour => ((colour & 255) << 8) | (colour >> 8);
+    const threshold = (lum(wire(view(24))) + lum(wire(view(25)))) / 2;
+    let n = 0;
+    for (let y = 54; y < 72; y++) for (let x = 4; x < 74; x++) n += lum(frame[y * 240 + x]) > threshold;
+    return n;
+  };
   const dim = f.screen();
-  check("FX FILTER: the rendered stored value uses the dim ink", valuePixels(dim, view(24)) > 0);
+  check("FX FILTER: the rendered nonzero stored value is brighter than dim ink", brightValuePixels(dim) > 0);
   f.turn("K1", 1); f.render(200);
   check("FX FILTER: the rendered active value uses bright ink", valuePixels(f.screen(), view(25)) > 0);
-  check("FX FILTER: first turn starts at stored LP and shows an active value", view(2) < -40 && view(0) >= -32 && view(0) <= -30 && view(1) === 0 && text() !== "OFF" && !same(dim, f.screen()));
-  check("FX FILTER: the stored filter is unchanged", view(3) === -32);
+  check("FX FILTER: first turn starts at stored LP and shows an active value", view(2) === 0 && view(0) > -32 && view(0) <= -30 && view(1) === 0 && text() !== "OFF" && !same(dim, f.screen()));
+  check("FX FILTER: the edit updates this track's stored filter", view(3) === view(0));
   f.turn("K1", -1); f.render(200);
-  check("FX FILTER: returning to the anchor releases to the stored value", view(2) === 0 && view(0) === -32 && view(1) === 1);
+  check("FX FILTER: reversing the edit restores the previous cutoff", view(2) === 0 && view(0) === -32 && view(3) === -32 && view(1) === 0);
   f.turn("K1", 1); f.release(); f.render(400);
-  check("FX FILTER: releasing an unlatched BUILD layer returns the track filter", view(2) === 0 && view(0) === -32 && view(3) === -32);
+  const track0 = view(3);
+  check("FX FILTER: releasing an unlatched BUILD layer retains the edit", view(2) === 0 && view(0) === track0 && track0 > -32);
   f.ex.web_test_select(1); own(20); f.hold("FX", 600); f.render(200);
-  check("FX FILTER: changing selection shows that track's own HP, dimmed", view(0) === 20 && view(1) === 1 && text().includes("HP"));
-  f.turn("K1", -1); const held = view(2); f.ex.web_test_select(0); f.render(200);
-  check("FX FILTER: an active macro follows the selection, without writing either track", view(2) === held && view(0) > 0 && view(3) === -32 && view(1) === 0);
+  check("FX FILTER: changing selection shows that track's own active HP", view(0) === 20 && view(1) === 0 && text().includes("HP"));
+  f.turn("K1", -1); const track1 = view(3); f.ex.web_test_select(0); f.render(200);
+  check("FX FILTER: track selection preserves the first track's LP", view(2) === 0 && view(0) === track0 && view(3) === track0 && view(1) === 0);
+  f.ex.web_test_select(1); f.render(200);
+  check("FX FILTER: the second track retains its independently edited HP", view(0) === track1 && track1 < 20 && track1 > 0);
   f.release(); own(0); f.hold("FX", 600); f.render(200);
   check("FX FILTER: no stored filter and no macro still shows OFF", text() === "OFF" && view(1) === 1);
   f.release();
