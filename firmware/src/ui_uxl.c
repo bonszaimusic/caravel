@@ -18,7 +18,7 @@
 #define UXL_KFILT 0xF0u                 /* a target that is no HOME-performance reference: the FX layer's FILTER, perf_k[0], -100 LP .. +100 HP */
 static const param_desc_t UXL_FILT_DESC = {"FILTER", F_INT, -100, 100, 0, 0, ""};
 static const param_desc_t UXL_FX_DESC = {"FX", F_INT, 0, 100, 0, 0, ""};
-/* the FX layer's four macros (perform.c perf_k) as the arcs of SPACE, each id: 0 FILTER (-100 LP .. +100 HP), 1 CRUSH, 2 THROW, 3 DEPTH (shown as 100 - perf_k[3], as the layer shows it) */
+/* SPACE/FILTER: K1 edits this track's persisted P_FILT; K2..K4 are the live CRUSH/THROW/DEPTH macros (perform.c perf_k). */
 static int32_t uxl_fx_get(uint32_t id) {
     if (!id) { int32_t v = tf_eff(TSEL); return v < 0 ? v * 100 / 64 : v * 100 / 63; }
     return id == 3u && !perf_harm_on() ? 100 - perf_k[3] : perf_k[id & 3u];
@@ -28,7 +28,7 @@ static void uxl_fx_turn(uint32_t id, uint32_t k, int32_t s)
     id &= 3u;
     if (id == 3u && !perf_harm_on())
         s = -s;
-    int32_t delta = accel(EN_K1 + k, s, id ? 100 : 200);
+    int32_t delta = accel(EN_K1 + k, s, id ? 100 : 127);
     if (!id) tf_macro_turn(delta);
     else perf_k[id] = (int8_t)clamp((int32_t)perf_k[id] + delta, 0, 100);
 }
@@ -1175,7 +1175,7 @@ static void uxl_knob(uint32_t k, int32_t s)
     uxl_group(uxl.area, uxl_group_now(), tg);
     if (!tg[k].kind)
         return;
-    if (tg[k].kind == UXL_KFILT) {                      /* an FX macro, set as the FX layer's knob sets it, kept when FX is let go (E74, E77) */
+    if (tg[k].kind == UXL_KFILT) {                      /* FILTER edits P_FILT; other FX macros keep their current live behavior */
         uxl_fx_turn(tg[k].id, k, s);
         uxl.hot_k = (uint8_t)k;
         uxl.hot_t = 40;
@@ -2142,7 +2142,7 @@ static void uxl_paint(void)
         int hot = uxl.hot_t && uxl.hot_k == k;
         if (k >= n || !tg[k].kind)                      /* (EVOLVE groups have no targets: n is 0) */
             continue;
-        if (tg[k].kind == UXL_KFILT) {                  /* an FX macro: OFF, or LP / HP and how far, or its percent */
+        if (tg[k].kind == UXL_KFILT) {                  /* per-track FILTER or the other live FX macros */
             v = uxl_fx_get(tg[k].id);
             d = tg[k].id == 0u ? &UXL_FILT_DESC : &UXL_FX_DESC;
             uxl_orbit_arc(k, d, v, hot);
@@ -2173,13 +2173,13 @@ static void uxl_paint(void)
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx, cy, hot); else cv_text(cx, cy, &AF_M, lab, hot ? T_ACCENT : T_TEXT);
-                cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !perf_k[0] ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
+                cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx + text_w(&AF_S, b) + 5, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
             } else {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx - UXL_GW, cy, hot); else uxl_text_r(cx, cy, &AF_M, lab, hot ? T_ACCENT : T_TEXT);
-                uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !perf_k[0] ? T_DIM : uxl_hot(k));
+                uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx - text_w(&AF_S, b) - 11, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
@@ -2393,7 +2393,7 @@ static uint32_t uxl_play_sig(void)
     uxl_group(uxl.area, uxl_group_now(), tg);
     for (k = 0; k < 4u; k++)
         if (tg[k].kind == UXL_KFILT) {
-            s = s * 16777619u + (uint32_t)(int32_t)perf_k[tg[k].id & 3u];
+            s = s * 16777619u + (uint32_t)(tg[k].id ? (int32_t)perf_k[tg[k].id & 3u] : tf_eff(TSEL));
         } else if (tg[k].kind) {
             hp_ref_t r = uxl_ref(&tg[k]);
             s = s * 16777619u + (uint32_t)hp_get(r) + 7u * (uint32_t)(tg[k].id);
