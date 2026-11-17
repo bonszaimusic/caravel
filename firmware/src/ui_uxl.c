@@ -15,7 +15,7 @@
 #if CARAVEL_UX_EVOLVE && !(FELUCCA_RANDOM_MORPH && CARAVEL_ACTION_BANKS && FELUCCA_HOME_PERF)
 #error "CARAVEL_UX_EVOLVE needs the HOME performance model, ACTION banks and RANDOM MORPH"
 #endif
-#define UXL_KFILT 0xF0u                 /* a target that is no HOME-performance reference: the FX layer's FILTER, perf_k[0], -100 LP .. +100 HP */
+#define UXL_KFILT 0xF0u                 /* a non-HOME FX FILTER target; edits this track's stored P_FILT (-100 LP .. +100 HP display) */
 static const param_desc_t UXL_FILT_DESC = {"FILTER", F_INT, -100, 100, 0, 0, ""};
 static const param_desc_t UXL_FX_DESC = {"FX", F_INT, 0, 100, 0, 0, ""};
 /* SPACE/FILTER: K1 edits this track's persisted P_FILT; K2..K4 are the live CRUSH/THROW/DEPTH macros (perform.c perf_k). */
