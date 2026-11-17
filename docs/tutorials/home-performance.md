@@ -29,4 +29,4 @@ Tap FX for SPACE and browse SENDS, FILTER and STASIS. STASIS holds an audio text
 
 SAVE opens PROJECT. A project includes sound and performance settings, while CAPTURE loops, temporary FX macros and running spring positions are not durable data. A too-large compressed project is refused with PROJECT TOO LARGE / NOT SAVED; the previous saved copy remains.
 
-[ELASTIC](elastic-first-steps.md) · [Snapshots and Journey](random-morph-journey.md) · [Filter](filter-fx.md)
+[CAPTURE](capture.md) · [ELASTIC](elastic-first-steps.md) · [Snapshots and Journey](random-morph-journey.md) · [Filter](filter-fx.md)

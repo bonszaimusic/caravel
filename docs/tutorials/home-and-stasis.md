@@ -3,4 +3,4 @@
 
 # STASIS in Caravel 1.0
 
-The current performance workflow is [PLAY / SPACE and MOVE](home-performance.md). STASIS holds audio texture; [CAPTURE](seq-arp.md) records panel and incoming MIDI note gestures. The old HOME ACTION-bank navigation is historical.
+The current performance workflow is [PLAY / SPACE and MOVE](home-performance.md). STASIS holds audio texture; [CAPTURE](capture.md) records panel and incoming MIDI note gestures. The old HOME ACTION-bank navigation is historical.
