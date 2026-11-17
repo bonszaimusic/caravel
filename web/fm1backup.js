@@ -288,6 +288,8 @@ export class BackupConnection {
     };
   }
   async request([cmd, args], opt = {}) {
+    if (this.updateOnly && ![1,65,66].includes(cmd))
+      throw new Error("Older 1.x development firmware is read-only; use the update installer");
     if (this.pending || this.closed || this.input.state === "disconnected" || this.output.state === "disconnected") throw new Error("Backup connection closed or busy");
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending = null; reject(new Error("Backup timed out. Keep the FM-1 connected and stopped.")); }, opt.timeout || 1200);
@@ -297,10 +299,11 @@ export class BackupConnection {
       catch (e) { clearTimeout(timer); this.pending = null; reject(e); }
     });
   }
-  async identify() {
+  async identify({allowLegacyFormat2Update = false} = {}) {
     const info = await detectGeneration((header,cmd,args) =>
-      this.request([cmd,args], {header, timeout:700}));
+      this.request([cmd,args], {header, timeout:700}), {allowLegacyFormat2Update});
     this.header = info.header;
+    this.updateOnly = !!info.updateOnly;
     return info;
   }
   close() {

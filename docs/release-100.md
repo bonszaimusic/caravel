@@ -10,6 +10,8 @@ Back up using the firmware and backup tool that currently read your device. Keep
 
 Projects now use FUNW with the HPM2 v6 performance container; user presets use UPB2 and performance flash records IFP2. The editor protocol is 18, with separate generation-2 framing for every request. Frozen Classic clients cannot edit 1.x or start its software update/recovery entry. Backup LIST 1 and LIST 2 describe different generations; restore must match the connected firmware. Old data is reported as OLD DATA FOUND, with explicit trial/save-copy handling where supported, rather than converted or silently overwritten.
 
+The web installer also supports upgrading the known pre-release 1.0 development firmware with protocol 17. It first validates and downloads a complete FORMAT-2 backup using a read-only connection, then asks for confirmation before updating to the current 1.x firmware. Normal editors remain restricted to protocol 18; unknown revisions and incompatible device layouts are refused. Confirm the two checkboxes in the installer; no typed `UPDATE` word is required. The final confirmation after backup remains.
+
 ## What changed
 
 - Six engines: **ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE**. SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM are removed from the shipped profile. Song/Chain and Scope are removed.

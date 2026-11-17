@@ -117,7 +117,6 @@
       </ul>
       <p class="small"><label><input type="checkbox" id="brk-understand"> <span data-t="brkUnderstand"></span></label></p>
       <p class="small"><label><input type="checkbox" id="brk-backup"> <span data-t="brkBackup"></span></label></p>
-      <p class="small"><label><span data-t="brkType"></span> <input id="brk-type" autocomplete="off" spellcheck="false" size="10"></label></p>
     </section>
     <section class="box">
       <span class="tag">Install</span>
@@ -197,7 +196,6 @@ const TEXT = {
     brk4: "元に戻すには旧ファームウェアをもう一度インストールします。旧データは再び使えますが、1.0.0 で作ったデータは旧版で読めません。",
     brkUnderstand: "旧バージョンのデータが 1.0.0 で読み込めなくなることを理解しました。",
     brkBackup: "FM-1 のバックアップがあります（インストーラーもいま保存します）。旧ファームウェアへの戻し方も分かっています。",
-    brkType: "インストールボタンを有効にするには UPDATE と入力:",
     brkConfirm: "全体バックアップファイルはパソコンに保存できましたか？ 続けると Caravel 1.0.0 を書き込みます。旧バージョンのプロジェクトと音色は 1.0.0 では開けません。",
     brkNoAuto: "この FM-1 は全体バックアップに未対応です。自分で作成済みのバックアップがある場合だけ続けてください。",
     brkNoAutoConfirm: "自動バックアップを保存できませんでした。保存済みのバックアップがない場合は、キャンセルして対応するエディタで先にバックアップしてください。",
@@ -245,7 +243,6 @@ const TEXT = {
     brk4: "Going back means installing the old firmware again: your old data is then usable again, but anything made in 1.0.0 cannot be read by it.",
     brkUnderstand: "I understand that data of older releases will not load in 1.0.0.",
     brkBackup: "I have a backup of my FM-1 (the installer saves one now as well) and I know how to go back to the old firmware.",
-    brkType: "Type UPDATE to enable the install button:",
     brkConfirm: "Has the complete backup file been saved to this computer? Continue to install Caravel 1.0.0. Projects and sounds of older releases will not open in it.",
     brkNoAuto: "This FM-1 cannot make a complete backup automatically. Continue only if you made one yourself.",
     brkNoAutoConfirm: "No automatic backup could be saved. Do you have a backup you made yourself? If not, cancel and back up with the matching editor first.",
@@ -273,10 +270,10 @@ const meta = /*META*/;
 let writing = false, stock = null, stockFileEpoch = 0;
 const breaking = !!meta.breaking;                    // a release that cannot open older data: backup, warning and a typed confirmation first
 $("breaking").hidden = !breaking;
-const brkReady = () => !breaking || ($("brk-understand").checked && $("brk-backup").checked && $("brk-type").value.trim().toUpperCase() === "UPDATE");
+const brkReady = () => !breaking || ($("brk-understand").checked && $("brk-backup").checked);
 const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image || !brkReady(); $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on;
-  for (const id of ["brk-understand", "brk-backup", "brk-type"]) $(id).disabled = on; };
-for (const id of ["brk-understand", "brk-backup", "brk-type"]) $(id).addEventListener("input", () => lockInstaller(writing));
+  for (const id of ["brk-understand", "brk-backup"]) $(id).disabled = on; };
+for (const id of ["brk-understand", "brk-backup"]) $(id).addEventListener("input", () => lockInstaller(writing));
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
 (async () => {

@@ -92,7 +92,7 @@ class Link {
     return this.q.shift() || null;
   }
   close() { this.input.onmidimessage = null; }
-  async generation() {
+  async generation(options = {}) {
     return detectGeneration(async (header, cmd, args) => {
       this.drain();
       if (!this.send([0xf0,...header,cmd,...args,0xf7])) throw fail("lost", "Device disconnected");
@@ -104,7 +104,7 @@ class Link {
           return reply.slice(5,-1);
       }
       throw fail("generation", "No matching device protocol; nothing written");
-    });
+    }, options);
   }
 }
 
@@ -194,14 +194,18 @@ export class Updater {
     if (dev.id.model !== model) { dev.link.close(); throw fail("model", `the device is ${dev.id.text}, the package is for ${product}`); }
     let source;
     try {
-      source = await dev.link.generation();
       const target = policy.targetGeneration ?? 2;
+      source = await dev.link.generation({allowLegacyFormat2Update:
+        target === 2 && policy.allowLegacyFormat2Update === true});
+      if (source.updateOnly && target !== 2)
+        throw fail("generation", "Older 1.x development firmware requires the current 1.x update path");
       if (target !== 2 && !(target === 1 && source.generation === 2 && policy.downgrade === true) &&
           !(target === 0 && policy.stock === true))
         throw fail("generation", "Wrong firmware generation; use the explicit backup-confirmed return path");
     } catch (error) { dev.link.close(); throw error; }
     step("start", dev.id.text);
-    dev.link.send(updateEntry(source.generation));
+    dev.link.send(updateEntry(source.generation, {protocol:source.protocol,
+      allowLegacyFormat2Update:policy.allowLegacyFormat2Update === true}));
     await sleep(2000);
     const s1 = await this.serve(dev.link, image, 0xE0000000, 8000, (n) => step("verify", n));
     dev.link.close();

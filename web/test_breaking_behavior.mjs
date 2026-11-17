@@ -16,7 +16,7 @@ if (process.env.INSTALLER_RACE_NEGATIVE) {
 if (process.env.CLASSIC_RETURN_NEGATIVE) {
   script=script.replace('    saveArchive(classicEditorBackup(selectedBackup),"Caravel-Classic-restore");','');
 }
-async function setup({loader=false,supported=true,failBackup=false,answers=[],stockWait=null,installWait=null} = {}) {
+async function setup({loader=false,supported=true,protocol17=false,failBackup=false,answers=[],stockWait=null,installWait=null} = {}) {
   const stats = {events:[],writes:0,backups:0,downloads:[],confirmations:[]};
   const objectURLs = new Map();
   const elements = new Map();
@@ -41,11 +41,11 @@ async function setup({loader=false,supported=true,failBackup=false,answers=[],st
       if (!predicate({model})) return null;
       return {id:{model},link:{input:{},output:{},close(){}}};
     }
-    async install(){stats.writes++;stats.events.push("install");await installWait;}
+    async install(_image,_product,_step,policy){if(protocol17)assert.equal(policy?.allowLegacyFormat2Update,true);stats.writes++;stats.events.push("install");await installWait;}
     async resume(){stats.writes++;stats.events.push("resume");return true;}
   }
   class BackupConnection {
-    async identify(){return {generation:supported?2:0,version:"CARAVEL v1.0.0"};}
+    async identify(options){if(protocol17)assert.equal(options?.allowLegacyFormat2Update,true);return {generation:supported?2:0,protocol:protocol17?17:18,updateOnly:protocol17,version:"CARAVEL v1.0.0"};}
     close(){}
   }
   const ctx = vm.createContext({
@@ -82,7 +82,6 @@ async function setup({loader=false,supported=true,failBackup=false,answers=[],st
     unlock(){
       el("brk-understand").checked=true;el("brk-understand").listeners.input();
       el("brk-backup").checked=true;el("brk-backup").listeners.input();
-      el("brk-type").value="UPDATE";el("brk-type").listeners.input();
       assert.equal(el("go").disabled,false);
     }
   };
@@ -94,16 +93,23 @@ assert.equal(locked.el("go").disabled,true);
 await locked.click();
 assert.equal(locked.stats.writes,0);
 locked.el("brk-understand").checked=true;locked.el("brk-understand").listeners.input();
+assert.equal(locked.el("go").disabled,true,"understand alone must not enable install");
+locked.el("brk-understand").checked=false;
 locked.el("brk-backup").checked=true;locked.el("brk-backup").listeners.input();
-assert.equal(locked.el("go").disabled,true);
-locked.el("brk-type").value="WRONG";locked.el("brk-type").listeners.input();
-assert.equal(locked.el("go").disabled,true);
-locked.el("brk-type").value="UPDATE";locked.el("brk-type").listeners.input();
+assert.equal(locked.el("go").disabled,true,"backup alone must not enable install");
+locked.el("brk-understand").checked=true;locked.el("brk-understand").listeners.input();
 assert.equal(locked.el("go").disabled,false);
-pass("both checkboxes and typed UPDATE are required");
+assert(!html.includes('id="brk-type"'),"no redundant typed UPDATE field");
+pass("both checkboxes are required; no typed UPDATE");
 const complete=await setup({answers:[true]});complete.unlock();await complete.click();
 assert.deepEqual(complete.stats.events,["backup","download","install"]);
 pass("backup and download before write");
+const development=await setup({protocol17:true,answers:[true]});development.unlock();await development.click();
+assert.deepEqual(development.stats.events,["backup","download","install"]);
+pass("known protocol17 development update retains backup, download and confirmation");
+const developmentFailed=await setup({protocol17:true,failBackup:true});developmentFailed.unlock();await developmentFailed.click();
+assert.equal(developmentFailed.stats.writes,0);
+pass("protocol17 backup failure prevents update");
 const denyLast=await setup({answers:[false]});denyLast.unlock();await denyLast.click();
 assert.equal(denyLast.stats.backups,1);assert.equal(denyLast.stats.writes,0);
 pass("final cancel forbids write");

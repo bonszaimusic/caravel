@@ -6,7 +6,7 @@ export const CLASSIC_HEADER = [0x7d, 0x46, 0x4c];
 export const V1_PROTOCOL = 18;
 const ENGINES = ["ANALOG", "PHYS", "SEM", "HADES", "DRONE", "ENSEMBLE"];
 
-export function generationInfo(a) {
+export function generationInfo(a, {allowLegacyFormat2Update = false} = {}) {
   if (!Array.isArray(a) || a.some(v => !Number.isInteger(v) || v < 0 || v > 127))
     throw new Error("Invalid generation INFO");
   let at = 0;
@@ -26,8 +26,17 @@ export function generationInfo(a) {
   }
   const format = tags.get(0x60);
   if (format) {
-    if (rows !== 0 || format[0] !== 2 || format[1] !== V1_PROTOCOL ||
-        engines.join("|") !== ENGINES.join("|")) throw new Error("Unsupported 1.x protocol revision");
+    if (rows !== 0 || format[0] !== 2 || engines.join("|") !== ENGINES.join("|"))
+      throw new Error("Unsupported FORMAT 2 device profile");
+    // The pre-release revision 17 used FL framing. It is never an editor
+    // connection: permit only the known layout for backup-before-update.
+    if (format[1] === 17 && allowLegacyFormat2Update &&
+        counts.join() === "114,27,64,106" && tags.get(0x42)?.join() === "1,3" &&
+        tags.get(0x41)?.join() === "1,0,1" && tags.get(0x59)?.join() === "1,7" &&
+        tags.get(0x58)?.join() === "2,64")
+      return {generation:2, protocol:17, version, updateOnly:true};
+    if (format[1] !== V1_PROTOCOL)
+      throw new Error(`Unsupported 1.x protocol revision ${format[1]} (required ${V1_PROTOCOL})`);
     return {generation:2, protocol:V1_PROTOCOL, version};
   }
   if (rows !== 16 || tags.get(0x55)?.[0] !== 1 || tags.get(0x42)?.[0] !== 1)
@@ -35,7 +44,7 @@ export function generationInfo(a) {
   return {generation:1, protocol:"Classic capabilities / LIST 1", version};
 }
 
-export async function detectGeneration(request) {
+export async function detectGeneration(request, {allowLegacyFormat2Update = false} = {}) {
   // request(header, command, args): strictly read-only here, before any mutation.
   let info, header;
   try {
@@ -47,8 +56,8 @@ export async function detectGeneration(request) {
     // A running 1.x rejects the old framing explicitly; never treat it as Classic.
     if (legacy.length === 4 && legacy[0] === 0 && legacy[1] === 0x60)
       throw new Error("1.x generation handshake failed; reconnect using the matching 1.x editor");
-    info = generationInfo(legacy);
-    if (info.generation !== 1) throw modernError;
+    info = generationInfo(legacy, {allowLegacyFormat2Update});
+    if (info.generation !== 1 && !(info.updateOnly && allowLegacyFormat2Update)) throw modernError;
     header = CLASSIC_HEADER;
   }
   const catalog = await request(header, 65, []);
@@ -61,9 +70,11 @@ export async function detectGeneration(request) {
   return {...info, header, catalog};
 }
 
-export function updateEntry(generation) {
+export function updateEntry(generation, {protocol = V1_PROTOCOL, allowLegacyFormat2Update = false} = {}) {
   if (generation === 1) return [0xf0,0x22,0x24,0x35,0x7f,0xf7];
-  if (generation === 2) return [0xf0,...V1_HEADER,0x7f,V1_PROTOCOL,2,0xf7];
+  if (generation === 2 && protocol === 17 && allowLegacyFormat2Update)
+    return [0xf0,0x22,0x24,0x35,0x7f,0xf7];
+  if (generation === 2 && protocol === V1_PROTOCOL) return [0xf0,...V1_HEADER,0x7f,V1_PROTOCOL,2,0xf7];
   throw new Error("Unknown device generation; update refused");
 }
 

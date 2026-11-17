@@ -9,7 +9,7 @@ import vm from 'node:vm';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {generationInfo,detectGeneration,updateEntry,requireClassicReturnBackup,V1_HEADER,CLASSIC_HEADER} from './generation.js';
-import {bkManifest,bkU32,bkR32,bkCrc,bkPack,bkUnpack,captureBackup,restoreBackup,readBackup,readBackupFile,classicEditorBackup} from './fm1backup.js';
+import {bkManifest,bkU32,bkR32,bkCrc,bkPack,bkUnpack,captureBackup,restoreBackup,readBackup,readBackupFile,classicEditorBackup,BackupConnection} from './fm1backup.js';
 // Exact published d85ecb7 web/fm1backup.js, copied as a read-only client fixture;
 // no Classic firmware/site build is performed by this test.
 import {readBackup as classicReadBackup} from '../tests/fixtures/classic-fm1backup.mjs';
@@ -43,6 +43,51 @@ await assert.rejects(()=>detectGeneration(async(h,c)=>c===1?fixture.modern:catal
 assert.throws(()=>generationInfo([0,0x60,2,18]));
 const wrongRevision=fixture.modern.slice();wrongRevision[wrongRevision.indexOf(0x60)+2]=17;
 assert.throws(()=>generationInfo(wrongRevision),/revision/);
+const development17=JSON.parse(fs.readFileSync(new URL('../tests/fixtures/format2-protocol17-info.json',import.meta.url))).info;
+assert.throws(()=>generationInfo(development17),/revision 17/,'ordinary clients remain strict');
+const developmentRequests=[];
+const developmentRequest=async(h,c,a)=>{
+ developmentRequests.push({h,c,a});
+ if(h===V1_HEADER)throw new Error('timeout');
+ return c===1?development17:catalog(2);
+};
+await assert.rejects(()=>detectGeneration(developmentRequest),/revision 17/);
+const development=await detectGeneration(developmentRequest,{allowLegacyFormat2Update:true});
+assert.equal(development.protocol,17);assert.equal(development.generation,2);assert.equal(development.updateOnly,true);
+assert.deepEqual(development.header,CLASSIC_HEADER);
+assert(developmentRequests.every(x=>[1,65].includes(x.c)&&x.a.length===0));
+for(const revision of [16,19]) {
+ const bad=development17.slice();bad[bad.indexOf(0x60)+2]=revision;
+ assert.throws(()=>generationInfo(bad,{allowLegacyFormat2Update:true}),/revision/);
+}
+const wrongLayout=development17.slice();wrongLayout[wrongLayout.indexOf(0)+2]=113;
+assert.throws(()=>generationInfo(wrongLayout,{allowLegacyFormat2Update:true}),/revision/);
+await assert.rejects(()=>detectGeneration(async(h,c,a)=>c===65?catalog(1):developmentRequest(h,c,a),
+ {allowLegacyFormat2Update:true}),/mismatch/);
+assert.throws(()=>updateEntry(2,{protocol:17}));
+assert.deepEqual(updateEntry(2,{protocol:17,allowLegacyFormat2Update:true}),updateEntry(1));
+assert.throws(()=>updateEntry(2,{protocol:16,allowLegacyFormat2Update:true}));
+// Exercise the real backup connection, including its write-command refusal.
+const input={state:'connected',onmidimessage:null},sent=[];
+const output={state:'connected',send(frame){
+ const h=Array.from(frame.slice(1,4)),cmd=frame[4],a=frame.slice(5,-1);sent.push(Array.from(frame));
+ if(h.join()===V1_HEADER.join())return; // actual protocol17 ignores modern framing
+ const data=cmd===1?development17:cmd===65?catalog(2):(()=>{
+  const b=objects.get(a[0]),off=bkR32(a,1),n=a[6]|a[7]<<7;
+  return [a[0],0,...bkU32(off),n&127,n>>7,...bkPack(b.subarray(off,off+n))];
+ })();
+ queueMicrotask(()=>input.onmidimessage?.({data:Uint8Array.from([240,...h,cmd,...data,247])}));
+}};
+const oldConnection=new BackupConnection(input,output);
+await oldConnection.identify({allowLegacyFormat2Update:true});
+const saved17=await captureBackup((r,o)=>oldConnection.request(r,o),development.version);
+assert.equal(readBackup(saved17).generation,2);
+const sentBefore=sent.length;
+await assert.rejects(()=>oldConnection.request([67,[0,0]]),/read-only/);
+await assert.rejects(()=>oldConnection.request([3,[0,0]]),/read-only/);
+assert.equal(sent.length,sentBefore,'no destructive packet leaves the read-only bridge');
+assert(sent.every(f=>[1,65,66].includes(f[4])));oldConnection.close();
+
 assert.notDeepEqual(updateEntry(2),updateEntry(1));
 assert.throws(()=>updateEntry(0));
 

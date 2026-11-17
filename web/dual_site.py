@@ -83,17 +83,17 @@ def verify_site(root: Path, version: str) -> dict:
         # Verify the actual breaking-update guard, not incidental localized prose.
         # Runtime simulated-MIDI behavior is covered by web/test_breaking_behavior.mjs.
         controls = ('id="breaking"', 'id="brk-understand"',
-                    'id="brk-backup"', 'id="brk-type"')
+                    'id="brk-backup"')
         if not re.search(r'"breaking"\s*:\s*true\b', installer):
             raise ValueError("1.x installer missing breaking=true metadata")
         if any(control not in installer for control in controls):
             raise ValueError("1.x installer missing breaking-update acknowledgement controls")
         guards = (
             r'const\s+breaking\s*=\s*!!meta\.breaking',
-            r'const\s+brkReady\s*=\s*\(\)\s*=>[^;]*brk-understand[^;]*brk-backup[^;]*brk-type[^;]*===\s*["\']UPDATE["\']',
+            r'const\s+brkReady\s*=\s*\(\)\s*=>\s*!breaking\s*\|\|\s*\(\s*\$\("brk-understand"\)\.checked\s*&&\s*\$\("brk-backup"\)\.checked\s*\)',
             r'\$\("go"\)\.disabled\s*=\s*on\s*\|\|\s*!image\s*\|\|\s*!brkReady\(\)',
             r'if\s*\(writing\s*\|\|\s*!image\s*\|\|\s*!brkReady\(\)\)\s*return\s*;',
-            r'if\s*\(breaking\)[^{]*\{.*?captureBackup\(.*?confirm\(t\("brkConfirm"\)\).*?await up\.install\(image,\s*meta\.product,\s*step\)',
+            r'if\s*\(breaking\)[^{]*\{.*?captureBackup\(.*?confirm\(t\("brkConfirm"\)\).*?await up\.install\(image,\s*meta\.product,\s*step(?:\s*,\s*\{[^}]*\})?\s*\)',
         )
         if not all(re.search(expr, installer, re.S) for expr in guards):
             raise ValueError("1.x installer missing functional breaking-update guard")

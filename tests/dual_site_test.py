@@ -137,9 +137,9 @@ class DualSiteTests(unittest.TestCase):
             original.replace('"breaking": true', '"breaking": false'),
             original.replace('id="brk-understand"', 'id="deleted-understand"'),
             original.replace('id="brk-backup"', 'id="deleted-backup"'),
-            original.replace('id="brk-type"', 'id="deleted-type"'),
             original.replace('!brkReady()', 'false'),
-            original.replace('=== "UPDATE"', '=== "INSTALL"'),
+            original.replace(' && $("brk-backup").checked', ''),
+            original.replace('.checked &&', '.checked ||'),
             original.replace('await up.install(image, meta.product, step)', 'await blockedInstall(image)'),
         ):
             self.assertNotEqual(invalid, original)
