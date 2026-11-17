@@ -142,6 +142,7 @@ def run(r):
   r.command('format2-wasm-old-data-guard',['node','web/emu/format2_test.mjs','build/emu/felucca.wasm'])
   r.command('ux-layers-119',['node','web/emu/ux_layers_test.mjs'])
   r.command('frame-flicker',['node','web/emu/frame_flicker_test.mjs'])
+  r.command('fx-filter-track-retention',['node','web/emu/fx_filter_track_test.mjs','build/emu/felucca.wasm'])
   r.command('capture-dense-four-loops',['node','web/emu/capture_load_test.mjs'])
   r.command('tutorial-source-links',[sys.executable,'web/tutorial_pages.py','--check-source'])
   r.command('tutorial-generated-index',[sys.executable,'web/tutorial_pages.py','--check-readme'])
