@@ -153,8 +153,12 @@ class TutorialPagesTest(unittest.TestCase):
             for name in tp.used_audio(self.data, ROOT):
                 self.assertTrue((site / "tutorials/audio" / name).is_file(), name)
             sem = (site / "tutorials/sem/index.html").read_text()
-            self.assertIn('<audio controls preload="none" src="../audio/sem-warm-pad.mp3"', sem)
-            self.assertIn("native DSP render, not a device recording", sem)
+            self.assertIn("SEM in Caravel 1.0", sem)
+            self.assertIn("CUT", sem)
+            self.assertNotIn('<audio controls preload=', sem)  # this 1.x lesson links no audio
+            for slug in ("analog", "phys", "capture"):
+                lesson = (site / "tutorials" / slug / "index.html").read_text()
+                self.assertIn("Caravel 1.0", lesson if slug != "capture" else lesson.replace("1.0.0", "Caravel 1.0"))
 
     def test_generated_overview_readme_is_current_and_linked_at_the_top_of_the_readme(self):
         self.assertEqual((TUT / "README.md").read_text(encoding="utf-8"), tp.readme_text(self.data))
