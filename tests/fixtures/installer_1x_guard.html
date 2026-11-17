@@ -1,0 +1,412 @@
+<!-- Offline installer test fixture; copied from an earlier development snapshot.
+     The dual-site unit test prepends generated package metadata. This template is NOT a verified release installer. -->
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caravel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 17'%3E%3Cpath fill='%23ffaa29' d='M11 0h2v1h-2zM11 1h1v1h-1zM11 2h2v1h-2zM7 3h9v1h-9zM19 3h1v1h-1zM7 4h9v1h-9zM19 4h1v1h-1zM7 5h7v1h-7zM15 5h7v1h-7zM7 6h7v1h-7zM15 6h8v1h-8zM7 7h7v1h-7zM15 7h8v1h-8zM6 8h8v1h-8zM15 8h8v1h-8zM2 9h21v1h-21zM27 9h1v1h-1zM2 10h21v1h-21zM25 10h2v1h-2zM2 11h5v1h-5zM11 11h1v1h-1zM19 11h1v1h-1zM24 11h2v1h-2zM2 12h22v1h-22zM3 13h20v1h-20zM4 14h18v1h-18zM7 15h13v1h-13z'/%3E%3C/svg%3E">
+<style>
+/*LOOK-BEGIN*/
+  /* Caravel look: the firmware's AMBER palette (PAPER in light), the pixel ship, boxes with a tag on the border */
+  :root { --bg: #100c08; --box: #181208; --surf: #292010; --line: #3b2e18; --raise: #54411f; --ctl: #8a7347;
+          --text: #f7efde; --dim: #9a8a6b; --amb: #ffaa29; --cy: #63d7e6; --onamb: #1a1205;
+          --mono: ui-monospace, Menlo, Consolas, monospace; color-scheme: dark; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f6efe4; --box: #efe6d6; --surf: #e6d9c8; --line: #cdbda3; --raise: #b8a283; --ctl: #7a6540;
+          --text: #201a12; --dim: #625740; --amb: #963e10; --cy: #0b6a7a; --onamb: #fffaf0; color-scheme: light; }
+  }
+  :root[data-theme="light"] { --bg: #f6efe4; --box: #efe6d6; --surf: #e6d9c8; --line: #cdbda3; --raise: #b8a283; --ctl: #7a6540;
+          --text: #201a12; --dim: #625740; --amb: #963e10; --cy: #0b6a7a; --onamb: #fffaf0; color-scheme: light; }
+  :focus-visible { outline: 2px solid var(--cy); outline-offset: 2px; }
+  .ship { display: block; fill: currentColor; shape-rendering: crispEdges; }
+  .site { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 16px; background: var(--surf);
+          border-bottom: 1px solid var(--line); font: 600 12px/1.2 var(--mono); }
+  .site .logo { display: flex; align-items: center; gap: 10px; color: var(--amb); text-decoration: none; letter-spacing: .14em; font-size: 15px; font-weight: 700; }
+  .pill { font: 600 10px/1 var(--mono); letter-spacing: .06em; padding: 4px 8px; border: 1px solid var(--raise); border-radius: 99px; color: var(--dim); white-space: nowrap; }
+  .site nav { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; }
+  .site nav a { padding: 5px 10px; border-radius: 99px; color: var(--dim); text-decoration: none; letter-spacing: .08em; font-size: 11px; }
+  .site nav a:hover { color: var(--text); }
+  .site nav a[aria-current] { background: var(--amb); color: var(--onamb); }
+  .boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px 10px; margin: 0 0 22px; }
+  .box { position: relative; min-width: 0; box-sizing: border-box; border: 1px solid var(--line); background: var(--box); border-radius: 4px; padding: 18px 12px 12px; }
+  .box > .tag { position: absolute; top: -8px; left: 10px; padding: 0 6px; font: 700 10px/16px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+                background: var(--amb); color: var(--onamb); border-radius: 2px; }
+  .box.sec > .tag { background: var(--surf); color: var(--amb); box-shadow: inset 0 0 0 1px var(--raise); }
+  .btn, button { font: 600 12px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; border-radius: 3px; padding: 9px 18px; cursor: pointer;
+                 background: transparent; color: var(--amb); border: 1px solid var(--raise); }
+  .btn.primary, button.primary { background: var(--amb); color: var(--onamb); border-color: var(--amb); }
+  .btn:hover, button:hover { border-color: var(--amb); }
+  button:disabled { cursor: default; background: var(--surf); color: var(--dim); border-color: var(--ctl); }
+  /*LOOK-END*/
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 28px 16px 40px; }
+  p { margin: 0 0 12px; }
+  .box > :last-child { margin-bottom: 0; }
+  .hero { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 22px 16px 18px; }
+  .hero .ship { color: var(--amb); flex: none; }
+  .hero h1 { margin: 0; font: 700 28px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--amb); }
+  .hero h1 small { display: block; margin-top: 4px; font-size: 11px; letter-spacing: .04em; text-transform: none; color: var(--dim); }
+  .hero p { margin: 4px 0 0; color: var(--dim); }
+  .lang { position: absolute; top: 10px; right: 10px; padding: 5px 10px; font-size: 11px; }
+  @media (min-width: 600px) { .hero .txt { padding-right: 84px; } }
+  .small { color: var(--dim); font-size: 13px; }
+  .risk .lead { font-weight: 600; }
+  a { color: inherit; }
+  .go { display: inline-block; color: var(--amb); }
+  #status { margin: 12px 0 0; min-height: 1.6em; overflow-wrap: anywhere; }
+  .meter { position: relative; margin-top: 14px; }
+  .meter::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 2px;
+                  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 3px), var(--box) calc(10% - 3px), var(--box) 10%); }
+  progress { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 14px; margin: 0; border: 0; border-radius: 2px; overflow: hidden; background: var(--surf); color: var(--amb); }
+  progress::-webkit-progress-bar { background: var(--surf); }
+  progress::-webkit-progress-value { background: var(--amb); }
+  progress::-moz-progress-bar { background: var(--amb); }
+  pre { color: var(--dim); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 12px 0 0; }
+  pre:empty { display: none; }
+  details > summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+  details[open] > summary { margin-bottom: 12px; }
+  input[type=file] { max-width: 100%; margin-top: 4px; font: 12px var(--mono); color: var(--text); }
+  input[type=checkbox] { accent-color: var(--amb); }
+  .credits { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header class="site">
+  <a class="logo" href="./" aria-label="Caravel"><svg class="ship" width="42" height="26" viewBox="0 0 28 17" aria-hidden="true"><path d="M11 0h2v1h-2zM11 1h1v1h-1zM11 2h2v1h-2zM7 3h9v1h-9zM19 3h1v1h-1zM7 4h9v1h-9zM19 4h1v1h-1zM7 5h7v1h-7zM15 5h7v1h-7zM7 6h7v1h-7zM15 6h8v1h-8zM7 7h7v1h-7zM15 7h8v1h-8zM6 8h8v1h-8zM15 8h8v1h-8zM2 9h21v1h-21zM27 9h1v1h-1zM2 10h21v1h-21zM25 10h2v1h-2zM2 11h5v1h-5zM11 11h1v1h-1zM19 11h1v1h-1zM24 11h2v1h-2zM2 12h22v1h-22zM3 13h20v1h-20zM4 14h18v1h-18zM7 15h13v1h-13z"/></svg>CARAVEL</a>
+  <span class="pill">v@VERSION@</span>
+  <nav aria-label="Caravel">
+    <a href="./" aria-current="page">INSTALL</a>
+    <a href="../editor/">EDITOR</a>
+    <a href="../../emulator/" data-site="emulator">EMULATOR</a>
+    <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/faq.md" target="_blank" rel="noopener">FAQ</a>
+    <a href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener">DOCS</a>
+  </nav>
+</header>
+<main>
+  <div class="boxes">
+    <section class="box hero">
+      <span class="tag">FM-1 firmware</span>
+      <button class="lang" id="lang"></button>
+      <svg class="ship" width="140" height="85" viewBox="0 0 28 17" aria-hidden="true"><path d="M11 0h2v1h-2zM11 1h1v1h-1zM11 2h2v1h-2zM7 3h9v1h-9zM19 3h1v1h-1zM7 4h9v1h-9zM19 4h1v1h-1zM7 5h7v1h-7zM15 5h7v1h-7zM7 6h7v1h-7zM15 6h8v1h-8zM7 7h7v1h-7zM15 7h8v1h-8zM6 8h8v1h-8zM15 8h8v1h-8zM2 9h21v1h-21zM27 9h1v1h-1zM2 10h21v1h-21zM25 10h2v1h-2zM2 11h5v1h-5zM11 11h1v1h-1zM19 11h1v1h-1zM24 11h2v1h-2zM2 12h22v1h-22zM3 13h20v1h-20zM4 14h18v1h-18zM7 15h13v1h-13z"/></svg>
+      <div class="txt">
+        <h1>Caravel</h1>
+        <p data-t="tagline"></p>
+      </div>
+    </section>
+    <section class="box risk">
+      <span class="tag">Risk</span>
+      <p class="lead" data-t="warn"></p>
+      <p class="small" data-t="beta"></p>
+      <p class="small" data-t="usbIds"></p>
+      <p class="small" data-t="direct"></p>
+      <p class="small"><span data-t="brick"></span>
+        <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener" style="color:inherit">FM-1-transporter</a></p>
+    </section>
+    <section class="box risk" id="breaking" hidden>
+      <span class="tag" data-t="brkTag"></span>
+      <p class="lead" data-t="brkLead"></p>
+      <ul class="small">
+        <li data-t="brk1"></li>
+        <li data-t="brk2"></li>
+        <li data-t="brk3"></li>
+        <li data-t="brk4"></li>
+      </ul>
+      <p class="small"><label><input type="checkbox" id="brk-understand"> <span data-t="brkUnderstand"></span></label></p>
+      <p class="small"><label><input type="checkbox" id="brk-backup"> <span data-t="brkBackup"></span></label></p>
+      <p class="small"><label><span data-t="brkType"></span> <input id="brk-type" autocomplete="off" spellcheck="false" size="10"></label></p>
+    </section>
+    <section class="box">
+      <span class="tag">Install</span>
+      <p data-t="intro"></p>
+      <p><button class="primary" id="go" disabled data-t="install"></button></p>
+      <div class="meter"><progress id="bar" max="100" value="0"></progress></div>
+      <p id="status"></p>
+      <p class="small" lang="en">Connection or update problem? <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/faq.md" target="_blank" rel="noopener" style="color:inherit">Troubleshooting &amp; FAQ</a></p>
+      <pre id="log"></pre>
+    </section>
+    <section class="box sec">
+      <span class="tag">Stock V15</span>
+      <details>
+        <summary data-t="stockTitle"></summary>
+        <p class="small" data-t="back"></p>
+        <p class="small" lang="en"><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/faq.md#stock-return-error--5" target="_blank" rel="noopener" style="color:inherit">Update Failed -5? Read the stock-return FAQ.</a></p>
+        <p class="small"><a href="https://www.m-vave.com/download" target="_blank" rel="noopener" style="color:inherit">M-VAVE Downloads</a></p>
+        <p><label><span data-t="stockFile"></span><br><input id="stock-file" type="file" accept=".fwsc"></label></p>
+        <p><button id="stock-go" disabled data-t="stockGo"></button></p>
+        <p class="small" data-t="stockBackup"></p>
+        <p class="small"><label><input id="stock-recovery" type="checkbox"> <span data-t="stockRecovery"></span></label></p>
+      </details>
+    </section>
+    <section class="box sec">
+      <span class="tag">Editor</span>
+      <p><a class="go" href="../editor/" style="color:inherit" data-t="editor"></a></p>
+    </section>
+  </div>
+  <p class="credits">Caravel by bonszaimusic, based on Felucca 1.6.1 by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments</a>, with its CrispyZebra waveforms, drum voices, Sample Pack and Fukiai icons (MIT).<br>
+    Font: Inter Tight (The Inter Project Authors, SIL OFL 1.1). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
+    FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin; the pinned SDK has an Apache-2.0 root licence. See LICENSING.md for provenance and applicable-notice limits. <a href="../../firmware/LICENSING.md" style="color:inherit">Licences</a>: <a href="../../firmware/LICENSE" style="color:inherit">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt" style="color:inherit">Apache-2.0</a>, <a href="../../firmware/LICENSES/" style="color:inherit">all</a>.<br>
+    M-VAVE and FM-1 are trademarks of their respective owners. Caravel is not affiliated with or endorsed by Hügelton Instruments or M-VAVE.<br>
+    <span data-t="license"></span> <a href="../../firmware/LICENSING.md" style="color:inherit">LICENSING.md</a> · <a href="../../firmware/NOTICE" style="color:inherit">NOTICE</a> · <a href="../../firmware/CREDITS.md" style="color:inherit">CREDITS</a> · <a id="matching-source" href="https://github.com/bonszaimusic/caravel" target="_blank" rel="noopener" style="color:inherit">Matching source</a> · Felucca: <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener" style="color:inherit">github.com/hugelton/Felucca</a></p>
+</main>
+<script type="module">
+/*LIB*/
+const $ = (id) => document.getElementById(id);
+const TEXT = {
+  ja: {
+    tagline: "FM-1 のためのマルチエンジン・シンセ ファームウェア",
+    intro: "FM-1 を USB で接続してください。（Chrome か Edge で使えます）",
+    warn: "書き込み中は USB を抜かないでください。",
+    install: "インストール", other: "English",
+    editor: "エディタ（インストール後、パソコンから音色やシーケンスを編集）",
+    direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
+    brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
+    beta: "Caravel はテスト用ビルドです。導入すると FM-1 が起動しなくなる可能性があります。法令上除外できない権利や責任を制限するものではありません。",
+    usbIds: "このビルドは Caravel に割り当てられていない共用テスト用 USB ID 1209:0001/0002 を使用します。無償配布を含め、再配布・販売・製造する機器には使用できません。NOTICE を確認してください。",
+    back: "M-VAVEから公式FM-1 V15を取得し、未変更のFM-1.fwscを選んでください。ファイルはこのブラウザ内で検証し、サーバーへ送りません。",
+    stockTitle: "公式V15に戻す", stockFile: "公式FM-1.fwsc", stockGo: "バックアップして公式V15へ戻す",
+    stockBackup: "対応する音楽・バンク・サンプル・設定をエクスポートします。ファイルの保存を確認してください。公式ファームウェアの再導入は、工場出荷状態・データ・保証・復旧を保証しません。",
+    stockRecovery: "更新中断の再開：全体バックアップはすでにパソコンへ保存済み",
+    stockValid: "登録された V15 ファイルのハッシュと一致", stockConfirm: "全体バックアップファイルをパソコンに保存できましたか？ 続けると公式V15へ戻します。Caravelの曲は公式V15では開けません。",
+    stockNeedBackup: "書き込みモードからはバックアップできません。保存済みバックアップがある場合だけ、更新中断の再開にチェックしてください。",
+    stockUnsupported: "このCaravelは全体バックアップに未対応です。先に最新版をインストールしてください。",
+    backup: "全体バックアップ保存中 ", stockError: "公式ファイルを確認できません: ",
+    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", loadfail: "読み込めませんでした: ",
+    start: "開始します", verify: "確認中", loader: "書き込みモードに切り替え中", write: "書き込み中",
+    reboot: "再起動中", done: "完了しました", stopped: "途中で止まりました。USB を挿し直してもう一度押してください。",
+    error: "エラー: ",
+    denied: "MIDI（SysEx）の使用が許可されませんでした。アドレスバーのサイト設定で MIDI を許可して、もう一度押してください。",
+    notfound: "FM-1 が見つかりません。USB ケーブル（データ通信用か）を確かめ、MIDI を使う他のアプリを閉じてから、もう一度押してください。",
+    model: "接続されている機器は FM-1 ではありません。",
+    lost: "USB の接続が切れました。挿し直してもう一度押してください。",
+    noloader: "書き込みモードの FM-1 が見つかりません。USB を挿し直してもう一度押してください（終わるまで書き込みモードのままです）。",
+    noreturn: "FM-1 が戻ってきません。電源を入れ直してください。",
+    mismatch: "書き込みは終わりましたが、FM-1 が別のバージョンを報告しています: ",
+    badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
+    preflightOk: "SHA-256、アプリ、ローダー、FM-1 パッケージの検証完了",
+    leave: "書き込み中です。ページを閉じないでください。",
+    license: "GPL-3.0、無保証。ライセンスとソースの提供:",
+    brkTag: "重要: 互換性のない更新",
+    brkLead: "FORMAT 2: Caravel 1.x は、旧バージョンで保存したデータを一切開けません。",
+    brk1: "0.x のプロジェクト、ユーザー音色、お気に入り、設定、バックアップは 1.0.0 では読み込めません。FM-1 のメモリには残りますが（消去するか上書き保存するまで）、読めるのは旧ファームウェアだけです。",
+    brk2: "インストーラーは書き込みの前に、全体バックアップをこのパソコンへ保存します。そのファイルを必ず保管してください。再び読み込めるのは旧バージョンのエディタです。",
+    brk3: "エンジンは ANALOG、PHYS、SEM、HADES、DRONE、ENSEMBLE の6つだけになり、操作も組み替えました。先にリリースノートを読んでください。",
+    brk4: "元に戻すには旧ファームウェアをもう一度インストールします。旧データは再び使えますが、1.0.0 で作ったデータは旧版で読めません。",
+    brkUnderstand: "旧バージョンのデータが 1.0.0 で読み込めなくなることを理解しました。",
+    brkBackup: "FM-1 のバックアップがあります（インストーラーもいま保存します）。旧ファームウェアへの戻し方も分かっています。",
+    brkType: "インストールボタンを有効にするには UPDATE と入力:",
+    brkConfirm: "全体バックアップファイルはパソコンに保存できましたか？ 続けると Caravel 1.0.0 を書き込みます。旧バージョンのプロジェクトと音色は 1.0.0 では開けません。",
+    brkNoAuto: "この FM-1 は全体バックアップに未対応です。自分で作成済みのバックアップがある場合だけ続けてください。",
+    brkNoAutoConfirm: "自動バックアップを保存できませんでした。保存済みのバックアップがない場合は、キャンセルして対応するエディタで先にバックアップしてください。",
+    brkLoader: "復旧モードではバックアップを作成できません。",
+    brkLoaderConfirm: "新しいバックアップを作成せずに書き込みを再開しますか？ 既存の完全なバックアップを保存済みの場合のみ続けてください。",
+  },
+  en: {
+    tagline: "Multi-engine synth firmware for the FM-1",
+    intro: "Connect the FM-1 by USB. (Works in Chrome or Edge.)",
+    warn: "Do not unplug the USB cable while writing.",
+    install: "Install", other: "日本語",
+    editor: "Editor (after installing: edit sounds and sequences from the computer)",
+    direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
+    brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
+    beta: "Caravel is field-testing firmware. Installing it may leave the FM-1 unusable. Use it at your own risk; nothing here excludes rights or liability that applicable law does not allow to be excluded.",
+    usbIds: "This build retains shared, non-unique pid.codes test USB IDs 1209:0001/0002, not allocated to Caravel. They are not for devices that will be redistributed (even free), sold or manufactured. See NOTICE; public deployment needs an identifier-policy decision.",
+    back: "Get official FM-1 V15 from M-VAVE and select the unmodified FM-1.fwsc. The browser validates it locally; it is not sent to a server.",
+    stockTitle: "Return to official V15", stockFile: "Official FM-1.fwsc", stockGo: "Back up and return to official V15",
+    stockBackup: "The supported music, banks, samples and settings are exported first; confirm the file was saved. This is not a factory image or a guarantee of recovery. Reinstalling official V15 does not restore all data, warranty or factory state. Older firmware may need a Caravel update for supported backups.",
+    stockRecovery: "Resume an interrupted update: I already saved a complete backup to this computer",
+    stockValid: "Matches the pinned V15 file hash", stockConfirm: "Has the complete backup file been saved to this computer? Continue to return to official V15. Official V15 cannot open Caravel music.",
+    stockNeedBackup: "An update loader cannot export a backup. Only select resume if you already saved a complete backup.",
+    stockUnsupported: "This Caravel does not support complete backups. Install the current Caravel first.",
+    backup: "Saving complete backup ", stockError: "Cannot validate official firmware: ",
+    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
+    start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
+    reboot: "Restarting", done: "Done", stopped: "Stopped. Replug the USB cable and press Install again.",
+    error: "Error: ",
+    denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
+    notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+    model: "The connected device is not an FM-1.",
+    lost: "The USB connection was lost. Replug it and press Install again.",
+    noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
+    noreturn: "The FM-1 did not come back. Power-cycle it.",
+    mismatch: "Written, but the FM-1 reports another version: ",
+    badpkg: "The file to install is damaged. Reload the page.",
+    preflightOk: "SHA-256, application, loader and FM-1 package verified",
+    leave: "Writing. Do not close the page.",
+    license: "GPL-3.0, no warranty. Licences and source offer:",
+    brkTag: "Breaking update",
+    brkLead: "FORMAT 2: Caravel 1.x cannot open data saved by an older 0.x release.",
+    brk1: "Projects, user sounds, favourites, settings and backups of 0.x firmware will not load in 1.0.0. They stay untouched in the FM-1's memory until you erase or save over them, but only the old firmware can read them.",
+    brk2: "The installer saves a complete backup file to this computer before it writes anything. Keep that file: the editor of the old release is what can read it again.",
+    brk3: "Only six engines remain (ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE) and the controls were rearranged. Read the release notes first.",
+    brk4: "Going back means installing the old firmware again: your old data is then usable again, but anything made in 1.0.0 cannot be read by it.",
+    brkUnderstand: "I understand that data of older releases will not load in 1.0.0.",
+    brkBackup: "I have a backup of my FM-1 (the installer saves one now as well) and I know how to go back to the old firmware.",
+    brkType: "Type UPDATE to enable the install button:",
+    brkConfirm: "Has the complete backup file been saved to this computer? Continue to install Caravel 1.0.0. Projects and sounds of older releases will not open in it.",
+    brkNoAuto: "This FM-1 cannot make a complete backup automatically. Continue only if you made one yourself.",
+    brkNoAutoConfirm: "No automatic backup could be saved. Do you have a backup you made yourself? If not, cancel and back up with the matching editor first.",
+    brkLoader: "Update loader detected: this device cannot export a backup in recovery mode.",
+    brkLoaderConfirm: "Resume writing WITHOUT making a new backup? Continue only if a complete backup is already saved on your computer.",
+  },
+};
+let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
+const t = (k) => TEXT[lang][k];
+let lastKey = null, lastArg = "";
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t); });
+  $("lang").textContent = t("other");
+  if (lastKey) $("status").textContent = t(lastKey) + lastArg;
+}
+$("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; applyLang(); });
+applyLang();
+const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textContent = t(k) + arg; };
+const say = (txt) => { lastKey = null; $("status").textContent = txt; };
+const log = (t) => { $("log").textContent += t + "\n"; };
+let image = null;
+const meta = /*META*/;
+
+let writing = false, stock = null, stockFileEpoch = 0;
+const breaking = !!meta.breaking;                    // a release that cannot open older data: backup, warning and a typed confirmation first
+$("breaking").hidden = !breaking;
+const brkReady = () => !breaking || ($("brk-understand").checked && $("brk-backup").checked && $("brk-type").value.trim().toUpperCase() === "UPDATE");
+const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image || !brkReady(); $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on;
+  for (const id of ["brk-understand", "brk-backup", "brk-type"]) $(id).disabled = on; };
+for (const id of ["brk-understand", "brk-backup", "brk-type"]) $(id).addEventListener("input", () => lockInstaller(writing));
+window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
+
+(async () => {
+  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+  try {
+    const r = await fetch(meta.pkg);
+    if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
+    const pkg = new Uint8Array(await r.arrayBuffer());
+    // No install or recovery-resume button until digest, image, loader and model checks pass.
+    const verified = await validateCaravelPackage(pkg, meta);
+    image = verified.image;
+    sayK("preflightOk", ` (Caravel ${meta.version})`);
+    lockInstaller(false);
+  } catch (e) { sayK("loadfail", e.message); }
+})();
+
+$("go").addEventListener("click", async () => {
+  if (writing || !image || !brkReady()) return;
+  lockInstaller(true);
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { sayK("denied"); lockInstaller(false); return; }
+  let bkLink = null;
+  try {
+    const up = new Updater(midi, log);
+    const total = 74 + 1167;
+    const step = (k, a) => {
+      log(`${k} ${a ?? ""}`);
+      if (k === "start") sayK("start");
+      if (k === "verify") { sayK("verify"); $("bar").value = (a / total) * 100; }
+      if (k === "loader") sayK("loader");
+      if (k === "write") { sayK("write"); $("bar").value = ((74 + a) / total) * 100; }
+      if (k === "reboot") sayK("reboot");
+      if (k === "done") { $("bar").value = 100; sayK("done"); }
+    };
+    const ota = await up.find((id) => /^ota-/i.test(id.model));
+    if (ota) {
+      ota.link.close();
+      if (breaking) {
+        sayK("brkLoader"); // Recovery loader does not offer a backup channel.
+        if (!confirm(t("brkLoaderConfirm"))) return;
+      }
+      sayK((await up.resume(image, step, meta.product)) ? "done" : "stopped");
+    } else {
+      if (breaking) {                                     // the device runs: save everything it holds first, then ask once more
+        const device = await up.find((id) => id.model === "FM-1");
+        let saved = false;
+        if (device) {
+          const input = device.link.input, output = device.link.output; device.link.close();
+          bkLink = new BackupConnection(input, output);
+          const info = archiveInfo(await bkLink.request([1,[]]));
+          if (info.supported) {
+            const archive = await captureBackup((r,o) => bkLink.request(r,o), info.version,
+              (done,total) => sayK("backup", `${Math.round(done / Math.max(1,total) * 100)}%`));
+            saveArchive(archive); saved = true;
+          } else sayK("brkNoAuto");
+          bkLink.close(); bkLink = null;
+        }
+        if (!saved && !confirm(t("brkNoAutoConfirm"))) { lockInstaller(false); return; }
+        if (!confirm(t("brkConfirm"))) { lockInstaller(false); return; }
+      }
+      await up.install(image, meta.product, step);
+    }
+  } catch (e) {
+    if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
+    else sayK("error", e && e.message);
+    log(String(e && e.stack || e));
+  } finally { if (bkLink) bkLink.close(); }
+  lockInstaller(false);
+});
+
+$("stock-file").addEventListener("change", async () => {
+  const epoch = ++stockFileEpoch, file = $("stock-file").files[0]; stock = null; lockInstaller(false);
+  if (!file) return;
+  try {
+    if (file.size !== STOCK_V15_SIZE) throw new Error("FM-1 V15 / FM-1.fwsc");
+    const verified = await validateStockPackage(new Uint8Array(await file.arrayBuffer()));
+    if (epoch !== stockFileEpoch) return;
+    stock = verified; sayK("stockValid"); lockInstaller(false);
+  } catch (e) { if (epoch === stockFileEpoch) sayK("stockError", e.message); }
+});
+function saveArchive(archive) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(archive)], {type:"application/json"}));
+  const a = document.createElement("a"); a.href = url; a.download = `Caravel-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function archiveInfo(a) {
+  let pos = a.indexOf(0); if (pos < 0) throw new Error("Invalid INFO");
+  const version = String.fromCharCode(...a.slice(0,pos)); pos++;
+  const engines = a[pos]; pos += 5;
+  for (let i = 0; i < engines; i++) { const end = a.indexOf(0,pos); if (end < 0) throw new Error("Invalid INFO"); pos = end + 1; }
+  const ext = a.slice(pos + 1);
+  const supported = /^(FELUCCA|CARAVEL) /i.test(version) && ext[0] === 16 && ext[1] === 0x55 && ext[2] === 1 &&
+    ext[4] === 0x4d && ext[5] === 1 && ext[8] === 0x42 && ext[9] === 1 && (ext[10] & 1);
+  // INFO advertises backup support; LIST identifies protocol 1 versus 2.
+  return {version,supported};
+}
+$("stock-go").addEventListener("click", async () => {
+  if (!stock || writing) return;
+  const selected = stock; lockInstaller(true);
+  let link = null;
+  try {
+    let midi;
+    try { midi = await navigator.requestMIDIAccess({sysex:true}); } catch (e) { sayK("denied"); return; }
+    const up = new Updater(midi, log);
+    const step = (k, n) => { log(`${k} ${n ?? ""}`); if (["start","verify","loader","write","reboot","done"].includes(k)) sayK(k); if (k === "done") $("bar").value = 100; };
+    const loader = await up.find(id => id.model === "ota-FM-1");
+    if (loader) {
+      loader.link.close();
+      if (!$("stock-recovery").checked) { sayK("stockNeedBackup"); return; }
+      if (!confirm(t("stockConfirm"))) return;
+      sayK(await up.resume(selected.image, step, selected.product) ? "done" : "stopped");
+    } else {
+      const device = await up.find(id => id.model === "FM-1");
+      if (!device) { sayK("notfound"); return; }
+      const input = device.link.input, output = device.link.output; device.link.close();
+      link = new BackupConnection(input, output);
+      const info = archiveInfo(await link.request([1,[]]));
+      if (!info.supported) { sayK("stockUnsupported"); return; }
+      const archive = await captureBackup((r,o) => link.request(r,o), info.version,
+        (done,total) => sayK("backup", `${Math.round(done / Math.max(1,total) * 100)}%`));
+      saveArchive(archive); link.close(); link = null;
+      if (!confirm(t("stockConfirm"))) return;
+      await up.install(selected.image, selected.product, step);
+    }
+  } catch (e) {
+    if (e.code && TEXT[lang][e.code]) sayK(e.code,e.detail || ""); else sayK("error",e.message);
+    log(String(e.stack || e));
+  } finally { if (link) link.close(); lockInstaller(false); }
+});
+</script>
+</body>
+</html>

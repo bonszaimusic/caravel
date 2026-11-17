@@ -1,0 +1,1038 @@
+{
+  "schema_version": 1,
+  "version": "0.13.0",
+  "source_commit": "d85ecb7e82c3678cea24c4812a8a331f097f3e72",
+  "origin": "https://bonszaimusic.github.io/caravel/",
+  "files": [
+    {
+      "path": "changelog/index.html",
+      "size": 8681,
+      "sha256": "6d83fe93f98547f69362d4bedb981e020412d1e05ff89978949f9970baa24380"
+    },
+    {
+      "path": "emulator/felucca.wasm",
+      "size": 1011192,
+      "sha256": "b9ef571d8f8270a9f248bf330a044b91af0275abdda7f2b14ce3df3ca08dbaf0"
+    },
+    {
+      "path": "emulator/fonts/DotGothic16-subset.woff",
+      "size": 4324,
+      "sha256": "64f5bf21134bb81ed79b6ab1f65e0a8c75d55cfd68b08a2501e21e571a3cc61f"
+    },
+    {
+      "path": "emulator/fonts/OFL.txt",
+      "size": 4401,
+      "sha256": "5e59cab6d61d59a5b3110ed900dce715383cb2626a473dcf77c13c116aa839eb"
+    },
+    {
+      "path": "emulator/index.html",
+      "size": 34595,
+      "sha256": "275c8b2f30c383c5ebdd7b7835d179ad368f3aa7d9a175a6195205988bf66b2e"
+    },
+    {
+      "path": "emulator/worklet.js",
+      "size": 7810,
+      "sha256": "1c09c179478b463eb3d2278251ca00886a639cb36fa466374325190824b74d60"
+    },
+    {
+      "path": "firmware/ATTRIBUTION.txt",
+      "size": 1933,
+      "sha256": "d9b6171396bce707eb16836c1abf82651fae8b1d3eeda3365f5baacf33c1ae59"
+    },
+    {
+      "path": "firmware/Apache-2.0-msfa.txt",
+      "size": 11024,
+      "sha256": "27dd23b62bc11d0806562397a1e782f86fc7dcacd1ba7a1b58d3c78a54795e62"
+    },
+    {
+      "path": "firmware/Apache-2.0.txt",
+      "size": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "firmware/CREDITS.md",
+      "size": 5627,
+      "sha256": "b33e165c3022ed5ce829009e4d10a556d34797b0795701f4ddbffe8f4a9f4f1c"
+    },
+    {
+      "path": "firmware/LICENSE",
+      "size": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "firmware/LICENSES/Apache-2.0-msfa.txt",
+      "size": 11024,
+      "sha256": "27dd23b62bc11d0806562397a1e782f86fc7dcacd1ba7a1b58d3c78a54795e62"
+    },
+    {
+      "path": "firmware/LICENSES/Apache-2.0.txt",
+      "size": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "firmware/LICENSES/MIT-DaisySP.txt",
+      "size": 3172,
+      "sha256": "7fa755aede5b5c2a8131a6db692f5818ed8d21dcbe632f41618af03b6d698126"
+    },
+    {
+      "path": "firmware/LICENSES/MIT-Felucca-Engines.txt",
+      "size": 1108,
+      "sha256": "8d7a6483ea3289b07b1d9d5a4b760c8e6c69d22ca4248cad6fec14afa0ee5f4b"
+    },
+    {
+      "path": "firmware/LICENSES/MIT-Fukiai.txt",
+      "size": 1166,
+      "sha256": "fddeab17d69ab85a8e9c593beb0e93c279a9d74ff9504e1804bba123cb63e08e"
+    },
+    {
+      "path": "firmware/LICENSES/MIT-Rings.txt",
+      "size": 1758,
+      "sha256": "60cd097bf74b2a3a0cadadeddec5d80b6806f83039e6ce9cb0ba511a1f17a2be"
+    },
+    {
+      "path": "firmware/LICENSES/OFL-DotGothic16.txt",
+      "size": 4401,
+      "sha256": "5e59cab6d61d59a5b3110ed900dce715383cb2626a473dcf77c13c116aa839eb"
+    },
+    {
+      "path": "firmware/LICENSES/OFL-InterTight.txt",
+      "size": 4383,
+      "sha256": "50240ab035cf1b6b3307940235481d515c4b6de3ab1fa843dbe59e7892cb9d58"
+    },
+    {
+      "path": "firmware/LICENSES/index.html",
+      "size": 720,
+      "sha256": "b4e95912aeea31c65ab6d1d7b9d7b95044060f2b5352338ed3a9aac8cc114c8b"
+    },
+    {
+      "path": "firmware/LICENSING.md",
+      "size": 10636,
+      "sha256": "11602ca76a104d6866e8d2921d3f20e627ef7b2f59e68de0beb958e9bfb2f6d0"
+    },
+    {
+      "path": "firmware/MIT-DaisySP.txt",
+      "size": 3172,
+      "sha256": "7fa755aede5b5c2a8131a6db692f5818ed8d21dcbe632f41618af03b6d698126"
+    },
+    {
+      "path": "firmware/MIT-Felucca-Engines.txt",
+      "size": 1108,
+      "sha256": "8d7a6483ea3289b07b1d9d5a4b760c8e6c69d22ca4248cad6fec14afa0ee5f4b"
+    },
+    {
+      "path": "firmware/MIT-Fukiai.txt",
+      "size": 1166,
+      "sha256": "fddeab17d69ab85a8e9c593beb0e93c279a9d74ff9504e1804bba123cb63e08e"
+    },
+    {
+      "path": "firmware/MIT-Rings.txt",
+      "size": 1758,
+      "sha256": "60cd097bf74b2a3a0cadadeddec5d80b6806f83039e6ce9cb0ba511a1f17a2be"
+    },
+    {
+      "path": "firmware/NOTICE",
+      "size": 4421,
+      "sha256": "44268fa425782b01d09f152ccc13baef431bbe00847167bf190f60062e2c1836"
+    },
+    {
+      "path": "firmware/OFL-DotGothic16.txt",
+      "size": 4401,
+      "sha256": "5e59cab6d61d59a5b3110ed900dce715383cb2626a473dcf77c13c116aa839eb"
+    },
+    {
+      "path": "firmware/OFL-InterTight.txt",
+      "size": 4383,
+      "sha256": "50240ab035cf1b6b3307940235481d515c4b6de3ab1fa843dbe59e7892cb9d58"
+    },
+    {
+      "path": "firmware/SHA256SUMS",
+      "size": 1503,
+      "sha256": "1b32c128f27a5ba14674a4812bd22dd8c7ed18c242d191d82ebd9b8ff3005ca2"
+    },
+    {
+      "path": "firmware/caravel-0.13.0-app.bin",
+      "size": 553016,
+      "sha256": "b4d7ceb4600f96e92f87baf0d658920f3b9a2822ac9484f0a475dc9de8a194c8"
+    },
+    {
+      "path": "firmware/caravel-0.13.0-loader.bin",
+      "size": 6918,
+      "sha256": "d6f56dfe0afead2007ea83165ca8968e0b45ff8815f8f3a758af7eec1c7f30f8"
+    },
+    {
+      "path": "firmware/caravel-0.13.0-source.tar.gz",
+      "size": 13550279,
+      "sha256": "6ae38751a1a629f090d89bf0b8d8f73823c91c9a759e0d82ae3ecde8e729a26c"
+    },
+    {
+      "path": "firmware/caravel-0.13.0.fwsc",
+      "size": 610074,
+      "sha256": "a1d560684519667b4051b35630380874065853a20a353a4f9d279c2bfee208b7"
+    },
+    {
+      "path": "firmware/release-build.json",
+      "size": 1203,
+      "sha256": "33876e4e01dd0d74a5368c6f4582d66b7e265b632571173e132ed1fd5dfbd6b0"
+    },
+    {
+      "path": "index.html",
+      "size": 8183,
+      "sha256": "7f425191d688cb7e6b4080ec75805e2ab8fb3e419b696c64e6355d913528b09c"
+    },
+    {
+      "path": "performance/Caravel_060_STASIS_HOME.hpm",
+      "size": 10000,
+      "sha256": "70b0d999903ad59273c704c0a00b444e829bc24900b3dcaba6c0140cf88692e8"
+    },
+    {
+      "path": "performance/Caravel_060_STASIS_Performance.zip",
+      "size": 28556,
+      "sha256": "9af3ea10b0067e3cbebccd9a51bf942dc410bb47ac2a4cb9030a1423bf660553"
+    },
+    {
+      "path": "performance/Caravel_060_V4b_Notes_90BPM.mid",
+      "size": 467,
+      "sha256": "6517933e16683ba0a43135d929e4e8320e1dc0f0cff5736c895cf5451983752a"
+    },
+    {
+      "path": "performance/PLAY_GUIDE_EN.md",
+      "size": 3624,
+      "sha256": "49c4ae07049a031a37bfaa459e9cffce9d3277e214fd7a40eed638a53032a9cf"
+    },
+    {
+      "path": "performance/Spielplan_DE.md",
+      "size": 7476,
+      "sha256": "63661a33626a870fd8e0ea1c2dd89276bcda692c8970ba856e8328b67ebfa6c6"
+    },
+    {
+      "path": "performance/home.png",
+      "size": 16246,
+      "sha256": "9240790a2228a200b255cd47f5ddec5e2fbbb5f6a4fdb029e8d69b4ad03c44b6"
+    },
+    {
+      "path": "performance/index.html",
+      "size": 10672,
+      "sha256": "cf1d8ab2faa0c14ab8c573c808184c93f9f9b91b9d1ee2692e2871793f31370d"
+    },
+    {
+      "path": "performance/preview.mp3",
+      "size": 1202801,
+      "sha256": "bd585488837f209236f21f8498ce0e4a10308d90740d475e8768c4e3e751203d"
+    },
+    {
+      "path": "sounds/index.html",
+      "size": 9871,
+      "sha256": "573b0d099fc3d0c75cd4ef569dd85421ca6f5d0b25238043f1f367f996e6de0b"
+    },
+    {
+      "path": "sounds/stasis-add.mp3",
+      "size": 451143,
+      "sha256": "dc52721f66aec53dab40fe6f178e446ecf55a52653ad94a67718482703d3b21f"
+    },
+    {
+      "path": "sounds/stasis-blend.mp3",
+      "size": 484489,
+      "sha256": "701a517a89ce1f26722f5a05ac1bbd317c298646037796c67e4dd84691483192"
+    },
+    {
+      "path": "sounds/stasis-hold.mp3",
+      "size": 395710,
+      "sha256": "d99b0518594dd8eb65b15bb3144e0451ecad9308f743c6272730f04c3db917ff"
+    },
+    {
+      "path": "tutorials/Caravel-0.6.0-STASIS-Guide.pdf",
+      "size": 40672,
+      "sha256": "36c823ecad08f4ef47a3a821df8a2b00ebe93b75f6dadf1927d371a54474e3b3"
+    },
+    {
+      "path": "tutorials/audio/drone-dark-ring.mp3",
+      "size": 157844,
+      "sha256": "08428071eca5a4ee68b49a6e182a74a666da62de1beb348f176757cc63f1a4ce"
+    },
+    {
+      "path": "tutorials/audio/drone-slow-chain.mp3",
+      "size": 106881,
+      "sha256": "a18894ed0d305dffd381f2049f78d82839911d4ca715ec5837b4832a3ab44faf"
+    },
+    {
+      "path": "tutorials/audio/drone-still-air.mp3",
+      "size": 87003,
+      "sha256": "745f14c960083a866c13062acab82584bc2c0de7069d462ff0a2d2b9cf50d363"
+    },
+    {
+      "path": "tutorials/audio/drone-tide.mp3",
+      "size": 95745,
+      "sha256": "10d56290881706a198d6f89d9f0a3a74f68d1458c9e0967b0ca55babb48a059f"
+    },
+    {
+      "path": "tutorials/audio/ensemble-abyss-pad.mp3",
+      "size": 144216,
+      "sha256": "6cd21df5f9d5731b499c32bb0070d34976bc07210d2dcc12c231f747cfbbbdfc"
+    },
+    {
+      "path": "tutorials/audio/ensemble-glass-choir.mp3",
+      "size": 141049,
+      "sha256": "f199df1f0ffad17672732f8329aea2615a01205bb1a02884ecec2e9b0c4ce021"
+    },
+    {
+      "path": "tutorials/audio/ensemble-glass-shimmer.mp3",
+      "size": 100484,
+      "sha256": "9fa883ba1cbd603919172ef824a7dc88efebf472e9de1e2299c1a7cc10c0dd4e"
+    },
+    {
+      "path": "tutorials/audio/ensemble-vintage-strings.mp3",
+      "size": 146682,
+      "sha256": "5e7a0a2c1ea5f045a9ea947df5fc04594d67f626791d5bb65d0fff4b536e7834"
+    },
+    {
+      "path": "tutorials/audio/hades-dark-plk.mp3",
+      "size": 33248,
+      "sha256": "8f9c72a81c0f4ea9394eb18a92dfff362ee3bba7a402fac021c1b03f4913e963"
+    },
+    {
+      "path": "tutorials/audio/hades-dark-saw.mp3",
+      "size": 61017,
+      "sha256": "dede76b3e5969e92f8d61f4c1e0d9dce934e61172713b2461ac0448e107ae8d1"
+    },
+    {
+      "path": "tutorials/audio/hades-deep-sub.mp3",
+      "size": 43578,
+      "sha256": "7bbc5f17082d3a461822af96a0d42012da883784456803348ea0ffe6f21c72bb"
+    },
+    {
+      "path": "tutorials/audio/hades-raw-lead.mp3",
+      "size": 58379,
+      "sha256": "ca349f3a6437969883101b7f0ca1b8d76999828d65ce72de23c06e82742282fc"
+    },
+    {
+      "path": "tutorials/audio/sem-brass.mp3",
+      "size": 115985,
+      "sha256": "be82e6eec26db3562b08157eb9e8c2a1a46c117d3e2a449d816e971861cc612f"
+    },
+    {
+      "path": "tutorials/audio/sem-notch-pad.mp3",
+      "size": 123999,
+      "sha256": "7469ff69b72a0c6e24e0e525ab611e3dc9595dd79b944764611691173dcd6c15"
+    },
+    {
+      "path": "tutorials/audio/sem-round-bas.mp3",
+      "size": 107157,
+      "sha256": "c4810881bc786f667c13c2afad1ff1bee19e8719acdf077bb999fa011d2dc06b"
+    },
+    {
+      "path": "tutorials/audio/sem-warm-pad.mp3",
+      "size": 129597,
+      "sha256": "c63c818b877cb8cdeb5465302b0e70e28c577e898bb61ad117381bba71149064"
+    },
+    {
+      "path": "tutorials/basics/index.html",
+      "size": 25987,
+      "sha256": "2798be435a6be9cbea6558d4309c5737791643297c2e141d8370d443e6acbab3"
+    },
+    {
+      "path": "tutorials/drone/index.html",
+      "size": 25753,
+      "sha256": "f3846ba181b61aa87bcf1144282e748491c5f9c4a7fb2e45975f7e970105e5c7"
+    },
+    {
+      "path": "tutorials/elastic-ambient-recipes/index.html",
+      "size": 25254,
+      "sha256": "6e8baed93e44122b67690d52f867e919d86c1acc19584230b8b78bf78d12f53e"
+    },
+    {
+      "path": "tutorials/elastic-first-steps/index.html",
+      "size": 32799,
+      "sha256": "34f85aff95e8215b2d42a9f841cd964758a1b3c76e4982f1b7437bfb8cda5d61"
+    },
+    {
+      "path": "tutorials/elastic-linked-springs/index.html",
+      "size": 27693,
+      "sha256": "14b8803106fe6778ef6ce5824c7735e34c9944aec55cbd62703cc807c41b68ed"
+    },
+    {
+      "path": "tutorials/ensemble/index.html",
+      "size": 25326,
+      "sha256": "23f9dd4f9ed6367f30ef42073bdb7e4820af1c02db901483e48784383a8837c8"
+    },
+    {
+      "path": "tutorials/filter-fx/index.html",
+      "size": 23310,
+      "sha256": "3f8eee2e7ce232e4267b175c16d21a444c82d585a8ccdb3a3907e271ddf82d11"
+    },
+    {
+      "path": "tutorials/hades/index.html",
+      "size": 24645,
+      "sha256": "7a4791f9f83937c3b0fe71697ec650327e94e2462e00df31615757109b1b62a9"
+    },
+    {
+      "path": "tutorials/harmony/index.html",
+      "size": 28991,
+      "sha256": "f6b53dfb63d87b2d8809abd1e3ad8b2c98fbc84fb193ddd5e8c9576c229952f8"
+    },
+    {
+      "path": "tutorials/help/index.html",
+      "size": 24288,
+      "sha256": "ded2d327a3a37e0e81d7c1b03d934015d2d8593b20bbe7c0569ad7b1ef7b77c4"
+    },
+    {
+      "path": "tutorials/home/index.html",
+      "size": 24648,
+      "sha256": "83404fe4cc5be8f6bd3ed719b37bf559983d93439df01238b89117f5d09e3bfb"
+    },
+    {
+      "path": "tutorials/img/add-ready.png",
+      "size": 10463,
+      "sha256": "33312f7f57dba1d8c614d90c6d085dc40047321e5b2a8d73eb499f4c16c49e3a"
+    },
+    {
+      "path": "tutorials/img/basics-clock.png",
+      "size": 6311,
+      "sha256": "14cc9c9de82d35b0379df697c674db8a84b03eb5a3034e3a891a724e06012396"
+    },
+    {
+      "path": "tutorials/img/basics-edit.png",
+      "size": 11205,
+      "sha256": "57d3af1740135d21d38d58ffe61d1d244a76b72ddb11812bda37d72dc5956f7d"
+    },
+    {
+      "path": "tutorials/img/basics-env.png",
+      "size": 11910,
+      "sha256": "556663e9a2ac455b48a76b03169240444484c81265d4ad7c039c0aa4a4a2a4fe"
+    },
+    {
+      "path": "tutorials/img/basics-lfo.png",
+      "size": 12029,
+      "sha256": "943f04fdf1a03389560688d43e08bfadc0ef006cc9c0d40ff0d585194f03549c"
+    },
+    {
+      "path": "tutorials/img/basics-menu-control.png",
+      "size": 16412,
+      "sha256": "9db5d36dd1fd24c713f7c6407bcf7235ddb687ee45bcba8256a5357b8e95eed5"
+    },
+    {
+      "path": "tutorials/img/basics-menu-system.png",
+      "size": 14683,
+      "sha256": "02315e6615d6cbb521bd7d75737609b522357cf3c93f259c24e13226c56d9619"
+    },
+    {
+      "path": "tutorials/img/basics-menu.png",
+      "size": 16443,
+      "sha256": "31f9fc8a8ce7ebfb5906a9a62f67c324de00f6793c5ae4fc94a7f740974520e9"
+    },
+    {
+      "path": "tutorials/img/basics-mixer.png",
+      "size": 12543,
+      "sha256": "4f6103dc925c60bf8c52918e0d1a8da648cbc01e4086e5ebfc86c71166096e7e"
+    },
+    {
+      "path": "tutorials/img/basics-scl.png",
+      "size": 10994,
+      "sha256": "766d96f55a3230e6b27f336e35400db0f95d2df998ad8c1416dca1039e7f2fb7"
+    },
+    {
+      "path": "tutorials/img/blend-mix.png",
+      "size": 10010,
+      "sha256": "ebd75f1fa724a4f218f84e7c90cd594a35c96e25365be14716dd107ec04ca954"
+    },
+    {
+      "path": "tutorials/img/card-basics.png",
+      "size": 14210,
+      "sha256": "85878daa3a94232a39709391bd039fb51d6c2dc65f199c30663daa4dd35d01fb"
+    },
+    {
+      "path": "tutorials/img/card-drone.png",
+      "size": 11762,
+      "sha256": "956c1b3c52315c7ac88c856dc1490e7be9e23950995060245ef3be65fc39f4b1"
+    },
+    {
+      "path": "tutorials/img/card-elastic-ambient.svg",
+      "size": 1743,
+      "sha256": "0de6a25fda68ea6f5e959b016dbd9184725103d4835dc3a8c2d90c00dd184d2f"
+    },
+    {
+      "path": "tutorials/img/card-elastic-first.svg",
+      "size": 1733,
+      "sha256": "438f4a6769622170fe875234a7820af788e264462a08e443a0f5aa5c38d5b0bb"
+    },
+    {
+      "path": "tutorials/img/card-elastic-linked.svg",
+      "size": 2041,
+      "sha256": "6b43b4a6eb670bfc6d96d81cbcedf5e4dab171d052db9c914f7645e4d7702acf"
+    },
+    {
+      "path": "tutorials/img/card-ensemble.png",
+      "size": 11475,
+      "sha256": "2775cea48110817f9ed39fa5cea8dd8d9312a83b50bce141ac7528fbcfdda592"
+    },
+    {
+      "path": "tutorials/img/card-filter-fx.png",
+      "size": 11831,
+      "sha256": "6876b230a93671ad368edb8ec61a877cf8ae5873167c89d7fc543a3b6d3b612f"
+    },
+    {
+      "path": "tutorials/img/card-hades.png",
+      "size": 11779,
+      "sha256": "12d7432134fdffbd6acfa35d739d1b4939acf4d6404a11a993693085c36749d5"
+    },
+    {
+      "path": "tutorials/img/card-harmony.png",
+      "size": 12244,
+      "sha256": "9d1a33b58fdb929df7cc1bc2e07c32eab40f8590167d8f121f4578485b152c82"
+    },
+    {
+      "path": "tutorials/img/card-help.png",
+      "size": 16443,
+      "sha256": "31f9fc8a8ce7ebfb5906a9a62f67c324de00f6793c5ae4fc94a7f740974520e9"
+    },
+    {
+      "path": "tutorials/img/card-midi.png",
+      "size": 11696,
+      "sha256": "d4c1d25d3fffaa0485229a12cf04b0f98a6df3f95618f50274c864424377151f"
+    },
+    {
+      "path": "tutorials/img/card-sem.png",
+      "size": 11506,
+      "sha256": "19a49ad9ed0a1fd47a1cabee2e07d5a3a5749b3c46ba8706ace5c36afe4f7d55"
+    },
+    {
+      "path": "tutorials/img/card-seq-arp.png",
+      "size": 13066,
+      "sha256": "7193012b1dcb915e78ba96b548e124ef3e4795f3299c6b7b0c2117079dde1fa1"
+    },
+    {
+      "path": "tutorials/img/card-start.png",
+      "size": 11175,
+      "sha256": "4c465973a475c4f61f74f8aa934643ffaf9a7c410ad64e5365f7e639798a68ae"
+    },
+    {
+      "path": "tutorials/img/device-action.svg",
+      "size": 35891,
+      "sha256": "592c5f1e9688b357bb90449567a13e81079391b4094a47281962a6f46c49c31c"
+    },
+    {
+      "path": "tutorials/img/device-controls.svg",
+      "size": 35186,
+      "sha256": "a46c9a266a043adc667faa42c1cdc084052c6e243ee1a445db05eca17ff2f744"
+    },
+    {
+      "path": "tutorials/img/device-engine.svg",
+      "size": 34950,
+      "sha256": "ec883521a3da47759b9069d15903a8e1d7108d17cead739bf2be5f91ac6223ed"
+    },
+    {
+      "path": "tutorials/img/device-first-sound.svg",
+      "size": 32469,
+      "sha256": "1b3d48b0b65da4d65223546eb00e509d7256360285e1a3ad93aa637026c5cad7"
+    },
+    {
+      "path": "tutorials/img/device-hero.svg",
+      "size": 28905,
+      "sha256": "70efb8292b781540ce925e966d10b94c910c4e3e9f62247c971e2c17d2951d5d"
+    },
+    {
+      "path": "tutorials/img/device-play.svg",
+      "size": 26412,
+      "sha256": "4849a35c8f5e318d6d1cd2f805a9ae196a0267c60dd4ee736caffcdfcf2cb5f9"
+    },
+    {
+      "path": "tutorials/img/device-save.svg",
+      "size": 30514,
+      "sha256": "43afdaff8fc8373f3eb3abdde12ad61b8a7a4e3a1a5c37a257c01de2fce80d73"
+    },
+    {
+      "path": "tutorials/img/device-step.svg",
+      "size": 27314,
+      "sha256": "af1d1cb1391b800b11c3f4789f300e01313290aa196b13224aedf149636496ea"
+    },
+    {
+      "path": "tutorials/img/elastic-bank-idle.png",
+      "size": 14188,
+      "sha256": "de05520845a5e30d18344b073058ea9805d14e9df93f09d62c86b66b08a418a2"
+    },
+    {
+      "path": "tutorials/img/elastic-cell-armed.png",
+      "size": 14803,
+      "sha256": "bb72964880911bc49659661793d38df50b7d4d581e73d8bbeef6d2f9b4c0bf4b"
+    },
+    {
+      "path": "tutorials/img/elastic-four-track-hud.png",
+      "size": 15440,
+      "sha256": "6e4c2bf1752b4b9c6e470072cae9db1b85b29fc933416e1aa37dfae957782922"
+    },
+    {
+      "path": "tutorials/img/elastic-physics-off.png",
+      "size": 12839,
+      "sha256": "1b09083d87f6e2f298d19aac73e0a90f557d61e0fcfcbba92392e03521a0f351"
+    },
+    {
+      "path": "tutorials/img/elastic-physics-seed42.png",
+      "size": 12774,
+      "sha256": "8d2b6696410519ca2ec508460a67efd60bc533496a01e539442dc6bbbd2d8c4c"
+    },
+    {
+      "path": "tutorials/img/elastic-return-long.png",
+      "size": 14767,
+      "sha256": "ca71d1412e13a61f93278b81cd6c9bbb06d33a91e9f7a1e97f375298b7261aea"
+    },
+    {
+      "path": "tutorials/img/elastic-row-coupled.png",
+      "size": 15152,
+      "sha256": "3326af1d20e0514ae5e36642869c725e496ee7eec739bb83cb218512496a2cf2"
+    },
+    {
+      "path": "tutorials/img/elastic-row-four-armed.png",
+      "size": 15543,
+      "sha256": "ea138ff7df04c2699ba5107650891ca4cf98a48fb005fd0ebfb8da864c3fc8e9"
+    },
+    {
+      "path": "tutorials/img/elastic-setup-t2.png",
+      "size": 12888,
+      "sha256": "37f602c0f7336e823813440dd37967c2f7455374f173f962c56d7583dd63244c"
+    },
+    {
+      "path": "tutorials/img/elastic-times-cell.png",
+      "size": 14904,
+      "sha256": "97cc4a223c4a577781cb52cb00a599b52036c4e7052345c6dc74d3565dca4616"
+    },
+    {
+      "path": "tutorials/img/eng-drone-dark-ring.png",
+      "size": 11956,
+      "sha256": "9f569ce7c0142fcc3dfdd2b7c2ed4557cb6f2fdad610a6e1f9e4408f3d25d620"
+    },
+    {
+      "path": "tutorials/img/eng-drone-presets.png",
+      "size": 16046,
+      "sha256": "835afcc9d03866aaf65fc5c8e991fd3f045416ef87937dfcf535551a7ed41844"
+    },
+    {
+      "path": "tutorials/img/eng-drone-slow-chain.png",
+      "size": 12450,
+      "sha256": "05e6cc218b4f8cf24206d401063356b5f5a60452acff6c886619d4636a8d0d11"
+    },
+    {
+      "path": "tutorials/img/eng-drone-still-air.png",
+      "size": 11506,
+      "sha256": "4a9b6520453d5b7d8d1fcaf1b6ad56a3519d9d267fe19e98d757324a40f29204"
+    },
+    {
+      "path": "tutorials/img/eng-drone-tide.png",
+      "size": 11088,
+      "sha256": "68b2cae71154e68928ab1e1a1eb90d89c505c4b8e29ccdcba40453be447858a0"
+    },
+    {
+      "path": "tutorials/img/eng-ensemble-abyss-pad.png",
+      "size": 11072,
+      "sha256": "2d10c84930528b8ef6f6658ed48a1dc1c28916a23ee105a8151081c9af6ec259"
+    },
+    {
+      "path": "tutorials/img/eng-ensemble-glass-choir.png",
+      "size": 11232,
+      "sha256": "877665e2d79ad8f376f0f0088a9b3cad57b0648b2ec9223116e55e8d198fd96f"
+    },
+    {
+      "path": "tutorials/img/eng-ensemble-glass-shimmer.png",
+      "size": 10934,
+      "sha256": "7352bbaf9803be81d484741a48e53bf16437a11d635648eedc921a8e18e607e2"
+    },
+    {
+      "path": "tutorials/img/eng-ensemble-presets.png",
+      "size": 16469,
+      "sha256": "05b478471fb0a9e54bc0079af5202bcb45e9599b52fcbc436e0ac8d24f2ef4d3"
+    },
+    {
+      "path": "tutorials/img/eng-ensemble-vintage-strings.png",
+      "size": 11219,
+      "sha256": "4c9857d95461d9572042deeff4a2a24f2e9b57d3f22bba870eb3ab92f47a522a"
+    },
+    {
+      "path": "tutorials/img/eng-hades-dark-plk.png",
+      "size": 11368,
+      "sha256": "89811cb14466a66819a52ff42aa2787aa8aafa8ba4cb97836b5c6aeb10dee910"
+    },
+    {
+      "path": "tutorials/img/eng-hades-dark-saw.png",
+      "size": 11703,
+      "sha256": "21ced146fc6795a85b6269a7b15933f6dfb7a95e234d53eb2d4bdd8afe100e5a"
+    },
+    {
+      "path": "tutorials/img/eng-hades-deep-sub.png",
+      "size": 11521,
+      "sha256": "a6bdf4d2df04642a491d2286d2ee4eb45ed24699c71731551861ce9949e89c92"
+    },
+    {
+      "path": "tutorials/img/eng-hades-presets.png",
+      "size": 15640,
+      "sha256": "e59fb85f20c4c2710e045a6a12cf6c190c9e59ad9d759e387322c88b184dcd9a"
+    },
+    {
+      "path": "tutorials/img/eng-hades-raw-lead.png",
+      "size": 11675,
+      "sha256": "902a69681ab151323be318215939cd40d88ca3bf29275c92f731b92795f4ced6"
+    },
+    {
+      "path": "tutorials/img/eng-sem-brass.png",
+      "size": 11695,
+      "sha256": "dbb9a1ceb7b23d805ed82adfbf023134a9ff1a11c26805fb655981488290bf82"
+    },
+    {
+      "path": "tutorials/img/eng-sem-notch-pad.png",
+      "size": 11619,
+      "sha256": "f2646bd1506adaf210d95960b7a8e88245ac8ce80698d25392f0cc6232b3cc3a"
+    },
+    {
+      "path": "tutorials/img/eng-sem-presets.png",
+      "size": 16457,
+      "sha256": "8a5ab1fe4f83f4d643734c5a6e6ededd27dc4605ec72195635115da8544ef062"
+    },
+    {
+      "path": "tutorials/img/eng-sem-round-bas.png",
+      "size": 12106,
+      "sha256": "19821d62bb35c017d0c6ba0795e09f682bc843ad36de607a29593ba113faa3fa"
+    },
+    {
+      "path": "tutorials/img/eng-sem-warm-pad.png",
+      "size": 11250,
+      "sha256": "ba78d00e39403d3729391a94d3ec62877292c4c7f8b5bc72a19a997eea878a11"
+    },
+    {
+      "path": "tutorials/img/fx-chorus-reverb.png",
+      "size": 10548,
+      "sha256": "c4c2749efabf2300e93c9b04e9dd313623fdf917da2529adea3901af645137e3"
+    },
+    {
+      "path": "tutorials/img/fx-filter.png",
+      "size": 12154,
+      "sha256": "d11b3413f0dbadee4e37803fa2dbbb01501f9d3cd10ec680d422f86ddac4e54d"
+    },
+    {
+      "path": "tutorials/img/fx-insert.png",
+      "size": 12156,
+      "sha256": "ebf79c5ccd864a828a2dc2b964fd40a6fc9f92d0e58a597c663b9a7f04fe5733"
+    },
+    {
+      "path": "tutorials/img/fx-lfo-dest.png",
+      "size": 12252,
+      "sha256": "3fb563f3841d19c7161152ae97bf2ed99fd29e33c2f02a14ce447b74ff404e37"
+    },
+    {
+      "path": "tutorials/img/fx-sends.png",
+      "size": 11575,
+      "sha256": "de102d09461c717bb8ba40922628e01309d23185dca4ab25007aae62a6780bfe"
+    },
+    {
+      "path": "tutorials/img/harmony-bank.png",
+      "size": 12061,
+      "sha256": "33a45046b9871e00fa2b2b1f06781d6bdda38fc591b6143f619afb4039ef6606"
+    },
+    {
+      "path": "tutorials/img/harmony-chord.png",
+      "size": 11345,
+      "sha256": "492723d06e5f465a6977daa67af7bd9e645e57b608f64c93948b41028548708c"
+    },
+    {
+      "path": "tutorials/img/harmony-durations.png",
+      "size": 13517,
+      "sha256": "20df1af7cd897f5748e9da6cb4d75c8448c7c8c7a944596540c2aba8a14f3c1e"
+    },
+    {
+      "path": "tutorials/img/harmony-hold.png",
+      "size": 12239,
+      "sha256": "51b7d0bd563c26bf02046b5bbe1794be3e45f51a87b7b0c28b490dcf112d604f"
+    },
+    {
+      "path": "tutorials/img/harmony-link.png",
+      "size": 14389,
+      "sha256": "e1d1ef3a1a8af7f1cd64bcc6ad403d9ccdf4c4f7590708100352348157fedd3b"
+    },
+    {
+      "path": "tutorials/img/harmony-roots.png",
+      "size": 13496,
+      "sha256": "d4913b9597355f963831e36467e183faa9d5e9b4c07328403bcab926e3351588"
+    },
+    {
+      "path": "tutorials/img/harmony-scl.png",
+      "size": 11298,
+      "sha256": "fddf2b48011f89e04fc9e76ecb77b8b04cf56db5e659c835f2bed0273fa46cf9"
+    },
+    {
+      "path": "tutorials/img/harmony-setup-row.png",
+      "size": 14507,
+      "sha256": "b701600db22a93eb26cd9bfc2be76126563a5d47e90bbc166020c355bf240278"
+    },
+    {
+      "path": "tutorials/img/harmony-setup.png",
+      "size": 10536,
+      "sha256": "04cb5a9440d85221762f4cc9597348252c599b06165a74ed7a45f22d42f53b1e"
+    },
+    {
+      "path": "tutorials/img/home-bank-journey.png",
+      "size": 11909,
+      "sha256": "d9dcb7a5bc75b9f3b3d8a65bfc356bfea846859c3a5a432617a746f6bf349f69"
+    },
+    {
+      "path": "tutorials/img/home-bank-live.png",
+      "size": 10348,
+      "sha256": "eb69a3b38caa36f04c19003976bce6c5f576d50986896a6ebb431a358b444fb8"
+    },
+    {
+      "path": "tutorials/img/home-bank-pair.png",
+      "size": 11582,
+      "sha256": "a19a4ad764825940f37883821b6d25ccbf4f5e281dfc002032aa650fedf09cc0"
+    },
+    {
+      "path": "tutorials/img/home-bank-random.png",
+      "size": 11791,
+      "sha256": "8277426b275c4949e3a638dde098b652eba2136751522e47de2a127287353d1a"
+    },
+    {
+      "path": "tutorials/img/home-bank-stasis.png",
+      "size": 11584,
+      "sha256": "0ccb405550c4a4172ee9e97bd1cfb1d95901430ecc04de9cab26026badfd67f2"
+    },
+    {
+      "path": "tutorials/img/journey-held.png",
+      "size": 12170,
+      "sha256": "98d6909c513fee3f59daec8b949c6198571fdd08c3a0d76b985581d50083ec4d"
+    },
+    {
+      "path": "tutorials/img/journey-hold.png",
+      "size": 57406,
+      "sha256": "ea030b5ff0e39b71187d5efb25070e97f9af78815a747b9bf81899cf31ec1a6c"
+    },
+    {
+      "path": "tutorials/img/journey-off.png",
+      "size": 12244,
+      "sha256": "96346fd17d3dce8882059f2572d67ba6e8ab27e157fd515749a65ab2843d8049"
+    },
+    {
+      "path": "tutorials/img/journey-play.png",
+      "size": 12416,
+      "sha256": "85069c5ada0fcd1e25f093ed4a0d7d4b049398e5e9f50a23bb486f2069182430"
+    },
+    {
+      "path": "tutorials/img/journey-reverse.png",
+      "size": 13308,
+      "sha256": "8dcd7d6fe3a75b55fc3ec3f04ed64684f44592b7e681258bd30c03408cd9b7f1"
+    },
+    {
+      "path": "tutorials/img/journey-setup.png",
+      "size": 12080,
+      "sha256": "6bd2e11c69df3a54d12befcef68540dda9547a130ffce894fa6b184f3afcec09"
+    },
+    {
+      "path": "tutorials/img/journey-status.png",
+      "size": 10780,
+      "sha256": "9b37c320cb49132c0b434b082d4426b5b7ab74b9ee2c314f23a3e169b91739f2"
+    },
+    {
+      "path": "tutorials/img/journey-wait.png",
+      "size": 12323,
+      "sha256": "6771775bb80259990520e3e02d49d9b9f2ea332d95ebe18a9b0759db63644d12"
+    },
+    {
+      "path": "tutorials/img/midi-clock-trs.png",
+      "size": 6541,
+      "sha256": "b205d51c35199df601e4e596039416852dfed41ae8ff0b83035b0b89f67e7a52"
+    },
+    {
+      "path": "tutorials/img/midi-clock-usb.png",
+      "size": 6573,
+      "sha256": "49b7fa53dc395538bef94ebea09939fc75c5a2ae92f4d80d9e788273cabe9199"
+    },
+    {
+      "path": "tutorials/img/midi-glo-map.png",
+      "size": 10988,
+      "sha256": "725cee24cc993de4c946e48aaace178ff9ebb8d7d4e7822fadb04935b2e7baa9"
+    },
+    {
+      "path": "tutorials/img/midi-learn-mapped.png",
+      "size": 10988,
+      "sha256": "725cee24cc993de4c946e48aaace178ff9ebb8d7d4e7822fadb04935b2e7baa9"
+    },
+    {
+      "path": "tutorials/img/midi-learn-moved.png",
+      "size": 10988,
+      "sha256": "725cee24cc993de4c946e48aaace178ff9ebb8d7d4e7822fadb04935b2e7baa9"
+    },
+    {
+      "path": "tutorials/img/midi-learn-on.png",
+      "size": 11629,
+      "sha256": "2072b032d003c513c3a8e4c3d5762969f377aa016babdca7bd1e8e97f5b76527"
+    },
+    {
+      "path": "tutorials/img/midi-menu.png",
+      "size": 15088,
+      "sha256": "7552880dc825e83b3a16241c29ae41e8aea72aeb7183988a81473c625f6ba763"
+    },
+    {
+      "path": "tutorials/img/morph-delete.png",
+      "size": 14212,
+      "sha256": "0e6710d60ede4ab20794de74dacaca7fb9440da5f496c64d6148b8cf4b46eecc"
+    },
+    {
+      "path": "tutorials/img/morph-go.png",
+      "size": 12292,
+      "sha256": "9b59c4d1af502ba3a32effb9f5cb85e3a36c18a5372179dc553f4e872c0e576b"
+    },
+    {
+      "path": "tutorials/img/morph-save.png",
+      "size": 12986,
+      "sha256": "d76e980085823dd382f85b2d9a7b071b535ee27c268765ed2db4c0b9baa394e3"
+    },
+    {
+      "path": "tutorials/img/morph-setup.png",
+      "size": 13406,
+      "sha256": "c2d3f1f529016ea773cd57319ccaa304b30f99203be2e0e808940ada78be5163"
+    },
+    {
+      "path": "tutorials/img/seq-arp-up.png",
+      "size": 12836,
+      "sha256": "188f5a1c2cdc43716d596187b168e07c3b754235782de98c184370cb6ccf1b21"
+    },
+    {
+      "path": "tutorials/img/seq-cursor.png",
+      "size": 7397,
+      "sha256": "ba6f931684b5d633c8f29e61a57d290bcf652adc25a5dedb1993559dbadbec00"
+    },
+    {
+      "path": "tutorials/img/seq-detail.png",
+      "size": 9019,
+      "sha256": "24921924b9a55bc1906164cf1240e8d060dd92dc0b705ffbfba1af8a8bae17b4"
+    },
+    {
+      "path": "tutorials/img/seq-flag.png",
+      "size": 7976,
+      "sha256": "76bb1017ec1891795758e55415507b8835efecdaa705f9a14c6dd3aa4ca267c0"
+    },
+    {
+      "path": "tutorials/img/start-engine-picked.png",
+      "size": 14473,
+      "sha256": "f5e2644d3cef3077e55b4c8e80e67908fccb36e851cf3879f5a393651f3dc4c1"
+    },
+    {
+      "path": "tutorials/img/start-engine-picker.png",
+      "size": 14210,
+      "sha256": "85878daa3a94232a39709391bd039fb51d6c2dc65f199c30663daa4dd35d01fb"
+    },
+    {
+      "path": "tutorials/img/start-home.png",
+      "size": 10988,
+      "sha256": "725cee24cc993de4c946e48aaace178ff9ebb8d7d4e7822fadb04935b2e7baa9"
+    },
+    {
+      "path": "tutorials/img/start-preset.png",
+      "size": 10776,
+      "sha256": "54877cb3a90bf3869ddd769db0c4588c711c9b2d2448733f954200735cead5d2"
+    },
+    {
+      "path": "tutorials/img/start-save-arm.png",
+      "size": 9541,
+      "sha256": "8f2848e44987d941acf01a1e6c94b01b50f2940ef7f24d6a4e41c83a696c9e59"
+    },
+    {
+      "path": "tutorials/img/start-save-name.png",
+      "size": 15700,
+      "sha256": "9c620c5830073710d4a2e38f3881ce1ed1e29a4a3a47d939e83da6d8b160ca9e"
+    },
+    {
+      "path": "tutorials/img/start-save-user.png",
+      "size": 11002,
+      "sha256": "7e4cf8cfb1c8bdd9daec63968bed5f26018ad885bed4ef3dfa6baa4eb67f6ecb"
+    },
+    {
+      "path": "tutorials/img/start-saved.png",
+      "size": 9597,
+      "sha256": "3730bd9cd64200f6cc11292f0adc46b578d69dac59bae04242aa940e2fd0f3c8"
+    },
+    {
+      "path": "tutorials/img/start-step-armed.png",
+      "size": 7190,
+      "sha256": "b9de8b6e662e6622ba0601c6e30671e1ffe07261e53e2b85d4bb8a19a1c39639"
+    },
+    {
+      "path": "tutorials/img/start-step-notes.png",
+      "size": 7779,
+      "sha256": "ed454290db08276c7eea6a077012164d116e3238eaf7c977d03a5ee8bf6286f9"
+    },
+    {
+      "path": "tutorials/img/start-step-play.png",
+      "size": 7771,
+      "sha256": "70ffb5a3863fbb949e706b0616e6b7f80e975b7a9a46ab5da1f39ba83b2a2d53"
+    },
+    {
+      "path": "tutorials/img/start-step.png",
+      "size": 7084,
+      "sha256": "10f2fb9e8f20c481637750d9720f485392a6e52efbbde71044f3cb8e68b6b68d"
+    },
+    {
+      "path": "tutorials/img/stasis-compat.png",
+      "size": 6962,
+      "sha256": "98eb750a99f42a977bc3fc24427b7d3b20b9923919ff81af9ca05435b745d47f"
+    },
+    {
+      "path": "tutorials/img/stasis-hold.png",
+      "size": 11715,
+      "sha256": "7097bf53f0101618fd94622b706d8aca63a5e68e91ace993231fcf43bb7a3889"
+    },
+    {
+      "path": "tutorials/index.html",
+      "size": 22786,
+      "sha256": "3fd361ad4ec7a1cd4eb684f2a7ed237bfbaf9271c7bfa20755c58539cf3878d0"
+    },
+    {
+      "path": "tutorials/midi-sync/index.html",
+      "size": 23288,
+      "sha256": "57ca22ec8fac0c1d5bf66c485ffd52b272cb1b8da82a2a787d1a5d6635851576"
+    },
+    {
+      "path": "tutorials/random-morph-journey/index.html",
+      "size": 21083,
+      "sha256": "b582f62b0d618b89e983167109336f43a171ec920e687dcc3604f75ac543d654"
+    },
+    {
+      "path": "tutorials/sem/index.html",
+      "size": 25395,
+      "sha256": "a1d7604bbce048dd6b920ee5251375c5077dfb10341a2cf26d790573bec019bc"
+    },
+    {
+      "path": "tutorials/seq-arp/index.html",
+      "size": 23162,
+      "sha256": "017d1718d2131ff82d1346b5b7e87ab81760b1dd4723cb3ea7779742313db5e8"
+    },
+    {
+      "path": "tutorials/start-here/index.html",
+      "size": 30425,
+      "sha256": "899ba40238ea44b6a3aba8979283029f3dd308e97731076a82ab821034efcf70"
+    },
+    {
+      "path": "tutorials/stasis/index.html",
+      "size": 12896,
+      "sha256": "f1913665a1551fbb99516b1902650956b3a7ea49407084bd30532b127ba98070"
+    },
+    {
+      "path": "webapp/editor/FUKIAI-LICENSE.txt",
+      "size": 1166,
+      "sha256": "fddeab17d69ab85a8e9c593beb0e93c279a9d74ff9504e1804bba123cb63e08e"
+    },
+    {
+      "path": "webapp/editor/fm1backup.js",
+      "size": 9979,
+      "sha256": "385a07117c743adab9a20f14b05fcd2e8c76abb60f08c7faa3faf86fec407ac9"
+    },
+    {
+      "path": "webapp/editor/fukiai.ttf",
+      "size": 82696,
+      "sha256": "312bc6abd697ba7783e3ce36250b819659998b0a778bcab259941856472be37a"
+    },
+    {
+      "path": "webapp/editor/index.html",
+      "size": 329965,
+      "sha256": "157a99c9211651ae594a3c84fc966e8995a732f011bd465d91c83681c77d6b29"
+    },
+    {
+      "path": "webapp/installer/index.html",
+      "size": 58594,
+      "sha256": "1208d084eb163e216ad0af867ae8e1805439b874b2c604930a9fa979eb57c357"
+    }
+  ]
+}
