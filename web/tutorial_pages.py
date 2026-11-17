@@ -378,7 +378,7 @@ def overview_page(data, look, ship, version, root=ROOT):
             f'<div class="actions"><a class="btn primary" href="{first["id"]}/">Start here · {first["minutes"]} min</a><a class="btn" href="../emulator/">Try the emulator</a><a class="btn" href="../sounds/">Hear sound examples</a></div></div>'
             f'<img class="device" src="img/{e(data["hero_device"])}" alt="The FM-1 front with the Caravel HOME screen on its display" width="1068" height="692"></section>')
     paths = ('<nav class="paths" aria-label="Pick a path"><a href="start-here/"><small>New here</small><b>Start here</b><span>Install, play, sequence, save.</span></a>'
-             '<a href="#engines"><small>I want sounds</small><b>Engines</b><span>SEM, HADES, DRONE, ENSEMBLE.</span></a>'
+             '<a href="#engines"><small>I want sounds</small><b>Engines</b><span>ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE.</span></a>'
              '<a href="#play"><small>I want to perform</small><b>Perform</b><span>Sequencer, HOME, HARMONY.</span></a>'
              '<a href="#shape"><small>I use a controller</small><b>Connect</b><span>MIDI Learn, clock, sync.</span></a></nav>')
     sixty = ('<aside class="sixty"><h2>In 60 seconds</h2><ul><li>Every lesson starts with an <strong>In 60 seconds</strong> box and ends with what to try next.</li>'

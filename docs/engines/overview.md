@@ -11,7 +11,7 @@ Select an engine with EDIT held in BUILD. PLAY / SOUND exposes four primary cont
 | DRONE | Coupled generators, drift, topology and cell modes | Quiet held note; change one topology control at a time |
 | ENSEMBLE | Three registers and a built-in stereo ensemble | String/choir pad; compare width against mono |
 
-[Tips](tips.md) · [SEM](SEM_ENGINE.md) · [HADES](hades-engine.md) · [DRONE cells](drone-cells.md) · [ENSEMBLE](ensemble-engine.md)
+[ANALOG tutorial](../tutorials/engine-analog.md) · [PHYS tutorial](../tutorials/engine-phys.md) · [Tips](tips.md) · [SEM](SEM_ENGINE.md) · [HADES](hades-engine.md) · [DRONE cells](drone-cells.md) · [ENSEMBLE](ensemble-engine.md)
 
 The 1.0 profile omits SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM. Older engine documents describe historical releases and do not add those engines to the current build. [Compatibility and release notes](../release-100.md).
 

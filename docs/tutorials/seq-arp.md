@@ -29,4 +29,4 @@ CAPTURE stores raw note, velocity, timing and physical key/note-off, before HARM
 
 Tap SEQ in PLAY to pause/resume the loop; hold SEQ to wipe it. Stop transport to pause clock-driven playback. There are at most 64 events per loop, including note-offs. A take that cannot fit is refused as FULL, keeping the previous loop. Loops live in RAM and disappear after power-off: they are not saved or backed up.
 
-[MIDI routing](midi-sync.md) · [HARMONY and CHORD EXT](harmony-live.md)
+[Detailed CAPTURE walkthrough](capture.md) · [MIDI routing](midi-sync.md) · [HARMONY and CHORD EXT](harmony-live.md)

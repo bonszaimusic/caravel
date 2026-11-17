@@ -53,8 +53,30 @@
       "tagline": "Tracks, engine versus preset, the pages and how to move between them, saving projects and presets."
     },
     {
-      "id": "sem",
+      "id": "analog",
       "num": "3.1",
+      "group": "engines",
+      "title": "ANALOG",
+      "minutes": 10,
+      "md": "engine-analog.md",
+      "thumb": "one-sound.png",
+      "status": "ready",
+      "tagline": "Oscillators, PWM, SYNC/SUB modes and the multimode filter for leads, bass and pads."
+    },
+    {
+      "id": "phys",
+      "num": "3.2",
+      "group": "engines",
+      "title": "PHYS",
+      "minutes": 10,
+      "md": "engine-phys.md",
+      "thumb": "one-build.png",
+      "status": "ready",
+      "tagline": "Modal, string, membrane and sympathetic-string models; make plucks and resonant textures."
+    },
+    {
+      "id": "sem",
+      "num": "3.3",
       "group": "engines",
       "title": "SEM",
       "minutes": 10,
@@ -65,7 +87,7 @@
     },
     {
       "id": "hades",
-      "num": "3.2",
+      "num": "3.4",
       "group": "engines",
       "title": "HADES",
       "minutes": 10,
@@ -76,7 +98,7 @@
     },
     {
       "id": "drone",
-      "num": "3.3",
+      "num": "3.5",
       "group": "engines",
       "title": "DRONE",
       "minutes": 10,
@@ -93,7 +115,7 @@
     },
     {
       "id": "ensemble",
-      "num": "3.4",
+      "num": "3.6",
       "group": "engines",
       "title": "ENSEMBLE",
       "minutes": 10,
@@ -112,6 +134,17 @@
       "thumb": "one-capture.png",
       "status": "ready",
       "tagline": "Step entry, timing, recording while it plays, parts A to D, and the arpeggiator."
+    },
+    {
+      "id": "capture",
+      "num": "4.1",
+      "group": "play",
+      "title": "CAPTURE live loops",
+      "minutes": 12,
+      "md": "capture.md",
+      "thumb": "one-capture.png",
+      "status": "ready",
+      "tagline": "Record retrospective 1–8-bar live notes on four tracks; overdub, pause, clear and understand FULL."
     },
     {
       "id": "home",
@@ -157,7 +190,7 @@
       "id": "elastic-first-steps",
       "num": "6.1",
       "group": "play",
-      "title": "ELASTIC \u00b7 First steps",
+      "title": "ELASTIC · First steps",
       "minutes": 10,
       "md": "elastic-first-steps.md",
       "thumb": "one-move.png",
@@ -168,7 +201,7 @@
       "id": "elastic-linked-springs",
       "num": "6.2",
       "group": "play",
-      "title": "ELASTIC \u00b7 Linked springs",
+      "title": "ELASTIC · Linked springs",
       "minutes": 12,
       "md": "elastic-linked-springs.md",
       "thumb": "one-lfo.png",
@@ -179,7 +212,7 @@
       "id": "elastic-ambient-recipes",
       "num": "6.3",
       "group": "play",
-      "title": "ELASTIC \u00b7 Ambient recipes",
+      "title": "ELASTIC · Ambient recipes",
       "minutes": 12,
       "md": "elastic-ambient-recipes.md",
       "thumb": "one-capture.png",

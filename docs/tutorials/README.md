@@ -21,10 +21,12 @@ Six engines: ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE.
 
 | | | |
 | --- | --- | --- |
-| <img src="img/one-sem.png" width="120" alt="Firmware display: SEM"> | **[3.1 SEM](engine-sem.md)** · about 10 min | Warm pads, brass, strings and notch sweeps. |
-| <img src="img/one-hades.png" width="120" alt="Firmware display: HADES"> | **[3.2 HADES](engine-hades.md)** · about 10 min | Basses, sub layers and dark leads. |
-| <img src="img/one-drone.png" width="120" alt="Firmware display: DRONE"> | **[3.3 DRONE](engine-drone.md)** · about 10 min | Evolving drones, beds, bells and slow textures (experimental).<br>[Watch: DRONE engine demo (YouTube)](https://www.youtube.com/watch?v=N08Vx3x7fLE) |
-| <img src="img/one-ensemble.png" width="120" alt="Firmware display: ENSEMBLE"> | **[3.4 ENSEMBLE](engine-ensemble.md)** · about 10 min | Strings, choirs and dark pads with a built-in three-tap ensemble, in stereo. |
+| <img src="img/one-sound.png" width="120" alt="Firmware display: ANALOG"> | **[3.1 ANALOG](engine-analog.md)** · about 10 min | Oscillators, PWM, SYNC/SUB modes and the multimode filter for leads, bass and pads. |
+| <img src="img/one-build.png" width="120" alt="Firmware display: PHYS"> | **[3.2 PHYS](engine-phys.md)** · about 10 min | Modal, string, membrane and sympathetic-string models; make plucks and resonant textures. |
+| <img src="img/one-sem.png" width="120" alt="Firmware display: SEM"> | **[3.3 SEM](engine-sem.md)** · about 10 min | Warm pads, brass, strings and notch sweeps. |
+| <img src="img/one-hades.png" width="120" alt="Firmware display: HADES"> | **[3.4 HADES](engine-hades.md)** · about 10 min | Basses, sub layers and dark leads. |
+| <img src="img/one-drone.png" width="120" alt="Firmware display: DRONE"> | **[3.5 DRONE](engine-drone.md)** · about 10 min | Evolving drones, beds, bells and slow textures (experimental).<br>[Watch: DRONE engine demo (YouTube)](https://www.youtube.com/watch?v=N08Vx3x7fLE) |
+| <img src="img/one-ensemble.png" width="120" alt="Firmware display: ENSEMBLE"> | **[3.6 ENSEMBLE](engine-ensemble.md)** · about 10 min | Strings, choirs and dark pads with a built-in three-tap ensemble, in stereo. |
 
 ### Play and perform
 
@@ -33,6 +35,7 @@ Sequence, arpeggiate, perform and follow a chord progression.
 | | | |
 | --- | --- | --- |
 | <img src="img/one-capture.png" width="120" alt="Firmware display: Sequencer and arpeggiator"> | **[4 Sequencer and arpeggiator](seq-arp.md)** · about 12 min | Step entry, timing, recording while it plays, parts A to D, and the arpeggiator. |
+| <img src="img/one-capture.png" width="120" alt="Firmware display: CAPTURE live loops"> | **[4.1 CAPTURE live loops](capture.md)** · about 12 min | Record retrospective 1–8-bar live notes on four tracks; overdub, pause, clear and understand FULL. |
 | <img src="img/one-move.png" width="120" alt="Firmware display: PLAY and BUILD performance"> | **[5 PLAY and BUILD performance](home-performance.md)** · about 15 min | SPACE, MOVE, snapshots, PAIR and STASIS in the current interface.<br>[Random Morph and Journey](https://bonszaimusic.github.io/caravel/tutorials/random-morph-journey/)<br>[STASIS: HOLD, ADD and BLEND](https://bonszaimusic.github.io/caravel/tutorials/stasis/)<br>[Pair Morph, macros and saving](home-and-stasis.md)<br>[Download the STASIS performance setup](https://bonszaimusic.github.io/caravel/performance/) |
 | <img src="img/one-chordext.png" width="120" alt="Firmware display: HARMONY"> | **[6 HARMONY](harmony-live.md)** · about 15 min | Set up a chord progression, let tracks follow it, and steer it live from the HARM bank; LATCH. |
 | <img src="img/one-move.png" width="120" alt="Firmware display: ELASTIC · First steps"> | **[6.1 ELASTIC · First steps](elastic-first-steps.md)** · about 10 min | Make an armed target breathe, bounce and return in PLAY / MOVE / ELASTIC. |
