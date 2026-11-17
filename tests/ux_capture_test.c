@@ -259,7 +259,7 @@ int main(void)
     fresh();
     {   static const unsigned li[4] = {0, 2, 4, 5};
         for(i=0;i<NTRK;i++) cap_li[i]=(uint8_t)li[i];
-        song.sel=0; uxl_cap_knob(0,1);
+        song.sel=0; cap_publish(); uxl_cap_knob(0,1);
         REQUIRE("REC K1 changes only selected track LENGTH",cap_li[0]==1 && cap_li[1]==2 && cap_li[2]==4 && cap_li[3]==5);
         cap_li[0]=0;
         perf_bars_q16 = 31u << 16;
