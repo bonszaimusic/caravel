@@ -378,12 +378,17 @@ int main(void)
     {
         static const uint8_t KEY[12] = {0x04,0xF0,0x7D,0x43, 0x04,0x41,0x7D,0x12, 0x06,0x02,0xF7,0};
         static const uint8_t UPG[12] = {0x04,0xF0,0x7D,0x43, 0x04,0x41,0x7F,0x12, 0x06,0x02,0xF7,0};
+        static const uint8_t OLD[8] = {0x04,0xF0,0x22,0x24, 0x07,0x35,0x7F,0xF7};
         static const uint8_t FRM[12] = {0x04, 0xF0, 0x7D, 0x01, 0x04, 0x02, 0x03, 0x04, 0x06, 0x05, 0xF7, 0};
         const uint8_t *fp;
         uint32_t fn;
         int ok = midi_if >= 0 && !usb.uboot_req && !usb.ota_req;
         ok &= ep1_take(KEY, sizeof KEY) && usb.uboot_req;
+        ok &= ep1_take(OLD, sizeof OLD) && !usb.ota_req;
+        check("legacy update command is rejected before protocol18 entry", ok);
         ok &= ep1_take(UPG, sizeof UPG) && usb.ota_req;
+        ok &= ep1_take(OLD, sizeof OLD) && usb.ota_req;
+        check("host loader entry sequence starts actual protocol18 USB parser", ok);
         ok &= ep1_take(FRM, sizeof FRM) && ota_frame_get(&fp, &fn) && fn == 6u && fp[0] == 0x7D && fp[5] == 0x05;
         snprintf(name, sizeof name, "update path (SysEx on EP1: soft key, M-UPGRADE, frames), console %s",
                  CDC_SHOWN ? "presented" : "not presented");

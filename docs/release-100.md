@@ -44,3 +44,5 @@ Record the installed package SHA-256, device/flash identity and each result. Sto
 9. Save/load projects, stop to commit a live save, power cycle, test autosave and a complete FORMAT 2 backup/restore with the matching tool. Confirm an old-format restore is refused. Confirm a malformed import leaves saved data unchanged.
 
 Public push, tag, release assets and live-site updates need separate owner approval after review of the exact package and these results.
+
+Loader-Fortsetzung: Web-Installer und CLI starten den erkannten Update-Loader mit dem passenden Einstieg für Protokoll 18 sowie dem kompatiblen Classic-Einstieg. Die Firmware-Sperre für alte Editor-/Updatezugriffe bleibt erhalten. Ein schwarzer Bildschirm im Loader ist keine laufende PLAY-/BUILD-Oberfläche; der Installer muss den Transfer und anschließenden Neustart bestätigen.

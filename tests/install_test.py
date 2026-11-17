@@ -76,8 +76,9 @@ class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None, protocol_generation=1):
+                 stall_after=None, bad_addr=None, protocol_generation=1, loader_protocol=18):
         self.protocol_generation=protocol_generation
+        self.loader_protocol=loader_protocol
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
         self.stall_after, self.bad_addr = stall_after, bad_addr
         self.served = self.bad = self.upgrades = 0
@@ -123,13 +124,15 @@ class FakeFM1:
             a=d[5:-1];k=a[0];off=cb.r32(a[1:6]);n=a[6]|a[7]<<7
             data=(F2_CAP if self.protocol_generation==2 else CLASSIC_CAP) if k==0 else bytes([1,2,3]) if k==1 else b''
             self.tx(d[:5]+bytes([k,0])+cb.u32(off)+bytes([n&127,n>>7])+cb.pack(data[off:off+n])+b'\xF7')
-        elif d == (I.UPGRADE if self.identity.startswith("ota-") or self.protocol_generation==1 else I.generation.update_entry(2)):
+        elif d == (I.UPGRADE if (self.loader_protocol!=18 if self.identity.startswith("ota-") else self.protocol_generation==1) else I.generation.update_entry(2)):
             self.upgrades += 1
             first = self.bad_addr if self.bad_addr is not None else 0
             self.queue = ([(first + k * 512, 512) for k in range(6)] + [(I.FINISH_WRITE, 8)]
                           if self.identity.startswith("ota-")
                           else [(0, 64), (0x40, 160), (0x1000, 512), (I.FINISH_CHECK, 8)])
             self.next()
+        elif d in (I.UPGRADE, I.generation.update_entry(2)):
+            pass  # The actual USB parser ignores the other generation's entry.
         elif self.waiting:
             u = I.unpack7(d[1:-1])
             addr, n = self.waiting
@@ -293,6 +296,11 @@ def installs():
     dev = FakeFM1(image, identity="ota-FM-1_900", name="Felucca Update")
     rc, out, err = cli([p, "--yes"], dev)
     ok(rc == 0 and dev.bad == 0 and dev.upgrades == 1 and "update mode" in out, "install: device already in update mode -> finishes the write")
+
+    dev = FakeFM1(image, identity="ota-FM-1_900", name="Felucca Update", loader_protocol=1)
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and dev.upgrades == 1,
+       "install: legacy loader still resumes after ignoring protocol18 entry")
 
     dev = FakeFM1(image, identity="ota-FM-1_900", name="Caravel Update")
     rc, out, err = cli([p, "--yes"], dev)

@@ -394,6 +394,10 @@ class Updater:
     def write(self, ota, image, step):
         """step 2: the loader reads and writes the whole package, then restarts"""
         step("write", 0)
+        if not ota.id.loader:
+            raise InstallError("generation", "Loader entry requires an identified update loader")
+        # Both loader generations report ota-FM-1; each ignores the other entry.
+        ota.link.send(generation.update_entry(2))
         ota.link.send(UPGRADE)
         time.sleep(DELAY["start"])
         served, finished, lost = self.serve(ota.link, image, FINISH_WRITE, DELAY["idle_write"],

@@ -1918,8 +1918,8 @@ const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 
 /* an FM-1 on WebMIDI: identity, then "device asks, host answers" reads of the image */
 class FakeFM1 {
-  constructor(image, { unplugAfter = Infinity, names = ["Felucca Update", "Felucca"], generation = 1, keepLegacyAfterUpdate = false } = {}) {
-    this.keepLegacyAfterUpdate = keepLegacyAfterUpdate;
+  constructor(image, { unplugAfter = Infinity, names = ["Felucca Update", "Felucca"], generation = 1, keepLegacyAfterUpdate = false, loaderProtocol = 18 } = {}) {
+    this.keepLegacyAfterUpdate = keepLegacyAfterUpdate; this.loaderProtocol = loaderProtocol;
     this.generation = generation; this.image = image; this.unplugAfter = unplugAfter; this.names = names; this.served = 0; this.bad = 0;
     this.access = { inputs: new Map(), outputs: new Map() };
     this.boot("FM-1_015", "FM-1");
@@ -1947,11 +1947,13 @@ class FakeFM1 {
       const ids=this.generation !== 1 ? [0,1,2,3,4,5,6,7] : [0,1,2,3,4,5,6,7,8,9,32,33,34];
       const args=d[4] === 1 ? (this.generation===17 ? JSON.parse(readFileSync(join(HERE,"../tests/fixtures/format2-protocol17-info.json"),"utf8")).info : fixture[this.generation === 2 ? "modern" : "classic"]) : [this.generation===17?2:this.generation,0,ids.length,...ids.flatMap(id=>[id,0,0,0,0,0,0,0,0,0,0])];
       this.tx([...d.slice(0,5),...args,0xf7]);
-    } else if (eq(d, this.identity.startsWith("ota-") || this.generation !== 2 ? UPGRADE : [0xf0,0x7d,0x43,0x41,0x7f,18,2,0xf7])) {
+    } else if (eq(d, (this.identity.startsWith("ota-") ? this.loaderProtocol !== 18 : this.generation !== 2) ? UPGRADE : [0xf0,0x7d,0x43,0x41,0x7f,18,2,0xf7])) {
       this.queue = this.identity.startsWith("ota-")
         ? [...Array.from({ length: 6 }, (_, k) => [k * 512, 512]), [0xF0000000, 8]]
         : [[0, 64], [0x40, 160], [0x1000, 512], [0xE0000000, 8]];
       this.next();
+    } else if (eq(d, UPGRADE) || eq(d,[0xf0,0x7d,0x43,0x41,0x7f,18,2,0xf7])) {
+      // The actual USB parser ignores the entry for the other generation.
     } else if (this.waiting) {
       const u = unpack7(d.slice(1, -1));
       const [addr, len] = this.waiting;
@@ -2017,6 +2019,14 @@ async function updater() {
   const back = new FakeFM1(image, {generation:2});
   const backGot = await new Updater(back.access).install(image,"FM-1_900",null,{targetGeneration:1,downgrade:true});
   ok(backGot === "FM-1_900" && back.bad === 0, "fm1ota.js: explicit Classic return transport completes in the stand-in");
+
+  for (const loaderProtocol of [18, 1]) {
+    const recovery = new FakeFM1(image, {loaderProtocol});
+    recovery.boot("ota-FM-1_900", "Felucca Update");
+    const resumed = await new Updater(recovery.access).resume(image, null, "FM-1_900");
+    ok(resumed && recovery.bad === 0 && recovery.served === 7,
+      `fm1ota.js: resume actual ${loaderProtocol === 18 ? "protocol18" : "Classic"} loader entry through reboot`);
+  }
 
   const dev2 = new FakeFM1(image, { unplugAfter: 3 });
   dev2.boot("ota-FM-1_900", "Felucca Update");

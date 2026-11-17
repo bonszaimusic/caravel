@@ -238,6 +238,9 @@ export class Updater {
 
   // step 2 with the loader found by find()/waitFor()
   async write(ota, image, step) {
+    if (!IS_OTA(ota.id)) throw fail("generation", "Loader entry requires an identified update loader");
+    // Both loader generations report ota-FM-1. Each ignores the other entry.
+    ota.link.send(updateEntry(2));
     ota.link.send(UPGRADE);
     await sleep(2000);
     const s2 = await this.serve(ota.link, image, 0xF0000000, 180000, (n) => step("write", n));
