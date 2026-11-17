@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// CAPTURE device plan C-e, the host half: how long a block takes while four tracks each play a full loop (8 bars, 64 events),
-// against the same synth with no loop, and the block that runs a REC (the take sorts and copies up to 64 events).
+// CAPTURE device plan C-e, the host half: how long a block takes while four tracks each play a near-full 32-bar loop (128 events),
+// against the same synth with no loop, and the block that runs a REC (the take sorts and copies up to 128 events).
 //   node web/emu/capture_load_test.mjs [felucca.wasm]       (built with -DCARAVEL_UX_CAPTURE=1)
 // This is the browser build on the host (WebAssembly), not the JieLi CPU: the numbers say how the cost moves between a
 // quiet block, a block with loops running and a take, not how many milliseconds it is on the device. The device half is the
@@ -21,22 +21,22 @@ const tap = (b) => { ex.web_buttons(1 << B[b]); render(70); ex.web_buttons(0); r
 render(2500); ex.web_buttons(1 << B.HOME); render(1100); ex.web_buttons(0); render(3500); tap("PLAY"); render(300);
 const OP = { REC: 1 };
 const quiet = stat(timed(2000));
-// four tracks: 30 short notes each (the ring holds 64 events), then a take of 8 bars
+// four tracks: 60 short notes each (the ring holds 128 events), then a take of 32 bars
 for (let tr = 0; tr < 4; tr++) {
   ex.web_test_select(tr);
-  for (let i = 0; i < 30; i++) { ex.web_keys(1 << (3 + ((i * 5 + tr * 3) % 20))); render(110); ex.web_keys(0); render(90); }
-  ex.web_test_cap_post(OP.REC, tr, 8);
+  for (let i = 0; i < 60; i++) { ex.web_keys(1 << (3 + ((i * 5 + tr * 3) % 20))); render(110); ex.web_keys(0); render(90); }
+  ex.web_test_cap_post(OP.REC, tr, 32);
   render(60);
 }
 const evs = [0, 1, 2, 3].map((t) => ex.web_test_cap_events(t));
-check(`four loops running with ${evs.join(", ")} events (full: 64)`, evs.every((n) => n >= 56) && [0, 1, 2, 3].every((t) => ex.web_test_cap_state(t) === 1));
+check(`four loops running with ${evs.join(", ")} events (full: 128)`, evs.every((n) => n >= 112) && [0, 1, 2, 3].every((t) => ex.web_test_cap_state(t) === 1));
 const run = stat(timed(6000));
 // REC again (an overdub with new notes) on each track: the block that runs the take
 const takes = [];
 for (let tr = 0; tr < 4; tr++) {
   ex.web_test_select(tr);
   ex.web_keys(1 << 9); render(110); ex.web_keys(0); render(90);
-  ex.web_test_cap_post(OP.REC, tr, 8);
+  ex.web_test_cap_post(OP.REC, tr, 32);
   takes.push(...timed(1).map((x) => x));
   render(200);
 }

@@ -909,57 +909,62 @@ static int demos(const char *dir)
     return 1;
 }
 
-/* 10. the FX layer's FILTER macro (perf_k[0]) is the SELECTED track's filter, for as long as it is turned: the others keep theirs, a track's own
- * P_FILT is not written, and the master's LPF / HPF stage is not run by it */
+/* 10. Regression: the FX FILTER knob is a persistent per-track sound parameter.
+ * Selecting a different track must neither clear the previous cutoff nor
+ * drag it across tracks, in BUILD FX held and PLAY SPACE/FILTER alike. */
 static void tft_macro(void)
 {
-    track_t *t0 = &trk[0], *t1 = &trk[1];
-    uint32_t k;
-    int own1;
+    track_t *t1 = &trk[0], *t2 = &trk[1], *t4 = &trk[3];
     fresh(0, preset_by_name(0, "SAW LEAD"));
-    fresh(1, preset_by_name(0, "SAW LEAD"));
-    t0->p[P_SUS] = 127; t1->p[P_SUS] = 127;
-    t1->p[P_FILT] = 30;                                 /* track 2's own filter: a high-pass */
-    song.sel = 0;
+    t1->p[P_SUS] = t2->p[P_SUS] = t4->p[P_SUS] = 127;
+    t2->p[P_FILT] = 30;                          /* T2 already has its own HP */
+    song.sel = 3;                                /* the reported issue: turn FILTER on T4 */
     perf_k[0] = 0;
-    trk_note_on(t0, 60, 110);
     trk_note_on(t1, 60, 110);
+    trk_note_on(t2, 60, 110);
+    trk_note_on(t4, 60, 110);
     mixb(FS / 4u / CTL);
-    ck("macro at rest: track 1 has no filter, track 2 its own high-pass", !tf[0].mode && tf[1].mode == 2);
-    perf_k[0] = -100;
+    ck("FX filter baseline: T1/T4 OFF and independent T2 high-pass",
+       !tf[0].mode && tf[1].mode == 2 && !tf[3].mode);
+    tf_macro_turn(-48);                          /* FX K1 or PLAY SPACE/FILTER K1 */
     mixb(FS / 4u / CTL);
-    ck("macro all the way left, track 1 selected: track 1 is a low-pass (mode 1), full wet", tf[0].mode == 1 && tf[0].w == 32768 && t0->tf_run);
-    ck("  and track 2 keeps its own high-pass (the macro does not touch it)", tf[1].mode == 2);
-    ck("  and no track's P_FILT was written (track 1 still 0, track 2 still 30)", !t0->p[P_FILT] && t1->p[P_FILT] == 30);
-    own1 = tf[1].mode;
-    song.sel = 1;
+    ck("FX turn on T4 stores P_FILT=-48, opens the low-pass only for T4",
+       t4->p[P_FILT] == -48 && tf_eff(t4) == -48 && tf[3].mode == 1 &&
+       tf[3].w == 32768 && !t1->p[P_FILT] && t2->p[P_FILT] == 30 && tf[1].mode == 2);
+    song.sel = 0;                                /* switch to T1 without touching FILTER */
     mixb(FS / 2u / CTL);
-    ck("the selection moves to track 2: its filter is the macro's low-pass now, track 1's is out again (at rest)",
-       tf[1].mode == 1 && !tf[0].mode && !t0->tf_run && own1 == 2);
-    perf_k[0] = 0;
-    mixb(FS / 2u / CTL);
-    ck("macro back to 0: track 2 is its own high-pass again", tf[1].mode == 2 && t1->p[P_FILT] == 30);
-    for (k = 0; k < 2u; k++)
-        trk_note_off(&trk[k], 60);
-    perf_k[0] = 0;
+    ck("selecting T1: T4's low-pass stays active and T1 remains unfiltered",
+       t4->p[P_FILT] == -48 && tf[3].mode == 1 && tf[3].w == 32768 &&
+       !t1->p[P_FILT] && !tf[0].mode && tf[1].mode == 2);
+    tf_macro_turn(-20);                          /* new K1 move applies to T1 ONLY */
+    mixb(FS / 4u / CTL);
+    ck("FX K1 on T1: T1 gets LP -20; T4 keeps LP -48; T2 keeps HP +30",
+       t1->p[P_FILT] == -20 && tf[0].mode == 1 &&
+       t4->p[P_FILT] == -48 && tf[3].mode == 1 &&
+       t2->p[P_FILT] == 30 && tf[1].mode == 2);
+    song.sel = 1;                                /* T2 already has HP */
+    mixb(FS / 4u / CTL);
+    ck("selecting T2 doesn't drag T1/T4 cutoffs or overwrite T2's HP",
+       tf[0].mode == 1 && tf[3].mode == 1 && tf[1].mode == 2 &&
+       tf_eff(t1) == -20 && tf_eff(t2) == 30 && tf_eff(t4) == -48);
+    tf_macro_turn(-30);                          /* turn selected T2 to OFF */
+    mixb(FS / 4u / CTL);
+    ck("FX K1 can turn the chosen track's filter OFF without changing the others",
+       t2->p[P_FILT] == 0 && !tf[1].mode && tf[0].mode == 1 && tf[3].mode == 1);
+    song.sel = 3;
+    tf_macro_turn(49);                           /* cross neutral: LP -48 -> HP +1 */
+    mixb(FS / 4u / CTL);
+    ck("T4 crosses zero into HP and retains its own value on later selections",
+       t4->p[P_FILT] == 1 && tf[3].mode == 2 && tf[0].mode == 1);
     song.sel = 0;
-    t0->p[P_FILT] = -32;
-    tf_macro_turn(1);
-    ck("first turn starts at stored LP, not neutral", perf_k[0] == -49 && tf_eff(t0) == -31 && t0->p[P_FILT] == -32);
-    tf_macro_turn(-1);
-    ck("return to the gesture's anchor releases the macro", !perf_k[0] && tf_eff(t0) == -32);
-    perf_k[0] = -1; tf_macro_turn(1);
-    ck("crossing neutral skips the release sentinel", perf_k[0] == 1 && !tf_eff(t0) && t0->p[P_FILT] == -32);
-    perf_k[0] = 1; tf_macro_turn(-1);
-    ck("crossing neutral in reverse also stays active", perf_k[0] == -1 && !tf_eff(t0));
-    unsigned worst = 0;
-    for (int v = -64; v <= 63; v++) {
-        int m = v * 100 / 64, back = clamp(m * 64 / 100, -64, 63);
-        unsigned error = (unsigned)abs(back - v); if (error > worst) worst = error;
-    }
-    ck("all 128 track values round-trip within one raw filter step", worst == 1);
-    printf("trackfilter macro: measured maximum anchor rounding error %u raw step\n", worst);
-    perf_k[0] = 0; t0->p[P_FILT] = 0;
+    perf_k[0] = -100;                             /* old global macro must not override P_FILT */
+    mixb(FS / 4u / CTL);
+    ck("deprecated perf_k[0] cannot move a cutoff between selected tracks",
+       tf_eff(t1) == -20 && tf_eff(t4) == 1 && tf[0].mode == 1 && tf[3].mode == 2);
+    perf_k[0] = 0;
+    trk_note_off(t1, 60);
+    trk_note_off(t2, 60);
+    trk_note_off(t4, 60);
 }
 
 int main(int argc, char **argv)

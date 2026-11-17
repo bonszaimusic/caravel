@@ -2,8 +2,8 @@
  * Copyright (C) 2026 bonszaimusic
  *
  * CARAVEL_UX_CAPTURE (enabled in the 1.0 target: plays notes from the block that counts the bars and keeps
- * 2 KB of event rings: 4 tracks x (live ring + loop) x 64 events x 4 bytes): CAPTURE, E8 / E38 / E41 of the decisions log. Each track has a LIVE ring of the notes played
- * (keys and MIDI IN, while the clock runs, raw timing) and one LOOP. REC takes the last 1/2/4/8 bars of the ring as the
+ * 4 KB of event rings: 4 tracks x (live ring + loop) x 128 events x 4 bytes): CAPTURE, E8 / E38 / E41 of the decisions log. Each track has a LIVE ring of the notes played
+ * (keys and MIDI IN, while the clock runs, raw timing) and one LOOP. REC takes the last 1/2/4/8/16/32 bars of the ring as the
  * loop (an existing loop receives an overdub; E45, the live ring continues); the loop's notes go
  * through input_on / input_off, so ARP, LATCH and HARMONY act on them as on played notes, and are not recorded again.
  * Times are perf_bars_q16 (bars in Q16), which runs only while the clock does. Not saved in the project (E8).
@@ -20,16 +20,19 @@
  * writes so that the UI can draw again when one fell inside a frame). cap_dring is gone: the band's notes of a running
  * loop are derived from the loop itself (they are the notes as captured, not as HARMONY or CHRD made them). */
 #if CARAVEL_UX_CAPTURE
-#define CAP_N 64u
+#define CAP_N 128u
 #define CAP_HN (CAP_N / 2u)            /* every admitted raw note reserves its end */
-/* An event is 4 bytes (device plan C-c): t in 1/4096 bar (about 0.5 ms at 120 BPM, 1.5 ms at 40 BPM), vel 0: the note ends.
- * In the live ring t is the bar clock modulo 16 bars; the ring keeps 8 bars (cap_trim), so an age is never ambiguous. In a loop
- * t is the place inside it (0 .. length - 1; the loop is 1, 2, 4 or 8 bars, so its length in these units divides 65536). */
-typedef struct { uint16_t t; uint8_t note, vel; } cap_ev_t;
+/* Four bytes per event. The unsigned bit-fields are local RAM, never serialized or sent via USB.
+ * An 18-bit clock at 1/4096 bar wraps every 64 bars: a 32-bar live window is unambiguous.
+ * Keeping the previous 1/4096-bar granularity avoids a timing downgrade for short loops.
+ * Vel=0 means note off; seven bits suffice for MIDI pitch and velocity (0..127).
+ * The compile-time size assertion catches target ABI changes before a firmware image is used. */
+typedef struct { uint32_t t : 18; uint32_t note : 7; uint32_t vel : 7; } cap_ev_t;
 typedef char cap_ev_size_must_be_4[sizeof(cap_ev_t) == 4 ? 1 : -1];
 #define CAP_U(q16) ((uint32_t)(q16) >> 4)                        /* bars in Q16 -> 1/4096 bar */
-#define CAP_KEEP_U (8u << 12)                                    /* the live ring keeps 8 bars: the longest REC window */
-static uint32_t cap_age(uint32_t now_q16, uint16_t t) { return (uint16_t)(CAP_U(now_q16) - t); }
+#define CAP_TMASK ((1u << 18) - 1u)
+#define CAP_KEEP_U (32u << 12)                                  /* longest retrospective REC window */
+static uint32_t cap_age(uint32_t now_q16, uint32_t t) { return (CAP_U(now_q16) - t) & CAP_TMASK; }
 static cap_ev_t cap_ring[NTRK][CAP_N], cap_loop[NTRK][CAP_N];
 static volatile uint8_t cap_gen[NTRK];                           /* counts every write to a ring or a loop (audio): the display's check */
 static uint8_t cap_rn[NTRK], cap_rh[NTRK];                       /* the ring: events kept, next to write */
@@ -47,8 +50,8 @@ static uint8_t cap_replay;                                       /* 1 while the 
  * cap_tick adds to it); the previous one is closed into last / max / sum when the next begins. */
 static uint32_t cap_p_cur, cap_p_fired, cap_p_all;               /* this block: ticks, events fired, 1 = all four loops run */
 static volatile uint32_t cap_p_last, cap_p_max, cap_p_sum, cap_p_blocks, cap_p_fired_max, cap_p_busy_max, cap_p_take_last, cap_p_take_max, cap_p_takes;
-static uint8_t cap_li = 1;                                       /* the length chosen: 1 2 4 8 bars */
-static const uint8_t CAP_BARS[4] = {1, 2, 4, 8};
+static uint8_t cap_li[NTRK] = {1, 1, 1, 1};                    /* per-owner next-take length, default 2 bars */
+static const uint8_t CAP_BARS[6] = {1, 2, 4, 8, 16, 32};
 static void input_on(track_t *t, uint32_t note, uint32_t vel);
 static void input_off(track_t *t, uint32_t note);
 static uint32_t fm1_ticks(void);                                  /* the timer (hal/fm1_time.h; the emulator's own): for the block counter */
@@ -79,7 +82,7 @@ static void cap_log(uint32_t i, uint32_t note, uint32_t vel)
     cap_ev_t *e = &cap_ring[i][cap_rh[i]];
     cap_serial[i]++;
     cap_gen[i]++;
-    e->t = (uint16_t)CAP_U(cap_clock_now());
+    e->t = CAP_U(cap_clock_now()) & CAP_TMASK;
     e->note = (uint8_t)note;
     e->vel = (uint8_t)vel;
     cap_rh[i] = (uint8_t)((cap_rh[i] + 1u) % CAP_N);
@@ -225,7 +228,8 @@ static void cap_release(uint32_t i)                              /* end only thi
  * length stays. Returns the new notes (0: nothing played in the window); *over = 1 for an overdub. */
 static uint32_t cap_take(uint32_t i, uint32_t nb, uint32_t *over)
 {
-    /* Times inside here are in 1/4096 bar (CAP_U); the lengths divide 65536 of them, so a 16 bit difference is exact modulo them. */
+    /* The 18-bit time field wraps every 64 bars; up to 32 bars fit without ambiguity.
+     * Difference and phase are computed modulo the 18-bit clock, then modulo the loop. */
     uint32_t now = cap_clock_now(), k, n = 0, ons = 0, open[4] = {0, 0, 0, 0}, len, origin, window, now_u, len_u, origin_u, window_u, relnow;
     int add = cap_ln[i] && cap_len[i];
     cap_ev_t tmp[CAP_N];
@@ -276,7 +280,7 @@ static uint32_t cap_take(uint32_t i, uint32_t nb, uint32_t *over)
             if (pre[k >> 5] & (1u << (k & 31))) {
                 if (n + pending + 2u > CAP_N) goto full;
                 pending++;
-                tmp[n++] = (cap_ev_t){(uint16_t)relmin, (uint8_t)k, pv[k]};
+                tmp[n++] = (cap_ev_t){relmin, (uint8_t)k, pv[k]};
                 open[k >> 5] |= 1u << (k & 31);
                 ons++;
             }
@@ -286,22 +290,22 @@ static uint32_t cap_take(uint32_t i, uint32_t nb, uint32_t *over)
         uint32_t w = e->note >> 5, b = 1u << (e->note & 31), rel;
         if ((add && (int32_t)(cap_serial[i]-cap_rn[i]+k+1u-cap_taken_serial[i])<=0) || cap_age(now, e->t) > window_u)
             continue;
-        rel = (uint32_t)(uint16_t)(e->t - (uint16_t)origin_u) % len_u;
+        rel = ((e->t - origin_u) & CAP_TMASK) % len_u;
         if (e->vel) {
             if (n + pending + 2u > CAP_N) goto full;
             if (!(open[w] & b)) pending++;
-            tmp[n++] = (cap_ev_t){(uint16_t)rel, e->note, e->vel};
+            tmp[n++] = (cap_ev_t){rel, e->note, e->vel};
             open[w] |= b;
             ons++;
         } else if (open[w] & b) {
-            tmp[n++] = (cap_ev_t){(uint16_t)rel, e->note, 0};
+            tmp[n++] = (cap_ev_t){rel, e->note, 0};
             open[w] &= ~b;
             pending--;
         }
     }
     for (k = 0; k < 128u && n < CAP_N; k++)                      /* a note still held: ends with the window */
         if (open[k >> 5] & (1u << (k & 31)))
-            tmp[n++] = (cap_ev_t){(uint16_t)relnow, (uint8_t)k, 0};
+            tmp[n++] = (cap_ev_t){relnow, (uint8_t)k, 0};
     if (!ons)
         return 0;
     /* Stable phase order also keeps overdubs chronological. No audio-block sort. */
@@ -476,8 +480,13 @@ static void cap_publish(void)
 {
     uint32_t i;
     for (i = 0; i < NTRK; i++) {
-        uint32_t w0 = (uint32_t)cap_st[i] | (uint32_t)(cap_full[i] & 1u) << 2 | (uint32_t)cap_ln[i] << 3 | (uint32_t)cap_rn[i] << 10 |
-                      (uint32_t)cap_rh[i] << 17 | (cap_len[i] >> 16 & 15u) << 23 | (uint32_t)(cap_clock_wrapped & 1u) << 27;
+        uint32_t bars = cap_len[i] >> 16, code = 0;
+        uint32_t w0;
+        while (bars > 1u) { bars >>= 1; code++; } /* only 1/2/4/8/16/32 are admitted */
+        /* 2 state + 1 full + 8 loop + 8 live + 7 head + 3 bars-code + 1 wrap = 30 bits */
+        w0 = (uint32_t)cap_st[i] | (uint32_t)(cap_full[i] & 1u) << 2 | (uint32_t)cap_ln[i] << 3 |
+             (uint32_t)cap_rn[i] << 11 | (uint32_t)cap_rh[i] << 19 |
+             (code & 7u) << 26 | (uint32_t)(cap_clock_wrapped & 1u) << 29;
         cap_pub[i].w1 = cap_st[i] == 2u ? cap_pph[i] : cap_o[i];
         cap_pub[i].w0 = w0;
     }
@@ -492,11 +501,11 @@ static void cap_view(uint32_t i, cap_view_t *v)
     } while (a != cap_pub[i].w0 && ++n < 4u);
     v->st = (uint8_t)(a & 3u);
     v->full = (uint8_t)((a >> 2) & 1u);
-    v->ln = (uint8_t)((a >> 3) & 127u);
-    v->rn = (uint8_t)((a >> 10) & 127u);
-    v->rh = (uint8_t)((a >> 17) & 63u);
-    v->bars = (uint8_t)((a >> 23) & 15u);
-    v->wrapped = (uint8_t)((a >> 27) & 1u);
+    v->ln = (uint8_t)((a >> 3) & 255u);
+    v->rn = (uint8_t)((a >> 11) & 255u);
+    v->rh = (uint8_t)((a >> 19) & 127u);
+    v->bars = v->ln ? (uint8_t)(1u << ((a >> 26) & 7u)) : 0u;
+    v->wrapped = (uint8_t)((a >> 29) & 1u);
     v->o = b;
 }
 static const cap_ev_t *cap_view_ring(const cap_view_t *v, uint32_t i, uint32_t k)   /* k-th oldest of the viewed ring */
@@ -523,7 +532,7 @@ static void cap_idle_body(void)                                  /* the clock st
             cap_wait[i]=1;
         }
 }
-static void cap_trim(void)                                       /* audio: nothing older than 8 bars stays in a live ring, so a 16 bit age is never ambiguous */
+static void cap_trim(void)                                       /* audio: retain up to 32 bars in the 18-bit (64-bar modulo) live clock */
 {
     uint32_t i, now = perf_bars_q16;
     for (i = 0; i < NTRK; i++) {

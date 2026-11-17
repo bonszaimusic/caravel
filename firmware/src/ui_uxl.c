@@ -18,7 +18,7 @@
 #define UXL_KFILT 0xF0u                 /* a target that is no HOME-performance reference: the FX layer's FILTER, perf_k[0], -100 LP .. +100 HP */
 static const param_desc_t UXL_FILT_DESC = {"FILTER", F_INT, -100, 100, 0, 0, ""};
 static const param_desc_t UXL_FX_DESC = {"FX", F_INT, 0, 100, 0, 0, ""};
-/* the FX layer's four macros (perform.c perf_k) as the arcs of SPACE, each id: 0 FILTER (-100 LP .. +100 HP), 1 CRUSH, 2 THROW, 3 DEPTH (shown as 100 - perf_k[3], as the layer shows it) */
+/* SPACE/FILTER: K1 edits this track's persisted P_FILT; K2..K4 are the live CRUSH/THROW/DEPTH macros (perform.c perf_k). */
 static int32_t uxl_fx_get(uint32_t id) {
     if (!id) { int32_t v = tf_eff(TSEL); return v < 0 ? v * 100 / 64 : v * 100 / 63; }
     return id == 3u && !perf_harm_on() ? 100 - perf_k[3] : perf_k[id & 3u];
@@ -28,7 +28,7 @@ static void uxl_fx_turn(uint32_t id, uint32_t k, int32_t s)
     id &= 3u;
     if (id == 3u && !perf_harm_on())
         s = -s;
-    int32_t delta = accel(EN_K1 + k, s, id ? 100 : 200);
+    int32_t delta = accel(EN_K1 + k, s, id ? 100 : 127);
     if (!id) tf_macro_turn(delta);
     else perf_k[id] = (int8_t)clamp((int32_t)perf_k[id] + delta, 0, 100);
 }
@@ -422,8 +422,8 @@ static void uxl_el_cap_ex(uint32_t k, char *name, char *value, int page2, int tm
     uint32_t t = song.sel, keep_pg = hp_el_setup_page;
     hp_et_cfg_t keep_t = hp_el_times_track[t];
     hp_elastic_cfg_t keep_c = hp_el_cfg_track[t];
-    int cur = -1;                                   /* (always the settings of the moment, the brush; a touch hands them to the spring) */
-    (void)tmpl;
+    int cur = tmpl ? -1 : uxl_el_cur();             /* BUILD template vs PLAY last-touched spring */
+    /* BUILD edits the track-wide template; PLAY shows the last touched spring. */
     if (page2) {                                    /* the track's: COUPLE REFLECT SEED */
         static const uint8_t M[4] = {2, 1, 3, 255};
         if (M[k & 3u] == 255u) {
@@ -452,6 +452,38 @@ static void uxl_el_cap_ex(uint32_t k, char *name, char *value, int page2, int tm
     hp_el_cfg_track[t] = keep_c;
 }
 static void uxl_el_cap(uint32_t k, char *name, char *value) { uxl_el_cap_ex(k, name, value, hp_el_setup_page & 1u, 0); }
+/* Every ELASTIC value arc follows the *same* settings that its label displays.
+ * BUILD uses the track's new-spring template; PLAY shows the last touched
+ * spring when one is selected. Angles are limited to the 76-degree quadrant. */
+static int32_t uxl_el_arc_frac(uint32_t k, int page2, int tmpl)
+{
+    const uint32_t t = song.sel;
+    hp_et_cfg_t tm = hp_el_times_track[t];
+    hp_elastic_cfg_t cf = hp_el_cfg_track[t];
+    int cur = page2 || tmpl ? -1 : uxl_el_cur();
+    if (cur >= 0) {
+        tm = hp_el_stimes[t][cur];
+        cf = hp_el_scfg[t][cur];
+    }
+    if (page2) {
+        if (k == 0u) return clamp((int32_t)tm.couple, 0, 100) * 76 / 100;
+        if (k == 1u) return clamp((int32_t)tm.reflect, 0, 100) * 76 / 100;
+        if (k == 2u) return (int32_t)tm.seed * 76 / 255;
+        return -1; /* K4 is not a parameter on SPRINGS. */
+    }
+    if (k == 0u) return clamp((int32_t)tm.pull, 0, 100) * 76 / 100;
+    if (k == 1u) return clamp((int32_t)tm.back, 0, (int32_t)HP_ES_RETURN_INF) * 76 / (int32_t)HP_ES_RETURN_INF;
+    if (k == 2u) return clamp((int32_t)cf.range, 0, 100) * 76 / 100;
+    if (k == 3u) {
+        /* The new clock-synced periods are discrete steps; legacy v4
+         * numeric bounce values still have a meaningful visual range. */
+        if (hp_es_is_sync(tm.bounce))
+            return ((int32_t)hp_es_index(tm.bounce) - (int32_t)HP_ES_MIN_INDEX) * 76 /
+                   (int32_t)(HP_ES_COUNT - HP_ES_MIN_INDEX - 1u);
+        return clamp((int32_t)tm.bounce, 0, 1000) * 76 / 1000;
+    }
+    return -1;
+}
 static void uxl_el_setup_turn_ex(uint32_t k, int32_t s, int page2, int tmpl)
 {
     uint32_t t = song.sel, keep_pg = hp_el_setup_page;
@@ -847,6 +879,10 @@ static int32_t uxl_ev_frac(uint32_t b, uint32_t k)
             return v * 76 / 127;
         return k < 3u && v >= -64 && v <= 63 ? (v + 64) * 76 / 127 : -1;
     }
+#if CARAVEL_ELASTIC_P1
+    if (b == ACT_BANK_ELASTIC)
+        return uxl_el_arc_frac(k, hp_el_setup_page & 1u, 0);
+#endif
     if (b != 0u)
         return -1;
     v = action_setup_value(k);
@@ -1139,7 +1175,7 @@ static void uxl_knob(uint32_t k, int32_t s)
     uxl_group(uxl.area, uxl_group_now(), tg);
     if (!tg[k].kind)
         return;
-    if (tg[k].kind == UXL_KFILT) {                      /* an FX macro, set as the FX layer's knob sets it, kept when FX is let go (E74, E77) */
+    if (tg[k].kind == UXL_KFILT) {                      /* FILTER edits P_FILT; other FX macros keep their current live behavior */
         uxl_fx_turn(tg[k].id, k, s);
         uxl.hot_k = (uint8_t)k;
         uxl.hot_t = 40;
@@ -1315,7 +1351,7 @@ static void uxl_boot(void)
 #if CARAVEL_UX_CAPTURE
 static void uxl_cap_rec(void)                       /* REC tapped: the live notes become the loop, or are added to it (overdub, E45) */
 {
-    if (!cap_post(CAP_OP_REC, cap_selected(), CAP_BARS[cap_li & 3u]))     /* (the audio context answers, uxl_cap_poll says it) */
+    if (!cap_post(CAP_OP_REC, cap_selected(), CAP_BARS[cap_li[cap_selected()]]))     /* (the audio context answers, uxl_cap_poll says it) */
         ui_message("CAPTURE BUSY");
 }
 static void uxl_cap_loop(void)                      /* SEQ tapped: the loop pauses or goes on */
@@ -1336,12 +1372,12 @@ static void uxl_cap_poll(void)                      /* what the audio context di
         ui.force = 1;
     }
 }
-static void uxl_cap_knob(uint32_t k, int32_t s)     /* K1 in the view: the length 1 2 4 8 bars (for the next capture) */
+static void uxl_cap_knob(uint32_t k, int32_t s)     /* K1 in the view: per-track length 1 2 4 8 16 32 bars for the next capture */
 {
     if (k == 0u && s && uxl_cap_get(cap_selected(), 2u)) {
         ui_message("LENGTH: CLEAR LOOP FIRST");
     } else if (k == 0u && s) {
-        cap_li = (uint8_t)clamp((int32_t)(cap_li & 3u) + (s > 0 ? 1 : -1), 0, 3);
+        cap_li[cap_selected()] = (uint8_t)clamp((int32_t)cap_li[cap_selected()] + (s > 0 ? 1 : -1), 0, 5);
         ui.force = 1;
     }
 }
@@ -1562,7 +1598,7 @@ static int uxl_layer_head_draw(void)
 }
 #if CARAVEL_UX_CAPTURE
 /* CAPTURE in the middle of PLAY, always (E41, owner's wish): a small dim ring with the loop's notes as dots and its pointer
- * while there is a loop (none while LIVE); inside it the band of the notes played, the last 1/2/4/8 bars: a new note
+ * while there is a loop (none while LIVE); inside it the band of the notes played, up to 32 bars: a new note
  * enters at the right and moves left. The band is the LIVE window (what REC would take), also while a loop runs. */
 static void uxl_paint_widget(void)
 {
@@ -1575,7 +1611,7 @@ static void uxl_paint_widget(void)
     cap_view(i, &v);
     st = v.st;
     len = (uint32_t)v.bars << 12;
-    nb = v.ln && len ? (uint32_t)v.bars : CAP_BARS[cap_li & 3u];
+    nb = v.ln && len ? (uint32_t)v.bars : CAP_BARS[cap_li[i]];
     span = nb << 12;
     uxl_ring(CX, CY, 40, 48, 0, 359, 0, 359, T_LINE, T_LINE);
     cv_rect(BX, BY, BW, BH, T_SURF);
@@ -1599,7 +1635,7 @@ static void uxl_paint_widget(void)
     if (hi - lo < 12) { hi = lo + 12; }
     {   /* the bar lines, as the bars move */
         uint32_t cur = now & ~0xFFFFu;
-        for (k = 0; k <= nb; k++) {
+        for (k = 0; k <= nb; k += nb > 16u ? 4u : nb > 8u ? 2u : 1u) {
             uint32_t tb = cur - (k << 16);
             int32_t x = BX + BW - (int32_t)(((uint32_t)CAP_U(now - tb) * (uint32_t)BW) / span);
             if ((v.wrapped || cur >= (k << 16)) && x >= BX && x < BX + BW)
@@ -1667,8 +1703,14 @@ static void uxl_paint_widget(void)
             cv_rect(x - 4, y - 4, 9, 9, st == 1u ? T_TEXT : T_MID);
         }
     }
-    b[0] = (char)('0' + nb);
-    str_cpy(b + 1, " BAR", sizeof b - 1u);
+    if (nb >= 10u) {
+        b[0] = (char)('0' + nb / 10u);
+        b[1] = (char)('0' + nb % 10u);
+        str_cpy(b + 2, " BARS", sizeof b - 2u);
+    } else {
+        b[0] = (char)('0' + nb);
+        str_cpy(b + 1, nb == 1u ? " BAR" : " BARS", sizeof b - 1u);
+    }
     uxl_text_c(120, 77, &AF_S, b, uxl.cap_view ? T_ACCENT : T_MID);
     if (v.full) {
         cv_frame(102, 146, 36, 14, T_TEXT);
@@ -1902,8 +1944,17 @@ static void uxl_ev_ring_paint(uint32_t pg, const char nm[4][16], const char val[
     uint32_t k, i;
     char f[32];
     cv_rect(0, 0, 240, 240, T_BG);
-    for (k = 0; k < 4u; k++)
-        uxl_ring(120, 116, 58, 71, START[k], START[k] + 76, 0, 0, T_LINE, T_LINE);
+    for (k = 0; k < 4u; k++) {
+        int32_t f = -1;
+#if CARAVEL_ELASTIC_P1
+        if (pg >= 2u)
+            f = uxl_el_arc_frac(k, pg == 3u, 1);
+#endif
+        if (f >= 0)
+            uxl_orbit_arc_f(k, f, 0, 0);
+        else
+            uxl_ring(120, 116, 58, 71, START[k], START[k] + 76, 0, 0, T_LINE, T_LINE);
+    }
     for (k = 0; k < 4u; k++) {
         int32_t cx = (k & 1u) == 0u ? 4 : 236, cy = k < 2u ? 46 : 150;
         if (nm[k][0] == '-')
@@ -2091,7 +2142,7 @@ static void uxl_paint(void)
         int hot = uxl.hot_t && uxl.hot_k == k;
         if (k >= n || !tg[k].kind)                      /* (EVOLVE groups have no targets: n is 0) */
             continue;
-        if (tg[k].kind == UXL_KFILT) {                  /* an FX macro: OFF, or LP / HP and how far, or its percent */
+        if (tg[k].kind == UXL_KFILT) {                  /* per-track FILTER or the other live FX macros */
             v = uxl_fx_get(tg[k].id);
             d = tg[k].id == 0u ? &UXL_FILT_DESC : &UXL_FX_DESC;
             uxl_orbit_arc(k, d, v, hot);
@@ -2122,13 +2173,13 @@ static void uxl_paint(void)
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx, cy, hot); else cv_text(cx, cy, &AF_M, lab, hot ? T_ACCENT : T_TEXT);
-                cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !perf_k[0] ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
+                cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx + text_w(&AF_S, b) + 5, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
             } else {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx - UXL_GW, cy, hot); else uxl_text_r(cx, cy, &AF_M, lab, hot ? T_ACCENT : T_TEXT);
-                uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !perf_k[0] ? T_DIM : uxl_hot(k));
+                uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx - text_w(&AF_S, b) - 11, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
@@ -2164,20 +2215,31 @@ static void uxl_paint(void)
         uxl_text_c(120, 128, &AF_S, "OCT- CANCEL", T_MID);
     }
 #if CARAVEL_UX_CAPTURE
-    else if (uxl.cap_view) {                          /* REC held: K1 is the CAPTURE length, named, with its four steps (E78) */
-        uint32_t i, on = cap_li & 3u;
-        uxl_orbit_arc_f(0, (int32_t)on * 76 / 3, 0, 1);
-        cv_text(4, 46, &AF_M, "LENGTH", T_ACCENT);
-        for (i = 0; i < 4u; i++) {
-            char sb[2];
-            int32_t x = 4 + (int32_t)i * 16;
-            sb[0] = (char)('0' + CAP_BARS[i]);
-            sb[1] = 0;
+    else if (uxl.cap_view) {                          /* REC held: K1 selects the next CAPTURE length for this owner track (6 steps). */
+        uint32_t i, track = cap_selected(), on = cap_li[track];
+        char label[] = "T1 LENGTH";
+        cap_view_t cv;
+        label[1] = (char)('1' + track);
+        cap_view(track, &cv);
+        uxl_orbit_arc_f(0, (int32_t)on * 76 / 5, 0, 1);
+        cv_text(4, 46, &AF_M, label, T_ACCENT);
+        for (i = 0; i < 6u; i++) {
+            char sb[3];
+            int32_t x = 4 + (int32_t)i * 19;
+            uint32_t bars = CAP_BARS[i];
+            if (bars >= 10u) {
+                sb[0] = (char)('0' + bars / 10u);
+                sb[1] = (char)('0' + bars % 10u);
+                sb[2] = 0;
+            } else {
+                sb[0] = (char)('0' + bars);
+                sb[1] = 0;
+            }
             if (i == on) {
-                cv_rrect(x - 1, 66, 14, 16, 3, T_ACCENT, T_BG);
+                cv_rrect(x - 1, 66, 19, 16, 3, T_ACCENT, T_BG);
                 cv_text_on(x + 2, 67, &AF_S, sb, T_INK, T_ACCENT);
             } else {
-                { cap_view_t cv; cap_view(cap_selected(), &cv); cv_text(x + 2, 67, &AF_S, sb, cv.ln ? T_DIM : T_MID); }
+                cv_text(x + 2, 67, &AF_S, sb, cv.ln ? T_DIM : T_MID);
             }
         }
     }
@@ -2294,7 +2356,7 @@ static void uxl_paint(void)
 static uint32_t uxl_cap_sig(void)
 {
 #if CARAVEL_UX_CAPTURE
-    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) + uxl_cap_get(cap_selected(), 0u) * 17u + cap_li * 5u + uxl_cap_get(cap_selected(), 3u) * 3u + (uint32_t)song.playing + (uint32_t)uxl.cap_view * 977u;
+    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) + uxl_cap_get(cap_selected(), 0u) * 17u + cap_li[cap_selected()] * 5u + uxl_cap_get(cap_selected(), 3u) * 3u + (uint32_t)song.playing + (uint32_t)uxl.cap_view * 977u;
 #else
     return 0;
 #endif
@@ -2331,7 +2393,7 @@ static uint32_t uxl_play_sig(void)
     uxl_group(uxl.area, uxl_group_now(), tg);
     for (k = 0; k < 4u; k++)
         if (tg[k].kind == UXL_KFILT) {
-            s = s * 16777619u + (uint32_t)(int32_t)perf_k[tg[k].id & 3u];
+            s = s * 16777619u + (uint32_t)(tg[k].id ? (int32_t)perf_k[tg[k].id & 3u] : tf_eff(TSEL));
         } else if (tg[k].kind) {
             hp_ref_t r = uxl_ref(&tg[k]);
             s = s * 16777619u + (uint32_t)hp_get(r) + 7u * (uint32_t)(tg[k].id);
@@ -3342,24 +3404,40 @@ static int32_t uxl_chip(uint16_t band)                   /* returns the chip's w
     cv_text_on(22, 4, &AF_M, "BUILD", T_INK, T_TEXT);
     return cw;
 }
+/* The BUILD title and its warning stripe are one 240x28 LCD region.
+ * In particular, no intermediate "old title" or cleared stripe may be sent
+ * before restoring the BUILD image: the FM-1 exposes each LCD transfer. */
+static uint32_t uxl_build_head_hash;
+static uint8_t uxl_build_head_owner;              /* 0: other screen, 1: BUILD page, 2: BUILD key layer */
 static void uxl_hazard_rows(void)
 {
     uint32_t px, py;
     for (py = 0; py < 4u; py++)
         for (px = 0; px < 240u; px++)
-            cv_px[py * 240u + px] = ((px + py) / 6u) & 1u ? swap16(T_BG) : swap16(T_THEME);
+            cv_px[(24u + py) * 240u + px] = ((px + py) / 6u) & 1u ? swap16(T_BG) : swap16(T_THEME);
+}
+static void uxl_build_head_flush(uint8_t owner)
+{
+    uint32_t k, hash = 2166136261u;
+    uxl_hazard_rows();
+    for (k = 0; k < 240u * 28u; k++)
+        hash = (hash ^ cv_px[k]) * 16777619u;
+    /* Redraw on content or screen ownership changes, not every 15-ms frame. */
+    if (uxl_build_head_owner != owner || uxl_build_head_hash != hash || ui.force) {
+        cv_blit(0, 0);
+        uxl_build_head_hash = hash;
+        uxl_build_head_owner = owner;
+    }
 }
 static int uxl_menu_style(void) { return !uxl.play; }
 static int uxl_build_now(void) { return !uxl.play; }
 static void uxl_layer_header(void)
 {
-    static uint32_t last_hash, last_head_n;
     static const char *const FAM[LAYER_N] = {"", "FX", "GLO", "SEL", "EDIT", "SEQ", "REC"}, *const TITLE[LAYER_N] = {"", "FX HOLD", "GLOBAL SET", "SCALE SET", "EDIT SET", "SEQ TOOLS", "REC SET"};
     const char *fam = FAM[ui.layer % LAYER_N], *title = TITLE[ui.layer % LAYER_N];
     uint16_t band = ux_mix(T_SURF, T_ACCENT, 20);
     int32_t cw;
-    uint32_t h = 2166136261u, k;
-    cv_begin(240, 24, band);
+    cv_begin(240, 28, band);
     cv_bg = band;
     cw = uxl_chip(band);
     if (ui.msg_t) {                                         /* a message takes the place of both names */
@@ -3368,16 +3446,7 @@ static void uxl_layer_header(void)
         cv_text(cw + 8, 4, &AF_M, fam, T_TEXT);
         uxl_text_r(236, 4, &AF_M, title, T_ACCENT);
     }
-    for (k = 0; k < 240u * 24u; k++)
-        h = (h ^ cv_px[k]) * 16777619u;
-    if (h != last_hash || ui_head_paints != last_head_n || ui.force) {
-        cv_blit(0, 0);
-        last_hash = h;
-        last_head_n = ui_head_paints;
-    }
-    cv_begin(240, 4, T_BG);
-    uxl_hazard_rows();
-    cv_blit(0, 24);
+    uxl_build_head_flush(2u);
 }
 static void uxl_layer_field(int32_t x, int32_t y, int32_t w, const char *t, int on, int dim)
 {
@@ -3514,7 +3583,17 @@ static void uxl_build_mark(void)
     int cpg = 0;
     const page_t *count_page=dual_top_page(cur_page());
     if(!count_page)count_page=cur_page();
-    if (uxl.play || ui.menu || ui.confirm || name_on() || ui.uboot || ui.layer) return;
+    if (uxl.play || ui.menu || ui.confirm || name_on() || ui.uboot) {
+        uxl_build_head_owner = 0;                 /* screen may have replaced these rows */
+        return;
+    }
+    if (ui.layer) {
+#if CARAVEL_UX_EVOLVE
+        if (!uxl_layer_page())
+#endif
+            uxl_build_head_owner = 0;             /* a legacy layer owns the LCD */
+        return;
+    }
 #if CARAVEL_UX_EVOLVE
     cpg = uxl_ring_page() ? 0 : uxl_c_page();
 #endif
@@ -3527,7 +3606,7 @@ static void uxl_build_mark(void)
     str_cpy(count + str_len(count), "/", sizeof count - str_len(count));
     fmt_int(count + str_len(count), (int32_t)(n ? n : 1));
     uint16_t band = ux_mix(T_SURF, T_ACCENT, 20);       /* BUILD's header band: the surface tinted with the accent (a cool slate on AMBER, grey on GREY) */
-    cv_begin(240, 24, band); cv_bg = band;
+    cv_begin(240, 28, band); cv_bg = band;
     {   /* one row in the larger face: the chip, the block (named like its PLAY area), the screen's name at the right; a message takes the place of both
          * names while it shows. (The pages' own foot lines and tabs say where in the block a page is; the second small line is gone.) */
         static const char *const BLK[FAM_COUNT] = {"TRACKS", "SHAPE", "MOVE", "SPACE", "HARM", "SOUND", "MIX", "SAVE", "ARP", "SEQ", "TRK"};
@@ -3577,27 +3656,7 @@ static void uxl_build_mark(void)
             }
         }
     }
-    {   /* blit only when the header's pixels changed or the old header drew over it (draw_head counts its repaints): a panel shows every blit,
-         * and this one ran 67 times a second for nothing */
-        static uint32_t last_hash, last_head_n;
-        uint32_t h = 2166136261u, k;
-        for (k = 0; k < 240u * 24u; k++)
-            h = (h ^ cv_px[k]) * 16777619u;
-        if (h != last_hash || ui_head_paints != last_head_n || ui.force) {
-            cv_blit(0, 0);
-            last_hash = h;
-            last_head_n = ui_head_paints;
-        }
-    }
-    {   /* the roadworks strip under the header: amber and black on the slant, 4 rows. The page below paints these rows when it redraws, so
-         * this is blitted every frame (1.9 KB: nothing against the header's 11.5 KB that used to go each frame) */
-        uint32_t px, py;
-        cv_begin(240, 4, T_BG);
-        for (py = 0; py < 4u; py++)
-            for (px = 0; px < 240u; px++)
-                cv_px[py * 240u + px] = ((px + py) / 6u) & 1u ? swap16(T_BG) : swap16(T_THEME);   /* (the canvas holds the panel's byte order) */
-        cv_blit(0, 24);
-    }
+    uxl_build_head_flush(1u);
 #if CARAVEL_UX_EVOLVE
     if (!ui.home && cur_page()->graph != GR_EVOLVE && !cpg && !uxl_ring_page() && !uxl_save_page()) {   /* a dot on each card whose parameter RANDOM and JOURNEY move (the ring pages mark their own) */
         uint32_t c, bottom = 0;

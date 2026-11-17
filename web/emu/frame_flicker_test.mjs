@@ -98,5 +98,47 @@ check("BUILD SAVE page, standing still", transients("BUILD SAVE") === 0);
     check(`${f} layer held and let go: the strip never changes`, bad === 0);
   }
 }
+
+// Regression #60: the physical panel displays each SPI operation. A BUILD
+// ring page must never send the Classic header first, nor restore its four
+// warning rows separately after every redraw. Every header transfer during a
+// parameter edit must be the complete, final BUILD 240x28 region.
+function buildHeaderTransfers(label) {
+  const n = ex.web_trace_count();
+  const tr = new Uint16Array(mem.buffer, ex.web_trace_ptr(), n * 6);
+  let whole = 0, split = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, y, w, h, , kind] = tr.subarray(i * 6, i * 6 + 6);
+    if (y >= 28 || y + h === 0) continue;
+    if (x === 0 && y === 0 && w === 240 && h === 28 && kind === 1) whole++;
+    else split++;
+  }
+  console.log(`flicker #60: ${label}: ${whole} whole BUILD header transfers, ${split} overlapping/split transfers`);
+  return { whole, split };
+}
+{   // The MOVE > LFO screen from the owner's FM-1 video.
+  tap("HOME"); tap("LFO"); render(3000);
+  ex.web_trace_reset(); render(600);
+  const idle = buildHeaderTransfers("MOVE/LFO idle");
+  check("BUILD MOVE/LFO idle: no header or roadworks LCD transfers", idle.whole === 0 && idle.split === 0);
+  ex.web_trace_reset();
+  for (let j = 0; j < 16; j++) { ex.web_enc(3 + j % 4, j < 8 ? 1 : -1); render(55); }
+  const turning = buildHeaderTransfers("MOVE/LFO knobs K1-K4");
+  check("BUILD MOVE/LFO turning: no old/split header or redundant stripe transfer", turning.split === 0);
+  check("BUILD MOVE/LFO turning: no excessive full title updates", turning.whole <= 20);
+  render(3000);
+  ex.web_trace_reset(); render(600);
+  const settled = buildHeaderTransfers("MOVE/LFO settled");
+  check("BUILD MOVE/LFO settled: zero transfers to stable 28-row header", settled.whole === 0 && settled.split === 0);
+}
+{   // Newly drawn BUILD layers must follow the same rule on entry and edits.
+  tap("HOME"); render(300);
+  ex.web_buttons(1 << B.SCL); render(500);
+  ex.web_trace_reset(); ex.web_enc(3, 1); render(150);
+  const held = buildHeaderTransfers("BUILD held SCL layer");
+  check("BUILD held SCL: single combined header / warning band", held.split === 0);
+  ex.web_buttons(0); render(1500);
+}
+
 console.log(fails ? `flicker: ${fails} failed` : "flicker: all passed");
 process.exit(fails ? 1 : 0);

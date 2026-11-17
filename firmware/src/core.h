@@ -254,7 +254,7 @@ enum {                          /* global parameters */
     G_ENGSEL, G_ENGGO,          /* no page: the editor switches the engine with a SET of G_ENGSEL; G_ENGGO is
                                  * unused (ids are fixed by the formats and the protocol) */
     G_CLRSEQ, G_INITSND,
-    G_RTYPE,                    /* REVERB TYPE: 0 ROOM, 1 SPRING, 2 HALL (1.2, the power-on default) (fx.c). Was
+    G_RTYPE,                    /* REVERB TYPE: 0 ROOM, 1 SPRING, 2 HALL (former default), 3 STASIS (1.0 new-project default) (fx.c). Was
                                  * G_DRCH, the GM drum part's MIDI channel (inert since 1.0, never read); projects
                                  * of formats before FUN7 load it as ROOM (project.c proj_rtype_room) */
     G_DRLVL, G_DRREV,           /* inert (label "-", on no page): the GM drum part they set is gone; kept

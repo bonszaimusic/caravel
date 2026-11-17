@@ -102,6 +102,11 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
         out[0] = (uint8_t)root;
         return 1;
     }
+    /* New independent-key projects never silently replace an unavailable
+     * HARMONY chord with a local DIA3. Old unmarked projects retain their
+     * historical T1-linked fallback for exact sound compatibility. */
+    if (mode == CH_BUS && harmony_key_mode && !harmony_mask(t))
+        return 0; /* WAIT HARMONY, explicit zero-note output */
     n = chord_tones(t, mode, &r, iv);
     for (i = 0; i < n; i++)
         mask |= (uint16_t)(1u << (iv[i] % 12));

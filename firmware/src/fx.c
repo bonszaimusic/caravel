@@ -1409,24 +1409,21 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
  * faded out: nothing runs and the track is bit for bit as before (mix_part calls it only while P_FILT is set or track_t tf_run says it still runs).
  * State: tfilt_t per track (a few words, no pool). With SPREAD (mix_spread) the side signal d (left - right) takes the same filter in a second pair
  * of states. DRUM-X's per-lane image and lane sends (drumx_mix) are added after the strip, as they pass DIST, the INSERT and the SLICER by */
-/* The filter the track has now: its own P_FILT, and while the FX layer's FILTER macro (perf_k[0], -100 .. 100) is turned, the macro's
- * place on the SELECTED track only (-64 .. 63): the macro is that track's filter for the time it is held (or latched), the other tracks keep theirs.
- * (Up to now the macro filtered the whole master; the keys' LPF and HPF effects still do.) */
+/* FX FILTER edits the selected track's stored P_FILT directly (Caravel 1.0).
+ * The former perf_k[0] override followed song.sel: selecting another track
+ * removed the filter from the previously selected track and applied it to the
+ * newly selected one. The DSP filter is already per track, so no new state or
+ * audio path is necessary. The held FX keys' LPF/HPF remain separate effects. */
 static inline int32_t tf_eff(const track_t *t)
 {
-    int32_t m = perf_k[0];
-    if (m && (uint32_t)(t - trk) == (uint32_t)song.sel)
-        return clamp(m * 64 / 100, -64, 63);
     return clamp(t->p[P_FILT], -64, 63);
 }
-/* UI delta, in macro units. Zero remains the release sentinel: no extra state.
- * Anchor every new gesture at the selected track; returning there releases it.
- * Across zero, +/-1 both sound neutral after tf_eff's integer conversion. */
+/* Both the FX held-layer knob and PLAY SPACE/FILTER arc call this. A detent
+ * changes P_FILT by at least one of its 128 steps, including OFF at zero.
+ * It is part of the track's sound/project, not a transient FX latch macro. */
 static void tf_macro_turn(int32_t delta)
 {
-    int32_t base = clamp(TSEL->p[P_FILT], -64, 63) * 100 / 64;
-    int32_t m = clamp((perf_k[0] ? perf_k[0] : base) + delta, -100, 100);
-    perf_k[0] = (int8_t)(m == base ? 0 : !m && base ? (delta < 0 ? -1 : 1) : m);
+    TSEL->p[P_FILT] = (int16_t)clamp((int32_t)TSEL->p[P_FILT] + delta, -64, 63);
 }
 #define TF_TAIL 32u                     /* blocks of the filter's state to run out after the last voice (23 ms: the LP at 120 Hz rings 12 ms) */
 #define TF_STEP 192                     /* the cutoff's glide a block, Q8 rows (perform.c) */

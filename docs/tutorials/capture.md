@@ -15,17 +15,17 @@ Enter PLAY by holding HOME for one second. Start transport with **PLAY** (or a w
 
 CAPTURE records *live note input* from panel keys and incoming USB/TRS MIDI notes while the transport runs. It keeps raw pitch, velocity, note-on/off timing and track ownership. It does **not** sample audio, and it does not record ARP output, sequencer playback or its own loop output.
 
-## 2. Choose one, two, four or eight bars
+## 2. Choose a length independently for each track
 
-**Hold REC** to display CAPTURE. While REC is held, turn **K1** to select **1, 2, 4 or 8 bars** for the *next new loop*. Release the button after viewing the length; the view gesture itself is not a capture.
+**Hold REC** to display CAPTURE. While REC is held, turn **K1** to select **1, 2, 4, 8, 16 or 32 bars** for the *next new loop on the selected track*. Each track remembers its own LENGTH selection (initially two bars); the display identifies the track. Release the button after viewing the length; the view gesture itself is not a capture.
 
-A loop's length is fixed after it has been taken. To choose another length, clear that track's loop first and then set the new length. If no valid clock is running, CAPTURE reports **NO CLOCK: PRESS PLAY**.
+A loop's length is fixed after it has been taken. To choose another length, clear **only that track's** loop first and then set the new length. For example, T1=32, T2=8, T3=4 and T4=1 bars can run simultaneously. If no valid clock is running, CAPTURE reports **NO CLOCK: PRESS PLAY**.
 
 ## 3. Overdub rather than replacing the loop
 
 With an existing loop playing, play additional notes live and tap **REC** again. CAPTURE adds only the newer live gestures to the same loop, preserving its length. It does not copy previous overdubs or its own playback into the live input ring.
 
-If there is no new input, the screen may show **NOTHING TO CAPTURE** or **NOTHING TO ADD** instead of inserting silence. The live buffer holds the most recent eight bars of raw input, so recording is retrospective.
+If there is no new input, the screen may show **NOTHING TO CAPTURE** or **NOTHING TO ADD** instead of inserting silence. The live buffer holds up to 32 bars of raw input (limited by its event capacity), so recording is retrospective.
 
 ## 4. Four tracks, PAIR and playback
 
@@ -41,7 +41,7 @@ Do not confuse **BUILD / SEQ** (step sequencing) with **PLAY / SEQ** (CAPTURE lo
 
 ## 6. Understand the capacity limit
 
-Each loop stores up to **64 events**, and a complete note normally needs **two events** (note-on and note-off). Consequently, 64 events are *not* 64 independent notes. A dense take can fill the space early. The **FULL / LOOP FULL** warning rejects an overflowing take or overdub and preserves the existing loop; CAPTURE must not create a partial set of stuck or missing note-offs.
+Each loop stores up to **128 events per track**, and a complete note normally needs **two events** (note-on and note-off). Consequently, 128 events are *not* 128 independent notes; at most roughly 64 complete notes fit per loop. A dense take can fill the space early. The **FULL / LOOP FULL** warning rejects an overflowing take or overdub and preserves the existing loop; CAPTURE must not create a partial set of stuck or missing note-offs.
 
 Try a sparse motif first. If you need to change its length or simplify an overcrowded loop, clear it and capture a fresh take.
 
@@ -49,6 +49,6 @@ Try a sparse motif first. If you need to change its length or simplify an overcr
 
 CAPTURE is a live RAM performance feature. The loop is **not** saved in PROJECT, user presets, autosave or the FORMAT-2 backup. Save the underlying sounds, engine settings, ARP, HARMONY and performance configuration separately. A power-off loses the loop. Use external MIDI recording when you need a durable record of the actual notes.
 
-This guide describes firmware behavior verified by host/emulator tests; the final release still requires FM-1 hardware, clock, latency and audio acceptance.
+This guide describes the private 1.0 implementation. The 128-event/32-bar extension has not passed the full host/emulator/target-FM-1 acceptance suite and must not be considered released. The owner has previously exercised the earlier CAPTURE on hardware; the extended build still requires its own device and audio acceptance.
 
 [Sequencer and ARP](seq-arp.md) · [HARMONY and CHORD EXT](harmony-live.md) · [MIDI routing and clock](midi-sync.md) · [PLAY and BUILD](basics.md)

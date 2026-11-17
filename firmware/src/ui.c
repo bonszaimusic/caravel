@@ -304,6 +304,12 @@ static void key_link_sync(void)
         const track_t *s;
         if (!src || src > NTRK || src == i + 1u)
             continue;
+        /* KEY FROM is suspended while the track plays from HARMONY or EXT;
+         * keep stored links for the next NOTES / CHORD KEY selection. Old
+         * mixed combinations retain their original behavior as CUSTOM. */
+        if (harmony_key_mode && (t->p[P_CSRC] || (harmony_follow[i] &&
+            (t->p[P_CHRD] == CH_OFF || t->p[P_CHRD] == CH_BUS))))
+            continue;
         if (link_src[src - 1u])
             continue;                                 /* no chains: only an unlinked track is a source */
         s = &trk[src - 1u];
@@ -539,9 +545,53 @@ static int more_slot_ok(uint32_t id)
         return FELUCCA_PHASE_FB && TSEL->eng_req == 2u;
     return 1;
 }
+/* One effective HARM role, derived from existing persistent note controls.
+ * Mixed historical modes remain CUSTOM until the user explicitly chooses a role. */
+enum { HROLE_NOTES, HROLE_FOLLOW, HROLE_CHORD, HROLE_EXT, HROLE_CUSTOM };
+static uint32_t harm_role(const track_t *t)
+{
+    uint32_t k = trk_index(t);
+    if (t->p[P_CSRC]) return HROLE_EXT;
+    if (t->p[P_CHRD] == CH_OFF)
+        return harmony_follow[k] ? HROLE_FOLLOW : HROLE_NOTES;
+    if (t->p[P_CHRD] == CH_BUS)
+        return harmony_follow[k] ? HROLE_CHORD : HROLE_CUSTOM;
+    return harmony_follow[k] ? HROLE_CUSTOM : HROLE_CHORD;
+}
+static int harm_has_key(const track_t *t)
+{
+    uint32_t role = harm_role(t);
+    return role == HROLE_NOTES || (role == HROLE_CHORD && t->p[P_CHRD] != CH_BUS)
+        || role == HROLE_CUSTOM;  /* legacy is always inspectable */
+}
+static void harm_choose_role(track_t *t, uint32_t mode)
+{
+    uint32_t k = trk_index(t);
+    if (t->p[P_CHRD] >= CH_DIA3 && t->p[P_CHRD] <= CH_POW)
+        harmony_local_shape[k] = (uint8_t)t->p[P_CHRD];
+    if (mode == HROLE_EXT) {
+        if (!t->p[P_CSRC]) t->p[P_CSRC] = 1; /* global HARMONY by default */
+        return;
+    }
+    t->p[P_CSRC] = 0;
+    if (mode == HROLE_NOTES || mode == HROLE_FOLLOW) {
+        t->p[P_CHRD] = CH_OFF;
+        harmony_follow[k] = mode == HROLE_FOLLOW;
+    } else if (mode == HROLE_CHORD) {
+        if (t->p[P_CHRD] == CH_OFF || t->p[P_CHRD] > CH_BUS)
+            t->p[P_CHRD] = (int16_t)(harmony_local_shape[k] >= CH_DIA3 &&
+                harmony_local_shape[k] <= CH_POW ? harmony_local_shape[k] : CH_DIA3);
+        harmony_follow[k] = t->p[P_CHRD] == CH_BUS;
+    }
+}
 static int page_visible(uint32_t i)
 {
-    if (str_eq(PAGES[i].title, "HARMONY")) return harmony_on != 0u;
+    if (PAGES[i].graph == GR_SCALE) return harm_has_key(TSEL);
+    if (PAGES[i].graph == GR_CHORD) {
+        uint32_t m = harm_role(TSEL);
+        return m == HROLE_CHORD || m == HROLE_EXT || m == HROLE_CUSTOM;
+    }
+    /* HARMONY's progression can be edited even while the bus is OFF. */
 #if CARAVEL_REVERB_MINIMAL
     if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
 #endif
@@ -668,7 +718,7 @@ extern uint8_t harmony_edit_dur;
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
-    if (!ui.home && str_eq(pg->title, "LINK")) link_setup_row = 0;
+    if (!ui.home && pg->graph == GR_LINK) link_setup_row = 0;
     if (!ui.home && pg->graph == GR_CHORD) chord_ext_row = 0;        /* the CHORD KEYS row first */
     if (!ui.home && str_eq(pg->title, "HARMONY")) harmony_edit_dur = 0;   /* first SCL tap opens durations */
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
@@ -916,6 +966,7 @@ static uint32_t hp_global_page(uint32_t at,int32_t dir) {
     return pages[clamp((int32_t)pos+dir,0,(int32_t)n-1)];
 }
 #endif
+static void scl_page_turn(int32_t dir);
 static void open_family(uint32_t fam)
 {
 #if CARAVEL_STASIS_EXPAND
@@ -928,6 +979,22 @@ static void open_family(uint32_t fam)
 #if FELUCCA_HOME_PERF
     if(fam==FAM_GLO){ui.page=hp_global_page(ui.fam_last[FAM_GLO],0);ui.fam_last[FAM_GLO]=ui.page;ui.home=0;page_entered();return;}
 #endif
+    if (fam == FAM_SCL) {
+        if (!ui.home && cur_page()->fam == fam) {
+            scl_page_turn(1);  /* same button moves through visible HARM workflow */
+        } else {
+            for (uint32_t i = 0; i < NPAGES; i++)
+                if (PAGES[i].fam == fam && PAGES[i].graph == GR_LINK) {
+                    ui.page = (uint8_t)i;
+                    ui.fam_last[fam] = ui.page;
+                    ui.home = 0;
+                    page_entered();
+                    link_setup_row = 0;
+                    break;
+                }
+        }
+        return;
+    }
     if (!ui.home && cur_page()->fam == fam) {          /* same button again: next page */
         uint32_t n, i = ui.page;
         for (n = 0; n < NPAGES; n++) {
@@ -981,19 +1048,31 @@ static void home_tap(void)
 #endif
 }
 
-/* SCL has three virtual lower rows as well as ordinary pages. SELECT walks
- * SCALE, CHORD, CHORD EXT, LINK, HARMONY SETUP, ROOTS, DURATIONS. The bus
- * switch and CHORD EXT remain reachable while the bus is OFF; only the
- * roots/durations are hidden. */
+/* HARM-first navigation. KEY and shape pages appear only for relevant
+ * effective roles; old mixed projects remain inspectable via CUSTOM. */
 static void scl_page_turn(int32_t dir)
 {
     const page_t *pg = cur_page();
-    int32_t at = pg->graph == GR_SCALE ? 0 : pg->graph == GR_CHORD ? 1 + !!chord_ext_row :
-                 pg->graph == GR_LINK ? 3 + !!link_setup_row : 5 + !!harmony_edit_dur;
-    int32_t last = harmony_on ? 6 : 4;
-    int32_t next = clamp(at + (dir > 0 ? 1 : -1), 0, last);
-    uint32_t graph = next == 0 ? GR_SCALE : next < 3 ? GR_CHORD : next < 5 ? GR_LINK : GR_HARMONY;
-    if (at == next) return;                         /* preserve endpoint row and edit state */
+    uint8_t steps[7], count = 0;
+    uint32_t mode = harm_role(TSEL);
+    int32_t at, pos = 0;
+    steps[count++] = 0; /* HARM */
+    if (harm_has_key(TSEL)) steps[count++] = 1; /* KEY */
+    if (mode == HROLE_CHORD && TSEL->p[P_CHRD] != CH_BUS) steps[count++] = 2; /* SHAPE */
+    if (mode == HROLE_EXT) steps[count++] = 3; /* EXT details */
+    steps[count++] = 4; /* GLOBAL HARMONY ON/ROOT/SCALE on its own screen */
+    steps[count++] = 5; /* progression chord roots */
+    steps[count++] = 6; /* durations */
+    at = pg->graph == GR_LINK ? 0 :
+         pg->graph == GR_SCALE ? 1 :
+         pg->graph == GR_CHORD ? (chord_ext_row ? 3 : 2) :
+         pg->graph == GR_HARMONY ? 4 + clamp(harmony_edit_dur, 0, 2) : 0;
+    for (uint32_t i = 0; i < count; i++)
+        if (steps[i] == at) pos = (int32_t)i;
+    uint32_t next = steps[clamp(pos + (dir > 0 ? 1 : -1), 0, (int32_t)count - 1)];
+    uint32_t graph = next == 0 ? GR_LINK :
+                     next == 1 ? GR_SCALE : (next == 2 || next == 3) ? GR_CHORD : GR_HARMONY;
+    if (at == (int32_t)next) return;
     for (uint32_t i = 0; i < NPAGES; i++) {
         if (PAGES[i].fam != FAM_SCL || PAGES[i].graph != graph) continue;
         if (ui.page != i) {
@@ -1001,12 +1080,12 @@ static void scl_page_turn(int32_t dir)
             ui.fam_last[FAM_SCL] = ui.page;
             page_entered();
         }
-        chord_ext_row = next == 2;
-        link_setup_row = next == 4;
-        harmony_edit_dur = next == 6;
-        if (graph == GR_CHORD && (chord_ext_row || at == 2)) ui_message(chord_ext_row ? "CHORD EXT" : "CHORD");   /* (CHORD from SCALE: no message, as before) */
-        if (graph == GR_LINK) ui_message(link_setup_row ? "HARMONY SETUP" : "LINK");
-        if (graph == GR_HARMONY) ui_message(harmony_edit_dur ? "HARMONY: DURATIONS" : "HARMONY: ROOTS");
+        link_setup_row = 0;
+        chord_ext_row = next == 3;
+        harmony_edit_dur = next >= 4u ? (uint8_t)(next - 4u) : 0u;
+        ui_message(next == 0 ? "HARM" : next == 1 ? "KEY" :
+                   next == 2 ? "CHORD SHAPE" : next == 3 ? "EXT DETAILS" :
+                   next == 4 ? "GLOBAL HARMONY" : next == 5 ? "HARMONY CHORDS" : "HARMONY DURATION");
         ui.force = 1;
         return;
     }

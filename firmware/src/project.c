@@ -100,6 +100,10 @@ static void harmony_save(harmony_saved_t *s)
     memcpy(s->link_src, link_src, sizeof s->link_src);
     memcpy(s->link_retrig, link_retrig, sizeof s->link_retrig);
     memcpy(s->follow, harmony_follow, sizeof s->follow);
+    s->key_mode = harmony_key_mode;
+    s->key_root = harmony_key_root;
+    s->key_scale = harmony_key_scale;
+    memcpy(s->local_shape,harmony_local_shape,sizeof s->local_shape);
     s->on = harmony_on;
     s->bar = harmony_bar;
     s->base = harmony_base_bar;
@@ -111,6 +115,10 @@ static void harmony_restore(const harmony_saved_t *s)
     memcpy(link_src, s->link_src, sizeof s->link_src);
     memcpy(link_retrig, s->link_retrig, sizeof s->link_retrig);
     memcpy(harmony_follow, s->follow, sizeof s->follow);
+    harmony_key_mode = s->key_mode;
+    harmony_key_root = s->key_root;
+    harmony_key_scale = s->key_scale;
+    memcpy(harmony_local_shape,s->local_shape,sizeof harmony_local_shape);
     harmony_on = s->on;
     harmony_bar = s->bar;
     harmony_base_bar = s->base;
@@ -387,13 +395,17 @@ static void project_init_runtime(void)
     motion_base_valid = 0;
     harmony_perf_clear();
     harmony_on = 0;
+    harmony_key_mode = 1u;  /* fresh 1.0 project owns its global key */
+    harmony_key_root = 0u;
+    harmony_key_scale = 1u; /* MAJOR */
+    memset(harmony_local_shape,CH_DIA3,sizeof harmony_local_shape);
     harmony_bar = 0;
     harmony_base_bar = HARM_BAR();
     memset(harmony_root, 0, sizeof harmony_root);
     memset(harmony_dur, 0, sizeof harmony_dur);
     memset(link_src, 0, sizeof link_src);
     memset(link_retrig, 0, sizeof link_retrig);
-    memset(harmony_follow, 1, sizeof harmony_follow);
+    memset(harmony_follow, 0, sizeof harmony_follow); /* 1.0: new tracks start in NOTES */
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);

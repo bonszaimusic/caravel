@@ -52,6 +52,10 @@ int main(void) {
  for(uint32_t t=0;t<NTRK;t++)cs_settings(&trk[t],0,0,0);
  ed_bk_id=0;ed_bk_len=ed_bk_pos=cap.size;memcpy(ED_BK_RAW,&cap,cap.size);ed_bk_crc=st_crc32(&cap,cap.size);
  assert(!ed_bk_commit());for(uint32_t t=0;t<NTRK;t++)assert(same(&trk[t],1,2,-2));
- project_init_runtime();for(uint32_t t=0;t<NTRK;t++)assert(same(&trk[t],0,0,0));
- puts("CHORD settings FORMAT 2: ids, fresh defaults, 67 preset keeps, editor, MIDI Learn codes, motion exclusion, FUNW/UPB2/IFP2 and complete backup passed");
+ project_init_runtime();for(uint32_t t=0;t<NTRK;t++){
+  assert(same(&trk[t],0,0,0));
+  assert(harmony_follow[t]==0); /* new 1.0 project starts in NOTES */
+ }
+ assert(harmony_key_mode==1&&harmony_key_root==0&&harmony_key_scale==1);
+ puts("CHORD settings FORMAT 2: ids, fresh NOTES and global-key defaults, 67 preset keeps, editor, MIDI Learn codes, motion exclusion, FUNW/UPB2/IFP2 and complete backup passed");
 }

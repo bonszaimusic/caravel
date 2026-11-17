@@ -17,14 +17,17 @@ static void chord_page(void) {
  assert(0);
 }
 int main(void) {
- ui_power_on();chord_page();harmony_on=0;
+ ui_power_on();harmony_on=0;
+ harm_choose_role(TSEL,HROLE_EXT);
+ open_family(FAM_SCL);assert(cur_page()->graph==GR_LINK);
  assert(!chord_ext_row);scl_page_turn(1);assert(cur_page()->graph==GR_CHORD&&chord_ext_row);
- scl_page_turn(-1);assert(!chord_ext_row);assert(page_tap(B_SCL)&&chord_ext_row);
+ scl_page_turn(-1);assert(cur_page()->graph==GR_LINK&&!chord_ext_row);
+ assert(page_tap(B_SCL)&&chord_ext_row);
  uint32_t bottom=0;const dual_t *dd=dual_of(cur_page(),&bottom);
  assert(dd&&dd->kind==DK_CHEXT&&bottom==1&&str_eq(dd->hb,"CHORD EXT"));
  TSEL->p[P_CSRC]=1;TSEL->p[P_CEXT]=2;TSEL->p[P_COCT]=2;
  cx_mock=1;cx_info=(ext_info_t){.state=EXT_ST_OK,.src=1,.npc=3,.want=3,.pc={11,2,9}};
- int32_t v;const param_desc_t *d=dual_card(dd,0,1,0,&v);assert(str_eq(d->label,"SOURCE")&&v==1&&d->max==5);
+ int32_t v;const param_desc_t *d=dual_card(dd,0,1,0,&v);assert(str_eq(d->label,"CHORD SRC")&&v==1&&d->max==5);
  d=dual_card(dd,0,1,1,&v);assert(str_eq(d->label,"EXT")&&v==2&&str_eq(d->names[v],"7+9+13"));
  d=dual_card(dd,0,1,2,&v);assert(str_eq(d->label,"OCT")&&v==2);
  d=dual_card(dd,0,1,3,&v);assert(str_eq(d->label,"NOTES")&&v==EXT_ST_OK);
@@ -59,5 +62,5 @@ int main(void) {
  edit_param(0,-1);assert(TSEL->p[P_CSRC]==0);
  assert(TSEL->p[P_CHRD]==ch&&TSEL->p[P_VOIC]==vo&&TSEL->p[P_LATCH]==la);
  chord_page();assert(!chord_ext_row);
- puts("CHORD EXT UI data: nine states, actual notes/counts, dual_card row, SCL navigation, K1-K3, read-only K4, N/A and MIDI Learn passed");
+ puts("CHORD EXT UI: nine states, actual pools, HARM-first EXT route, K1-K3, N/A and MIDI Learn passed");
 }

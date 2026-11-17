@@ -345,11 +345,22 @@ static void ship_draw(int32_t x0, int32_t y0, int32_t k, uint16_t col)
         }
     }
 }
-static uint32_t ui_head_paints;                    /* the old header's full repaints (uxl_build_mark must draw over each one) */
 static void draw_head(void)
 {
 #if CARAVEL_UX_LAYERS
     if (uxl_layer_head_draw()) return;
+    /* On a regular BUILD page (or a rebuilt held layer), the complete
+     * BUILD title + warning band owns rows 0..27. Do not send the Classic
+     * title first: on the physical LCD both transfers become visible. */
+    if (!uxl.play && !ui.menu && !ui.confirm && !name_on() && !ui.uboot &&
+        (!ui.layer
+#if CARAVEL_UX_EVOLVE
+         || uxl_layer_page()
+#endif
+        )) {
+        ui.head_sig = ~0u;             /* require a fresh Classic title on leaving BUILD */
+        return;
+    }
 #endif
     static int16_t metro_x = -1;                       /* the metronome's ink as drawn (-1: hidden), its beat */
     static int8_t metro_beat;
@@ -399,7 +410,6 @@ static void draw_head(void)
         return;
     }
     ui.head_sig = sig;
-    ui_head_paints++;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
 #if FELUCCA_PAIR_MORPH

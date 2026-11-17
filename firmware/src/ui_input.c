@@ -452,7 +452,7 @@ static void ui_leds(void)
 #endif
     if ((k = arp_led()) != 2u && (!ui.layer || layer_btn() != B_ARP))
         led_put(nl, panel.btn[B_ARP], FAM_BTN[fam] == B_ARP ? !k : (int)k);   /* (on ARP's page: dark flashes) */
-    if (!ui.layer && (perf_latched || perf_k[0] || perf_k[1] || perf_k[2] || perf_k[3]))
+    if (!ui.layer && (perf_latched || perf_k[1] || perf_k[2] || perf_k[3]))
         led_put(nl, panel.btn[B_FX], 1);                /* FX LATCH: lit while an effect or a macro is on */
     if (ui.layer)                                       /* the layer's button breathes while its map is up */
         led_put(nb, panel.btn[layer_btn()], 1);
@@ -1024,11 +1024,42 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
-    if (pg->graph == GR_LINK) {                       /* K1 SOURCE, K2 RETRIG; K3/K4 show the source */
-        if (link_setup_row) {                         /* the lower HARMONY SETUP row: K1 only */
-            if (slot == 0u) {
-                uint8_t nv = (uint8_t)(steps > 0);           /* positive ON, negative OFF */
-                if (nv != harmony_on) {                      /* idempotent: no phase restart on ON -> ON */
+    if (pg->graph == GR_SCALE) { /* conditional KEY screen: K1 KEY FROM */
+        if (slot == 0u) {
+            uint32_t cur = link_src[song.sel], n = 0, is_src = 0, x;
+            for (x = 0; x < NTRK; x++)
+                is_src |= link_src[x] == song.sel + 1u;
+            do {
+                cur = (cur + (steps > 0 ? 1u : 4u)) % 5u;
+                n++;
+                if (!cur || (!is_src && cur != song.sel + 1u && !link_src[cur - 1u]))
+                    break;
+            } while (n < 5u);
+            link_src[song.sel] = (uint8_t)(cur <= NTRK ? cur : 0u);
+            ui.force = 1;
+            return;
+        }
+        if (link_src[song.sel]) { /* inherited ROOT/SCALE/QNT are read only */
+            ui_message("KEY FROM TRACK");
+            return;
+        }
+    }
+    if (pg->graph == GR_LINK) { /* HARM: one effective role per track */
+        if (link_setup_row) {  /* global HARMONY: K1 ON, K2 ROOT, K3 SCALE */
+            if (slot == 1u) {
+                harmony_key_root = (uint8_t)((((int32_t)harmony_key_root_eff() + steps) % 12 + 12) % 12);
+                harmony_key_scale = (uint8_t)harmony_key_scale_eff();
+                harmony_key_mode = 1u;
+                ui.force = 1;
+            } else if (slot == 2u) {
+                harmony_key_root = (uint8_t)harmony_key_root_eff();
+                harmony_key_scale = (uint8_t)clamp((int32_t)harmony_key_scale_eff() + steps, 0,
+                    (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1);
+                harmony_key_mode = 1u;
+                ui.force = 1;
+            } else if (slot == 0u) {
+                uint8_t nv = (uint8_t)(steps > 0);
+                if (nv != harmony_on) {
                     harmony_perf_clear();
                     harmony_on = nv;
                     harmony_base_bar = HARM_BAR();
@@ -1039,41 +1070,84 @@ static void edit_param(uint32_t slot, int32_t steps)
             }
             return;
         }
+        uint32_t role = harm_role(TSEL);
         if (slot == 0u) {
-            uint32_t cur = link_src[song.sel], n = 0, is_src = 0, x;
-            for (x = 0; x < NTRK; x++)
-                is_src |= link_src[x] == song.sel + 1u;   /* a track others follow cannot follow one itself (no chains) */
-            do {
-                cur = (uint8_t)((cur + (steps > 0 ? 1u : 4u)) % 5u);
-                n++;
-                if (!cur || (!is_src && cur != song.sel + 1u && !link_src[cur - 1u]))
-                    break;
-            } while (n < 5u);
-            link_src[song.sel] = (uint8_t)(cur <= NTRK ? cur : 0u);
+            int32_t from = role == HROLE_CUSTOM ? 0 : (int32_t)role;
+            uint32_t mode = (uint32_t)clamp(from + steps, HROLE_NOTES, HROLE_EXT);
+            harm_choose_role(TSEL, mode);
+            ui_message(mode == HROLE_NOTES ? "NOTES" : mode == HROLE_FOLLOW ? "FOLLOW" :
+                       mode == HROLE_CHORD ? "CHORD" : "EXT");
             ui.force = 1;
-        } else if (slot == 1u) {
-            int32_t r = (int32_t)link_retrig[song.sel] + steps;
-            r %= 4;
-            if (r < 0) r += 4;
-            link_retrig[song.sel] = (uint8_t)r;
-            ui.force = 1;
-        } else if (slot == 3u && steps) {            /* FOLLOW: right ON, left OFF, whatever the burst (as the global switch) */
-            harmony_follow[song.sel] = (uint8_t)(steps > 0);
-            ui_message(harmony_follow[song.sel] ? "FOLLOW ON" : "FOLLOW OFF");
+        } else if (role == HROLE_CHORD) {
+            if (slot == 1u) { /* K2: CHORD FROM KEY / HARMONY */
+                if (TSEL->p[P_CHRD] == CH_BUS) {
+                    uint32_t shape = harmony_local_shape[song.sel];
+                    TSEL->p[P_CHRD] = (int16_t)(shape >= CH_DIA3 && shape <= CH_POW ? shape : CH_DIA3);
+                    harmony_follow[song.sel] = 0;
+                } else {
+                    /* K2 does not discard the local chord, even on project save. */
+                    harmony_local_shape[song.sel] = (uint8_t)clamp(TSEL->p[P_CHRD], CH_DIA3, CH_POW);
+                    TSEL->p[P_CHRD] = CH_BUS;
+                    harmony_follow[song.sel] = 1;
+                }
+                ui.force = 1;
+            } else if (slot == 2u && TSEL->p[P_CHRD] != CH_BUS) {
+                TSEL->p[P_CHRD] = (int16_t)clamp((int32_t)TSEL->p[P_CHRD] + steps, CH_DIA3, CH_POW);
+                harmony_local_shape[song.sel] = (uint8_t)TSEL->p[P_CHRD];
+                ui.force = 1;
+            } else if (slot == 3u) {
+                TSEL->p[P_VOIC] = (int16_t)clamp((int32_t)TSEL->p[P_VOIC] + steps, 0, 4);
+                ui.force = 1;
+            }
+        } else if (role == HROLE_EXT) {
+            if (slot == 1u) {
+                int32_t src = clamp((int32_t)TSEL->p[P_CSRC] + steps, 1, 5);
+                int32_t self = (int32_t)song.sel + 2;
+                if (src == self) /* skip self; do not get stuck on its value */
+                    src = clamp(src + (steps > 0 ? 1 : -1), 1, 5);
+                if (src != self) TSEL->p[P_CSRC] = (int16_t)src;
+                ui.force = 1;
+            } else if (slot == 2u) {
+                TSEL->p[P_CEXT] = (int16_t)chext_stored((uint32_t)clamp(
+                    (int32_t)chext_disp((uint32_t)chext_p(1)) + steps, 0, 2));
+                ui.force = 1;
+            } else if (slot == 3u) {
+                TSEL->p[P_COCT] = (int16_t)clamp((int32_t)TSEL->p[P_COCT] + steps, -2, 2);
+                ui.force = 1;
+            }
+        } else if (role == HROLE_FOLLOW && slot == 3u) {
+            link_retrig[song.sel] = (uint8_t)clamp((int32_t)link_retrig[song.sel] + steps, 0, 3);
             ui.force = 1;
         }
         return;
     }
-    if (pg->graph == GR_HARMONY) {                    /* K1..K4: the roots (top) or the DUR row (bottom) */
-        uint32_t bottom = (uint32_t)dual_bottom(pg);
-        if (slot < 4u) {
-            if (bottom || harmony_edit_dur) {
-                int32_t d = (int32_t)hdur_get(slot) + steps;
-                d &= 3;
-                hdur_set(slot, (uint8_t)d);
-            } else {
-                hroot_set(slot, (uint8_t)harmony_root_step(hroot_get(slot), steps));   /* scale degrees of T1's scale only */
+    if (pg->graph == GR_HARMONY) { /* global setup, chord roots or durations */
+        if (harmony_edit_dur == 0u) {
+            if (slot == 0u) {
+                uint8_t on = steps > 0;
+                if (on != harmony_on) {
+                    harmony_perf_clear();
+                    harmony_on = on;
+                    harmony_base_bar = HARM_BAR();
+                    harmony_bar = 0;
+                    ui_message(on ? "HARMONY ON" : "HARMONY OFF");
+                    ui.force = 1;
+                }
+            } else if (slot == 1u || slot == 2u) {
+                uint32_t root = harmony_key_root_eff(), scale = harmony_key_scale_eff();
+                if (slot == 1u) root = (uint32_t)((((int32_t)root + steps) % 12 + 12) % 12);
+                else scale = (uint32_t)clamp((int32_t)scale + steps, 0,
+                    (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1);
+                harmony_key_root = (uint8_t)root;
+                harmony_key_scale = (uint8_t)scale;
+                harmony_key_mode = 1u; /* explicit edit decouples T1 */
+                ui.force = 1;
             }
+        } else if (slot < 4u && harmony_edit_dur == 2u) {
+            hdur_set(slot, (uint8_t)(((int32_t)hdur_get(slot) + steps) & 3));
+            ui.force = 1;
+        } else if (slot < 4u) {
+            hroot_set(slot, (uint8_t)harmony_root_step(hroot_get(slot), steps));
             ui.force = 1;
         }
         return;
@@ -1535,28 +1609,9 @@ static int page_tap(uint32_t b)
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
-    if (b == B_SCL && !ui.home) {                        /* one row step, then the page step */
-        if (cur_page()->graph == GR_CHORD && !chord_ext_row) {
-            chord_ext_row = 1;
-            ui_message("CHORD EXT");
-            ui.force = 1;
-            return 1;
-        }
-        if (cur_page()->graph == GR_LINK && !link_setup_row) {
-            link_setup_row = 1;
-            ui_message("HARMONY SETUP");
-            ui.force = 1;
-            return 1;
-        }
-        if (cur_page()->graph == GR_HARMONY && !harmony_edit_dur) {
-            harmony_edit_dur = 1;
-            ui_message("HARMONY: DURATIONS");
-            ui.force = 1;
-            return 1;
-        }
-        link_setup_row = 0;
-        chord_ext_row = 0;
-        harmony_edit_dur = 0;                           /* the next SCL press is a page step */
+    if (b == B_SCL && !ui.home && cur_page()->fam == FAM_SCL) {
+        scl_page_turn(1); /* same physical button and SELECT share HARM-first sequence */
+        return 1;
     }
     for (f = FAM_HOME + 1u; f < FAM_COUNT; f++)        /* (GLO SEQ SAVE ..: HOME is ui_input's, home_tap) */
         if (FAM_BTN[f] == b && b != B_HOME) {
@@ -1807,7 +1862,7 @@ static void ui_input(void)
     if (!layer_allowed()) {
         perf_kill = 1;                                  /* (effects off until their keys are let go) */
         perf_latched = 0;                               /* (FX LATCH: the latched ones and the macros off) */
-        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+        perf_k[1] = perf_k[2] = perf_k[3] = 0;
     }
     else if (!kb_layer)
         perf_kill = 0;

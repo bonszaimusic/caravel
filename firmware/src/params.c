@@ -269,7 +269,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_CLRSEQ] = PE("CLRSQ", N_GO, 0),
     [G_INITSND] = PE("INIT", N_GO, 0),
     /* the reverb's model on the REVERB page: the id of the old GM drum channel (G_DRCH, inert since 1.0) */
-    [G_RTYPE] = PE("TYPE", N_RTYPE, 2),         /* HALL at power-on since 1.2 (ROOM before; projects keep theirs) */
+    [G_RTYPE] = PE("TYPE", N_RTYPE, 3),         /* STASIS for new projects/init in Caravel 1.0; loaded projects keep theirs */
     /* inert: they set the GM drum part (level, reverb send), which is gone (drums are the DRUM engine
      * on any part). On no page; kept so the ids and G_COUNT, which the project format and the
      * editor protocol depend on, do not move */
@@ -620,10 +620,10 @@ static const page_t PAGES[] = {
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IMIX, 0xFF, 0xFF}},   /* 1.5: the track's INSERT (fx.c): TYPE and dry / wet; 0.3.0: FX HOLD is KNOB 3 (no parameter), the type's curve the fourth card */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IA, P_IB, P_IC, P_FILT}},    /* .. the type's A B C (its own labels) and the track's FILTER (0.3.0) */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* (the FX family's order is the two-group layout's: FX|DLY, REVERB|CHORUS, INSERT|INSERT 2, SLICER with its graph) */
-    {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
+    {"KEY", FAM_SCL, SC_TRACK, GR_SCALE, {0xFF, P_ROOT, P_SCALE, P_QUANT}}, /* HARM-first: key from / root / scale / quant */
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, P_LATCH, 0xFF}},   /* SCL again: the chord keys (chord.c) */
-    {"LINK", FAM_SCL, SC_TRACK, GR_LINK, {0xFF, 0xFF, 0xFF, 0xFF}},            /* per-track key link (ui.c) */
-    {"HARMONY", FAM_SCL, SC_TRACK, GR_HARMONY, {0xFF, 0xFF, 0xFF, 0xFF}},       /* the four-bar bus (seq.c) */
+    {"HARM", FAM_SCL, SC_TRACK, GR_LINK, {0xFF, 0xFF, 0xFF, 0xFF}},            /* single role + conditional source and details */
+    {"HARMONY", FAM_SCL, SC_GLOBAL, GR_HARMONY, {0xFF, 0xFF, 0xFF, 0xFF}},       /* global independent progression */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
     {"SEM MODE", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_LD_SHP, P_SPRD, 0xFF}},
