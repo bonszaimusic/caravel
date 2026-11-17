@@ -29,7 +29,7 @@ Hold HOME for one second to switch views. PLAY exposes SOUND, SHAPE, MOVE, HARM,
 
 Four tracks share the note/voice budget and provide envelopes, filters, ARP, modulation and effects. HARMONY supplies a progression; CHORD EXT takes extensions from that bus or real live input on T1–T4. RANDOM, JOURNEY, ELASTIC, PAIR and STASIS support performance and changing textures.
 
-**CAPTURE records notes, not audio:** live panel keys and USB/TRS MIDI IN, including velocity and physical note lengths. With transport running, REC takes a retrospective 1/2/4/8/16/32-bar loop with LENGTH selected independently per track; another take overdubs. Four independent loops (up to 128 events each, including note-offs) are temporary RAM state and are not saved with projects. ARP/SEQ output and loop playback do not record themselves. [CAPTURE guide](docs/tutorials/seq-arp.md)
+**CAPTURE records notes, not audio:** live panel keys and USB/TRS MIDI IN, including velocity and physical note lengths. With transport running, REC takes a retrospective 1/2/4/8/16/32-bar loop with LENGTH selected independently per track; another take overdubs. Four independent loops (up to 128 events each, including note-offs) are temporary RAM state and are not saved with projects. ARP/SEQ output and loop playback do not record themselves. [CAPTURE guide](docs/tutorials/capture.md)
 
 ## A new data generation
 
