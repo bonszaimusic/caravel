@@ -16,7 +16,10 @@
 #define AFB_N (AFB_N0 + AFB_N1 + AFB_N2 + AFB_N3)
 #define AFB_Q 4096
 _Static_assert(FS == 44100 && CTL % 4u == 0u, "AFTERBURNER needs 44.1kHz and blocks divisible by four");
-static int32_t afb_line[AFB_N] __attribute__((section(".pool")));
+/* The integrated 32-bar CAPTURE RC has more spare space in RAM than POOL.
+ * Keep the delay bank in zero-initialized RAM: both regions are the same
+ * SRAM, and this retains the existing 4 KiB RAM / 8 KiB POOL reserves. */
+static int32_t afb_line[AFB_N];
 /* CHO+DLY before REV: subtract the copy to feed ONLY the post-REV tail. */
 static int32_t afb_pre[CTL] __attribute__((section(".pool")));
 /* Q15 feedback loss at 11.025 kHz per line, RT60 10..60s, generated offline:
