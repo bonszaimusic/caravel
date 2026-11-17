@@ -3404,24 +3404,40 @@ static int32_t uxl_chip(uint16_t band)                   /* returns the chip's w
     cv_text_on(22, 4, &AF_M, "BUILD", T_INK, T_TEXT);
     return cw;
 }
+/* The BUILD title and its warning stripe are one 240x28 LCD region.
+ * In particular, no intermediate "old title" or cleared stripe may be sent
+ * before restoring the BUILD image: the FM-1 exposes each LCD transfer. */
+static uint32_t uxl_build_head_hash;
+static uint8_t uxl_build_head_owner;              /* 0: other screen, 1: BUILD page, 2: BUILD key layer */
 static void uxl_hazard_rows(void)
 {
     uint32_t px, py;
     for (py = 0; py < 4u; py++)
         for (px = 0; px < 240u; px++)
-            cv_px[py * 240u + px] = ((px + py) / 6u) & 1u ? swap16(T_BG) : swap16(T_THEME);
+            cv_px[(24u + py) * 240u + px] = ((px + py) / 6u) & 1u ? swap16(T_BG) : swap16(T_THEME);
+}
+static void uxl_build_head_flush(uint8_t owner)
+{
+    uint32_t k, hash = 2166136261u;
+    uxl_hazard_rows();
+    for (k = 0; k < 240u * 28u; k++)
+        hash = (hash ^ cv_px[k]) * 16777619u;
+    /* Redraw on content or screen ownership changes, not every 15-ms frame. */
+    if (uxl_build_head_owner != owner || uxl_build_head_hash != hash || ui.force) {
+        cv_blit(0, 0);
+        uxl_build_head_hash = hash;
+        uxl_build_head_owner = owner;
+    }
 }
 static int uxl_menu_style(void) { return !uxl.play; }
 static int uxl_build_now(void) { return !uxl.play; }
 static void uxl_layer_header(void)
 {
-    static uint32_t last_hash, last_head_n;
     static const char *const FAM[LAYER_N] = {"", "FX", "GLO", "SEL", "EDIT", "SEQ", "REC"}, *const TITLE[LAYER_N] = {"", "FX HOLD", "GLOBAL SET", "SCALE SET", "EDIT SET", "SEQ TOOLS", "REC SET"};
     const char *fam = FAM[ui.layer % LAYER_N], *title = TITLE[ui.layer % LAYER_N];
     uint16_t band = ux_mix(T_SURF, T_ACCENT, 20);
     int32_t cw;
-    uint32_t h = 2166136261u, k;
-    cv_begin(240, 24, band);
+    cv_begin(240, 28, band);
     cv_bg = band;
     cw = uxl_chip(band);
     if (ui.msg_t) {                                         /* a message takes the place of both names */
@@ -3430,16 +3446,7 @@ static void uxl_layer_header(void)
         cv_text(cw + 8, 4, &AF_M, fam, T_TEXT);
         uxl_text_r(236, 4, &AF_M, title, T_ACCENT);
     }
-    for (k = 0; k < 240u * 24u; k++)
-        h = (h ^ cv_px[k]) * 16777619u;
-    if (h != last_hash || ui_head_paints != last_head_n || ui.force) {
-        cv_blit(0, 0);
-        last_hash = h;
-        last_head_n = ui_head_paints;
-    }
-    cv_begin(240, 4, T_BG);
-    uxl_hazard_rows();
-    cv_blit(0, 24);
+    uxl_build_head_flush(2u);
 }
 static void uxl_layer_field(int32_t x, int32_t y, int32_t w, const char *t, int on, int dim)
 {
@@ -3576,7 +3583,17 @@ static void uxl_build_mark(void)
     int cpg = 0;
     const page_t *count_page=dual_top_page(cur_page());
     if(!count_page)count_page=cur_page();
-    if (uxl.play || ui.menu || ui.confirm || name_on() || ui.uboot || ui.layer) return;
+    if (uxl.play || ui.menu || ui.confirm || name_on() || ui.uboot) {
+        uxl_build_head_owner = 0;                 /* screen may have replaced these rows */
+        return;
+    }
+    if (ui.layer) {
+#if CARAVEL_UX_EVOLVE
+        if (!uxl_layer_page())
+#endif
+            uxl_build_head_owner = 0;             /* a legacy layer owns the LCD */
+        return;
+    }
 #if CARAVEL_UX_EVOLVE
     cpg = uxl_ring_page() ? 0 : uxl_c_page();
 #endif
@@ -3589,7 +3606,7 @@ static void uxl_build_mark(void)
     str_cpy(count + str_len(count), "/", sizeof count - str_len(count));
     fmt_int(count + str_len(count), (int32_t)(n ? n : 1));
     uint16_t band = ux_mix(T_SURF, T_ACCENT, 20);       /* BUILD's header band: the surface tinted with the accent (a cool slate on AMBER, grey on GREY) */
-    cv_begin(240, 24, band); cv_bg = band;
+    cv_begin(240, 28, band); cv_bg = band;
     {   /* one row in the larger face: the chip, the block (named like its PLAY area), the screen's name at the right; a message takes the place of both
          * names while it shows. (The pages' own foot lines and tabs say where in the block a page is; the second small line is gone.) */
         static const char *const BLK[FAM_COUNT] = {"TRACKS", "SHAPE", "MOVE", "SPACE", "HARM", "SOUND", "MIX", "SAVE", "ARP", "SEQ", "TRK"};
@@ -3639,27 +3656,7 @@ static void uxl_build_mark(void)
             }
         }
     }
-    {   /* blit only when the header's pixels changed or the old header drew over it (draw_head counts its repaints): a panel shows every blit,
-         * and this one ran 67 times a second for nothing */
-        static uint32_t last_hash, last_head_n;
-        uint32_t h = 2166136261u, k;
-        for (k = 0; k < 240u * 24u; k++)
-            h = (h ^ cv_px[k]) * 16777619u;
-        if (h != last_hash || ui_head_paints != last_head_n || ui.force) {
-            cv_blit(0, 0);
-            last_hash = h;
-            last_head_n = ui_head_paints;
-        }
-    }
-    {   /* the roadworks strip under the header: amber and black on the slant, 4 rows. The page below paints these rows when it redraws, so
-         * this is blitted every frame (1.9 KB: nothing against the header's 11.5 KB that used to go each frame) */
-        uint32_t px, py;
-        cv_begin(240, 4, T_BG);
-        for (py = 0; py < 4u; py++)
-            for (px = 0; px < 240u; px++)
-                cv_px[py * 240u + px] = ((px + py) / 6u) & 1u ? swap16(T_BG) : swap16(T_THEME);   /* (the canvas holds the panel's byte order) */
-        cv_blit(0, 24);
-    }
+    uxl_build_head_flush(1u);
 #if CARAVEL_UX_EVOLVE
     if (!ui.home && cur_page()->graph != GR_EVOLVE && !cpg && !uxl_ring_page() && !uxl_save_page()) {   /* a dot on each card whose parameter RANDOM and JOURNEY move (the ring pages mark their own) */
         uint32_t c, bottom = 0;
