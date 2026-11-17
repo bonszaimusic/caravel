@@ -141,8 +141,7 @@ footer small { display: block; font-size: 11px; }
   <span><kbd>↑</kbd> <kbd>↓</kbd> SELECT</span>
   <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
   <span><kbd>Shift</kbd>-click holds a button</span>
-  <span><button id="action" type="button" title="Two HOME taps: ACTION on/off. C#5/D#5 BANK back/forward; D5/E5/F5/G5 actions; hold either BANK for SETUP">ACTION (HOME ×2)</button></span>
-  <span><button id="p12demo" type="button" title="Preview helper: all four tracks to DRONE with a filled HOME row; not PR firmware">P1.2 demo setup</button></span>
+  <span>Hold HOME for BUILD / PLAY</span>
   <span id="midiknobs" hidden><label><input type="checkbox" id="knobson"> MIDI CC 20–27 turn the panel's knobs</label>
   <select id="knobmode" aria-label="How the controller sends CC 20–26" hidden>
     <option value="abs">absolute</option>
@@ -220,16 +219,6 @@ angle.MASTER = -135 + 270 * masterValue / 1023;
 const knobs = [], buttons = [], keys = [];
 const btnBy = new Map(), keyBy = new Map();                   // pointer / key code -> label bit or key
 const send = (m) => { if (node) node.port.postMessage(m); };
-/* The panel's HOME twice, as a single control: the two taps are spaced so the firmware's 330 ms window sees them
- * even when a browser double-click is too slow. */
-function actionTwice() {
-  if (!node) return;
-  const bit = 1 << B.HOME;
-  [0, 90, 180, 270].forEach((ms, i) => setTimeout(() => send({ type: "buttons", mask: i % 2 ? 0 : bit }), ms));
-}
-document.getElementById("action").addEventListener("click", actionTwice);
-document.getElementById("p12demo").addEventListener("click", () => send({ type: "p12demo" }));
-
 function build(name) {
   const L = LAYOUTS[name];
   layout = name;
