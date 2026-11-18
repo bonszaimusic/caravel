@@ -83,7 +83,7 @@ Node 22, Emscripten 3.1.64, the JieLi toolchain, the pinned SDK files, DaisySP).
 
 ```
 tools/docker_validate.sh action                 # job `wasm` of action-banks-android.yml (all ACTION / ENSEMBLE / JOURNEY / STASIS suites, the C/WASM emulator, the Node tests)
-tools/docker_validate.sh host SHARD             # `prepare`, then one shard of `host` in validate-060.yml; SHARD,SHARD,... or `all`
+tools/docker_validate.sh host SHARD             # `prepare`, then one shard of `host` in validate-format2.yml; SHARD,SHARD,... or `all`
 ```
 
 Measured 2026-11-04 on an Apple-silicon Mac (Docker with 9.7 GB): `action` 4 minutes (the CI: 5.5 to 8), the eight host shards one after the other about 20 minutes

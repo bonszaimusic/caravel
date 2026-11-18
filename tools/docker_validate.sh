@@ -6,7 +6,7 @@
 # files themselves (tools/docker_validate/run_steps.py runs their `run:` steps in order), so the local check cannot drift from the CI.
 #
 #   tools/docker_validate.sh action [SRC_DIR]          job `wasm` of action-banks-android.yml (the ACTION / ENSEMBLE / JOURNEY / STASIS suites, the C/WASM emulator and its Node tests)
-#   tools/docker_validate.sh host SHARD [SRC_DIR]      job `prepare` of validate-060.yml (the target build and the host fixtures), then one shard of job `host`
+#   tools/docker_validate.sh host SHARD [SRC_DIR]      job `prepare` of validate-format2.yml (the target build and the host fixtures), then one shard of job `host`
 #                                                      (storage_usb synthesis_midi ui_storage effects cpu_dual engines_samples sanitizers web_target)
 #   tools/docker_validate.sh host SHARD,SHARD,... [SRC_DIR]   several shards after one preparation (comma separated)
 #   tools/docker_validate.sh host all [SRC_DIR]        the preparation once, then every shard one after the other (stops at the first failing shard)
