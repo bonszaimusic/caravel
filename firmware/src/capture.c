@@ -10,12 +10,12 @@
  *
  * ONE OWNER (device plan C-a): the rings, the loops, the phases and the serial numbers are read and written only by the
  * audio context (the key and MIDI inputs, cap_idle at the top of a block, cap_tick). The UI never touches them: it posts
- * commands (cap_post: REC, TOGGLE, WIPE, ALL_PAUSE) into a small queue that cap_idle empties at the start of the next
+ * commands (cap_post: REC, TOGGLE, WIPE, ALL_PAUSE, QUANT) into a small queue that cap_idle empties at the start of the next
  * block, and takes the outcomes (cap_result, for its message) from a second queue, in the same order. Each queue has one
  * writer and one reader and volatile indices, as transport_req and panic_req.
  *
  * THE DISPLAY (C-b) reads a snapshot, never the live state: once per block (end of cap_idle) the audio context publishes
- * two words per track (cap_pub: state, loop events, ring events and head, bars, the origin or paused phase); the UI takes
+ * three words per track (cap_pub: state, loop events, ring events and head, bars, phase, quant); the UI takes
  * them with cap_view and then reads the event arrays only (a note being written shows one frame late; cap_gen counts the
  * writes so that the UI can draw again when one fell inside a frame). cap_dring is gone: the band's notes of a running
  * loop are derived from the loop itself (they are the notes as captured, not as HARMONY or CHRD made them). */
@@ -34,6 +34,21 @@ typedef char cap_ev_size_must_be_4[sizeof(cap_ev_t) == 4 ? 1 : -1];
 #define CAP_KEEP_U (32u << 12)                                  /* longest retrospective REC window */
 static uint32_t cap_age(uint32_t now_q16, uint32_t t) { return (CAP_U(now_q16) - t) & CAP_TMASK; }
 static cap_ev_t cap_ring[NTRK][CAP_N], cap_loop[NTRK][CAP_N];
+/* Post-capture QUANT: cap_loop is immutable ORIGINAL timing. A separate
+ * playback list holds the currently committed grid, and ONE shared scratch
+ * list is prepared in bounded per-block slices. The UI never edits either.
+ * Added event memory: (NTRK+1)*CAP_N*4 = 2560 B, plus small job state. */
+static cap_ev_t cap_qloop[NTRK][CAP_N], cap_qscratch[CAP_N];
+static uint8_t cap_qpair[CAP_N];                  /* scratch ON index -> OFF */
+static uint32_t cap_qused[CAP_N / 32u];          /* which raw OFFs were paired */
+static uint8_t cap_qactive[NTRK], cap_qwant[NTRK], cap_qready[NTRK], cap_qdirty[NTRK];
+static uint8_t cap_qn[NTRK];                   /* active transformed list count: may lag an overdub */
+static uint8_t cap_qowner = NTRK, cap_qstage, cap_qpos;
+static uint8_t cap_qfailed; /* deferred UI outcome: avoids audio-worker/UI writes */
+enum { CAP_QPAIR=1, CAP_QCHECK, CAP_QSORT, CAP_QREADY };
+static const uint16_t CAP_GRID[6] = {0u, 256u, 512u, 1024u, 2048u, 4096u};
+/* The clock is fixed 4 quarter-note beats/bar: 1/1 = 4096 units = one
+ * four-beat bar. All loop lengths are multiples of that bar. */
 static volatile uint8_t cap_gen[NTRK];                           /* counts every write to a ring or a loop (audio): the display's check */
 static uint8_t cap_rn[NTRK], cap_rh[NTRK];                       /* the ring: events kept, next to write */
 static uint8_t cap_full[NTRK], cap_rejected;               /* full/rejected capture: no partial takes */
@@ -223,6 +238,165 @@ static void cap_release(uint32_t i)                              /* end only thi
     if(t->p[P_AMODE] && !t->nheld)arp_silence(t);
     cap_replay = 0;
 }
+/* All quantisation planning is audio-owned, bounded to at most two source
+ * events per audio block. There is no copying, sorting or note pairing in
+ * the UI; no unbounded insertion sort in the audio callback. The one scratch
+ * buffer remains reserved while a completed job waits for a loop boundary.
+ * Other tracks' requests queue and are processed after it is committed. */
+static void cap_quant_abort(uint32_t i)
+{
+    if (cap_qowner == i) { cap_qowner = NTRK; cap_qstage = 0u; }
+    cap_qready[i] = 0u;
+}
+static void cap_quant_dirty(uint32_t i)                 /* original loop changed by a successful overdub */
+{
+    if (!cap_qwant[i] && !cap_qactive[i]) return;
+    cap_quant_abort(i);
+    cap_qdirty[i] = cap_qwant[i] != 0u;
+    cap_qready[i] = cap_qwant[i] == 0u;
+}
+static uint32_t cap_quant_request(uint32_t i, uint32_t mode)
+{
+    if (i >= NTRK || mode > 5u || !cap_ln[i] || !cap_len[i]) return 0u;
+    cap_quant_abort(i);
+    cap_qwant[i] = (uint8_t)mode;
+    cap_qdirty[i] = mode != 0u;
+    cap_qready[i] = mode == 0u;
+    cap_gen[i]++;
+    return 1u;
+}
+static void cap_quant_fail(uint32_t i)
+{
+    /* No partial transformed loop is ever published. On an ambiguous
+     * overlap, schedule original timing at the next boundary instead. */
+    cap_qwant[i] = 0u;
+    cap_qready[i] = 1u;
+    cap_qdirty[i] = 0u;
+    cap_qowner = NTRK;
+    cap_qstage = 0u;
+    cap_qfailed = 1u;
+    cap_gen[i]++;
+}
+static void cap_quant_apply(uint32_t i)
+{
+    uint32_t changed = cap_qactive[i] != cap_qwant[i];
+    if (!cap_qready[i]) return;
+    if (cap_qwant[i]) {
+        if (cap_qowner != i || cap_qstage != CAP_QREADY) return;
+        /* The source loop cannot change while a ready result is waiting:
+         * overdub cancels this ready result in cap_quant_dirty(). */
+        memcpy(cap_qloop[i], cap_qscratch, cap_ln[i] * sizeof(cap_ev_t));
+        cap_qn[i] = cap_ln[i];
+        cap_qowner = NTRK;
+        cap_qstage = 0u;
+        changed = 1u; /* source update even if grid setting is unchanged */
+    }
+    if (changed && cap_st[i] == 1u)
+        cap_release(i);       /* one safe transition release, never a hanging old note */
+    cap_qactive[i] = cap_qwant[i];
+    cap_qready[i] = 0u;
+    cap_gen[i]++;
+}
+static uint32_t cap_quant_overlap(uint32_t a, uint32_t da,
+                                  uint32_t b, uint32_t db, uint32_t len)
+{
+    /* Circular half-open intervals [ON,OFF); touching endpoints are fine.
+     * A later event with the same pitch cannot share a held raw-note owner. */
+    /* CAPTURE lengths are 1/2/4/8/16/32 bars, thus always powers
+     * of two in CAP_U. Use a mask, never integer DIV in the ISR worker. */
+    return (((b + len - a) & (len - 1u)) < da) ||
+           (((a + len - b) & (len - 1u)) < db);
+}
+static uint32_t cap_quant_before(cap_ev_t a, cap_ev_t b)
+{
+    if (a.t != b.t) return a.t < b.t;
+    if (!!a.vel != !!b.vel) return !a.vel; /* release first for adjacent same-pitch notes */
+    return 0u;                              /* stable order between identical-time events */
+}
+static void cap_quant_work(void)
+{
+    uint32_t i = cap_qowner, n, len, k;
+    if (i == NTRK) {
+        for (i = 0; i < NTRK; i++)
+            if (cap_qdirty[i] && cap_qwant[i] && cap_ln[i] && cap_len[i])
+                break;
+        if (i == NTRK) return;
+        cap_qowner = (uint8_t)i;
+        cap_qdirty[i] = 0;
+        cap_qstage = CAP_QPAIR;
+        cap_qpos = 0;
+        memset(cap_qpair, 255, sizeof cap_qpair);
+        memset(cap_qused, 0, sizeof cap_qused);
+        memcpy(cap_qscratch, cap_loop[i], cap_ln[i] * sizeof(cap_ev_t));
+    }
+    if (cap_qstage == CAP_QREADY) return;
+    n = cap_ln[i];
+    len = CAP_U(cap_len[i]);
+    if (!n || !len || !cap_qwant[i]) { cap_quant_abort(i); return; }
+    if (len & (len - 1u)) { cap_quant_fail(i); return; } /* unsupported loop length */
+    /* Budget max TWO event operations per 128-frame audio block. Even
+     * worst-case matching/sorting is at most 2*128 comparisons/moves. */
+    for (k = 0; k < 2u && cap_qpos < n; k++, cap_qpos++) {
+        uint32_t idx = cap_qpos;
+        if (cap_qstage == CAP_QPAIR) {
+            const cap_ev_t *e = &cap_loop[i][idx];
+            uint32_t j, match = CAP_N, step, new_on, duration;
+            if (!e->vel) continue;
+            for (j = 1u; j <= n; j++) {
+                uint32_t x = (idx + j) % n;
+                if (cap_loop[i][x].note != e->note) continue;
+                if (cap_loop[i][x].vel) { cap_quant_fail(i); return; }
+                match = x; break;
+            }
+            if (match >= n || (cap_qused[match >> 5] & (1u << (match & 31u)))) {
+                cap_quant_fail(i); return;
+            }
+            duration = (cap_loop[i][match].t + len - e->t) & (len - 1u);
+            if (!duration) { cap_quant_fail(i); return; } /* no zero-length release can be made safe */
+            cap_qused[match >> 5] |= 1u << (match & 31u);
+            cap_qpair[idx] = (uint8_t)match;
+            step = CAP_GRID[cap_qwant[i]];
+            new_on = ((e->t + step / 2u) / step * step) & (len - 1u);
+            cap_qscratch[idx].t = new_on;
+            cap_qscratch[match].t = (new_on + duration) & (len - 1u);
+        } else if (cap_qstage == CAP_QCHECK) {
+            uint32_t j, off = cap_qpair[idx], d;
+            if (!cap_loop[i][idx].vel) {
+                if (!(cap_qused[idx >> 5] & (1u << (idx & 31u)))) { cap_quant_fail(i); return; }
+                continue;
+            }
+            if (off >= n) { cap_quant_fail(i); return; }
+            d = (cap_qscratch[off].t + len - cap_qscratch[idx].t) & (len - 1u);
+            for (j = idx + 1u; j < n; j++) {
+                uint32_t oj = cap_qpair[j], dj;
+                if (!cap_loop[i][j].vel || cap_loop[i][j].note != cap_loop[i][idx].note) continue;
+                if (oj >= n) { cap_quant_fail(i); return; }
+                dj = (cap_qscratch[oj].t + len - cap_qscratch[j].t) & (len - 1u);
+                if (cap_quant_overlap(cap_qscratch[idx].t, d, cap_qscratch[j].t, dj, len)) {
+                    cap_quant_fail(i); return;
+                }
+            }
+        } else { /* CAP_QSORT: bounded stable insertion, at most 128 moves */
+            cap_ev_t key = cap_qscratch[idx];
+            uint32_t j = idx;
+            while (j && cap_quant_before(key, cap_qscratch[j - 1u])) {
+                cap_qscratch[j] = cap_qscratch[j - 1u];
+                j--;
+            }
+            cap_qscratch[j] = key;
+        }
+    }
+    if (cap_qpos >= n) {
+        cap_qpos = 0u;
+        if (cap_qstage == CAP_QPAIR) cap_qstage = CAP_QCHECK;
+        else if (cap_qstage == CAP_QCHECK) cap_qstage = CAP_QSORT;
+        else {
+            cap_qstage = CAP_QREADY;
+            cap_qready[i] = 1u;  /* do NOT switch mid-loop */
+            cap_gen[i]++;
+        }
+    }
+}
 /* REC: the notes played live become the loop. No loop yet: the last nb bars of the ring, a loop starting now. A loop already
  * there: OVERDUB (E45): the notes played live during its last length are added where they fall in the loop (its phase), the
  * length stays. Returns the new notes (0: nothing played in the window); *over = 1 for an overdub. */
@@ -320,6 +494,7 @@ static uint32_t cap_take(uint32_t i, uint32_t nb, uint32_t *over)
     cap_full[i] = n == CAP_N;
     cap_tt[i] = now;
     cap_taken_serial[i]=cap_serial[i];
+    cap_quant_dirty(i);   /* new overdubs retain raw timing and rebuild only playback */
     if (!add) {
         cap_release(i);
         cap_len[i] = len;
@@ -357,6 +532,9 @@ static void cap_clear(uint32_t i)
     cap_ln[i] = 0;
     cap_full[i] = cap_wait[i] = 0;
     cap_st[i] = 0;
+    cap_quant_abort(i);
+    cap_qactive[i] = cap_qwant[i] = cap_qready[i] = cap_qdirty[i] = 0u;
+    cap_qn[i] = 0u;
 }
 /* each block, with the bar clock: the loops' notes that fall since the last block */
 static void cap_tick(void)
@@ -370,14 +548,22 @@ static void cap_tick(void)
         len = cap_len[i];
         ph = CAP_U((now - cap_o[i]) % len);                      /* the place in the loop, in 1/4096 bar like the events */
         last = cap_last[i];
-        /* A wrapped block crosses the old tail before the new head. */
-        if(last>=0 && ph<(uint32_t)last)
-            for(k=0;k<cap_ln[i];k++)
-                if(cap_loop[i][k].t>(uint32_t)last)cap_fire(i,&cap_loop[i][k]);
-        for(k=0;k<cap_ln[i];k++) {
-            uint32_t r=cap_loop[i][k].t;
-            if(r<=ph && (last<0 || ph<(uint32_t)last || r>(uint32_t)last))
-                cap_fire(i,&cap_loop[i][k]);
+        /* A wrapped block crosses the old tail, then commits the new grid
+         * at the boundary, then plays the new head. Never switch mid-cycle. */
+        if (last >= 0 && ph < (uint32_t)last) {
+            const cap_ev_t *tail = cap_qactive[i] ? cap_qloop[i] : cap_loop[i];
+            uint32_t tn = cap_qactive[i] ? cap_qn[i] : cap_ln[i];
+            for (k = 0; k < tn; k++)
+                if (tail[k].t > (uint32_t)last) cap_fire(i, &tail[k]);
+            cap_quant_apply(i);
+        }
+        {   const cap_ev_t *src = cap_qactive[i] ? cap_qloop[i] : cap_loop[i];
+            uint32_t nn = cap_qactive[i] ? cap_qn[i] : cap_ln[i];
+            for (k = 0; k < nn; k++) {
+                uint32_t r = src[k].t;
+                if (r <= ph && (last < 0 || ph < (uint32_t)last || r > (uint32_t)last))
+                    cap_fire(i, &src[k]);
+            }
         }
         cap_last[i] = (int32_t)ph;
     }
@@ -393,9 +579,10 @@ static void cap_wipe(uint32_t i)                                 /* SEQ held: th
     memset(cap_open[i], 0, sizeof cap_open[i]);
 }
 /* ---- the UI's commands to the audio context, and the outcomes back (device plan C-a) ---- */
-enum { CAP_OP_REC = 1, CAP_OP_TOGGLE, CAP_OP_WIPE, CAP_OP_ALL_PAUSE };
+enum { CAP_OP_REC = 1, CAP_OP_TOGGLE, CAP_OP_WIPE, CAP_OP_ALL_PAUSE, CAP_OP_QUANT };
 enum { CAPR_NONE, CAPR_CAPTURED, CAPR_OVERDUB, CAPR_NOTHING, CAPR_NOTHING_ADD, CAPR_FULL, CAPR_PAUSED, CAPR_RUNS,
-       CAPR_NO_LOOP, CAPR_NO_CLOCK, CAPR_CLEARED };
+       CAPR_NO_LOOP, CAPR_NO_CLOCK, CAPR_CLEARED, CAPR_QUANT_NEXT, CAPR_QUANT_OFF,
+       CAPR_QUANT_CONFLICT };
 #define CAP_Q 8u                                                 /* a power of two */
 static volatile uint16_t cap_cq[CAP_Q];                          /* op | track << 4 | bars << 8 */
 static volatile uint8_t cap_cq_w, cap_cq_r;                      /* UI writes cap_cq_w, audio writes cap_cq_r */
@@ -468,13 +655,19 @@ static void cap_commands(void)
         } else if (op == CAP_OP_WIPE) {
             cap_wipe(i);
             cap_answer(CAPR_CLEARED);
+        } else if (op == CAP_OP_QUANT) {
+            if (!cap_quant_request(i, nb))
+                cap_answer(CAPR_NO_LOOP);
+            else
+                cap_answer(nb ? CAPR_QUANT_NEXT : CAPR_QUANT_OFF);
         }
     }
 }
 /* ---- the snapshot for the display (device plan C-b) ---- */
-typedef struct { volatile uint32_t w0, w1; } cap_pub_t;
+typedef struct { volatile uint32_t w0, w1, w2; } cap_pub_t;
 static cap_pub_t cap_pub[NTRK];
-typedef struct { uint8_t st, full, ln, rn, rh, bars, wrapped; uint32_t o; } cap_view_t;   /* o: the bar clock at the loop's start (running) or its phase (paused) */
+typedef struct { uint8_t st, full, ln, rn, rh, bars, wrapped;
+                 uint8_t quant, requested, quant_pending; uint32_t o; } cap_view_t;   /* o: the bar clock at the loop's start (running) or its phase (paused) */
 /* audio, once per block, after the commands and the idle logic */
 static void cap_publish(void)
 {
@@ -487,6 +680,8 @@ static void cap_publish(void)
         w0 = (uint32_t)cap_st[i] | (uint32_t)(cap_full[i] & 1u) << 2 | (uint32_t)cap_ln[i] << 3 |
              (uint32_t)cap_rn[i] << 11 | (uint32_t)cap_rh[i] << 19 |
              (code & 7u) << 26 | (uint32_t)(cap_clock_wrapped & 1u) << 29;
+        cap_pub[i].w2 = (uint32_t)cap_qactive[i] | (uint32_t)cap_qwant[i] << 3 |
+                         (uint32_t)(cap_qready[i] || cap_qdirty[i] || cap_qowner == i) << 6;
         cap_pub[i].w1 = cap_st[i] == 2u ? cap_pph[i] : cap_o[i];
         cap_pub[i].w0 = w0;
     }
@@ -494,10 +689,11 @@ static void cap_publish(void)
 /* UI: the track's snapshot (a retry when a block published while it was read) */
 static void cap_view(uint32_t i, cap_view_t *v)
 {
-    uint32_t a, b, n = 0;
+    uint32_t a, b, q, n = 0;
     do {
         a = cap_pub[i].w0;
         b = cap_pub[i].w1;
+        q = cap_pub[i].w2;
     } while (a != cap_pub[i].w0 && ++n < 4u);
     v->st = (uint8_t)(a & 3u);
     v->full = (uint8_t)((a >> 2) & 1u);
@@ -506,6 +702,9 @@ static void cap_view(uint32_t i, cap_view_t *v)
     v->rh = (uint8_t)((a >> 19) & 127u);
     v->bars = v->ln ? (uint8_t)(1u << ((a >> 26) & 7u)) : 0u;
     v->wrapped = (uint8_t)((a >> 29) & 1u);
+    v->quant = (uint8_t)(q & 7u);
+    v->requested = (uint8_t)((q >> 3) & 7u);
+    v->quant_pending = (uint8_t)((q >> 6) & 1u);
     v->o = b;
 }
 static const cap_ev_t *cap_view_ring(const cap_view_t *v, uint32_t i, uint32_t k)   /* k-th oldest of the viewed ring */
@@ -559,6 +758,15 @@ static void cap_idle(void)                                       /* audio, at th
     cap_trim();
     cap_commands();
     cap_idle_body();
+    cap_quant_work();
+    if (cap_qfailed) {
+        cap_answer(CAPR_QUANT_CONFLICT);
+        cap_qfailed = 0u;
+    }
+    /* Paused loops have no next audible loop boundary. Apply when staged,
+     * without modifying their saved phase or sounding a note. */
+    for (i = 0; i < NTRK; i++)
+        if (cap_st[i] == 2u) cap_quant_apply(i);
     cap_publish();
     for (i = 0; i < NTRK; i++)
         busy += cap_st[i] == 1u;

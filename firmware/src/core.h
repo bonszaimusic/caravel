@@ -97,11 +97,17 @@ static struct {
     int16_t on, time, amt, damp; /* ON/OFF; RT60 10..60s; wet amount; high-frequency loss */
 } afterburner = {0, 30, 32, 70}; /* OFF preserves the sound of existing projects */
 #endif
+/* GRAV was rejected by owner listening. Never accidentally rebuild its
+ * discarded DSP with a stale local test-firmware flag. */
+#if defined(CARAVEL_GRAVITY_LITE) && CARAVEL_GRAVITY_LITE
+#error "GRAV has been removed; omit -DCARAVEL_GRAVITY_LITE=1"
+#endif
 #if CARAVEL_STASIS_EXPAND && !CARAVEL_REVERB_MINIMAL
 #error "Expanded STASIS requires the experimental minimal reverb implementation"
 #endif
 #if CARAVEL_STASIS_EXPAND
-/* These four new settings are RAM-only but have one authoritative store.
+/* Grain window/quality/scan/reverse remain RAM-only for this experimental
+ * pilot; TONE below is project-persistent through the FUNW FX extension.
  * int16_t matches the firmware's page_desc / param_turn ABI exactly:
  * FX > GRAIN and ACTION > STASIS edit the same fields, never shadow copies.
  * Existing STR/MOTN/LAYER continue to live only in song.g. */
@@ -111,6 +117,11 @@ static struct {
  int16_t scan;     /* 0..127; modulation may offset this */
  int16_t reverse;  /* 0 forward, 1 reverse per grain */
 } st_expand = {.grain=1u,.quality=0u,.scan=0u,.reverse=0u};
+/* Global STASIS TONE (PLAY > SPACE > STASIS K4): 64 preserves the
+ * approved STASIS sound. Independent of track FILTER / HALL DAMP.
+ * Persisted with AFTER in the fixed-length FORMAT-2 FUNW FX extension. */
+static int16_t stasis_tone = 64;
+static int32_t stasis_tone_sm = 64 * 256; /* click-free control-block slew */
 #endif
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built

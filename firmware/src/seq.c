@@ -441,6 +441,11 @@ static uint32_t lat_eat[NTRK][4];        /* bit n: the press of note n ended it 
 static uint32_t lat_bus_other[NTRK][4];
 static uint8_t lat_bus_last[NTRK];
 static uint8_t lat_vel[NTRK][128];       /* the input velocity of a latched note (retrigger keeps the dynamics) */
+/* EXT/HARMONY: unlike physical keys, a released LATCH pitch no longer has
+ * kb_src/mchord.src. Save a *fixed* pitch anchor per sounding latch note.
+ * Never remap from the last harmonised output; that drifts by up to six
+ * semitones per bar on a repeating progression. 512 B RAM for 4 tracks. */
+static uint8_t lat_src[NTRK][128];
 static volatile uint8_t link_retrig_req;  /* bit per track: a LINK key change asks the audio side to retrigger that track's held bus chord (round 7: the UI no longer touches voices) */
 static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
 
@@ -512,6 +517,7 @@ static __attribute__((noinline)) void latch_free(track_t *t)
 #endif
             ) trk_note_off(t, n);
             lat_vel[k][n] = 0;
+            lat_src[k][n] = 0;
         }
     memset(lat_bus_other[k], 0, sizeof lat_bus_other[k]);
     lat_bus_last[k] = 0;
@@ -526,6 +532,7 @@ static void latch_forget(uint32_t k)
     memset(lat_stay[k], 0, sizeof lat_stay[k]);
     memset(lat_eat[k], 0, sizeof lat_eat[k]);
     memset(lat_vel[k], 0, sizeof lat_vel[k]);
+    memset(lat_src[k], 0, sizeof lat_src[k]);
     chord_live_sync(k);
 }
 /* A rebuilt CHRD BUS chord must stay eligible only while some owner still holds it. */
@@ -693,6 +700,7 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
             if (!lat_get(lat_bus_other[i], old[j])) {
                 lat_put(lat_stay[i], old[j], 0);
                 lat_vel[i][old[j]] = 0;
+                lat_src[i][old[j]] = 0;
             }
             lat_put(lat_eat[i], old[j], 0);
         }
@@ -700,6 +708,7 @@ static void retrigger_owners(uint32_t i, const uint8_t *old, uint32_t oldn, cons
             lat_put(lat_stay[i], new[j], 1);
             lat_put(lat_eat[i], new[j], 0);
             lat_vel[i][new[j]] = lv;
+            lat_src[i][new[j]] = new[j]; /* BUS uses a separate stored chord owner */
         }
     }
     for (j = 0; j < oldn; j++)                        /* round 7: a moved chord's stale 'this press ended it' marks go with it, or its release would swallow a later NoteOff */
@@ -814,6 +823,7 @@ static __attribute__((noinline)) int latch_press(track_t *t, const uint8_t *nn, 
                 }
                 if (!keep) {
                     lat_put(lat_stay[k], nn[i], 0);
+                    lat_src[k][nn[i]] = 0;
                     trk_note_off(t, nn[i]);
                     lat_put(lat_eat[k], nn[i], 1);                  /* its release does nothing; a kept tone's release goes on as ever */
                 }
@@ -1421,6 +1431,7 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
 #endif
     last_note = (uint8_t)note;
     lat_vel[trk_index(t)][note & 127u] = (uint8_t)clamp((int32_t)vel, 1, 127);
+    lat_src[trk_index(t)][note & 127u] = (uint8_t)note; /* immutable latch anchor */
     lat_put(lat_stay[trk_index(t)], note, 0);       /* (LATCH: a latched note pressed again is held by the key again) */
     lat_put(lat_eat[trk_index(t)], note, 0);
     if (cin_left)
@@ -2216,7 +2227,7 @@ static __attribute__((noinline)) void retrigger_follow(uint32_t i)
 {
     track_t *t = &trk[i];
     struct { uint8_t kind, idx, no, nn, vel, old[CHORD_MAX], nw[CHORD_MAX]; } ow[8];
-    uint8_t lp[12], ln[12], lv[12], on[RET_N], offs[RET_N];                     /* (8 owners x CHORD_MAX + 12 latched pitches at most) */
+    uint8_t lp[12], ln[12], lv[12], ls[12], on[RET_N], offs[RET_N];                     /* (8 owners x CHORD_MAX + 12 latched pitches at most) */
     ext_cfg_t ec = ext_cfg(t);                                /* SOURCE / EXT / OCT once for the whole bar line */
     uint32_t ex = ext_is_on(t, &ec), no = 0, nl = 0, k, m, j, n, ch, note, non = 0, noff = 0;
     int32_t oct = clamp((int32_t)ec.oct, -2, 2);
@@ -2274,10 +2285,16 @@ static __attribute__((noinline)) void retrigger_follow(uint32_t i)
         int32_t y;
         if (!lat_get(lat_stay[i], j) || midi_local_held(t, j) || midi_note_held(t, j) || mchord_held(i + 1u, j))
             continue;
-        y = ex ? ext_map(t, &ec, clamp((int32_t)j - 12 * oct, 0, 127)) : (int32_t)harmony_snap(t, j);
+        /* For LATCH EXT, always map the FIRST pitch the user latched,
+         * not the previous bar's already-reharmonised output. This is
+         * the missing fixed source identity that causes downward drift. */
+        uint32_t anchor = lat_src[i][j];
+        y = ex ? ext_map(t, &ec, clamp((int32_t)anchor - 12 * oct, 0, 127)) :
+                 (int32_t)harmony_snap(t, anchor);
         if (y < 0 || y == (int32_t)j)
             continue;
         lp[nl] = (uint8_t)j; ln[nl] = (uint8_t)y; lv[nl] = lat_vel[i][j] ? lat_vel[i][j] : 100u;
+        ls[nl] = (uint8_t)anchor;
         nl++;
     }
     for (k = 0; k < no; k++) {                                /* rewrite the owners first: they are the release identity */
@@ -2289,12 +2306,14 @@ static __attribute__((noinline)) void retrigger_follow(uint32_t i)
     for (k = 0; k < nl; k++) {
         lat_put(lat_stay[i], lp[k], 0);
         lat_vel[i][lp[k]] = 0;
+        lat_src[i][lp[k]] = 0;
         lat_put(lat_eat[i], lp[k], 0);
     }
     for (k = 0; k < nl; k++) {
         lat_put(lat_stay[i], ln[k], 1);
         lat_put(lat_eat[i], ln[k], 0);
         lat_vel[i][ln[k]] = lv[k];
+        lat_src[i][ln[k]] = ls[k]; /* carry original pitch, never relatch the output */
     }
     for (k = 0; k < no; k++) {
         for (j = 0; j < ow[k].no && noff < RET_N; j++)

@@ -15,8 +15,12 @@
 #if CARAVEL_UX_EVOLVE && !(FELUCCA_RANDOM_MORPH && CARAVEL_ACTION_BANKS && FELUCCA_HOME_PERF)
 #error "CARAVEL_UX_EVOLVE needs the HOME performance model, ACTION banks and RANDOM MORPH"
 #endif
-#define UXL_KFILT 0xF0u                 /* a non-HOME FX FILTER target; edits this track's stored P_FILT (-100 LP .. +100 HP display) */
+#define UXL_KFILT 0xF0u                 /* per-track FILTER */
+#define UXL_KTONE 0xF1u                 /* separate global STASIS TONE */
 static const param_desc_t UXL_FILT_DESC = {"FILTER", F_INT, -100, 100, 0, 0, ""};
+#if CARAVEL_STASIS_EXPAND
+static const param_desc_t UXL_STTONE_DESC = {"TONE", F_INT, 0, 127, 64, 0, ""};
+#endif
 static const param_desc_t UXL_FX_DESC = {"FX", F_INT, 0, 100, 0, 0, ""};
 /* SPACE/FILTER: K1 edits this track's persisted P_FILT; K2..K4 are the live CRUSH/THROW/DEPTH macros (perform.c perf_k). */
 static int32_t uxl_fx_get(uint32_t id) {
@@ -64,7 +68,13 @@ static const uxl_area_t UXL_AREA[UXL_N] = {
      * go) and STASIS (its three and the FILTER on K4, which would be empty); the delay's own settings are BUILD's) */
     {"SPACE", B_FX, 3, {{"SENDS", 4, {UXL_T(0, P_DIST), UXL_T(0, P_CHOR), UXL_T(0, P_DLY), UXL_T(0, P_REV)}},
                         {"FILTER", 4, {{UXL_KFILT, 0, 255, 0}, {UXL_KFILT, 1, 255, 0}, {UXL_KFILT, 2, 255, 0}, {UXL_KFILT, 3, 255, 0}}},
-                        {"STASIS", 4, {UXL_G(G_DRREV), UXL_G(G_STAMT), UXL_G(G_STTIME), {UXL_KFILT, 0, 255, 0}}}}},
+                        {"STASIS", 4, {UXL_G(G_DRREV), UXL_G(G_STAMT), UXL_G(G_STTIME),
+#if CARAVEL_STASIS_EXPAND
+                            {UXL_KTONE, 0, 255, 0}
+#else
+                            {UXL_KFILT, 0, 255, 0}
+#endif
+                        }}}},
     {"HARM", B_SCL, 1, {{"SCALE", 4, {UXL_T(0, P_ROOT), UXL_T(0, P_SCALE), UXL_T(0, P_TRANS), UXL_T(0, P_LATCH)}}}},
     {"SHAPE", B_ENV, 2, {{"ENV", 4, {UXL_T(0, P_ATK), UXL_T(0, P_DEC), UXL_T(0, P_SUS), UXL_T(0, P_REL)}},
                          {"MACRO", 4, {{HP_MACRO, 0, 255, 0}, {HP_MACRO, 1, 255, 0}, {HP_MACRO, 2, 255, 0}, {HP_MACRO, 3, 255, 0}}}}},
@@ -99,6 +109,7 @@ static struct {
     uint8_t lvl;                        /* .. it shows how to switch between PLAY and BUILD; any input closes it */
     uint8_t cap_view, cap_auto;         /* CAPTURE: its view while REC is held; frames of the view after an action */
     uint8_t rec_viewed, seq_fired;      /* the view was shown in this REC press (no capture on release); SEQ held 700 ms cleared the loop */
+    uint8_t rec_knob_used;             /* K1/K2 REC gesture always consumes the release/tap */
     uint32_t rec_t, seq_t;              /* REC / SEQ pressed since (fm1_ms | 1) */
     uint8_t mom;                        /* MOMENTARY in PLAY: the arcs (bit k) turned with LFO held, to go back when it is let go */
     int16_t mom_v[4];                   /* .. their values before */
@@ -264,7 +275,7 @@ static void uxl_hp_sync(void)
                 uxl_group(a, g, tg);
                 for (k = 0; k < 4u; k++) {
                     hp_ref_t x = {0};
-                    if (tg[k].kind && tg[k].kind != UXL_KFILT) {
+                    if (tg[k].kind && tg[k].kind != UXL_KFILT && tg[k].kind != UXL_KTONE) {
                         x.kind = tg[k].kind;
                         x.id = tg[k].id;
                         x.track = tg[k].trk;
@@ -678,6 +689,7 @@ static void uxl_ev_poll(void)
 static int uxl_inter_ref(uint32_t slot, hp_ref_t *out)    /* the parameter a knob has on this page (as hp_touch, without its effects) */
 {
     const page_t *pg = cur_page();
+    if (fx_delay_suspended(pg, slot)) return 0; /* unavailable FX cannot enter INTERACT */
 #if CARAVEL_AFTERBURNER
     /* AFTER's controls are virtual, not pointers into song.g[]. */
     if (str_eq(pg->title, "AFTER")) return 0;
@@ -759,7 +771,8 @@ static int uxl_morph_has(hp_ref_t r)
                 continue;
             uxl_group(a, g, tg);
             for (k = 0; k < 4u; k++)
-                if (tg[k].kind && uxl_ref_same(uxl_ref(&tg[k]), r))
+                if (tg[k].kind && tg[k].kind != UXL_KFILT && tg[k].kind != UXL_KTONE &&
+                    uxl_ref_same(uxl_ref(&tg[k]), r))
                     return 1;
         }
     }
@@ -1024,6 +1037,7 @@ static void uxl_panic_poll(void)
             if (!uxl.rec_t) {
                 uxl.rec_t = fm1_ms | 1u;
                 uxl.rec_viewed = 0;
+                uxl.rec_knob_used = 0;
             } else if (!uxl.cap_view && fm1_ms - (uxl.rec_t & ~1u) >= 350u) {
                 uxl.cap_view = 1;
                 uxl.rec_viewed = 1;
@@ -1179,6 +1193,17 @@ static void uxl_knob(uint32_t k, int32_t s)
     uxl_group(uxl.area, uxl_group_now(), tg);
     if (!tg[k].kind)
         return;
+#if CARAVEL_STASIS_EXPAND
+    if (tg[k].kind == UXL_KTONE) {
+        if (song.g[G_RTYPE] != 3u) { ui_message("SET REVERB STASIS"); return; }
+        stasis_tone = (int16_t)clamp((int32_t)stasis_tone +
+                                   accel(EN_K1 + k, s, 127), 0, 127);
+        uxl.hot_k = (uint8_t)k;
+        uxl.hot_t = 40;
+        ui.force = 1;
+        return;
+    }
+#endif
     if (tg[k].kind == UXL_KFILT) {                      /* FILTER edits P_FILT; other FX macros keep their current live behavior */
         uxl_fx_turn(tg[k].id, k, s);
         uxl.hot_k = (uint8_t)k;
@@ -1366,7 +1391,8 @@ static void uxl_cap_loop(void)                      /* SEQ tapped: the loop paus
 static void uxl_cap_poll(void)                      /* what the audio context did with the commands: the messages */
 {
     static const char *const M[] = {0, "CAPTURED", "OVERDUB", "NOTHING TO CAPTURE", "NOTHING TO ADD", "LOOP FULL", "LOOP PAUSED",
-                                    "LOOP RUNS", "NO LOOP", "NO CLOCK: PRESS PLAY", "CLEARED"};
+                                    "LOOP RUNS", "NO LOOP", "NO CLOCK: PRESS PLAY", "CLEARED",
+                                    "QUANT: NEXT LOOP", "QUANT OFF: NEXT", "QUANT COLLISION: OFF"};
     uint32_t c;
     while ((c = cap_result()) != CAPR_NONE) {
         if (c < sizeof M / sizeof M[0])
@@ -1376,14 +1402,37 @@ static void uxl_cap_poll(void)                      /* what the audio context di
         ui.force = 1;
     }
 }
-static void uxl_cap_knob(uint32_t k, int32_t s)     /* K1 in the view: per-track length 1 2 4 8 16 32 bars for the next capture */
+static void uxl_cap_knob(uint32_t k, int32_t s)   /* REC held: K1 LENGTH unchanged, K2 post-CAPTURE QUANT */
 {
-    if (k == 0u && s && uxl_cap_get(cap_selected(), 2u)) {
-        ui_message("LENGTH: CLEAR LOOP FIRST");
-    } else if (k == 0u && s) {
-        cap_li[cap_selected()] = (uint8_t)clamp((int32_t)cap_li[cap_selected()] + (s > 0 ? 1 : -1), 0, 5);
-        ui.force = 1;
+    uint32_t owner = cap_selected();
+    cap_view_t v;
+    if (!s || k > 1u) return;
+    /* Even a turn BEFORE the 350ms view threshold must never arm a REC tap
+     * or a layer-tap overdub when the button is released. */
+    uxl.rec_knob_used = 1u;
+    uxl.rec_viewed = 1u;
+    uxl.cap_view = 1u;
+    ui.rec_t0 |= 2u;  /* btn_hold() consumes the corresponding release */
+    ui.pg_down &= (uint16_t)~(1u << panel.btn[B_REC]);
+    if (k == 0u) {
+        if (uxl_cap_get(owner, 2u)) {
+            ui_message("LENGTH: CLEAR LOOP FIRST");
+        } else {
+            cap_li[owner] = (uint8_t)clamp((int32_t)cap_li[owner] +
+                                             (s > 0 ? 1 : -1), 0, 5);
+        }
+    } else {
+        uint32_t next;
+        cap_view(owner, &v);
+        if (!v.ln) {
+            ui_message("CAPTURE LOOP FIRST"); /* no hidden pre-quant for future takes */
+        } else {
+            next = (uint32_t)clamp((int32_t)v.requested + (s > 0 ? 1 : -1), 0, 5);
+            if (next != v.requested && !cap_post(CAP_OP_QUANT, owner, next))
+                ui_message("CAPTURE BUSY");
+        }
     }
+    ui.force = 1u;
 }
 #endif
 /* the layer buttons' taps (FX SEL EDIT GLO SEQ REC) */
@@ -1401,6 +1450,11 @@ static void uxl_layer_tap(uint32_t l)
             uxl_cap_loop();
             break;
         default:
+            if (uxl.rec_knob_used) {
+                uxl.rec_knob_used = 0;
+                uxl.rec_viewed = 0;
+                break;
+            }
             if (uxl.rec_viewed) { uxl.rec_viewed = 0; break; }
             uxl_cap_rec();
             break;
@@ -2146,6 +2200,17 @@ static void uxl_paint(void)
         int hot = uxl.hot_t && uxl.hot_k == k;
         if (k >= n || !tg[k].kind)                      /* (EVOLVE groups have no targets: n is 0) */
             continue;
+#if CARAVEL_STASIS_EXPAND
+        if (tg[k].kind == UXL_KTONE) {
+            v = song.g[G_RTYPE] == 3u ? stasis_tone : 64;
+            d = &UXL_STTONE_DESC;
+            uxl_orbit_arc(k, d, v, hot);
+            if (song.g[G_RTYPE] == 3u) fmt_int(b, v);
+            else str_cpy(b, "N/A", sizeof b);
+            u = "";
+            r = (hp_ref_t){0};
+        } else
+#endif
         if (tg[k].kind == UXL_KFILT) {                  /* per-track FILTER or the other live FX macros */
             v = uxl_fx_get(tg[k].id);
             d = tg[k].id == 0u ? &UXL_FILT_DESC : &UXL_FX_DESC;
@@ -2173,16 +2238,20 @@ static void uxl_paint(void)
 #endif
         lab = tg[k].kind == UXL_KFILT ? uxl_fxm_label(tg[k].id) : tg[k].lab ? tg[k].lab : d->label;
         {
+            /* PLAY intentionally mixes TRACK and GLOBAL targets in one area. */
+            int global = tg[k].kind == HP_GLOBAL || tg[k].kind == UXL_KTONE;
             int gl = uxl.area == UXL_SHAPE && g == 0u ? (int)k : uxl.area == UXL_MOVE && g == 0u && k == 0u ? 4 : -1;
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
-                if (gl >= 0) uxl_glyph((uint32_t)gl, cx, cy, hot); else cv_text(cx, cy, &AF_M, lab, hot ? T_ACCENT : T_TEXT);
+                if (gl >= 0) uxl_glyph((uint32_t)gl, cx, cy, hot); else cv_text(cx, cy, &AF_M, lab, hot ? T_ACCENT : global ? T_THEME : T_TEXT);
+                if (global) cv_text(cx + 80, cy - 1, &AF_S, "G", T_THEME);
                 cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx + text_w(&AF_S, b) + 5, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
             } else {
-                if (gl >= 0) uxl_glyph((uint32_t)gl, cx - UXL_GW, cy, hot); else uxl_text_r(cx, cy, &AF_M, lab, hot ? T_ACCENT : T_TEXT);
+                if (gl >= 0) uxl_glyph((uint32_t)gl, cx - UXL_GW, cy, hot); else uxl_text_r(cx, cy, &AF_M, lab, hot ? T_ACCENT : global ? T_THEME : T_TEXT);
+                if (global) cv_text(cx - 85, cy - 1, &AF_S, "G", T_THEME);
                 uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx - text_w(&AF_S, b) - 11, vy + 3, 6, 6, 2, T_THEME, T_BG);
@@ -2219,14 +2288,19 @@ static void uxl_paint(void)
         uxl_text_c(120, 128, &AF_S, "OCT- CANCEL", T_MID);
     }
 #if CARAVEL_UX_CAPTURE
-    else if (uxl.cap_view) {                          /* REC held: K1 selects the next CAPTURE length for this owner track (6 steps). */
-        uint32_t i, track = cap_selected(), on = cap_li[track];
-        char label[] = "T1 LENGTH";
+    else if (uxl.cap_view) {                          /* REC held: owner LENGTH + post-CAPTURE QUANT */
+        static const char *const Q[6] = {"OFF", "1/16", "1/8", "1/4", "1/2", "1/1"};
+        uint32_t i, track = cap_selected(), on = cap_li[track], mode;
+        char label[] = "T1 LENGTH", qlab[] = "T1 QUANT";
         cap_view_t cv;
-        label[1] = (char)('1' + track);
+        label[1] = qlab[1] = (char)('1' + track);
         cap_view(track, &cv);
+        mode = cv.ln ? (uint32_t)cv.requested : 0u;
+        if (mode > 5u) mode = 0u;
         uxl_orbit_arc_f(0, (int32_t)on * 76 / 5, 0, 1);
+        uxl_orbit_arc_f(1, (int32_t)mode * 76 / 5, 0, 1);
         cv_text(4, 46, &AF_M, label, T_ACCENT);
+        cv_text(127, 46, &AF_M, qlab, T_THEME);
         for (i = 0; i < 6u; i++) {
             char sb[3];
             int32_t x = 4 + (int32_t)i * 19;
@@ -2246,6 +2320,14 @@ static void uxl_paint(void)
                 cv_text(x + 2, 67, &AF_S, sb, cv.ln ? T_DIM : T_MID);
             }
         }
+        cv_rrect(143, 64, 64, 22, 6, T_SURF, T_BG);
+        uxl_text_c(175, 67, &AF_M, Q[mode], cv.ln ? T_THEME : T_DIM);
+        if (!cv.ln)
+            cv_text(139, 93, &AF_S, "NO LOOP", T_DIM);
+        else if (cv.quant_pending)
+            cv_text(130, 93, &AF_S, "NEXT LOOP", T_ACCENT);
+        else if (cv.st == 2u)
+            cv_text(130, 93, &AF_S, "PAUSED", T_MID);
     }
 #endif
 #if CARAVEL_UX_EVOLVE
@@ -2255,6 +2337,13 @@ static void uxl_paint(void)
         str_cpy(ln, nm, sizeof ln);
         str_cpy(ln + str_len(ln), " ", sizeof ln - str_len(ln));
         str_cpy(ln + str_len(ln), val, sizeof ln - str_len(ln));
+        uxl_text_c(120, 27, &AF_M, ln, T_ACCENT);
+    }
+#endif
+#if CARAVEL_STASIS_EXPAND
+    else if (uxl.hot_t && uxl.hot_k < n && tg[uxl.hot_k].kind == UXL_KTONE) {
+        char ln[24] = "STASIS TONE ";
+        fmt_int(ln + str_len(ln), stasis_tone);
         uxl_text_c(120, 27, &AF_M, ln, T_ACCENT);
     }
 #endif
@@ -2360,7 +2449,13 @@ static void uxl_paint(void)
 static uint32_t uxl_cap_sig(void)
 {
 #if CARAVEL_UX_CAPTURE
-    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) + uxl_cap_get(cap_selected(), 0u) * 17u + cap_li[cap_selected()] * 5u + uxl_cap_get(cap_selected(), 3u) * 3u + (uint32_t)song.playing + (uint32_t)uxl.cap_view * 977u;
+    cap_view_t v;
+    cap_view(cap_selected(), &v);
+    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) +
+           v.st * 17u + v.rn * 3u + v.ln * 13u + v.quant * 43u +
+           v.requested * 79u + v.quant_pending * 97u +
+           cap_li[cap_selected()] * 5u + (uint32_t)song.playing +
+           (uint32_t)uxl.cap_view * 977u;
 #else
     return 0;
 #endif
@@ -2396,7 +2491,9 @@ static uint32_t uxl_play_sig(void)
 #endif
     uxl_group(uxl.area, uxl_group_now(), tg);
     for (k = 0; k < 4u; k++)
-        if (tg[k].kind == UXL_KFILT) {
+        if (tg[k].kind == UXL_KTONE) {
+            s = s * 16777619u + (uint32_t)stasis_tone + 7u;
+        } else if (tg[k].kind == UXL_KFILT) {
             s = s * 16777619u + (uint32_t)(tg[k].id ? (int32_t)perf_k[tg[k].id & 3u] : tf_eff(TSEL));
         } else if (tg[k].kind) {
             hp_ref_t r = uxl_ref(&tg[k]);
@@ -2669,12 +2766,21 @@ static void uxl_cards_c_paint(const dual_t *dd, uint32_t act, const page_t *cons
         const param_desc_t *d = uxl_c_card(dd, rps[act], act, col, &v);
         int hot = ui.hot_t && ui.hot_col == col, ok = d && d->label && d->label[0] && d->label[0] != '-';
         cv_rrect(x, y, 110, 56, 9, cs, T_BG);
-        cv_rect(x + 4, y + 14, 2, 28, ok ? T_ACCENT : T_LINE);
+        cv_rect(x + 4, y + 14, 2, 28, ok ? (rps[act] && rps[act]->scope == SC_GLOBAL ? T_THEME : T_ACCENT) : T_LINE);
         if (!ok) {
             cv_text(x + 12, y + 18, &AF_M, "--", T_DIM);
             continue;
         }
-        cv_text(x + 12, y + 10, &AF_M, d->label, hot ? T_ACCENT : T_TEXT);
+        if (rps[act] && fx_delay_suspended(rps[act], col)) {
+            cv_text(x + 12, y + 10, &AF_M, d->label, T_DIM);
+            cv_text(x + 12, y + 32, &AF_S, "OFF: STASIS", T_DIM);
+            continue;
+        }
+        cv_text(x + 12, y + 10, &AF_M, d->label,
+                hot ? T_ACCENT : rps[act] && rps[act]->scope == SC_GLOBAL ? T_THEME : T_TEXT);
+        /* Corner is owned by INTERACT/morph; the small G stays below it. */
+        if (rps[act] && rps[act]->scope == SC_GLOBAL)
+            cv_text(x + 98, y + 43, &AF_S, "G", T_THEME);
         {
             uint8_t nm = fmt_named;
             hp_ref_t r;
@@ -2717,12 +2823,20 @@ static void uxl_cards_c_paint(const dual_t *dd, uint32_t act, const page_t *cons
             cv_text(x, 190, &AF_S, "--", T_DIM);
             continue;
         }
+        if (rps[other] && fx_delay_suspended(rps[other], col)) {
+            cv_text(x, 188, &AF_S, d->label, T_DIM);
+            cv_text(x, 205, &AF_S, "OFF", T_DIM);
+            continue;
+        }
         {
             uint8_t nm = fmt_named;
             param_format(d, v, val, &unit);
             fmt_named = nm;
         }
-        cv_text(x, 188, &AF_S, d->label, T_MID);
+        cv_text(x, 188, &AF_S, d->label,
+                rps[other] && rps[other]->scope == SC_GLOBAL ? T_THEME : T_MID);
+        if (rps[other] && rps[other]->scope == SC_GLOBAL && text_w(&AF_S, d->label) < 37)
+            cv_text(x + 40, 188, &AF_S, "G", T_THEME);
         cv_text(x, 205, text_w(&AF_M, val) <= 50 ? &AF_M : &AF_S, val, T_TEXT);
     }
 }
@@ -2787,6 +2901,20 @@ static int uxl_ring_page(void)
 static void uxl_page_pos(char *out, uint32_t cap)
 {
     uint32_t i, n = 0, at = 0;
+#if CARAVEL_STASIS_EXPAND
+    /* The FX page counter must follow the real navigation sequence rather
+     * than PAGES[] indices (AFTER and GRAV have append-only physical IDs). */
+    if (cur_page()->fam == FAM_FX) {
+        uint8_t pages[NPAGES];
+        n = stasis_fx_pages(pages);
+        for (i = 0; i < n; i++)
+            if (pages[i] == ui.page) at = i + 1u;
+        fmt_int(out, (int32_t)(at ? at : 1u));
+        str_cpy(out + str_len(out), "/", cap - str_len(out));
+        fmt_int(out + str_len(out), (int32_t)(n ? n : 1u));
+        return;
+    }
+#endif
     const page_t *cp = dual_top_page(cur_page());
     if (!cp)
         cp = cur_page();
@@ -2890,6 +3018,16 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         }
         if (!ok)
             continue;
+        if (rps[act] && fx_delay_suspended(rps[act], k)) {
+            if (cx < 120) {
+                cv_text(cx, cy, &AF_M, d->label, T_DIM);
+                cv_text(cx, cy + 21, &AF_S, "OFF: STASIS", T_DIM);
+            } else {
+                uxl_text_r(cx, cy, &AF_M, d->label, T_DIM);
+                uxl_text_r(cx, cy + 21, &AF_S, "OFF: STASIS", T_DIM);
+            }
+            continue;
+        }
         if (!off && !(chx && k == 3u))                                  /* (NOTES is a display: no arc) */
             uxl_orbit_arc(k, d, v, hot);
         {
@@ -2906,12 +3044,19 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
             str_cpy(line + str_len(line), " ", sizeof line - str_len(line));
             str_cpy(line + str_len(line), unit, sizeof line - str_len(line));
         }
-        if (cx < 120) {
-            cv_text(cx, cy, &AF_M, d->label, off ? T_DIM : hot ? T_ACCENT : T_TEXT);
-            cv_text(cx, cy + 21, &AF_S, line, off ? T_DIM : hot ? T_ACCENT : T_MID);
-        } else {
-            uxl_text_r(cx, cy, &AF_M, d->label, off ? T_DIM : hot ? T_ACCENT : T_TEXT);
-            uxl_text_r(cx, cy + 21, &AF_S, line, off ? T_DIM : hot ? T_ACCENT : T_MID);
+        {   /* Scope is per visible page row: HARMONY, REVERB and tempo
+             * are global, whereas HARM/LINK, sends and engines are not. */
+            int global = rps[act] && rps[act]->scope == SC_GLOBAL;
+            uint16_t lc = off ? T_DIM : hot ? T_ACCENT : global ? T_THEME : T_TEXT;
+            if (cx < 120) {
+                cv_text(cx, cy, &AF_M, d->label, lc);
+                cv_text(cx, cy + 21, &AF_S, line, off ? T_DIM : hot ? T_ACCENT : T_MID);
+            } else {
+                uxl_text_r(cx, cy, &AF_M, d->label, lc);
+                uxl_text_r(cx, cy + 21, &AF_S, line, off ? T_DIM : hot ? T_ACCENT : T_MID);
+            }
+            /* G is independent of the knob label and avoids renaming it. */
+            if (global) cv_text(cx < 120 ? cx + 80 : cx - 85, cy - 1, &AF_S, "G", T_THEME);
         }
         if (chx && cv.detail[0]) {                                      /* the second small line: the source's chord, why a status, n of m */
             if (cx < 120)
@@ -3190,8 +3335,15 @@ static void uxl_save_model(uxl_save_t *m)
             str_cpy(m->r[i].name, !used ? "EMPTY" : pn[0] ? pn : "USED", sizeof m->r[i].name);
             m->r[i].sel = i == sel % 4u;
         }
+#if CARAVEL_UX_LAYERS
+        if (!play_project_save_only) {
+            uxl_sv_cell(m, 1, 2, ui.proj_erase ? "ERASE" : "INIT", 0);
+            uxl_sv_cell(m, 2, 2, "LOAD", 0);
+        }
+#else
         uxl_sv_cell(m, 1, 2, ui.proj_erase ? "ERASE" : "INIT", 0);
         uxl_sv_cell(m, 2, 2, "LOAD", 0);
+#endif
         uxl_sv_cell(m, 3, 2, "SAVE", 0);
     } else {                                           /* TOOLS */
         static const char *const NAMES[4] = {"PAT", "SOUND", "SEC", "SONG"};
@@ -3206,7 +3358,12 @@ static void uxl_save_model(uxl_save_t *m)
             m->r[i].sel = act_col() == i + 1u;
         }
     }
-    if (g == GR_SLOTS) str_cpy(m->what, "SAVES EVERYTHING", sizeof m->what);
+    if (g == GR_SLOTS)
+#if CARAVEL_UX_LAYERS
+        str_cpy(m->what, play_project_save_only ? "SAVE PROJECT ONLY" : "SAVES EVERYTHING", sizeof m->what);
+#else
+        str_cpy(m->what, "SAVES EVERYTHING", sizeof m->what);
+#endif
     else if (g == GR_USER) { str_cpy(m->what, "SAVES T1 SOUND + STEPS", sizeof m->what); m->what[7] = (char)('1' + song.sel); }
     else if (g == GR_BROWSE) { str_cpy(m->what, "LOADS A SOUND TO T1", sizeof m->what); m->what[17] = (char)('1' + song.sel); }
     else if (g == GR_PATS) { str_cpy(m->what, "LOADS A PATTERN TO T1", sizeof m->what); m->what[19] = (char)('1' + song.sel); }
@@ -3216,7 +3373,11 @@ static void uxl_save_model(uxl_save_t *m)
         foot_hint(a, b);
         str_cpy(m->ha, a, sizeof m->ha);
         str_cpy(m->hb, b, sizeof m->hb);
+#if CARAVEL_UX_LAYERS
+        m->edit = !play_project_save_only && foot_rename() != 0u;
+#else
         m->edit = foot_rename() != 0u;
+#endif
         m->picked = (uint8_t)act_col();
         m->ready = (uint8_t)(act_ready() != 0);
     }
@@ -3231,6 +3392,14 @@ static void uxl_sv_tab_name(const char *title, char *o, uint32_t n)   /* "PRESET
 }
 static void uxl_sv_tabs(void)                          /* the family's pages as tabs: the current one a filled pill */
 {
+#if CARAVEL_UX_LAYERS
+    if (play_project_save_only) {
+        cv_rrect(7, 30, 79, 19, 9, T_ACCENT, T_BG);
+        cv_text_on(16, 33, &AF_S, "PROJECT", T_INK, T_ACCENT);
+        cv_text(157, 33, &AF_S, "FROM PLAY", T_THEME);
+        return; /* no USER / PRESETS / PHRASES / TOOLS shortcut */
+    }
+#endif
     uint32_t k, cnt = 0;
     int32_t sum = 0, gap, x = 9;
     char nm[12];

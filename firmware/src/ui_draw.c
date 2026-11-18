@@ -642,15 +642,17 @@ static uint32_t span_face(uint32_t c, const card_span_t *sp, const char *label)
 #define LG_UY 73                                        /* the unit's line (S capitals rows 76..84) */
 #define LG_GY 92                                        /* the gauge, 3 px */
 static void draw_column_tall(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc, int32_t ratio,
-                             uint32_t icon, int hot, int mot, int32_t kid, const card_span_t *sp)
+                             uint32_t icon, int hot, int mot, int global, int32_t kid, const card_span_t *sp)
 {
-    uint16_t lc = hot ? T_ACCENT : mot ? T_THEME : T_MID;
+    uint16_t lc = hot ? T_ACCENT : mot || global ? T_THEME : T_MID;
     const aafont_t *lf = &AF_M, *vf = &AF_L;
     int32_t ly = LG_LY, vy, lw = 0, mw;
     char k[3] = {'K', (char)('1' + c), 0};
     uint32_t ic = mot ? ICON_X_MOTION : icon, isz = 16u;
     cv_begin(COL_W, LG_CARD_H, T_BG);
     cv_rrect(0, 0, COL_W, LG_CARD_H, 4, T_SURF, T_BG);
+    /* Consistent slim global rail, without stealing room from existing icons. */
+    if (global) cv_rect(1, 25, 2, 54, T_THEME);
     {   /* the knob: "K1" .. "K4" on a pill */
         uint16_t fill = hot ? T_ACCENT : label[0] || val[0] ? T_KEY : T_DIM;
         mw = ink_w(&AF_M, k) + 10;
@@ -729,9 +731,11 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
 {
     char key[48];
     int hot = c == ui.hot_col && ui.hot_t, named = fmt_named, mot = card_mot_next && label[0], strip, snap;
+    /* Semantic scope from params.c, never infer it from a label or track. */
+    int global = !ui.home && !ui.menu && cur_page()->scope == SC_GLOBAL && label[0];
     uint32_t kind = large_kind();                       /* MENU > LARGE: tall (draw_column_tall), or the label in M */
     uint8_t sig;
-    uint16_t lc = hot ? T_ACCENT : T_MID;
+    uint16_t lc = hot ? T_ACCENT : global ? T_THEME : T_MID;
     int32_t x, lx = 5, uw, room = COL_W - 8;
     const aafont_t *vf = &AF_M;
     uint32_t n, kn;
@@ -759,14 +763,14 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio * (COL_W - 10) / 1000));   /* the gauge's own pixel (as
                                                         * drawn: gw; ratio / 20 missed a pixel inside a step, #63 soak) */
     key[n + 5] = (char)(icon == ICON_NONE ? '~' : '!' + icon % 90u);
-    key[n + 6] = (char)('0' + hot + 2 * mot + 4 * (int)kind);
+    key[n + 6] = (char)('0' + hot + 2 * mot + 4 * (int)kind + 16 * global);
     key[n + 7] = 0;
     uw = unit[0] ? text_w(&AF_S, unit) + 3 : 0;
     if (text_w(vf, val) + uw > room) {
         vf = &AF_S;
         CARD_HOOK(val, unit);                           /* (host: the values set in S) */
     }
-    sig = (uint8_t)str_hash(str_hash(song.sel + TSEL->eng_req * 4u + ux.gen * 64u, label), unit);
+    sig = (uint8_t)str_hash(str_hash(song.sel + TSEL->eng_req * 4u + ux.gen * 64u + global * 8192u, label), unit);
     snap = ui.force || sig != ui.roll[c].sig;           /* what the value is of: label, unit, track, engine, palette */
     if (kind == LK_TALL)
         ui.roll[c].from[0] = 0;                         /* (a tall card: no rolling digits) */
@@ -792,11 +796,12 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
             ui.roll[c].from[0] = 0;
         str_cpy(ui.col[c], key, sizeof ui.col[c]);
         if (kind == LK_TALL) {
-            draw_column_tall(c, label, val, unit, vc, ratio, icon, hot, mot, kid, &sp);
+            draw_column_tall(c, label, val, unit, vc, ratio, icon, hot, mot, global, kid, &sp);
             return;
         }
         cv_begin(COL_W, COL_H, T_BG);
         cv_rrect(0, 0, COL_W, COL_H, 4, T_SURF, T_BG);
+        if (global) cv_rect(1, 4, 2, COL_H - 8, T_THEME);
     }
     if (label[0] || val[0]) {
         if (!strip && label[0]) {
@@ -1428,6 +1433,12 @@ static void draw_columns(void)
         }
         if ((act_cols() >> c) & 1u) {
             draw_act_column(c, d->label, T_THEME, ICON_AUTO);
+            continue;
+        }
+        if (fx_delay_suspended(cur_page(), c)) {
+            /* The old settings are retained but have no audio path under
+             * STASIS. Show a distinct disabled state instead of live digits. */
+            draw_column(c, d->label, "OFF", "STASIS", T_DIM, -1, ICON_AUTO);
             continue;
         }
         param_format(d, *vp, val, &unit);

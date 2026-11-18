@@ -28,6 +28,34 @@ int main(void) {
     assert(proj_pack(&wire,&p));assert(proj_import(&q,wire.raw,sizeof wire));
     assert(!memcmp(p.t,q.t,sizeof p.t));assert(!memcmp(p.lfo2,q.lfo2,sizeof p.lfo2));
     assert(!memcmp(&h,&proj_harmony,sizeof h));
+    /* Legacy FUNW has zero marker/padding and restores safe FX defaults. */
+    assert(wire.raw[65u] == 0u && wire.raw[67u] == 0u);
+    assert(q.af_on == 0u && q.af_time == 30u && q.af_amt == 32u &&
+           q.af_damp == 70u && q.st_tone == 64u);
+    /* Nondefault AFTER and TONE stay attached to the saved PROJECT.
+     * No project object-size increase and no change to the native checksum. */
+    p.af_on = 1u; p.af_time = 47u; p.af_amt = 99u;
+    p.af_damp = 51u; p.st_tone = 105u;
+    assert(proj_pack(&wire,&p));
+    assert(wire.raw[65u] == PROJ_FX_EXT_MARK);
+    assert(wire.raw[67u] == (0x80u | 47u));
+    assert(wire.raw[PROJ_FX_EXT_OFF] == 99u &&
+           wire.raw[PROJ_FX_EXT_OFF + 1u] == 51u &&
+           wire.raw[PROJ_FX_EXT_OFF + 2u] == 105u);
+    assert(proj_import(&q,wire.raw,sizeof wire));
+    assert(q.af_on == 1u && q.af_time == 47u && q.af_amt == 99u &&
+           q.af_damp == 51u && q.st_tone == 105u);
+    bad = wire; bad.raw[67u] = (uint8_t)(0x80u | 61u); rehash(&bad);
+    assert(!proj_import(&q,bad.raw,sizeof bad)); /* invalid AFTER TIME */
+    bad = wire; bad.raw[65u] = 0x55u; rehash(&bad);
+    assert(!proj_import(&q,bad.raw,sizeof bad)); /* unknown extension */
+    bad = wire; bad.raw[PROJ_FX_EXT_OFF] = 200u; rehash(&bad);
+    assert(!proj_import(&q,bad.raw,sizeof bad)); /* invalid wet amount */
+    /* A valid new project must re-encode through rename without losing
+     * the saved FX state; defaults still use the legacy zero-wire layout. */
+    assert(proj_pack(&wire,&q) && wire.raw[65u] == PROJ_FX_EXT_MARK);
+    p.af_on = p.af_time = p.af_amt = p.af_damp = p.st_tone = 0u;
+    assert(proj_pack(&wire,&p) && wire.raw[65u] == 0u);
     /* Legacy zero marker preserves T1-linked mode, but new projects can
      * encode an independent global ROOT/SCALE in the same 24-byte region. */
     uint32_t ko=68u+NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE);

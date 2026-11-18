@@ -435,6 +435,12 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void rev_hall(const int32_t *
     int32_t damp = song.g[G_RTYPE] == 3
         ? clamp(50 + osc_sine(hl.ph) * (int32_t)clamp(song.g[G_DRREV], 0, 127) / 400000, 36, 64)
         : song.g[G_RDAMP];
+#if CARAVEL_STASIS_EXPAND
+    /* TONE only colors STASIS's internal HALL damping; ordinary HALL
+     * continues to use G_RDAMP unchanged. 64 is the existing reference. */
+    if (song.g[G_RTYPE] == 3)
+        damp = clamp(damp + (64 - (stasis_tone_sm >> 8)) / 3, 24, 78);
+#endif
     int32_t kd = HL_KD(damp);
     int32_t xp = hl.x, hp = hl.hp, he = hl.he, mp = hl.m, sp = hl.s;
     (void)n;
@@ -721,8 +727,7 @@ static const char *stasis_exp_turn(uint32_t slot,int32_t steps)
 }
 #endif
 
-/* Read one captured source sample per output sample: grain playback pitch
- * never depends on MOTN. Taps are changed only at zero-crossfade weight. */
+/* STASIS grain read at unity speed; tap changes only on silent heads. */
 static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
 {
 #if CARAVEL_STASIS_EXPAND
@@ -857,8 +862,17 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
     int32_t sine_r = osc_sine(st.drift_ph + 0x50000000u);
     /* Macro modulation calculated once per 32-sample block, not per sample.
      * Stereo pole cutoff ~1.5..10 kHz, moving in opposing directions. */
-    int32_t cut_l = clamp(17000 + sine_l * (int32_t)motion / 300, 6500, 28000);
-    int32_t cut_r = clamp(17000 + sine_r * (int32_t)motion / 300, 6500, 28000);
+#if CARAVEL_STASIS_EXPAND
+    /* At most 2 units per 32-sample block; no zipper from play knobs. */
+    int32_t tone_target = clamp(stasis_tone, 0, 127) << 8;
+    stasis_tone_sm += clamp(tone_target - stasis_tone_sm, -512, 512);
+    int32_t tone_shift = ((stasis_tone_sm >> 8) - 64) * 88;
+#else
+    int32_t tone_shift = 0;
+#endif
+    /* TONE shapes fragments and HALL tank; never the dry track FILTER. */
+    int32_t cut_l = clamp(17000 + sine_l * (int32_t)motion / 300 + tone_shift, 5000, 30000);
+    int32_t cut_r = clamp(17000 + sine_r * (int32_t)motion / 300 + tone_shift, 5000, 30000);
     /* Variable echo taps: no pitch sweep because tap changes are only made
      * at a silent-grain crossfade boundary. */
     uint32_t tap_l = 256u + (uint32_t)(((uint32_t)(sine_l + 32768) * motion * 28u) >> 16u);
@@ -867,8 +881,14 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
     tap_l>>=st.active_quality;
     tap_r>>=st.active_quality;
 #endif
+#if CARAVEL_STASIS_EXPAND
+    /* Preserve the user-preferred V4 STASIS rebalance with GRAV removed. */
+    int32_t layer_gain = (int32_t)((strength * 240u + 63u) / 127u);
+    int32_t hall_gain = (int32_t)((strength * 1408u + 63u) / 127u);
+#else
     int32_t layer_gain = (int32_t)((strength * 2304u + 63u) / 127u);
     int32_t hall_gain = (int32_t)((strength * 1024u + 63u) / 127u);
+#endif
     if (cap && !st.cap_prev && !st.stopping) {
         /* Retake HOLD without erasing the previous sound. */
         if (!st.releasing) stasis_layer_reset();
@@ -955,10 +975,13 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
                                              tap_r+(421u>>st.active_quality));
             uint32_t p0=st.reverse_mask&1u?grain_len-1u-p:p;
             uint32_t p1=st.reverse_mask&2u?grain_len-1u-q:q;
-            int32_t la=stasis_grain_read(st.gr_l[0],p0);
-            int32_t lb=stasis_grain_read(st.gr_l[1],p1);
-            int32_t ra=stasis_grain_read(st.gr_r[0],p0);
-            int32_t rb=stasis_grain_read(st.gr_r[1],p1);
+            int32_t la,lb,ra,rb;
+            {
+                la=stasis_grain_read(st.gr_l[0],p0);
+                lb=stasis_grain_read(st.gr_l[1],p1);
+                ra=stasis_grain_read(st.gr_r[0],p0);
+                rb=stasis_grain_read(st.gr_r[1],p1);
+            }
             /* Zero-slope overlap envelope, constant unity sum. Keep
              * normalized gain for ALL grain sizes; no periodic hard corners
              * and no accidental 6dB boost with the largest 372ms grains. */

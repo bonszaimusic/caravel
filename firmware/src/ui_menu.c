@@ -388,7 +388,11 @@ static void menu_row(uint32_t k, uint32_t row)
 #define INFO_Y 32
 #define INFO_N 3u
 #define INFO_CPU_MS 500u
-static struct { uint8_t cpu; uint32_t t; } info;
+/* Display-only diagnostics: the CPU row is a moving average, whereas PEAK
+ * is the highest render-only half-buffer load since boot; LATE counts actual
+ * lost deadlines, SHED counts emergency voice reductions. None are reset
+ * by opening INFO, so repeated PHYS vs HADES comparisons are meaningful. */
+static struct { uint8_t cpu, peak; uint32_t t, late, shed; } info;
 static uint32_t info_usb(void)                         /* 0 OFF, 1 WAIT, 2 BUS, 3 ENUM, 4 MIDI */
 {
     return !usb.up ? 0u : usb.config ? 4u : usb.setups ? 3u : usb.sof_seen ? 2u : 1u;
@@ -398,8 +402,20 @@ static uint32_t info_sig(void)
     if (fm1_ms - info.t >= INFO_CPU_MS) {
         info.t = fm1_ms;
         info.cpu = (uint8_t)(song.cpu_q8 * 100u / 256u);
+#if defined(__PI32V2__)
+        /* audio.c is linked only in the target; the host UI fixture has
+         * no DMA/ISR and must never invent deadline results. */
+        uint32_t half_us = HALF_FRAMES * 1000000u / FS;
+        uint32_t peak = half_us ? audio_max_us * 100u / half_us : 0u;
+        info.peak = (uint8_t)(peak < 255u ? peak : 255u);
+        info.late = felucca_dbg.late;
+        info.shed = shed_count;
+#else
+        info.peak = 0; info.late = 0; info.shed = 0;
+#endif
     }
-    return info.cpu * 7u + info_usb() * 131u + 1u;
+    return (uint32_t)info.cpu * 7u + info.peak * 17u +
+           info.late * 131u + info.shed * 163u + info_usb() * 313u + 1u;
 }
 static void info_rows(void)                            /* (in screen rows: cv_oy set by the caller) */
 {
@@ -424,6 +440,23 @@ static void info_rows(void)                            /* (in screen rows: cv_oy
         } else {
             cv_text_r(MR_VR, vy, &AF_M, k ? USB_N[info_usb()] : FELUCCA_VERSION, T_THEME, mn_surf());
         }
+    }
+}
+
+/* Three secondary INFO readings live in the formerly blank lower band.
+ * This consumes no audio-ISR budget and exposes hidden PHYS overloads. */
+static void info_diag_rows(void)
+{
+    static const char *const name[3] = {"PEAK", "LATE", "SHED"};
+    uint32_t data[3] = {info.peak, info.late, info.shed};
+    for (uint32_t k = 0; k < 3u; k++) {
+        int32_t y = 156 + (int32_t)k * 27;
+        char b[16];
+        fmt_int(b, (int32_t)(data[k] > 999999u ? 999999u : data[k]));
+        if (k == 0u) str_cpy(b + str_len(b), "%", sizeof b - str_len(b));
+        if (k) cv_rect(MR_X + 6, y - 5, MR_W - 12, 1, T_LINE);
+        cv_text_on(MR_LX, y, &AF_M, name[k], T_TEXT, mn_surf());
+        cv_text_r(MR_VR, y, &AF_M, b, k == 1u && info.late ? T_ACCENT : T_THEME, mn_surf());
     }
 }
 
@@ -484,6 +517,8 @@ static void draw_menu(void)
                 info_rows();
                 if (mn_flat())
                     uxl_hazard_rows();
+            } else {
+                info_diag_rows();
             }
             cv_oy = 0;
             cv_blit(0, top_y);

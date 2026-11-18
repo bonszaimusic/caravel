@@ -60,6 +60,11 @@
 #ifndef CARAVEL_UX_CAPTURE
 #define CARAVEL_UX_CAPTURE 1     /* live panel / MIDI note loops; volatile, not project data */
 #endif
+/* Private GRAV experiment only. Not active in existing projects or official
+ * v1.0.0; CARAVEL_GRAVITY_LITE=0 restores the exact old STASIS processing. */
+#ifndef CARAVEL_GRAVITY_LITE
+#define CARAVEL_GRAVITY_LITE 1
+#endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
 #endif

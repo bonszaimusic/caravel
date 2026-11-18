@@ -94,6 +94,7 @@ static int mom_turn(uint32_t k, int32_t s)
             pg->graph == GR_PATS || (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u) ||
             (pg->graph == GR_CHORD && chord_ext_row))   /* (CHORD EXT's knobs are no CHRD / VOIC / LATCH) */
             return 0;
+        if (fx_delay_suspended(pg, k)) return 1; /* inactive delay cannot be momentarily edited */
         d = page_desc(pg, k, &vp);
     }
 #if CARAVEL_AFTERBURNER
@@ -984,6 +985,10 @@ static void step_edit(uint32_t slot, int32_t steps)
 
 static void edit_param(uint32_t slot, int32_t steps)
 {
+    if (fx_delay_suspended(cur_page(), slot)) {
+        ui_message("DELAY OFF: STASIS");
+        return; /* keep the preset's DELAY values for HALL */
+    }
 #if CARAVEL_STASIS_EXPAND
     if(cur_page()->graph==GR_STGRAIN){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
 #endif
@@ -1247,6 +1252,13 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
+#if CARAVEL_UX_LAYERS
+    if (play_project_save_only &&
+        (cur_page()->graph != GR_SLOTS || c != 3u)) {
+        ui_message("PROJECT SAVE ONLY");
+        return; /* never invoke LOAD / INIT / ERASE from the PLAY shortcut */
+    }
+#endif
 #if CARAVEL_REVERB_MINIMAL
     if (cur_page()->graph == GR_STLAYER) {
         uint32_t cancel = stasis_layer_can_cancel();
@@ -1589,6 +1601,13 @@ static void layer_lock_input(uint32_t pressed);
 static int page_tap(uint32_t b)
 {
     uint32_t f;
+#if CARAVEL_UX_LAYERS
+    if (play_project_save_only && b == B_EDIT) {
+        /* EDIT means switch workspace, not rename a project from PLAY. */
+        open_family(FAM_EDIT);
+        return 1;
+    }
+#endif
     if (b == B_EDIT && detail_on()) {                    /* DETAIL (1.5.1): the step's CHANCE RATCH NUDGE VEL back */
         if (0)
             ui_message("STOP TO EDIT");
@@ -1927,7 +1946,8 @@ static void ui_input(void)
         home = BT_NONE;                                 /* (menu_close went HOME already) */
     } else if (home == BT_HOLD) {                       /* HOME held: open the menu, or leave it */
 #if CARAVEL_UX_LAYERS
-        if (ui.menu) menu_close(); else uxl_toggle();
+        if (play_project_save_only) play_project_save_leave();
+        else if (ui.menu) menu_close(); else uxl_toggle();
         if (1) {} else
 #endif
         if (ui.menu) {
@@ -1945,7 +1965,54 @@ static void ui_input(void)
         if (fm1_in.buttons & (1u << panel.btn[B_SEQ])) step_rec_toggle();
         else rec_tap();
     }
-    if (ui.menu) {                                      /* SAVE / REC taps do nothing here (HOME: above) */
+    if (ui.menu) {
+        /* SYSTEM is a modal EDITOR for encoders / OCT, not a navigation
+         * trap. An area button exits directly to that area on its PRESS.
+         * Never forward the edge to layer/transport or play a CAPTURE/REC
+         * action. SAVE enters its real BUILD pages; PLAY/REC never jump. */
+        uint32_t dest = FAM_COUNT;
+        uint32_t target = B_HOME;
+        for (uint32_t f = FAM_ENV; f <= FAM_SEQ; f++) {
+            uint32_t button = FAM_BTN[f];
+            if (pressed & (1u << panel.btn[button])) {
+                dest = f; target = button; break;
+            }
+        }
+        if (dest != FAM_COUNT) {
+#if CARAVEL_UX_LAYERS
+            if (uxl.play && dest == FAM_SAVE) {
+                play_project_old_page = ui.page;
+                play_project_old_home = ui.home;
+                play_project_save_only = 1u;
+            }
+#endif
+            if (target == B_SAVE && ui.save_t0) ui.save_t0 |= 2u;
+            ui.pg_down = 0;
+            ui.ly = ui.layer = ui.lock = 0;
+            ui.ly_t0 = 0;
+            menu_close(); /* commits edited SYSTEM settings before exit */
+#if CARAVEL_UX_LAYERS
+            if (uxl.play && dest != FAM_SAVE && dest != FAM_SEQ) {
+                uint32_t area = dest == FAM_FX ? UXL_SPACE :
+                                dest == FAM_SCL ? UXL_HARM :
+                                dest == FAM_ENV ? UXL_SHAPE :
+                                dest == FAM_LFO ? UXL_MOVE :
+                                dest == FAM_EDIT ? UXL_SOUND :
+                                dest == FAM_GLO ? UXL_MIX : UXL_ARP;
+                uxl.area = (uint8_t)area; /* no re-tap/group cycling */
+                uxl.lvl = 0;
+                uxl.hot_t = 0;
+                uxl.pv = 0;
+                ui.force = 1;
+            } else {
+                if (uxl.play) uxl.play = 0;
+                open_family(dest);
+            }
+#else
+            open_family(dest);
+#endif
+            return; /* also prevents the release becoming a second action */
+        }
         if (ui.save_t0)
             ui.save_t0 |= 2u;
         ui.pg_down = 0;
@@ -1964,9 +2031,21 @@ static void ui_input(void)
         return;
     }
 #if CARAVEL_UX_LAYERS
-    if (uxl.play && (save == BT_HOLD || (save == BT_TAP && !ui.confirm)))
-        ui_message(save == BT_HOLD ? "UNDO: BUILD ONLY" : "SNAPSHOT: LATER");
-    else
+    if (uxl.play && save == BT_HOLD) {
+        ui_message("UNDO: BUILD ONLY"); /* preserve existing hold meaning */
+    } else if (uxl.play && save == BT_TAP && !ui.confirm) {
+        /* PROJECT-only quick-save entry. The normal SAVE family remains
+         * available from BUILD; no hidden preset/pattern actions in PLAY. */
+        play_project_old_page = ui.page;
+        play_project_old_home = ui.home;
+        play_project_save_only = 1u;
+        uxl.play = 0;
+        uxl.lvl = 0;
+        uxl.inter = 0;
+        uxl.pv = 0;
+        uxl.hot_t = 0;
+        open_family(FAM_SAVE);
+    } else
 #endif
     if (save == BT_HOLD && 0)
         ui_message("STOP TO UNDO");
@@ -2040,7 +2119,10 @@ static void ui_input(void)
 #endif                               /* on every page since 1.2, its tap the SEQ pages) */
     if (home == BT_TAP) {                                /* HOME retains its ordinary single-tap action */
 #if CARAVEL_UX_LAYERS
-        uxl_home_tap();
+        if (play_project_save_only)
+            play_project_save_leave();  /* back to PLAY after quick PROJECT */
+        else
+            uxl_home_tap();
 #else
 #if CARAVEL_ACTION_BANKS
         if(!action_home_double_tap())

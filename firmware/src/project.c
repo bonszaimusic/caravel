@@ -154,6 +154,21 @@ static void project_capture(project_t *p)
     f = motion_guard();
     for (i = 0; i < G_COUNT; i++)
         p->g[i] = song.g[i];
+    /* Project-level sound design: the values belong to the music, not
+     * device preferences. The fixed FUNW extension stores all five. */
+#if CARAVEL_AFTERBURNER
+    p->af_on = (uint8_t)clamp(afterburner.on, 0, 1);
+    p->af_time = (uint8_t)clamp(afterburner.time, 10, 60);
+    p->af_amt = (uint8_t)clamp(afterburner.amt, 0, 127);
+    p->af_damp = (uint8_t)clamp(afterburner.damp, 0, 127);
+#else
+    p->af_on = 0; p->af_time = 30; p->af_amt = 32; p->af_damp = 70;
+#endif
+#if CARAVEL_STASIS_EXPAND
+    p->st_tone = (uint8_t)clamp(stasis_tone, 0, 127);
+#else
+    p->st_tone = 64;
+#endif
     p->sel = song.sel;
     p->parts = NPART;
     p->phys = PROJ_PHYS;
@@ -408,9 +423,12 @@ static void project_init_runtime(void)
     memset(harmony_follow, 0, sizeof harmony_follow); /* 1.0: new tracks start in NOTES */
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
 #if CARAVEL_AFTERBURNER
-    /* Session-only AFTER settings: a new project never inherits the effect. */
+    /* New projects have a deliberate, safe OFF default. */
     afterburner.on = 0; afterburner.time = 30;
     afterburner.amt = 32; afterburner.damp = 70;
+#endif
+#if CARAVEL_STASIS_EXPAND
+    stasis_tone = 64; stasis_tone_sm = 64 * 256;
 #endif
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);
@@ -537,10 +555,12 @@ static int project_restore_runtime(const project_t *input)
         if (i != G_SLOT && i != G_LOAD && i != G_SAVE)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
 #if CARAVEL_AFTERBURNER
-    /* FORMAT2 does not yet encode AFTER controls: avoid retaining settings
-     * from a different loaded project or silently changing legacy sound. */
-    afterburner.on = 0; afterburner.time = 30;
-    afterburner.amt = 32; afterburner.damp = 70;
+    afterburner.on = p->af_on; afterburner.time = p->af_time;
+    afterburner.amt = p->af_amt; afterburner.damp = p->af_damp;
+#endif
+#if CARAVEL_STASIS_EXPAND
+    stasis_tone = p->st_tone;
+    stasis_tone_sm = (int32_t)stasis_tone * 256; /* no old-project glide */
 #endif
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);
@@ -795,6 +815,12 @@ static uint32_t autosave_sig(void)
     for (i = 0; i < G_COUNT; i++)
         if (i != G_SLOT && i != G_NAME && i != G_LOAD && i != G_SAVE)
             h = as_mix(h, &song.g[i], sizeof song.g[i]);
+#if CARAVEL_AFTERBURNER
+    h = as_mix(h, &afterburner, sizeof afterburner);
+#endif
+#if CARAVEL_STASIS_EXPAND
+    h = as_mix(h, &stasis_tone, sizeof stasis_tone);
+#endif
     h = as_mix(h, song.mch, sizeof song.mch);           /* (1.5.5: MIDI IN TRACK's channels, the project's) */
     h = as_mix(h, &motion, sizeof motion);
     h = as_mix(h, harmony_root, sizeof harmony_root);    /* (round 7: FUN11 puts HARMONY / LINK in the project; the transient bar and SHIFT stay out) */

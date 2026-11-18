@@ -584,6 +584,19 @@ static void harm_choose_role(track_t *t, uint32_t mode)
         harmony_follow[k] = t->p[P_CHRD] == CH_BUS;
     }
 }
+/* STASIS reuses the regular delay's sample ring: keep the stored delay
+ * parameters for returning to HALL, but show their controls as unavailable. */
+static int fx_delay_suspended(const page_t *pg, uint32_t slot)
+{
+#if CARAVEL_REVERB_MINIMAL
+    return pg && song.g[G_RTYPE] == 3u &&
+        (str_eq(pg->title, "DLY") || (pg->graph == GR_FX && slot == 2u));
+#else
+    (void)pg; (void)slot;
+    return 0;
+#endif
+}
+
 static int page_visible(uint32_t i)
 {
     if (PAGES[i].graph == GR_SCALE) return harm_has_key(TSEL);
@@ -626,11 +639,17 @@ static uint32_t page_first(uint32_t fam)
 /* Logical FX order only: persistent HOME references retain their page IDs. */
 static uint32_t stasis_fx_pages(uint8_t *pages)
 {
+    /* STASIS is one coherent sound-design block: the primary page,
+     * its grain settings and LAYER, without the rejected GRAV stage.
+     * AFTER remains the downstream optional ambience stage. Page IDs stay
+     * append-only/unchanged for project and HOME compatibility. */
     static const char *const names[]={"FX","DLY","CHORUS","REVERB",
+        "GRAIN",
+        "LAYER",
 #if CARAVEL_AFTERBURNER
         "AFTER",
 #endif
-        "GRAIN","LAYER","INSERT","INSERT 2","SLICER"};
+        "INSERT","INSERT 2","SLICER"};
     uint32_t n=0;
     for(uint32_t j=0;j<sizeof names/sizeof names[0];j++)
         for(uint32_t i=0;i<NPAGES;i++)
@@ -970,8 +989,38 @@ static uint32_t hp_global_page(uint32_t at,int32_t dir) {
 }
 #endif
 static void scl_page_turn(int32_t dir);
+#if CARAVEL_UX_LAYERS
+/* SAVE requested from PLAY is deliberately PROJECT ONLY. Reuse the existing
+ * project slot / name / overwrite-confirmation controls, never expose USER,
+ * PRESETS, PHRASES, TOOLS, INIT, ERASE or LOAD as quick-save actions. */
+static uint8_t play_project_save_only;
+static uint8_t play_project_old_page, play_project_old_home;
+static void play_project_save_leave(void)
+{
+    if (!play_project_save_only) return;
+    play_project_save_only = 0u;
+    uxl.play = 1u;
+    ui.page = play_project_old_page;
+    ui.home = play_project_old_home;
+    ui.act = 0u;
+    ui.hot_t = 0u;
+    ui.force = 1u;
+}
+#endif
 static void open_family(uint32_t fam)
 {
+#if CARAVEL_UX_LAYERS
+    if (play_project_save_only) {
+        if (fam == FAM_SAVE) {
+            ui.page = (uint8_t)page_first(FAM_SAVE);
+            ui.fam_last[FAM_SAVE] = ui.page;
+            ui.home = 0u;
+            page_entered();
+            return; /* SAVE again must NOT navigate into USER/PRESETS */
+        }
+        play_project_save_only = 0u; /* explicit switch to BUILD area */
+    }
+#endif
 #if CARAVEL_STASIS_EXPAND
     if(fam==FAM_FX){
         ui.page=(uint8_t)stasis_fx_page(!ui.home && cur_page()->fam==fam?ui.page:ui.fam_last[fam],
@@ -1099,6 +1148,9 @@ static void scl_page_turn(int32_t dir)
  * HOME, MIXER and CLOCK are one round, as HOME's taps go. A family of one page (GLO's SONG) stays */
 static void page_turn(int32_t dir)
 {
+#if CARAVEL_UX_LAYERS
+    if (play_project_save_only) return; /* project-only quick SAVE */
+#endif
     if (!ui.home && cur_page()->fam == FAM_SCL) {
         scl_page_turn(dir);
         return;

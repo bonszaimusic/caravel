@@ -22,7 +22,12 @@ int main(void)
     uint32_t count = stasis_fx_pages(order), found = 0;
     for (uint32_t i = 1; i < count; i++)
         if (order[i] == page) {
-            assert(str_eq(PAGES[order[i-1]].title, "REVERB")); found++;
+#if CARAVEL_STASIS_EXPAND
+            assert(str_eq(PAGES[order[i-1]].title, "LAYER"));
+#else
+            assert(str_eq(PAGES[order[i-1]].title, "REVERB"));
+#endif
+            found++;
         }
     assert(found == 1);
     ui.home = ui.menu = ui.confirm = ui.layer = 0;
@@ -42,12 +47,35 @@ int main(void)
     edit_param(2, 1000); assert(afterburner.amt == 127);
     edit_param(3, -1000); assert(afterburner.damp == 0);
     ui.force = 1; ui_draw();
+#if CARAVEL_STASIS_EXPAND
+    stasis_tone = 97;
+#endif
     project_capture(&saved);
+    assert(saved.af_on == 1 && saved.af_time == 10 &&
+           saved.af_amt == 127 && saved.af_damp == 0);
+#if CARAVEL_STASIS_EXPAND
+    assert(saved.st_tone == 97);
+#endif
+    project_store_t wire;
+    assert(proj_pack(&wire, &saved));
+    assert(proj_import(&saved, &wire, sizeof wire));
+    afterburner.on = 0; afterburner.time = 30;
+    afterburner.amt = 32; afterburner.damp = 70;
+#if CARAVEL_STASIS_EXPAND
+    stasis_tone = 64;
+#endif
     assert(project_restore_runtime(&saved) == 0);
-    assert(!afterburner.on && afterburner.time == 30 && afterburner.amt == 32 && afterburner.damp == 70);
-    afterburner.on = 1; afterburner.time = 60;
+    assert(afterburner.on && afterburner.time == 10 &&
+           afterburner.amt == 127 && afterburner.damp == 0);
+#if CARAVEL_STASIS_EXPAND
+    assert(stasis_tone == 97 && stasis_tone_sm == 97 * 256);
+#endif
     project_init_runtime();
-    assert(!afterburner.on && afterburner.time == 30);
-    puts("Afterburner UI: FX order, knobs/ranges, virtual-reference isolation, session-only INIT/LOAD PASS");
+    assert(!afterburner.on && afterburner.time == 30 &&
+           afterburner.amt == 32 && afterburner.damp == 70);
+#if CARAVEL_STASIS_EXPAND
+    assert(stasis_tone == 64);
+#endif
+    puts("Afterburner UI: FX order, virtual refs, AFTER/TONE project save/load, INIT defaults PASS");
     return 0;
 }
