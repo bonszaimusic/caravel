@@ -1520,6 +1520,20 @@ static int t37(void)
     return x_check("T37 RETRIG BOTH revoices held T2 MIDI key; original MIDI NoteOff releases remapped notes",ok);
 }
 
+/* ------------------------------------------------------------------ T38: STOP resets source sensing, not MIDI release identity --- */
+static int t38(void)
+{
+    int ok;
+    setup();
+    u_usb(10,0x91,72,100); run_to(170);
+    ok = ext_held[1][72] == 1u && midi_owners[1] == 1u && ngated(1) > 0u;
+    ext_sources_stop(); /* transport STOP: discard physical input snapshots */
+    ok &= !ext_held[1][72] && midi_owners[1] == 1u;
+    u_usb(200,0x81,72,0); run_to(300);
+    ok &= !midi_owners[1] && ngated(1) == 0u;
+    return x_check("T38 after STOP clears physical source inventory, the old MIDI NoteOff still releases its sounding owner",ok);
+}
+
 int main(void)
 {
     int bad = 0;
@@ -1559,6 +1573,7 @@ int main(void)
     if (x_on("T35")) bad += t35();
     if (x_on("T36")) bad += t36();
     if (x_on("T37")) bad += t37();
+    if (x_on("T38")) bad += t38();
     if (bad) { printf("chordext test FAILED (%d)\n", bad); return 1; }
     printf("chordext test passed\n");
     return 0;

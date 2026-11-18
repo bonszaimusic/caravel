@@ -486,7 +486,10 @@ static void __attribute__((noinline)) midi_event_source(uint32_t st, uint32_t ch
                 if (before && !same) return; /* another port already owns the sounding key */
             } else {
                 ext_midi_note(source, ch, d1, 0u); /* NOTE ON velocity zero is a true physical release */
-                if (!same || ext_phys_any(ch, d1)) return;
+                /* STOP clears recognition inventory but can intentionally
+                 * leave physical keys sounding; their later NoteOff still
+                 * has to reach the pre-existing MIDI voice owner. */
+                if (ext_phys_any(ch, d1) || (!same && before)) return;
                 /* Release the sounding key only when its last physical owner ends. */
             }
         }
