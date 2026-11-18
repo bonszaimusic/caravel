@@ -199,9 +199,9 @@ jobs:
         run: |
           mv site build/v1-base-site
           python3 web/v1_docs.py --source . --commit "$(git rev-parse HEAD)" \
-            --site build/v1-base-site --out build/v1-site --published
-          node web/check_generation_site.mjs build/v1-site
-          python3 web/dual_site.py --classic "$RUNNER_TEMP/classic-frozen" --v1 build/v1-site --out site
+            --site build/v1-base-site --out "$RUNNER_TEMP/v1-site" --published
+          node web/check_generation_site.mjs "$RUNNER_TEMP/v1-site"
+          python3 web/dual_site.py --classic "$RUNNER_TEMP/classic-frozen" --v1 "$RUNNER_TEMP/v1-site" --out site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
