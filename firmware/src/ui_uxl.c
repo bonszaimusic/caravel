@@ -2981,7 +2981,10 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         }
     } else if (dd && dd->kind == DK_LINK && act) {                     /* LINK's setup group: only K1 works, the bus is every track's */
         uxl_text_c(120, 98, &AF_M, "BUS", T_TEXT);
-        uxl_text_c(120, 122, &AF_S, "ALL TRACKS, K1", T_MID);
+        uxl_text_c(120, 122, &AF_S,
+                   harm_role(TSEL) == HROLE_EXT ? "K1-3 GLOBAL / K4 TRACK" : "ALL TRACKS, K1", T_MID);
+        if (harm_role(TSEL) == HROLE_EXT)
+            uxl_text_c(120, 139, &AF_S, "SCALE: NO EXT RETRIG", T_MID);
     }                                                                  /* (no picture: the middle stays free; the sound is on the foot line on every page) */
     for (k = 0; k < 4u; k++) {
         int32_t v, cx = (k & 1u) == 0u ? 4 : 236, cy = k < 2u ? 46 : 150;
@@ -3101,7 +3104,7 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         for (row = 0; row < (dd ? 2u : 1u); row++) {
             const char *nm = dd ? (row ? dd->bot : dd->top) : cur_page()->title;
             if (dd && row && dd->kind == DK_LINK)
-                nm = "HARMONY";                                   /* (LINK's second group: the bus's setup) */
+                nm = harm_role(TSEL) == HROLE_EXT ? "EXT RETRIG" : "HARMONY";
             else if (dd && row && dd->kind == DK_HARMONY)
                 nm = "DURATION";
             else if (dd && row && dd->kind == DK_CHEXT)

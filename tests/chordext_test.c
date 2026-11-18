@@ -1371,6 +1371,155 @@ static int t31(void) {
     return x_check("T31 STOP clears the live BUS chord, gates and held-key retrigger eligibility",ok && !ngated(1));
 }
 
+/* ------------------------------------------------------------------ T32-T34: physical EXT MIDI and held RETRIG --- */
+static int t32(void)
+{
+    ext_info_t o;
+    int ok = 1;
+    setup();
+    ce_set(1, CE_SRC, 2); /* T2 follows physical MIDI notes on T1 */
+    ce_set(1, CE_EXT, 2);
+    u_usb(10, 0x90, 60, 100); run_to(240);
+    ce_info(1, &o);
+    ok &= o.state == EXT_ST_AMBIG && ext_held[0][60] == 1u;
+    u_usb(310, 0x90, 64, 100); run_to(540); /* > 200 ms after C */
+    ce_info(1, &o);
+    ok &= o.state == EXT_ST_AMBIG && ext_held[0][60] && ext_held[0][64];
+    u_usb(610, 0x90, 67, 100); run_to(830); /* > 200 ms after E */
+    ce_info(1, &o);
+    ok &= o.state == EXT_ST_OK && o.have_chord && o.root == 0u &&
+          (xext[1].chord & 0xFFFu) == ((1u << 0) | (1u << 4) | (1u << 7));
+    u_usb(900, 0x80, 64, 0); run_to(1120);
+    ce_info(1, &o);
+    ok &= o.state == EXT_ST_AMBIG && o.have_chord; /* remembered valid chord */
+    u_usb(1200, 0x80, 60, 0); u_usb(1200, 0x90, 67, 0); run_to(1420);
+    ce_info(1, &o);
+    ok &= o.state == EXT_ST_OK && o.have_chord && !ext_held[0][60] &&
+          !ext_held[0][64] && !ext_held[0][67]; /* all up: last chord latches */
+    u_usb(1500, 0x90, 57, 95); u_usb(1510, 0x90, 60, 95); u_usb(1520, 0x90, 64, 95);
+    run_to(1760);
+    ce_info(1, &o);
+    ok &= o.state == EXT_ST_OK && o.root == 9u;
+    return x_check("T32 sequential >200 ms physical MIDI C/E/G; ambiguous retains, velocity-zero release, all-up chord latch, new Am",ok);
+}
+static int t33(void)
+{
+    int ok;
+    setup();
+    ce_set(1, CE_SRC, 2);
+    /* The shared sounding owner is one (channel,pitch), but the physical
+     * harmonic owners are separate for USB and TRS. */
+    midi_event_source(0x90u, 0u, 60u, 100u, 1u);
+    midi_event_source(0x90u, 0u, 60u, 100u, 2u);
+    midi_event_source(0x90u, 0u, 48u, 100u, 1u);
+    ok = ext_held[0][60] == 2u && ext_held[0][48] == 1u &&
+         midi_owners[0] == 2u;
+    midi_event_source(0x80u, 0u, 60u, 0u, 1u);
+    ok &= ext_held[0][60] == 1u && midi_owners[0] == 2u;
+    midi_event_source(0x90u, 0u, 60u, 0u, 2u);
+    ok &= ext_held[0][60] == 0u && ext_held[0][48] == 1u &&
+          midi_owners[0] == 1u;
+    midi_event_source(0x80u, 0u, 48u, 0u, 1u);
+    ok &= !midi_owners[0] && !ext_held[0][48];
+    return x_check("T33 USB/TRS independent holds, same pitch and octaves, final release alone clears voice ownership", ok);
+}
+static int t34(void)
+{
+    int bad = 0;
+    for (int rt = 0; rt < 2; rt++) {
+        int ok = 1;
+        uint8_t before[128], after[128];
+        uint32_t nb, na, ons;
+        setup();
+        ce_set(1, CE_SRC, 2);
+        ce_set(1, CE_EXT, 2);
+        link_retrig[1] = (uint8_t)rt; /* OFF versus HARM */
+        u_usb(10, 0x90, 60, 100); u_usb(20, 0x90, 64, 100); u_usb(30, 0x90, 67, 100);
+        run_to(240);
+        u_key(260, K_C4, 1); run_to(400);
+        nb = gnotes(1, before);
+        ons = nnev;
+        ok &= nb > 0u;
+        u_usb(500, 0x80, 60, 0); u_usb(500, 0x80, 64, 0); u_usb(500, 0x80, 67, 0);
+        u_usb(550, 0x90, 57, 100); u_usb(560, 0x90, 60, 100); u_usb(570, 0x90, 64, 100);
+        run_to(830);
+        na = gnotes(1, after);
+        if (rt) ok &= na > 0u && (na != nb || memcmp(after, before, nb)) && nnev > ons;
+        else ok &= na == nb && !memcmp(after, before, nb);
+        u_key(850, K_C4, 0); run_to(1000);
+        ok &= ngated(1) == 0u; /* original NoteOff remains valid after rebuild */
+        bad += x_check(rt ? "T34 RETRIG HARM revoices held T2 panel note and releases cleanly" :
+                            "T34 RETRIG OFF does not change held T2 panel note", ok);
+    }
+    return bad;
+}
+
+/* ------------------------------------------------------------------ T35-T36: sustain and actual HARM UI route --- */
+static int t35(void)
+{
+    int ok;
+    ext_info_t o;
+    setup();
+    ce_set(1, CE_SRC, 2);
+    u_usb(10,0x90,60,100); u_usb(20,0x90,64,100); u_usb(30,0x90,67,100);
+    run_to(240);
+    ce_info(1,&o);
+    ok = o.state == EXT_ST_OK && o.root == 0u;
+    u_usb(250,0xB0,64,127); /* sustain pedal down */
+    u_usb(300,0x80,60,0); u_usb(310,0x80,64,0); u_usb(320,0x80,67,0);
+    run_to(550);
+    ce_info(1,&o);
+    ok &= o.state == EXT_ST_OK && o.root == 0u &&
+          !ext_held[0][60] && !ext_held[0][64] && !ext_held[0][67] &&
+          (midi_note_get(0,60) & MIDI_PEDAL_NOTE);
+    u_usb(600,0xB0,64,0); run_to(730);
+    ok &= !midi_owners[0] && !midi_note_get(0,60);
+    return x_check("T35 CC64 sustains sounding voices, not physical harmony notes; pedal up releases existing MIDI owners",ok);
+}
+static int t36(void)
+{
+    int ok;
+    setup();
+    link_retrig[1] = 0;
+    ce_set(1, CE_SRC, 2); ce_set(1,CE_EXT,2); ce_set(1,CE_OCT,1);
+    open_family(FAM_SCL);
+    for (uint32_t k = 0; k < 8u && !link_setup_row; k++) scl_page_turn(1);
+    ok = link_setup_row && cur_page()->graph == GR_LINK &&
+         harm_role(TSEL) == HROLE_EXT && trk[1].p[P_CSRC] == 2;
+    edit_param(3u,1); /* spare K4 is an actual editable per-track RETRIG */
+    ok &= link_retrig[1] == 1u && trk[1].p[P_CSRC] == 2 &&
+          ce_get(1,CE_EXT) == 2 && ce_get(1,CE_OCT) == 1;
+    edit_param(3u,1);
+    ok &= link_retrig[1] == 2u; /* stored SCALE, inert in EXT: UI warns */
+    scl_page_turn(-1);
+    ok &= !link_setup_row && cur_page()->graph == GR_CHORD && chord_ext_row;
+    return x_check("T36 HARM EXT RETRIG K4 via real page path; SOURCE/EXT/OCT preserved; SCALE does not change mode",ok);
+}
+
+/* ------------------------------------------------------------------ T37: held MIDI follower retains release identity --- */
+static int t37(void)
+{
+    uint8_t before[128], after[128];
+    uint32_t nb, na;
+    int ok;
+    setup();
+    ce_set(1, CE_SRC, 2); ce_set(1, CE_EXT, 2);
+    link_retrig[1] = 3u; /* BOTH acts like HARM on EXT changes */
+    u_usb(10, 0x90, 60, 100); u_usb(20, 0x90, 64, 100); u_usb(30, 0x90, 67, 100);
+    run_to(250);
+    u_usb(270, 0x91, 72, 100); run_to(400);
+    nb = gnotes(1, before);
+    ok = nb > 0u;
+    u_usb(500, 0x80, 60, 0); u_usb(500, 0x80, 64, 0); u_usb(500, 0x80, 67, 0);
+    u_usb(550, 0x90, 57, 100); u_usb(560, 0x90, 60, 100); u_usb(570, 0x90, 64, 100);
+    run_to(830);
+    na = gnotes(1, after);
+    ok &= na > 0u && (na != nb || memcmp(after, before, nb));
+    u_usb(850, 0x81, 72, 0); run_to(1020);
+    ok &= ngated(1) == 0u && !midi_owners[1];
+    return x_check("T37 RETRIG BOTH revoices held T2 MIDI key; original MIDI NoteOff releases remapped notes",ok);
+}
+
 int main(void)
 {
     int bad = 0;
@@ -1404,6 +1553,12 @@ int main(void)
     if (x_on("T29")) bad += t29();
     if (x_on("T30")) bad += t30();
     if (x_on("T31")) bad += t31();
+    if (x_on("T32")) bad += t32();
+    if (x_on("T33")) bad += t33();
+    if (x_on("T34")) bad += t34();
+    if (x_on("T35")) bad += t35();
+    if (x_on("T36")) bad += t36();
+    if (x_on("T37")) bad += t37();
     if (bad) { printf("chordext test FAILED (%d)\n", bad); return 1; }
     printf("chordext test passed\n");
     return 0;

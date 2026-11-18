@@ -410,6 +410,17 @@ static __attribute__((noinline)) uint32_t ext_arp(const track_t *t, const ext_cf
     return m;
 }
 #else
+/* The FM4-only profile does not build the CHORD EXT recogniser.
+ * Keep shared MIDI dispatch compatible without adding a new FM4 feature. */
+#ifndef EXT_PORTS
+#define EXT_PORTS 2u
+#endif
+static uint32_t ext_phys_any(uint32_t ch, uint32_t note) { (void)ch; (void)note; return 0; }
+static uint32_t ext_phys_get(uint32_t p, uint32_t ch, uint32_t note) { (void)p; (void)ch; (void)note; return 0; }
+static void ext_midi_note(uint32_t p, uint32_t ch, uint32_t note, uint32_t id) { (void)p; (void)ch; (void)note; (void)id; }
+static void ext_midi_clear_all(void) {}
+static void ext_midi_forget_track(uint32_t track) { (void)track; }
+static void ext_midi_forget_channel(uint32_t ch) { (void)ch; }
 static void chordext_reset_runtime(void) {}
 static void ext_window_clear(uint32_t source) { (void)source; }
 static void ext_sources_stop(void) {}
@@ -430,7 +441,7 @@ static uint32_t chord_build_c(track_t *t, const ext_cfg_t *c, uint32_t root, uin
     uint16_t mask;
     uint32_t m = chord_make(t, root, out, &r, &mask), i, k = trk_index(t);
 #if !FELUCCA_FM4
-    if (ext_sources && !latch_would_toggle(t, out, m)) ext_source_note(t, root, r, mask);
+    if (ext_sources && !ext_from_midi && !latch_would_toggle(t, out, m)) ext_source_note(t, root, r, mask);
 #endif
     if (m > 1u && !latch_would_toggle(t, out, m)) {      /* (a LATCH STACK toggle starts no new chord: chord_last stays) */
         latch_bus_capture(t);

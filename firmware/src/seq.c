@@ -41,6 +41,7 @@ static uint8_t kb_note[27], kb_trk[27];  /* per key: the note it started and on 
 static uint8_t ret_harm;                  /* 1 while link_retrigger runs for a HARMONY bar change (not for a LINK key change) */
 static uint8_t kb_src[27];                /* per key: the note the key mapped to before HARMONY snapped it (RETRIG HARM re-snaps from it) */
 static uint8_t in_key;                   /* the key (+ 1) whose notes go into input_on now (key_on), 0: none (MIDI IN) */
+static uint8_t ext_from_midi;            /* do not teach source from MIDI's already mapped/sounding chord */
 static uint8_t kb_vel = 100;             /* 1.5.6 (#84): the keys' velocity (MENU > SELECT VEL, ui_input.c sel_play) */
 /* #191: where each track's held[i] came from, so the arp maps it again as it plays (arp_list: TRN, ROOT, SCALE, QNT as
  * they are now). held_key: the key + 1 (bits 0..4) and the octave buttons then + 3 (bits 5..7); 0: not a key's own
@@ -2588,6 +2589,7 @@ static void events_block(uint32_t n)
     if (transport_req >= 4u || midi_clock.resync)
         midi_resync_poll();
     if (midi_route != (uint8_t)song.g[G_ROUTE]) {     /* ROUT changed: a block lets go of the other channels */
+        ext_midi_clear_all();
         midi_route = (uint8_t)song.g[G_ROUTE];
         if (midi_route != ROUTE_SEL)
             midi_route_block();
@@ -2613,6 +2615,7 @@ static void events_block(uint32_t n)
         memset(midi_sel_on, 0, sizeof midi_sel_on);
         memset(midi_ch, 0, sizeof midi_ch);
         memset(midi_owners, 0, sizeof midi_owners);
+        ext_midi_clear_all();
         memset(mchord, 0, sizeof mchord);
         midi_hint = 0;
         for (i = 0; i < NTRK; i++) {
@@ -2677,7 +2680,7 @@ static void events_block(uint32_t n)
                     midi_clock_transport(status, ms);
             }
         } else
-            midi_event(st, ch, d1, d2);
+            midi_event_source(st, ch, d1, d2, source);
     }
     if (clock_mode) {
         seq_n = 0;

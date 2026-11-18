@@ -1054,8 +1054,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         }
     }
     if (pg->graph == GR_LINK) { /* HARM: one effective role per track */
-        if (link_setup_row) {  /* global HARMONY: K1 ON, K2 ROOT, K3 SCALE */
-            if (slot == 1u) {
+        if (link_setup_row) {  /* global HARMONY K1-3, EXT track RETRIG on free K4 */
+            if (slot == 3u && harm_role(TSEL) == HROLE_EXT) {
+                link_retrig[song.sel] = (uint8_t)clamp((int32_t)link_retrig[song.sel] + steps, 0, 3);
+                if (link_retrig[song.sel] == 2u) ui_message("SCALE: NO EXT RETRIG");
+                ui.force = 1;
+            } else if (slot == 1u) {
                 harmony_key_root = (uint8_t)((((int32_t)harmony_key_root_eff() + steps) % 12 + 12) % 12);
                 harmony_key_scale = (uint8_t)harmony_key_scale_eff();
                 harmony_key_mode = 1u;

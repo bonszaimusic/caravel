@@ -137,7 +137,9 @@ static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
     if (harmony_on && harmony_follow[trk_index(t)] && t->p[P_CHRD] != CH_BUS && !chord_kit(t))
         note = harmony_snap(t, note);              /* live MIDI notes follow HARMONY */
     ext_cfg_t ec = ext_cfg(t);                     /* SOURCE / EXT / OCT once: the build and 'mapped' agree */
+    ext_from_midi = 1;
     uint32_t n = chord_build_c(t, &ec, note, nn), i, f = 0, eat;
+    ext_from_midi = 0;
     uint8_t mapped = (uint8_t)(n > 1u || (n && nn[0] != src) || ext_is_on(t, &ec));   /* (CHORD EXT: always: with no note (WAIT, empty) the release must not fall back to the raw key and cut a same-pitch voice another source holds) */
     if (mapped)
         for (f = 0; f < MCHORD_N && mchord[f].id; f++)
@@ -215,6 +217,7 @@ static void __attribute__((noinline)) midi_forget_track(uint32_t track)
         midi_ch[ch].owned[track] = 0;
     }
     midi_owners[track] = 0;
+    ext_midi_forget_track(track);
     mchord_forget(track);
     chord_live_sync(track);
     midi_bend_q8[track] = midi_bend_target[track] = 0;
@@ -379,6 +382,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
                 midi_silence_track(i);
         break;
     case 123:                                      /* All Notes Off: normal releases, honours pedal */
+        ext_midi_forget_channel(ch);
         mask = midi_targets(ch);
         for (i = 0; i < 128u; i++)
             if (midi_note_get(ch, i))
@@ -439,6 +443,7 @@ static void __attribute__((noinline)) midi_route_block(void)
             midi_expression(midi_track(ch), c);
             continue;
         }
+        ext_midi_forget_channel(ch);
         for (note = 0; note < 128u; note++)
             if (midi_note_get(ch, note))
                 midi_release(ch, note);
@@ -457,7 +462,7 @@ static volatile uint8_t *const mpc_io;
  * (realtime and clock are handled in events_block, SysEx never reaches here). With ROUT CH1-4 channels
  * 5..16 are ignored entirely (with CH5-8 .. CH13-16 every channel outside the block): notes, bend, CCs (CC1/11/64, RPN, and the CC120/121/123 panic and reset),
  * channel aftertouch, Program Change, so they stay free for other instruments. */
-static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
+static void __attribute__((noinline)) midi_event_source(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2, uint32_t source)
 {
     if (song.g[G_ROUTE] != 1 && !midi_in_block(ch))
         return;
@@ -470,8 +475,23 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
         return;
     }
 #endif
-    if (st == 0x90u || st == 0x80u)
-        midi_note_event(ch, d1, st == 0x90u ? d2 : 0);
+    if (st == 0x90u || st == 0x80u) {
+        uint32_t vel = st == 0x90u ? d2 : 0u;
+        if (source >= 1u && source <= EXT_PORTS) {
+            uint32_t before = ext_phys_any(ch, d1);
+            uint32_t same = ext_phys_get(source - 1u, ch, d1);
+            if (vel) {
+                uint32_t owner = trk_index(midi_track(ch)) + 1u;
+                ext_midi_note(source, ch, d1, same ? owner : before ? before : owner);
+                if (before && !same) return; /* another port already owns the sounding key */
+            } else {
+                ext_midi_note(source, ch, d1, 0u); /* NOTE ON velocity zero is a true physical release */
+                if (!same || ext_phys_any(ch, d1)) return;
+                /* Release the sounding key only when its last physical owner ends. */
+            }
+        }
+        midi_note_event(ch, d1, vel);
+    }
     else if (st == 0xE0u) {
         midi_channel(ch)->bend = (int16_t)((int32_t)(d1 | (d2 << 7)) - 8192);
         midi_expression_channel(ch);
@@ -484,3 +504,10 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
         mpc_io[trk_index(midi_track(ch))] = (uint8_t)(0x80u | d1);
 }
 
+
+/* Retain the four-argument host/test API. The live queue calls the source-
+ * aware variant with its actual USB/TRS ingress ID. */
+static __attribute__((unused)) void midi_event(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
+{
+    midi_event_source(st, ch, d1, d2, 1u);
+}

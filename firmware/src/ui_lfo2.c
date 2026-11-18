@@ -230,6 +230,7 @@ static const param_desc_t *dual_card(const dual_t *dd, const page_t *rp, uint32_
             if (col == 0u) { *v = harmony_on; return &HON; }
             if (col == 1u) { *v = (int32_t)harmony_key_root_eff(); return &ROOT; }
             if (col == 2u) { *v = (int32_t)harmony_key_scale_eff(); return &SCL; }
+            if (col == 3u && mode == HROLE_EXT) { *v = link_retrig[song.sel]; return &RE; }
             return 0;
         }
         if (col == 0u) { *v = (int32_t)mode; return &MD; }
@@ -378,6 +379,9 @@ static void link_card(uint32_t row, uint32_t col, int32_t x, int32_t y, int acti
         else if (col == 2u) {
             lab = "SCALE";
             val = N_SCALE[harmony_key_scale_eff() % (sizeof N_SCALE / sizeof N_SCALE[0])];
+        } else if (mode == HROLE_EXT) {
+            static const char *const retrig[] = {"OFF", "HARM", "SCALE", "BOTH"};
+            lab = "RETRIG"; val = link_retrig[song.sel] == 2u ? "SCALE --" : retrig[link_retrig[song.sel] & 3u];
         } else { lab = "CHORDS"; val = "SELECT"; }
     } else if (col == 0u) {
         static const char *const names[] = {"NOTES", "FOLLOW", "CHORD", "EXT", "CUSTOM"};
@@ -498,7 +502,7 @@ static void lfo_cards(const page_t *pg)
         cv_text_on(10, y + 6, &AF_S, dd->kind == DK_HARMONY ?
             (row ? (harmony_edit_dur == 0u ? "CHORD PREVIEW" : "DURATIONS") :
              (harmony_edit_dur == 0u ? "GLOBAL KEY" : "CHORD ROOTS")) :
-            (row ? dd->hb : dd->ht), active ? T_INK : T_TEXT, head);
+            (row && dd->kind == DK_LINK && harm_role(TSEL) == HROLE_EXT ? "BUS + EXT RETRIG" : row ? dd->hb : dd->ht), active ? T_INK : T_TEXT, head);
         {
             char htxt[12];
             if (dd->kind == DK_HARMONY) {
@@ -506,7 +510,7 @@ static void lfo_cards(const page_t *pg)
                 str_cpy(htxt + str_len(htxt), harmony_on ? "ON" : "OFF", sizeof htxt - str_len(htxt));
                 cv_text_r(230, y + 6, &AF_S, htxt, active ? T_INK : T_MID, head);
             } else
-                cv_text_r(230, y + 6, &AF_S, !active ? "VIEW" : dd->kind == DK_LINK && row ? "EDIT K1-3" : "EDIT K1-4", active ? T_INK : T_MID, head);
+                cv_text_r(230, y + 6, &AF_S, !active ? "VIEW" : dd->kind == DK_LINK && row && harm_role(TSEL) != HROLE_EXT ? "EDIT K1-3" : "EDIT K1-4", active ? T_INK : T_MID, head);
         }
         if (rps[row] && rps[row]->graph == GR_MOD) {          /* the four slots at a glance: filled = in use, the one edited underlined */
             for (uint32_t k = 0; k < NMSLOT; k++) {
