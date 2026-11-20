@@ -1598,19 +1598,17 @@ static void uxl_hc_paint_bar(void)
         x += sw + 2;
     }
 }
-/* PLAY, HARM area: one short line inside the CAPTURE ring, below its box: "Am>F 1" = this chord, the next, and the bars until it */
+/* PLAY, HARM area: one short line inside the CAPTURE ring, below its box: "NEXT F 1" = the next chord and the bars until it (this chord is in the HARM tab) */
 static void uxl_hc_paint_play(void)
 {
     uxl_hc_t h;
     char a[8], b[24];
     uxl_hc_get(&h);
     if (!h.ok) {
-        uxl_text_c(120, 138, &AF_S, "HARM OFF", T_DIM);
+        uxl_text_c(120, 138, &AF_S, "OFF", T_DIM);
         return;
     }
-    uxl_hc_short(a, h.cur, 1u);
-    str_cpy(b, a, sizeof b);
-    str_cpy(b + str_len(b), ">", sizeof b - str_len(b));
+    str_cpy(b, "NEXT ", sizeof b);
     uxl_hc_short(a, h.nxt, 1u);
     str_cpy(b + str_len(b), a, sizeof b - str_len(b));
     str_cpy(b + str_len(b), " ", sizeof b - str_len(b));
@@ -2359,14 +2357,14 @@ static void uxl_paint(void)
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx, cy, hot); else cv_text(cx, cy, &AF_M, lab, hot ? T_ACCENT : global ? T_THEME : T_TEXT);
-                if (global) cv_text(cx + 80, cy - 1, &AF_S, "G", T_THEME);
+                if (global && !uxl_hm_key_global(&tg[k])) cv_text(cx + 80, cy - 1, &AF_S, "G", T_THEME);
                 cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx + text_w(&AF_S, b) + 5, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
             } else {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx - UXL_GW, cy, hot); else uxl_text_r(cx, cy, &AF_M, lab, hot ? T_ACCENT : global ? T_THEME : T_TEXT);
-                if (global) cv_text(cx - 85, cy - 1, &AF_S, "G", T_THEME);
+                if (global && !uxl_hm_key_global(&tg[k])) cv_text(cx - 85, cy - 1, &AF_S, "G", T_THEME);
                 uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx - text_w(&AF_S, b) - 11, vy + 3, 6, 6, 2, T_THEME, T_BG);
@@ -3110,11 +3108,11 @@ static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
                 cv_line(x1 - 5 * sx, y1, x1, y1, c);
                 cv_line(x1, y1 - 5 * sy, x1, y1, c);
             } else if (ax >= ay) {
-                cv_line(x1 - 4 * sx, y1 - 3, x1, y1, c);
-                cv_line(x1 - 4 * sx, y1 + 3, x1, y1, c);
+                cv_line(x1 - 6 * sx, y1 - 4, x1, y1, c);
+                cv_line(x1 - 6 * sx, y1 + 4, x1, y1, c);
             } else {
-                cv_line(x1 - 3, y1 - 4 * sy, x1, y1, c);
-                cv_line(x1 + 3, y1 - 4 * sy, x1, y1, c);
+                cv_line(x1 - 4, y1 - 6 * sy, x1, y1, c);
+                cv_line(x1 + 4, y1 - 6 * sy, x1, y1, c);
             }
         }
     }
@@ -3128,49 +3126,59 @@ static uint16_t uxl_hm_ink(uint32_t style, int ready, int hl)
     uint16_t ink = style == UXL_HM_FOLLOW ? 0x5F30u : style == UXL_HM_CHORD ? 0xFD05u : style == UXL_HM_EXT ? 0xDB7Fu : 0xFEE8u;
     return ux_mix(T_BG, ink, !ready ? 62 : hl ? 100 : 90);
 }
+/* Orthogonal routes only, 2 px (3 px on the selected track): no diagonal crosses the middle. From the bus node a route leaves its
+ * top corner (T1, T2) or bottom corner (T3, T4) sideways, then goes up or down into the track. Between tracks: straight when they share a
+ * row or column, else a Z through a lane beside the middle. */
 static void uxl_hm_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t style, uint16_t c, int32_t thick)
 {
-    uxl_hm_stroke(x0, y0, x1, y1, style, c);
-    if (thick) {
-        int32_t dx = x1 - x0, dy = y1 - y0;
-        if ((dy < 0 ? -dy : dy) > (dx < 0 ? -dx : dx)) uxl_hm_stroke(x0 + 1, y0, x1 + 1, y1, style == UXL_HM_FOLLOW ? UXL_HM_NONE : style, c);
-        else uxl_hm_stroke(x0, y0 + 1, x1, y1 + 1, style == UXL_HM_FOLLOW ? UXL_HM_NONE : style, c);
+    int32_t t, vert = x0 == x1;
+    for (t = 0; t <= thick; t++) {
+        if (vert) uxl_hm_stroke(x0 + t, y0, x1 + t, y1, style == UXL_HM_FOLLOW && t ? UXL_HM_NONE : style, c);
+        else uxl_hm_stroke(x0, y0 + t, x1, y1 + t, style == UXL_HM_FOLLOW && t ? UXL_HM_NONE : style, c);
     }
 }
-static void uxl_hm_badge(int32_t mx, int32_t my, uint32_t style, uint16_t ink, int32_t len, int32_t sx, int32_t sy)
+static void uxl_hm_badge(int32_t mx, int32_t my, uint32_t style, uint16_t ink)
 {
     const char *l = style == UXL_HM_EXT ? "E" : style == UXL_HM_CHORD ? "C" : 0;
     if (!l) return;
-    if (len < 30) { int32_t f = sx > 0 && sy < 0 ? -1 : 1; mx += 8 * -sy * f; my += 8 * sx * f; }          /* short bus edge: the letter beside the line, not on it */
-    else cv_rect(mx - 5, my - 7, 11, 14, T_BG);
-    uxl_text_c(mx, my - 7, &AF_S, l, ink);
+    cv_rect(mx - 6, my - 7, 13, 15, T_BG);
+    uxl_text_c(mx, my - 7, &AF_M, l, ink);
 }
-static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t c, int ready, int thick)
+static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t c, uint16_t ink, int thick)
 {
-    int32_t x0 = uxl_hm_x[source], y0 = uxl_hm_y[source];
-    int32_t x1 = uxl_hm_x[dest], y1 = uxl_hm_y[dest];
-    int32_t sx = uxl_hm_sign(x1 - x0), sy = uxl_hm_sign(y1 - y0);
-    int32_t mx, my;
+    int32_t x1 = uxl_hm_x[dest], y1 = uxl_hm_y[dest], bx, by, ex, ey;
+    uint32_t last = style == UXL_HM_KEY ? UXL_HM_KEY : UXL_HM_NONE;
     if (source == dest || source > NTRK || dest >= NTRK)
         return;
-    if (source < NTRK && (source ^ dest) == 3u) {              /* T1-T4, T2-T3: around the centre */
-        int32_t bx = 120 + (source < 1u || dest < 1u ? 24 : -24), by = 116;
-        int32_t ax = x0 + uxl_hm_sign(bx - x0) * 10, ay = y0 + uxl_hm_sign(by - y0) * 9;
-        int32_t ex = x1 - uxl_hm_sign(x1 - bx) * 10, ey = y1 - uxl_hm_sign(y1 - by) * 9;
-        uxl_hm_line(ax, ay, bx, by, style == UXL_HM_KEY ? UXL_HM_KEY : UXL_HM_NONE, c, thick);
-        uxl_hm_line(bx, by, ex, ey, style, c, thick);
-        mx = (ax + bx) / 2; my = (ay + by) / 2;
-        uxl_hm_badge(mx, my, style, c, 40, 0, 0);
+    if (source == NTRK) {                                     /* the bus node */
+        int32_t side = (dest & 1u) ? 1 : -1, ly = dest < 2u ? 108 : 124;
+        bx = 120 + side * 9;
+        ey = dest < 2u ? y1 + 9 : y1 - 9;
+        uxl_hm_line(bx, ly, x1, ly, UXL_HM_NONE, c, thick);
+        uxl_hm_line(x1, ly, x1, ey, style, c, thick);
+        uxl_hm_badge((bx + x1) / 2, ly, style, ink);
         return;
     }
-    /* Shorten both ends to leave room for the 20x18 track badges and bus. */
-    x0 += sx * (source == NTRK ? 11 : 10);
-    y0 += sy * (source == NTRK ? 9 : 9);
-    x1 -= sx * 10;
-    y1 -= sy * 9;
-    uxl_hm_line(x0, y0, x1, y1, style, c, thick);
-    {   int32_t ln = (x1 - x0 < 0 ? x0 - x1 : x1 - x0) + (y1 - y0 < 0 ? y0 - y1 : y1 - y0);
-        uxl_hm_badge((x0 + x1) / 2, (y0 + y1) / 2, style, c, ln, sx, sy); }
+    {
+        int32_t x0 = uxl_hm_x[source], y0 = uxl_hm_y[source];
+        if (x0 == x1) {                                       /* same column */
+            uxl_hm_line(x0, y0 + (y1 > y0 ? 9 : -9), x1, y1 + (y1 > y0 ? -9 : 9), style, c, thick);
+            uxl_hm_badge(x0, (y0 + y1) / 2, style, ink);
+        } else if (y0 == y1) {                                /* same row */
+            uxl_hm_line(x0 + (x1 > x0 ? 11 : -11), y0, x1 + (x1 > x0 ? -11 : 11), y1, style, c, thick);
+            uxl_hm_badge((x0 + x1) / 2, y0, style, ink);
+        } else {                                              /* diagonal: Z through the lane beside the middle */
+            int32_t lane = ((source ^ dest) == 3u && (source == 0u || dest == 0u)) ? 134 : 106;
+            by = y0 + (y0 < 116 ? 5 : -5);
+            ey = y1 + (y1 < 116 ? 5 : -5);
+            bx = x0 + (lane > x0 ? 11 : -11);
+            ex = x1 + (lane > x1 ? 11 : -11);
+            uxl_hm_line(bx, by, lane, by, last, c, thick);
+            uxl_hm_line(lane, by, lane, ey, last, c, thick);
+            uxl_hm_line(lane, ey, ex, ey, style, c, thick);
+            uxl_hm_badge((bx + lane) / 2, by, style, ink);
+        }
+    }
 }
 static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
 {
@@ -3200,9 +3208,12 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
                 ready = ext_state(t, src, 0) == EXT_ST_OK;
             }
             if (style != UXL_HM_NONE)
+            {
+                int hl = i == song.sel || source == song.sel;       /* every route of the selected track: its colour (the accent), 3 px */
                 uxl_hm_edge(source, i, style,
-                    uxl_hm_ink(style, ready, i == song.sel || source == song.sel), ready,
-                    i == song.sel || source == song.sel);
+                    hl ? ux_mix(T_BG, T_ACCENT, ready ? 100 : 62) : uxl_hm_ink(style, ready, 0),
+                    uxl_hm_ink(style, ready, hl), hl ? 2 : 1);
+            }
         }
     if (view != UXL_HM_KEY) {
         uxl_hc_t hc;
