@@ -52,6 +52,6 @@ assert.equal(ex.web_test_afterburner_energy(), 0, "OFF clears the tail");
 turn(0, 1);
 assert.equal(ex.web_test_project_save(0), 0, "project saved");
 ex.web_test_project_load(0); render(800);
-assert.deepEqual(values(), [0, 30, 32, 70], "documented session-only settings reset on LOAD");
+assert.deepEqual(values(), [1, 60, 127, 0], "AFTER settings are part of the saved PROJECT (FX extension, fc016bf) and come back on LOAD");
 console.log(JSON.stringify({test:"afterburner-wasm", frames, peak, energy5, energy30, energy60, hostOnly:true}));
-console.log("Afterburner WASM: panel controls, HALL/STASIS spillover, 60s decay, OFF clearing and session-only LOAD PASS");
+console.log("Afterburner WASM: panel controls, HALL/STASIS spillover, 60s decay, OFF clearing and PROJECT-persistent LOAD PASS");
