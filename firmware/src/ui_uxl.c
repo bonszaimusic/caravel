@@ -978,13 +978,24 @@ static void uxl_panic_only(void)
         ui.force = 1;
     }
 }
+static int32_t uxl_clamp8(int32_t v) { return v < -128 ? -128 : v > 127 ? 127 : v; }
 static void uxl_mom_poll(void)
 {
     uint32_t lfo = (fm1_in.buttons >> panel.btn[B_LFO]) & 1u, k;
     if (uxl.mom && (!lfo || !uxl.play)) {               /* LFO let go: the values back */
-        for (k = 0; k < 4u; k++)
-            if ((uxl.mom & (1u << k)) && hp_desc(uxl.mom_r[k]))
+        for (k = 0; k < 4u; k++) {
+            if (!(uxl.mom & (1u << k)))
+                continue;
+            if (uxl.mom_r[k].kind == UXL_KFILT) {            /* the FX macros (FILTER, CRUSH, THROW, DEPTH): their raw values back */
+                if (!uxl.mom_r[k].id) trk[uxl.mom_r[k].track % NTRK].p[P_FILT] = uxl.mom_v[k];
+                else perf_k[uxl.mom_r[k].id & 3u] = (int8_t)uxl_clamp8(uxl.mom_v[k]);
+            }
+#if CARAVEL_STASIS_EXPAND
+            else if (uxl.mom_r[k].kind == UXL_KTONE) stasis_tone = uxl.mom_v[k];
+#endif
+            else if (hp_desc(uxl.mom_r[k]))
                 hp_set(uxl.mom_r[k], uxl.mom_v[k], 0);
+        }
         uxl.mom = 0;
         ui.force = 1;
         ui_message("BACK");
@@ -1217,6 +1228,11 @@ static void uxl_knob(uint32_t k, int32_t s)
 #if CARAVEL_STASIS_EXPAND
     if (tg[k].kind == UXL_KTONE) {
         if (song.g[G_RTYPE] != 3u) { ui_message("SET REVERB STASIS"); return; }
+        if ((fm1_in.buttons & (1u << panel.btn[B_LFO])) && !(uxl.mom & (1u << k))) {   /* LFO held: it goes back when LFO is let go */
+            uxl.mom |= (uint8_t)(1u << k);
+            uxl.mom_v[k] = stasis_tone;
+            uxl.mom_r[k].kind = UXL_KTONE;
+        }
         stasis_tone = (int16_t)clamp((int32_t)stasis_tone +
                                    accel(EN_K1 + k, s, 127), 0, 127);
         uxl.hot_k = (uint8_t)k;
@@ -1235,6 +1251,13 @@ static void uxl_knob(uint32_t k, int32_t s)
         return;
     }
     if (tg[k].kind == UXL_KFILT) {                      /* FILTER edits P_FILT; other FX macros keep their current live behavior */
+        if ((fm1_in.buttons & (1u << panel.btn[B_LFO])) && !(uxl.mom & (1u << k))) {   /* LFO held: MOMENTARY, as for every other arc */
+            uxl.mom |= (uint8_t)(1u << k);
+            uxl.mom_r[k].kind = UXL_KFILT;
+            uxl.mom_r[k].id = (uint16_t)(tg[k].id & 3u);
+            uxl.mom_r[k].track = (uint8_t)song.sel;
+            uxl.mom_v[k] = (int16_t)(tg[k].id ? perf_k[tg[k].id & 3u] : TSEL->p[P_FILT]);
+        }
         uxl_fx_turn(tg[k].id, k, s);
         uxl.hot_k = (uint8_t)k;
         uxl.hot_t = 40;
