@@ -14,12 +14,24 @@
 #define PROJ_NAME_OFF (PROJ_STORE_SIZE - 4u - PROJ_NAME_LEN)
 #define PROJ_MIDI_OFF (PROJ_NAME_OFF - 3u)
 #define PROJ_LFO2_OFF (PROJ_MIDI_OFF - PROJ_LFO2_SIZE)
-/* FUNW backward-readable extension: 2 formerly-zero header bytes and the
- * three bytes already reserved between motion and LFO2. Zero marker means
- * historical defaults. Old firmware will reject *new* nondefault data; the
- * project size, object addresses and checksum are unchanged. */
+/* FUNW backward-readable extension: two formerly-zero header bytes (b[65] marker, b[67] ON+TIME) and 21 bits (AMT, DAMP, TONE)
+ * in the unused top six bits of the four HARMONY DURATION bytes (they hold 0..3; the gap between motion and LFO2 is only one
+ * byte, so it cannot hold them). No marker means historical defaults and untouched harmony bytes, so every 1.0 project loads
+ * exactly as before. Old firmware rejects *new* nondefault data (marker, or DURATION > 3); the project size, object addresses
+ * and checksum are unchanged. */
 #define PROJ_FX_EXT_MARK 0xA5u
-#define PROJ_FX_EXT_OFF (PROJ_LFO2_OFF - 3u)
+#define PROJ_HARM_DUR_OFF 4u
+static void proj_fx_hi_pack(uint8_t *hb, const uint8_t fx[5])
+{
+    uint32_t v = (uint32_t)fx[2] | (uint32_t)fx[3] << 7 | (uint32_t)fx[4] << 14, i;
+    for (i = 0; i < 4u; i++) hb[PROJ_HARM_DUR_OFF + i] = (uint8_t)(hb[PROJ_HARM_DUR_OFF + i] | ((v >> (6u * i)) & 63u) << 2);
+}
+static void proj_fx_hi_unpack(uint8_t *hb, uint8_t fx[5])   /* reads the bits and clears them from the copy */
+{
+    uint32_t v = 0, i;
+    for (i = 0; i < 4u; i++) { v |= (uint32_t)(hb[PROJ_HARM_DUR_OFF + i] >> 2) << (6u * i); hb[PROJ_HARM_DUR_OFF + i] &= 3u; }
+    fx[2] = (uint8_t)(v & 127u); fx[3] = (uint8_t)(v >> 7 & 127u); fx[4] = (uint8_t)(v >> 14 & 127u);
+}
 typedef struct {                               /* one track */
     int16_t p[P_COUNT];
     uint8_t engine, preset;
@@ -199,15 +211,14 @@ static int proj_pack(project_store_t *out, const project_t *q)
             b[pos++] = (uint8_t)(s->probability | (r >> 1) << 7);
         }
     }
-    if (pos + PROJ_HARMONY_SIZE + sizeof q->motion > PROJ_FX_EXT_OFF) return 0;
-    f2_harmony_pack(b + pos, &proj_harmony); pos += PROJ_HARMONY_SIZE;
+    if (pos + PROJ_HARMONY_SIZE + sizeof q->motion > PROJ_LFO2_OFF) return 0;
+    f2_harmony_pack(b + pos, &proj_harmony);
+    if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u) proj_fx_hi_pack(b + pos, fx);
+    pos += PROJ_HARMONY_SIZE;
     memcpy(b + pos, &q->motion, sizeof q->motion);
     if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u) {
         b[65] = PROJ_FX_EXT_MARK;
         b[67] = (uint8_t)(fx[1] | (fx[0] << 7)); /* ON + TIME 10..60 */
-        b[PROJ_FX_EXT_OFF] = fx[2];
-        b[PROJ_FX_EXT_OFF + 1u] = fx[3];
-        b[PROJ_FX_EXT_OFF + 2u] = fx[4];
     }
     proj_midi_pack(b, q);
     memcpy(b + PROJ_LFO2_OFF, q->lfo2, PROJ_LFO2_SIZE);
@@ -221,7 +232,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
 static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
 {
     uint32_t pos = 68u, t, i, magic, size, sum, np;
-    uint8_t fx[5] = {0,30,32,70,64};
+    uint8_t fx[5] = {0,30,32,70,64}, hb[PROJ_HARMONY_SIZE];
     int ext;
     harmony_saved_t h;
     if(st != PROJ_STORE_SIZE) return 0;
@@ -232,12 +243,11 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     if(magic!=PROJ_MAGIC_WIRE||size!=st||np!=P_COUNT||
        (b[65] && !ext) || (!ext && b[67]) ||
        b[62]>=NTRK||b[63]!=NPART||b[64]!=PROJ_PHYS||sum!=proj_hash(b,st-4u)||
-       68u+NTRK*(np+2u+NSTEP*PROJ_STEP_SIZE)+PROJ_HARMONY_SIZE+sizeof q->motion>PROJ_FX_EXT_OFF)return 0;
+       68u+NTRK*(np+2u+NSTEP*PROJ_STEP_SIZE)+PROJ_HARMONY_SIZE+sizeof q->motion>PROJ_LFO2_OFF)return 0;
+    memcpy(hb,b+68u+NTRK*(np+2u+NSTEP*PROJ_STEP_SIZE),PROJ_HARMONY_SIZE);
     if (ext) {
         fx[0] = b[67] >> 7; fx[1] = b[67] & 127u;
-        fx[2] = b[PROJ_FX_EXT_OFF];
-        fx[3] = b[PROJ_FX_EXT_OFF + 1u];
-        fx[4] = b[PROJ_FX_EXT_OFF + 2u];
+        proj_fx_hi_unpack(hb, fx);
         if (!proj_fx_valid(fx)) return 0;
     }
     memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC_V11; q->size = sizeof *q;
@@ -267,13 +277,12 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
             step_set_nudge(s, (int32_t)(nd ^ 8u) - 8);
         }
     }
-    if(!f2_harmony_unpack(&h,b+pos))return 0;
+    if(!f2_harmony_unpack(&h,hb))return 0;
     pos+=PROJ_HARMONY_SIZE;
     memcpy(&q->motion,b+pos,sizeof q->motion);
     if(!motion_valid(&q->motion)||!proj_engines_ok(q))return 0;
     motion_drop_chordset(&q->motion);
-    for(i=pos+sizeof q->motion;i<PROJ_FX_EXT_OFF;i++)if(b[i])return 0;
-    if (!ext) for(i=PROJ_FX_EXT_OFF;i<PROJ_LFO2_OFF;i++)if(b[i])return 0;
+    for(i=pos+sizeof q->motion;i<PROJ_LFO2_OFF;i++)if(b[i])return 0;
     proj_midi_unpack(q,b);
     memcpy(q->lfo2, b + PROJ_LFO2_OFF, PROJ_LFO2_SIZE);
     {
@@ -289,8 +298,8 @@ static int proj_import(project_t *q,const void *b,int n) {
 }
 _Static_assert(PROJ_STORE_SIZE <= 3840u,"FORMAT 2 native project fits storage");
 _Static_assert(sizeof(project_store_t)==PROJ_STORE_SIZE,"FORMAT 2 wire size includes alignment");
-_Static_assert(PROJ_FX_EXT_OFF >= 68u + NTRK * (P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) +
+_Static_assert(PROJ_LFO2_OFF >= 68u + NTRK * (P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) +
                PROJ_HARMONY_SIZE + sizeof(motion_store_t),
-               "Project FX extension overlaps motion");
+               "Project body overlaps LFO2");
 
 _Static_assert(sizeof(lfo2_config_t)==L2_N,"LFO2 explicit byte layout");

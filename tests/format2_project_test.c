@@ -30,6 +30,7 @@ int main(void) {
     assert(!memcmp(&h,&proj_harmony,sizeof h));
     /* Legacy FUNW has zero marker/padding and restores safe FX defaults. */
     assert(wire.raw[65u] == 0u && wire.raw[67u] == 0u);
+    for (uint32_t t2 = 0; t2 < NTRK; t2++) assert(wire.raw[68u + NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) + PROJ_HARM_DUR_OFF + t2] == t2);   /* default FX: bytes exactly as 1.0 wrote them */
     assert(q.af_on == 0u && q.af_time == 30u && q.af_amt == 32u &&
            q.af_damp == 70u && q.st_tone == 64u);
     /* Nondefault AFTER and TONE stay attached to the saved PROJECT.
@@ -39,9 +40,12 @@ int main(void) {
     assert(proj_pack(&wire,&p));
     assert(wire.raw[65u] == PROJ_FX_EXT_MARK);
     assert(wire.raw[67u] == (0x80u | 47u));
-    assert(wire.raw[PROJ_FX_EXT_OFF] == 99u &&
-           wire.raw[PROJ_FX_EXT_OFF + 1u] == 51u &&
-           wire.raw[PROJ_FX_EXT_OFF + 2u] == 105u);
+    {   /* AMT/DAMP/TONE ride in the unused top six bits of the four HARMONY DURATION bytes; the low two bits stay the duration */
+        const uint8_t *hd = wire.raw + 68u + NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) + PROJ_HARM_DUR_OFF;
+        uint32_t v = 0, t2;
+        for (t2 = 0; t2 < NTRK; t2++) { assert((hd[t2] & 3u) == t2); v |= (uint32_t)(hd[t2] >> 2) << (6u * t2); }
+        assert((v & 127u) == 99u && (v >> 7 & 127u) == 51u && (v >> 14 & 127u) == 105u);
+    }
     assert(proj_import(&q,wire.raw,sizeof wire));
     assert(q.af_on == 1u && q.af_time == 47u && q.af_amt == 99u &&
            q.af_damp == 51u && q.st_tone == 105u);
@@ -49,8 +53,14 @@ int main(void) {
     assert(!proj_import(&q,bad.raw,sizeof bad)); /* invalid AFTER TIME */
     bad = wire; bad.raw[65u] = 0x55u; rehash(&bad);
     assert(!proj_import(&q,bad.raw,sizeof bad)); /* unknown extension */
-    bad = wire; bad.raw[PROJ_FX_EXT_OFF] = 200u; rehash(&bad);
-    assert(!proj_import(&q,bad.raw,sizeof bad)); /* invalid wet amount */
+    assert(!memcmp(&h,&proj_harmony,sizeof h));   /* the harmony survived the shared bytes */
+    /* 1.0 strictness is kept: without the marker, a DURATION above 3 is still rejected */
+    {   p.af_on = p.af_time = p.af_amt = p.af_damp = p.st_tone = 0u;
+        assert(proj_pack(&wire,&p) && wire.raw[65u] == 0u);
+        bad = wire; bad.raw[68u + NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) + PROJ_HARM_DUR_OFF] |= 4u; rehash(&bad);
+        assert(!proj_import(&q,bad.raw,sizeof bad)); }
+    p.af_on = 1u; p.af_time = 47u; p.af_amt = 99u; p.af_damp = 51u; p.st_tone = 105u;
+    assert(proj_pack(&wire,&p) && proj_import(&q,wire.raw,sizeof wire));   /* (a failed import above leaves q cleared) */
     /* A valid new project must re-encode through rename without losing
      * the saved FX state; defaults still use the legacy zero-wire layout. */
     assert(proj_pack(&wire,&q) && wire.raw[65u] == PROJ_FX_EXT_MARK);
