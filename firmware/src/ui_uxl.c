@@ -3002,7 +3002,13 @@ static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
 }
 /* One line, 2 px when it touches the selected track. Roles: FOLLOW = arrow, CHORD = orange "C", EXT = violet "E" on the line;
  * KEY = dashes. Track-to-track diagonals bend around the centre (bus mark or KEY label) instead of crossing it. */
-#define UXL_HM_EXT_INK 0xDB7Fu
+/* One fixed colour per role (the same on every theme, so the legend is learnable): FOLLOW green, CHORD orange, EXT violet, KEY yellow.
+ * Not ready: the colour at 50 %; ready but not on the selected track: 90 %; on the selected track: full colour and 2 px. */
+static uint16_t uxl_hm_ink(uint32_t style, int ready, int hl)
+{
+    uint16_t ink = style == UXL_HM_FOLLOW ? 0x5F30u : style == UXL_HM_CHORD ? 0xFD05u : style == UXL_HM_EXT ? 0xDB7Fu : 0xFEE8u;
+    return ux_mix(T_BG, ink, !ready ? 50 : hl ? 100 : 90);
+}
 static void uxl_hm_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t style, uint16_t c, int32_t thick)
 {
     uxl_hm_stroke(x0, y0, x1, y1, style, c);
@@ -3012,13 +3018,13 @@ static void uxl_hm_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t
         else uxl_hm_stroke(x0, y0 + 1, x1, y1 + 1, style == UXL_HM_FOLLOW ? UXL_HM_NONE : style, c);
     }
 }
-static void uxl_hm_badge(int32_t mx, int32_t my, uint32_t style, int ready, int32_t len, int32_t sx, int32_t sy)
+static void uxl_hm_badge(int32_t mx, int32_t my, uint32_t style, uint16_t ink, int32_t len, int32_t sx, int32_t sy)
 {
     const char *l = style == UXL_HM_EXT ? "E" : style == UXL_HM_CHORD ? "C" : 0;
     if (!l) return;
     if (len < 30) { int32_t f = sx > 0 && sy < 0 ? -1 : 1; mx += 8 * -sy * f; my += 8 * sx * f; }          /* short bus edge: the letter beside the line, not on it */
     else cv_rect(mx - 5, my - 7, 11, 14, T_BG);
-    uxl_text_c(mx, my - 7, &AF_S, l, !ready ? T_MID : style == UXL_HM_EXT ? (uint16_t)UXL_HM_EXT_INK : T_THEME);
+    uxl_text_c(mx, my - 7, &AF_S, l, ink);
 }
 static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t c, int ready, int thick)
 {
@@ -3035,7 +3041,7 @@ static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t
         uxl_hm_line(ax, ay, bx, by, style == UXL_HM_KEY ? UXL_HM_KEY : UXL_HM_NONE, c, thick);
         uxl_hm_line(bx, by, ex, ey, style, c, thick);
         mx = (ax + bx) / 2; my = (ay + by) / 2;
-        uxl_hm_badge(mx, my, style, ready, 40, 0, 0);
+        uxl_hm_badge(mx, my, style, c, 40, 0, 0);
         return;
     }
     /* Shorten both ends to leave room for the 20x18 track badges and bus. */
@@ -3045,7 +3051,7 @@ static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t
     y1 -= sy * 9;
     uxl_hm_line(x0, y0, x1, y1, style, c, thick);
     {   int32_t ln = (x1 - x0 < 0 ? x0 - x1 : x1 - x0) + (y1 - y0 < 0 ? y0 - y1 : y1 - y0);
-        uxl_hm_badge((x0 + x1) / 2, (y0 + y1) / 2, style, ready, ln, sx, sy); }
+        uxl_hm_badge((x0 + x1) / 2, (y0 + y1) / 2, style, c, ln, sx, sy); }
 }
 static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
 {
@@ -3076,7 +3082,7 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
             }
             if (style != UXL_HM_NONE)
                 uxl_hm_edge(source, i, style,
-                    !ready ? T_DIM : (i == song.sel || source == song.sel) ? T_ACCENT : T_TEXT, ready,
+                    uxl_hm_ink(style, ready, i == song.sel || source == song.sel), ready,
                     i == song.sel || source == song.sel);
         }
     if (view != UXL_HM_KEY) {
