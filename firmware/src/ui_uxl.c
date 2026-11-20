@@ -2984,11 +2984,6 @@ static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
         }
     } else {
         cv_line(x0, y0, x1, y1, c);
-        if (style == UXL_HM_CHORD) {                    /* two lines = chord voices */
-            int32_t ox = (dx < 0 ? -dx : dx) >= (dy < 0 ? -dy : dy) ? 0 : 3;
-            int32_t oy = ox ? 0 : 3;
-            cv_line(x0 + ox, y0 + oy, x1 + ox, y1 + oy, c);
-        }
         if (style == UXL_HM_FOLLOW) {                   /* single line + arrow */
             int32_t sx = uxl_hm_sign(dx), sy = uxl_hm_sign(dy);
             int32_t ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
@@ -3003,26 +2998,54 @@ static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
                 cv_line(x1 + 3, y1 - 4 * sy, x1, y1, c);
             }
         }
-        if (style == UXL_HM_EXT) {                      /* plus = extension tones */
-            int32_t mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-            cv_rect(mx - 1, my - 4, 3, 9, c);
-            cv_rect(mx - 4, my - 1, 9, 3, c);
-        }
     }
 }
-static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t c)
+/* One line, 2 px when it touches the selected track. Roles: FOLLOW = arrow, CHORD = orange "C", EXT = violet "E" on the line;
+ * KEY = dashes. Track-to-track diagonals bend around the centre (bus mark or KEY label) instead of crossing it. */
+#define UXL_HM_EXT_INK 0xDB7Fu
+static void uxl_hm_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t style, uint16_t c, int32_t thick)
+{
+    uxl_hm_stroke(x0, y0, x1, y1, style, c);
+    if (thick) {
+        int32_t dx = x1 - x0, dy = y1 - y0;
+        if ((dy < 0 ? -dy : dy) > (dx < 0 ? -dx : dx)) uxl_hm_stroke(x0 + 1, y0, x1 + 1, y1, style == UXL_HM_FOLLOW ? UXL_HM_NONE : style, c);
+        else uxl_hm_stroke(x0, y0 + 1, x1, y1 + 1, style == UXL_HM_FOLLOW ? UXL_HM_NONE : style, c);
+    }
+}
+static void uxl_hm_badge(int32_t mx, int32_t my, uint32_t style, int ready, int32_t len, int32_t sx, int32_t sy)
+{
+    const char *l = style == UXL_HM_EXT ? "E" : style == UXL_HM_CHORD ? "C" : 0;
+    if (!l) return;
+    if (len < 30) { int32_t f = sx > 0 && sy < 0 ? -1 : 1; mx += 8 * -sy * f; my += 8 * sx * f; }          /* short bus edge: the letter beside the line, not on it */
+    else cv_rect(mx - 5, my - 7, 11, 14, T_BG);
+    uxl_text_c(mx, my - 7, &AF_S, l, !ready ? T_MID : style == UXL_HM_EXT ? (uint16_t)UXL_HM_EXT_INK : T_THEME);
+}
+static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t c, int ready, int thick)
 {
     int32_t x0 = uxl_hm_x[source], y0 = uxl_hm_y[source];
     int32_t x1 = uxl_hm_x[dest], y1 = uxl_hm_y[dest];
     int32_t sx = uxl_hm_sign(x1 - x0), sy = uxl_hm_sign(y1 - y0);
+    int32_t mx, my;
     if (source == dest || source > NTRK || dest >= NTRK)
         return;
+    if (source < NTRK && (source ^ dest) == 3u) {              /* T1-T4, T2-T3: around the centre */
+        int32_t bx = 120 + (source < 1u || dest < 1u ? 22 : -22), by = 116;
+        int32_t ax = x0 + uxl_hm_sign(bx - x0) * 10, ay = y0 + uxl_hm_sign(by - y0) * 9;
+        int32_t ex = x1 - uxl_hm_sign(x1 - bx) * 10, ey = y1 - uxl_hm_sign(y1 - by) * 9;
+        uxl_hm_line(ax, ay, bx, by, style == UXL_HM_KEY ? UXL_HM_KEY : UXL_HM_NONE, c, thick);
+        uxl_hm_line(bx, by, ex, ey, style, c, thick);
+        mx = (ax + bx) / 2; my = (ay + by) / 2;
+        uxl_hm_badge(mx, my, style, ready, 40, 0, 0);
+        return;
+    }
     /* Shorten both ends to leave room for the 20x18 track badges and bus. */
     x0 += sx * (source == NTRK ? 11 : 10);
     y0 += sy * (source == NTRK ? 9 : 9);
     x1 -= sx * 10;
     y1 -= sy * 9;
-    uxl_hm_stroke(x0, y0, x1, y1, style, c);
+    uxl_hm_line(x0, y0, x1, y1, style, c, thick);
+    {   int32_t ln = (x1 - x0 < 0 ? x0 - x1 : x1 - x0) + (y1 - y0 < 0 ? y0 - y1 : y1 - y0);
+        uxl_hm_badge((x0 + x1) / 2, (y0 + y1) / 2, style, ready, ln, sx, sy); }
 }
 static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
 {
@@ -3053,7 +3076,8 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
             }
             if (style != UXL_HM_NONE)
                 uxl_hm_edge(source, i, style,
-                    !ready ? T_DIM : i == song.sel ? T_ACCENT : T_MID);
+                    !ready ? T_DIM : (i == song.sel || source == song.sel) ? T_ACCENT : T_TEXT, ready,
+                    i == song.sel || source == song.sel);
         }
     if (view != UXL_HM_KEY) {
         cv_rrect(111, 108, 18, 16, 4, harmony_on ? T_THEME : T_DIM, T_BG);
@@ -3063,8 +3087,8 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
     for (i = 0; i < NTRK; i++) {
         int32_t x = uxl_hm_x[i], y = uxl_hm_y[i], selected = i == song.sel;
         char name[3] = {'T', (char)('1' + i), 0};
-        cv_rrect(x - 11, y - 9, 22, 18, 8,
-                 selected ? T_ACCENT : T_MID, selected ? T_ACCENT : T_BG);
+        cv_rrect(x - 11, y - 9, 22, 18, 8, selected ? T_ACCENT : T_MID, T_BG);
+        if (!selected) cv_rrect(x - 10, y - 8, 20, 16, 7, T_SURF, T_MID);
         uxl_text_c(x, y - 6, &AF_S, name, selected ? T_INK : T_TEXT);
     }
     /* Retain the EXT detail's source-chord readout, only move it below the map. */
