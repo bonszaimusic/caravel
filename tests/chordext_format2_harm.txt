@@ -8,7 +8,7 @@ chrd_shapes     audio=fd4513f4b36ee778 events=f4144d9692b9368b midiout=5e3366a53
 chrd_bus        audio=2480e9ab7eae6504 events=6c7d605f3da22447 midiout=024a7b85d2c8c945 blocks=6891 noteevents=14 midiout_packets=14
 chrd_midi       audio=cf3779b51dfe68a0 events=575d3ac17f5b8232 midiout=cbf29ce484222325 blocks=2619 noteevents=22 midiout_packets=0
 latch_new       audio=8738312622ff5384 events=c1b5e0204f8cf40a midiout=828f8e79d33c9247 blocks=2757 noteevents=36 midiout_packets=26
-latch_stack     audio=85ae78ffad9df36b events=4e457ac5eb949303 midiout=e313a83a6baea302 blocks=2619 noteevents=26 midiout_packets=28
+latch_stack     audio=50e778936c8f489e events=d68389419f4281e7 midiout=e313a83a6baea302 blocks=2619 noteevents=40 midiout_packets=28
 arp_modes_a     audio=d3441fd925239f2a events=4154c237e1327ef4 midiout=d79defc75c126119 blocks=4893 noteevents=82 midiout_packets=8
 arp_modes_b     audio=f3faf247532afe58 events=9b15bd753d295121 midiout=3032c944d8901f8a blocks=5375 noteevents=116 midiout_packets=6
 arp_hold_chord  audio=366824cf3c06f131 events=0add1b7f788d6984 midiout=08547ddb7f65aa83 blocks=6202 noteevents=254 midiout_packets=10
