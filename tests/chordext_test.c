@@ -1206,17 +1206,13 @@ static int t24(void)
         u_key(100, K_C4, 1); u_key(150, K_C4, 0);            /* latched */
         run_to(400);
         ok &= ngated(1) == 3u;
-        u_key(450, K_C4, 1);                                 /* the toggle: ends them, the key is still down */
+        u_key(450, K_C4, 1);                                 /* a chord track has no STACK (it latches as NEW): a press replaces the latched chord, no toggle */
         run_to(600);
-        ok &= ngated(1) == 0u;
-        run_to(1500);                                        /* a bar line: the held toggle key sounds nothing */
-        ok &= harmony_bar == 1u && ngated(1) == 0u;
-        u_key(1550, K_C4, 0); run_to(1700);
-        ok &= ngated(1) == 0u;
-        u_key(1750, K_C4, 1); u_key(1800, K_C4, 0); run_to(1950);      /* a fresh press latches again, not swallowed */
-        ok &= ngated(1) == 3u;
-        trk[1].p[P_LATCH] = LT_OFF; run_to(2100);
-        bad += x_check("T24 a LATCH STACK toggle key held over a bar line sounds nothing; a later press latches again; LATCH off frees it", ok && ngated(1) == 0u);
+        ok &= ngated(1) == 3u;                               /* the new set sounds, the old one is gone: three notes, not six, not none */
+        u_key(650, K_C4, 0); run_to(800);
+        ok &= ngated(1) == 3u;                               /* and it is latched */
+        trk[1].p[P_LATCH] = LT_OFF; run_to(950);
+        bad += x_check("T24 a chord track has no LATCH STACK: it latches as NEW, a new press replaces the latched chord (3 notes, not 6); LATCH off frees it", ok && ngated(1) == 0u);
     }
     {
         setup(); harm_prog(0, 9, 5, 7); link_retrig[1] = 1; harmony_follow[1] = 1; trk[1].p[P_AMODE] = AM_UP; trk[1].p[P_ARATE] = 2; transport_req = 1;
@@ -1249,6 +1245,13 @@ static int t25(void)
         u_usb(100, 0x91, 60, 100); u_usb(150, 0x81, 60, 0);   /* latched */
         run_to(400);
         ok &= ngated(1) >= 1u && nstay(1) >= 1u;
+        if (ex) {
+            u_usb(450, 0x91, 60, 100);                        /* a chord track has no STACK (NEW): the press replaces the latched notes */
+            run_to(600);
+            ok &= ngated(1) >= 1u;
+            u_usb(650, 0x81, 60, 0); run_to(800);
+            ok &= ngated(1) >= 1u && nstay(1) >= 1u;          /* the new set is latched too */
+        } else {
         u_usb(450, 0x91, 60, 100);                            /* the toggle: ends it, the note is still down */
         run_to(600);
         ok &= ngated(1) == 0u;
@@ -1256,7 +1259,8 @@ static int t25(void)
         ok &= harmony_bar == 1u && ngated(1) == 0u;
         u_usb(1550, 0x81, 60, 0); run_to(1800);
         ok &= ngated(1) == 0u && nstay(1) == 0u;              /* and its release latches nothing */
-        bad += x_check(ex ? "T25 EXT: a MIDI LATCH STACK toggle held over a bar line sounds nothing, its release latches nothing" :
+        }
+        bad += x_check(ex ? "T25 EXT: a chord track has no LATCH STACK (it latches as NEW): a MIDI press replaces the latched notes" :
                             "T25 SOURCE OFF (CHRD OFF, FOLLOW, RETRIG HARM): a MIDI LATCH STACK toggle held over a bar line sounds nothing, its release latches nothing", ok);
     }
     return bad;

@@ -461,9 +461,13 @@ static uint8_t lat_src[NTRK][128];
 static volatile uint8_t link_retrig_req;  /* bit per track: a LINK key change asks the audio side to retrigger that track's held bus chord (round 7: the UI no longer touches voices) */
 static volatile uint8_t latch_req;       /* bit per track: the UI asks for the release gesture (OCT- + OCT+) */
 
+/* A track that plays chords (a chord shape or the HARMONY bus: P_CHRD not OFF, or CHORD EXT: P_CSRC) has no STACK: every held key is already a
+ * chord (about 3 voices), so stacked latches would use up the voices. It latches as NEW (a new set replaces the old one). */
+static int latch_chords(const track_t *t) { return t->p[P_CSRC] != 0 || t->p[P_CHRD] != 0; }   /* (CH_OFF is 0, chord.c) */
 static uint32_t latch_mode(const track_t *t)
 {
     uint32_t v = (uint32_t)t->p[P_LATCH];
+    if (v == LT_STACK && latch_chords(t)) v = LT_NEW;
     return (v == LT_NEW || v == LT_STACK) && !chord_kit(t) ? v : LT_OFF;
 }
 static int lat_get(const uint32_t *a, uint32_t n) { return (int)((a[n >> 5] >> (n & 31u)) & 1u); }

@@ -742,6 +742,8 @@ EXPORT void web_test_el_arm(void) { uxl_el_arm_toggle(); }   /* (shots) PLAY's E
 EXPORT uint32_t web_test_harm_hc(uint32_t f) { uxl_hc_t h; uxl_hc_get(&h); return !h.ok ? 255u : f == 0u ? h.cur : f == 1u ? h.nxt : f == 2u ? h.left : f == 3u ? h.extra : f == 4u ? h.hold : f == 6u ? h.len : f == 7u ? h.elapsed : h.prog; }   /* (tests) the harmony readout */
 EXPORT int32_t web_test_fxk(uint32_t i) { return i == 0u ? TSEL->p[P_FILT] : perf_k[i & 3u]; }   /* (tests) the PLAY FX macros' raw values: FILTER, CRUSH, THROW, DEPTH */
 EXPORT uint32_t web_test_mom(void) { return uxl.mom; }
+EXPORT void web_test_set_latch(uint32_t t, uint32_t v) { if (t < NTRK) trk[t].p[P_LATCH] = (int16_t)v; }
+EXPORT uint32_t web_test_latch(uint32_t t) { return t < NTRK ? (uint32_t)trk[t].p[P_LATCH] : 0u; }
 EXPORT void web_test_harm_reset(void) { uint32_t i; harmony_on = 0; harmony_key_mode = 0; for (i = 0; i < NTRK; i++) { link_src[i] = 0; harmony_follow[i] = 0; trk[i].p[P_CSRC] = 0; trk[i].p[P_CHRD] = CH_OFF; } ui.force = 1; }
 EXPORT uint32_t web_test_cap_events(uint32_t i) { return i < NTRK ? cap_ln[i] : 0u; }   /* (tests: the events of a track's loop) */
 EXPORT uint32_t web_test_cap_post(uint32_t op, uint32_t i, uint32_t nb) { return cap_post(op, i, nb); }   /* (tests: a command as the UI posts it, none run until the next block) */

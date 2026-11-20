@@ -1814,6 +1814,13 @@ static void ui_input(void)
     fx_usb_fixed = (ui_prefs & PREF_USB_FIXED) != 0u;   /* (MENU > USB LEVEL: fx.c, audio.c) */
     scope_mix = (ui_prefs2 & (PREF_SCOPE_MIX >> 16)) != 0u;   /* (MENU > SCOPE: fx.c, audio.c) */
     rp_apply();                                         /* (MENU > CLICK, CLICK LEVEL, COUNT-IN: click.c, seq.c) */
+    {   uint32_t lt;                                    /* LATCH STACK is not for chords (voices): a chord track keeps NEW */
+        for (lt = 0; lt < NTRK; lt++)
+            if (trk[lt].p[P_LATCH] == 2 && latch_chords(&trk[lt])) {
+                trk[lt].p[P_LATCH] = 1;
+                if (lt == song.sel) ui_message("STACK: NOT FOR CHORDS");
+            }
+    }
     if (!ui.menu)
         usb_serial_apply();                             /* (MENU > USB SERIAL: when the menu has closed) */
     settings_later_poll();                              /* (#197: LIST / FAV written once the view is left or idle) */
