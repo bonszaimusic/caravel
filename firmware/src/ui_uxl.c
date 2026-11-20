@@ -2928,6 +2928,157 @@ static void uxl_page_pos(char *out, uint32_t cap)
     str_cpy(out + str_len(out), "/", cap - str_len(out));
     fmt_int(out + str_len(out), (int32_t)(n ? n : 1));
 }
+/* Harmony map in BUILD's existing orbit center.  These are NOTE/KEY relationships,
+ * not audio routing.  A line style describes the role; its brightness describes
+ * whether that configured relationship is presently usable.  Never store UI state. */
+#if !FELUCCA_FM4
+enum { UXL_HM_NONE, UXL_HM_FOLLOW, UXL_HM_CHORD, UXL_HM_EXT, UXL_HM_KEY };
+static const int16_t uxl_hm_x[5] = {91, 149, 91, 149, 120}; /* 4 tracks, then HARM bus */
+static const int16_t uxl_hm_y[5] = {87, 87, 145, 145, 116};
+
+static uint32_t uxl_hm_view(const dual_t *dd, uint32_t row)
+{
+    if (dd && dd->kind == DK_PLAIN && str_eq(dd->top, "KEY"))
+        return row ? UXL_HM_CHORD : UXL_HM_KEY;
+    if (dd && (dd->kind == DK_LINK || dd->kind == DK_HARMONY || dd->kind == DK_CHEXT))
+        return UXL_HM_CHORD;
+    return UXL_HM_NONE;
+}
+static int uxl_hm_key_ready(uint32_t track, uint32_t source)
+{
+    const track_t *t = &trk[track];
+    if (source >= NTRK || source == track || link_src[source])
+        return 0;                                      /* no self-link or key chain */
+    if (harmony_key_mode && (t->p[P_CSRC] ||
+        (harmony_follow[track] && (t->p[P_CHRD] == CH_OFF || t->p[P_CHRD] == CH_BUS))))
+        return 0;                                      /* stored but suspended */
+    return 1;
+}
+static uint32_t uxl_hm_sig(uint32_t view)
+{
+    uint32_t i, sig = harmony_on + harmony_key_mode * 7u + song.sel * 31u + view * 131u;
+    for (i = 0; i < NTRK; i++) {
+        const track_t *t = &trk[i];
+        int32_t src = t->p[P_CSRC];
+        sig = sig * 33u + harm_role(t) * 17u + harmony_follow[i] * 3u +
+              (uint32_t)t->p[P_CHRD] * 7u + (uint32_t)(src + 1) * 13u + link_src[i];
+        if (src >= 1 && src <= 5)
+            sig = sig * 33u + ext_state(t, src, 0);     /* WAIT/READY changes are visible */
+    }
+    return sig;
+}
+static int32_t uxl_hm_sign(int32_t v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }
+/* Dashes are reserved for KEY inheritance, never used merely for an inactive route. */
+static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
+                           uint32_t style, uint16_t c)
+{
+    int32_t dx = x1 - x0, dy = y1 - y0, n = dx < 0 ? -dx : dx, t = dy < 0 ? -dy : dy;
+    if (t > n) n = t;
+    if (style == UXL_HM_KEY && n) {
+        int32_t j;
+        for (j = 0; j < n; j += 7) {
+            int32_t z = j + 4 < n ? j + 4 : n;
+            cv_line(x0 + dx * j / n, y0 + dy * j / n,
+                    x0 + dx * z / n, y0 + dy * z / n, c);
+        }
+    } else {
+        cv_line(x0, y0, x1, y1, c);
+        if (style == UXL_HM_CHORD) {                    /* two lines = chord voices */
+            int32_t ox = (dx < 0 ? -dx : dx) >= (dy < 0 ? -dy : dy) ? 0 : 3;
+            int32_t oy = ox ? 0 : 3;
+            cv_line(x0 + ox, y0 + oy, x1 + ox, y1 + oy, c);
+        }
+        if (style == UXL_HM_FOLLOW) {                   /* single line + arrow */
+            int32_t sx = uxl_hm_sign(dx), sy = uxl_hm_sign(dy);
+            if ((dx < 0 ? -dx : dx) >= (dy < 0 ? -dy : dy)) {
+                cv_line(x1 - 4 * sx, y1 - 3, x1, y1, c);
+                cv_line(x1 - 4 * sx, y1 + 3, x1, y1, c);
+            } else {
+                cv_line(x1 - 3, y1 - 4 * sy, x1, y1, c);
+                cv_line(x1 + 3, y1 - 4 * sy, x1, y1, c);
+            }
+        }
+        if (style == UXL_HM_EXT) {                      /* plus = extension tones */
+            int32_t mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+            cv_rect(mx - 1, my - 4, 3, 9, c);
+            cv_rect(mx - 4, my - 1, 9, 3, c);
+        }
+    }
+}
+static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t c)
+{
+    int32_t x0 = uxl_hm_x[source], y0 = uxl_hm_y[source];
+    int32_t x1 = uxl_hm_x[dest], y1 = uxl_hm_y[dest];
+    int32_t sx = uxl_hm_sign(x1 - x0), sy = uxl_hm_sign(y1 - y0);
+    if (source == dest || source > NTRK || dest >= NTRK)
+        return;
+    /* Shorten both ends to leave room for the 20x18 track badges and bus. */
+    x0 += sx * (source == NTRK ? 11 : 10);
+    y0 += sy * (source == NTRK ? 9 : 9);
+    x1 -= sx * 10;
+    y1 -= sy * 9;
+    uxl_hm_stroke(x0, y0, x1, y1, style, c);
+}
+static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
+{
+    uint32_t pass, i;
+    if (!view) return;
+    /* Other tracks first, selected track last. Nodes are always at fixed locations. */
+    for (pass = 0; pass < 2u; pass++)
+        for (i = 0; i < NTRK; i++) {
+            const track_t *t = &trk[i];
+            uint32_t role = harm_role(t), source = NTRK, style = UXL_HM_NONE;
+            int ready = 0;
+            int32_t src = t->p[P_CSRC];
+            if ((i == song.sel) != (pass == 1u)) continue;
+            if (view == UXL_HM_KEY) {
+                if (link_src[i] >= 1 && link_src[i] <= NTRK) {
+                    source = link_src[i] - 1u;
+                    style = UXL_HM_KEY;
+                    ready = uxl_hm_key_ready(i, source);
+                }
+            } else if (role == HROLE_FOLLOW) {
+                style = UXL_HM_FOLLOW; ready = harmony_on;
+            } else if (role == HROLE_CHORD && t->p[P_CHRD] == CH_BUS) {
+                style = UXL_HM_CHORD; ready = harmony_on;
+            } else if (role == HROLE_EXT && src >= 1 && src <= 5) {
+                style = UXL_HM_EXT;
+                source = src == 1 ? NTRK : (uint32_t)src - 2u;
+                ready = ext_state(t, src, 0) == EXT_ST_OK;
+            }
+            if (style != UXL_HM_NONE)
+                uxl_hm_edge(source, i, style,
+                    !ready ? T_DIM : i == song.sel ? T_ACCENT : T_MID);
+        }
+    if (view != UXL_HM_KEY) {
+        cv_rrect(111, 108, 18, 16, 4, harmony_on ? T_THEME : T_DIM, T_BG);
+        uxl_text_c(120, 109, &AF_S, "H", harmony_on ? T_THEME : T_DIM);
+    } else
+        uxl_text_c(120, 110, &AF_S, "KEY", T_MID);
+    for (i = 0; i < NTRK; i++) {
+        int32_t x = uxl_hm_x[i], y = uxl_hm_y[i], selected = i == song.sel;
+        char name[3] = {'T', (char)('1' + i), 0};
+        cv_rrect(x - 11, y - 9, 22, 18, 8,
+                 selected ? T_ACCENT : T_MID, selected ? T_ACCENT : T_BG);
+        uxl_text_c(x, y - 6, &AF_S, name, selected ? T_INK : T_TEXT);
+    }
+    /* Retain the EXT detail's source-chord readout, only move it below the map. */
+    if (dd && dd->kind == DK_CHEXT && row) {
+        ext_info_t ei;
+        char b[20] = "SRC --";
+        ext_info(song.sel, &ei);
+        if (ei.have_chord && ei.state != EXT_ST_OFF) {
+            b[0] = 'S'; b[1] = 'R'; b[2] = 'C'; b[3] = ' '; b[4] = 0;
+            chord_name(b + 4, ei.root, ei.mask);
+        }
+        uxl_text_c(120, 158, &AF_S, b, ei.have_chord ? T_TEXT : T_DIM);
+    } else if (dd && dd->kind == DK_LINK && row && harm_role(TSEL) == HROLE_EXT)
+        uxl_text_c(120, 158, &AF_S, "K4: RETRIG", T_MID);
+    else
+        uxl_text_c(120, 158, &AF_S, view == UXL_HM_KEY ? "KEY FROM" : "HARM ROUTE", T_MID);
+}
+#endif /* !FELUCCA_FM4 */
+
 static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *const rps[2])
 {
     int pic = dd && (dd->kind == DK_ENV || dd->kind == DK_LFO || (dd->kind == DK_INS && !act) || dd->kind == DK_GRAPH);   /* (INSERT: the type's curve; SLICER: the pattern) */
@@ -2968,24 +3119,13 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
             env_icon(92, 101, 56, 30, TSEL->p[rps[0]->id[0]], TSEL->p[rps[0]->id[1]], TSEL->p[rps[0]->id[2]], TSEL->p[rps[0]->id[3]], T_THEME);
         else
             lfo2_wave_icon(94, 101, 52, 30, TSEL->p[P_LWAVE], T_THEME);
-    } else if (dd && dd->kind == DK_CHEXT && act) {                    /* CHORD EXT: the chord the source plays, big, in the middle */
-        ext_info_t ei;
-        char cn[16];
-        ext_info(song.sel, &ei);
-        uxl_text_c(120, 96, &AF_S, "SOURCE CHORD", T_DIM);
-        if (ei.have_chord && ei.state != EXT_ST_OFF) {
-            chord_name(cn, ei.root, ei.mask);
-            uxl_text_c(120, 112, &AF_M, cn, T_TEXT);
-        } else {
-            uxl_text_c(120, 112, &AF_M, "--", T_DIM);
-        }
-    } else if (dd && dd->kind == DK_LINK && act) {                     /* LINK's setup group: only K1 works, the bus is every track's */
-        uxl_text_c(120, 98, &AF_M, "BUS", T_TEXT);
-        uxl_text_c(120, 122, &AF_S,
-                   harm_role(TSEL) == HROLE_EXT ? "K1-3 GLOBAL / K4 TRACK" : "ALL TRACKS, K1", T_MID);
-        if (harm_role(TSEL) == HROLE_EXT)
-            uxl_text_c(120, 139, &AF_S, "SCALE: NO EXT RETRIG", T_MID);
-    }                                                                  /* (no picture: the middle stays free; the sound is on the foot line on every page) */
+    } else {
+#if !FELUCCA_FM4
+        /* A compact relationship map replaces only the previously free center
+         * of KEY/CHORD/HARMONY/HARM/EXT. Orbit arcs, labels and tabs stay put. */
+        uxl_hm_paint(dd, act, uxl_hm_view(dd, act));
+#endif
+    }
     for (k = 0; k < 4u; k++) {
         int32_t v, cx = (k & 1u) == 0u ? 4 : 236, cy = k < 2u ? 46 : 150;
         const param_desc_t *d = uxl_c_card(dd, rps[act], act, k, &v);
@@ -3135,6 +3275,12 @@ static void uxl_ring_build(void)
             const param_desc_t *d = uxl_c_card(dd, rps[row], row, col, &v);
             sig = sig * 33u + (d ? (uint32_t)v : 0x7FFFu);
         }
+#if !FELUCCA_FM4
+    {   /* Redraw on mode/source/key changes or when an EXT chord becomes ready. */
+        uint32_t hm = uxl_hm_view(dd, bottom);
+        if (hm) sig = sig * 33u + uxl_hm_sig(hm);
+    }
+#endif
     sig = sig * 33u + (uint32_t)(uintptr_t)cur_page();
 #if CARAVEL_REVERB_MINIMAL
     if (rps[bottom] && rps[bottom]->graph == GR_STLAYER) {                       /* the action and its state move by themselves */
