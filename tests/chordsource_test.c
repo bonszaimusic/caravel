@@ -47,6 +47,14 @@ static int has_pool(unsigned f,unsigned a,unsigned b,unsigned c)
     ext_info_t o=source_info(f);return o.have_chord&&o.npc==3&&o.pc[0]==a&&o.pc[1]==b&&o.pc[2]==c;
 }
 static unsigned source_gates(unsigned t) {unsigned n=0;for(unsigned i=0;i<NVOICE;i++)n+=trk[t].v[i].active&&trk[t].v[i].gate;return n;}
+static uint32_t gated_pcs(unsigned t)
+{
+    uint32_t pcs=0;
+    for(unsigned i=0;i<NVOICE;i++)
+        if(trk[t].v[i].active&&trk[t].v[i].gate)
+            pcs|=1u<<(trk[t].v[i].note%12u);
+    return pcs;
+}
 static void recogniser(void)
 {
     /* Explicit relative masks and qualities; rotate both inputs and expected roots. */
@@ -140,6 +148,34 @@ static void owners(void)
     fresh(0,1);triad(0,60,64,67);ticks(41);note(1,60,80);
     triad(0,57,60,64);ticks(41);note(1,60,0);ck("RETRIG OFF retains release identity across source change",!source_gates(1));
 }
+/* A follower panel key pressed in the exact gap-expiry block must sound
+ * the newly published EXT pool. A post-keyboard ext_source_tick (M3) updates
+ * the displayed pool but leaves this first, held voicing on the old one. */
+static void panel_follower_on_gap_expiry(void)
+{
+    fresh(0,1);
+    note(0,60,90);note(0,64,90);note(0,67,90);ticks(EXT_GAP);
+    ck("panel expiry fixture starts with held C major",has_pool(1,11,2,9));
+
+    /* Physical MIDI holds, not released note-on gestures: C E G -> A C E. */
+    note(0,67,0);note(0,57,90);
+    song.sel=1; /* CE_KEY now plays the follower, never the source. */
+    ce_reset();
+    ce_ev_t down={ce_us_of_block(EXT_GAP-1u),CE_KEY,7,1,0};
+    ce_sched(&down,1);
+    ce_run_until(ce_us_of_block(EXT_GAP-1u));
+    ck("panel expiry: old pool until the preceding block",
+       ce_block_no()==EXT_GAP-1u&&ce_fed_block(0)==~0u&&has_pool(1,11,2,9)&&!source_gates(1));
+    ce_run_until(ce_us_of_block(EXT_GAP));
+    ck("panel expiry: key fed in the 41st block and new pool published",
+       ce_fed_block(0)==EXT_GAP-1u&&ce_block_no()==EXT_GAP&&has_pool(1,7,11,5));
+    ck("panel expiry: first sounding follower voicing uses NEW Am extension, not old C extension",
+       kb_chn[7]==3&&source_gates(1)==3&&gated_pcs(1)==((1u<<7)|(1u<<11)|(1u<<5)));
+
+    ce_ev_t up={ce_us_of_block(EXT_GAP),CE_KEY,7,0,0};
+    ce_sched(&up,1);ce_run_until(ce_us_of_block(EXT_GAP+1u));
+    ck("panel expiry: the follower key-up releases its own voicing",!source_gates(1));
+}
 static void real_sources(void)
 {
     fresh(0,1);
@@ -208,7 +244,7 @@ static void transport_matrix(void)
 }
 int main(void)
 {
-    recogniser();collection();routing_and_lifecycle();owners();real_sources();transport_matrix();latency();
+    recogniser();collection();routing_and_lifecycle();owners();panel_follower_on_gap_expiry();real_sources();transport_matrix();latency();
     printf("live source: %u checks, %u failures; recognition, collection, lifecycle, owners and transport phases\n",checks,bad);
     return bad!=0;
 }
