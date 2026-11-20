@@ -2991,7 +2991,11 @@ static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
         }
         if (style == UXL_HM_FOLLOW) {                   /* single line + arrow */
             int32_t sx = uxl_hm_sign(dx), sy = uxl_hm_sign(dy);
-            if ((dx < 0 ? -dx : dx) >= (dy < 0 ? -dy : dy)) {
+            int32_t ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
+            if (ax * 2 > ay && ay * 2 > ax) {           /* diagonal (bus to a track): a right-angle head along it */
+                cv_line(x1 - 5 * sx, y1, x1, y1, c);
+                cv_line(x1, y1 - 5 * sy, x1, y1, c);
+            } else if (ax >= ay) {
                 cv_line(x1 - 4 * sx, y1 - 3, x1, y1, c);
                 cv_line(x1 - 4 * sx, y1 + 3, x1, y1, c);
             } else {
@@ -3076,7 +3080,7 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
     } else if (dd && dd->kind == DK_LINK && row && harm_role(TSEL) == HROLE_EXT)
         uxl_text_c(120, 158, &AF_S, "K4: RETRIG", T_MID);
     else
-        uxl_text_c(120, 158, &AF_S, view == UXL_HM_KEY ? "KEY FROM" : "HARM ROUTE", T_MID);
+        uxl_text_c(120, 158, &AF_S, view == UXL_HM_KEY ? "KEY FROM" : "ROUTE", T_MID);
 }
 #endif /* !FELUCCA_FM4 */
 
