@@ -1671,7 +1671,15 @@ static int32_t uxl_y0;                           /* the strip being drawn: its f
 static void uxl_ring(int32_t cx, int32_t cy, int32_t r0, int32_t r1, int32_t a0, int32_t a1, int32_t a0f, int32_t a1f, uint16_t c0, uint16_t c1)
 {
     int32_t x, y, xa = cx - r1, xb = cx + r1, ya = cy - r1, yb = cy + r1;
-    int32_t lo = r0 * r0, hi = r1 * r1;
+    int32_t lo = r0 * r0, hi = r1 * r1, K = 0, i;
+    uint16_t s1[8];
+    int shade = r1 - r0 >= 10;
+    if (shade) {                                         /* the fill is a soft tube (light in the middle); the rail stays flat */
+        static const int8_t TU[8] = {-14, -4, 6, 16, 16, 6, -4, -14};
+        K = (int32_t)((8u << 16) / (uint32_t)(hi - lo + 1));
+        for (i = 0; i < 8; i++)
+            s1[i] = ux_mix(c1, TU[i] > 0 ? T_TEXT : T_BG, TU[i] > 0 ? TU[i] : -TU[i]);
+    }
     if (ya < uxl_y0) ya = uxl_y0;
     if (yb > uxl_y0 + 119) yb = uxl_y0 + 119;
     for (y = ya; y <= yb; y++)
@@ -1682,7 +1690,11 @@ static void uxl_ring(int32_t cx, int32_t cy, int32_t r0, int32_t r1, int32_t a0,
             a = uxl_ang(dx, dy);
             if (a < a0 || a > a1)
                 continue;
-            cv_pset(x, y, a >= a0f && a <= a1f ? c1 : c0);
+            if (shade) {
+                int32_t b = ((d2 - lo) * K) >> 16;
+                cv_pset(x, y, a >= a0f && a <= a1f ? s1[b > 7 ? 7 : b] : c0);
+            } else
+                cv_pset(x, y, a >= a0f && a <= a1f ? c1 : c0);
         }
 }
 /* the value as an arc over its quadrant: bipolar parameters fill from their zero */
@@ -1718,9 +1730,12 @@ static void uxl_ring_thumb(int32_t a, uint16_t dot, uint16_t disc)
 {
     int32_t x, y;
     uxl_ring_pt(a, 65, &x, &y);
+    (void)dot;                                           /* a pearl: a shadow, a rim, the body and one gloss; the colour is the fill's job */
+    uxl_disc(x + 1, y + 2, 8, ux_mix(T_BG, 0x0000u, 70));
     uxl_disc(x, y, 8, T_BG);
-    uxl_disc(x, y, 6, disc);
-    uxl_disc(x, y, 2, dot);
+    uxl_disc(x, y, 6, ux_mix(disc, T_BG, 35));
+    uxl_disc(x - 1, y - 1, 5, disc);
+    uxl_disc(x - 2, y - 2, 2, ux_mix(disc, 0xFFFFu, 75));
 }
 static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int flags)   /* f, z: degrees of the arc (0..76): the value, the zero */
 {
@@ -3346,6 +3361,7 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
     for (i = 0; i < NTRK; i++) {
         int32_t x = uxl_hm_x[i], y = uxl_hm_y[i], selected = i == song.sel;
         char name[3] = {'T', (char)('1' + i), 0};
+        if (selected) cv_rrect(x - 13, y - 11, 26, 22, 10, ux_mix(T_BG, T_ACCENT, 14), T_BG);   /* a faint glow on the selected track */
         cv_rrect(x - 11, y - 9, 22, 18, 8, selected ? T_ACCENT : T_MID, T_BG);
         if (!selected) cv_rrect(x - 10, y - 8, 20, 16, 7, T_SURF, T_MID);
         uxl_text_c(x, y - 6, &AF_S, name, selected ? T_INK : T_TEXT);
