@@ -33,12 +33,15 @@ typedef char cap_ev_size_must_be_4[sizeof(cap_ev_t) == 4 ? 1 : -1];
 #define CAP_TMASK ((1u << 18) - 1u)
 #define CAP_KEEP_U (32u << 12)                                  /* longest retrospective REC window */
 static uint32_t cap_age(uint32_t now_q16, uint32_t t) { return (CAP_U(now_q16) - t) & CAP_TMASK; }
-static cap_ev_t cap_ring[NTRK][CAP_N], cap_loop[NTRK][CAP_N];
+/* The capture ring and the quantised loops live in the pool (the same SRAM: only the RAM / POOL budget differs): they are read only inside
+ * their counts (cap_rn / cap_qn / cap_qactive, all in .bss and zero at boot) and the scratch is written before it is read, so they need no zero start. */
+static cap_ev_t cap_ring[NTRK][CAP_N] __attribute__((section(".pool")));
+static cap_ev_t cap_loop[NTRK][CAP_N];
 /* Post-capture QUANT: cap_loop is immutable ORIGINAL timing. A separate
  * playback list holds the currently committed grid, and ONE shared scratch
  * list is prepared in bounded per-block slices. The UI never edits either.
  * Added event memory: (NTRK+1)*CAP_N*4 = 2560 B, plus small job state. */
-static cap_ev_t cap_qloop[NTRK][CAP_N], cap_qscratch[CAP_N];
+static cap_ev_t cap_qloop[NTRK][CAP_N] __attribute__((section(".pool"))), cap_qscratch[CAP_N] __attribute__((section(".pool")));
 static uint8_t cap_qpair[CAP_N];                  /* scratch ON index -> OFF */
 static uint32_t cap_qused[CAP_N / 32u];          /* which raw OFFs were paired */
 static uint8_t cap_qactive[NTRK], cap_qwant[NTRK], cap_qready[NTRK], cap_qdirty[NTRK];
