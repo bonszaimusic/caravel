@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0] - prepared, not published
+
+- HARM route map in BUILD, PLAY HARM area with the chord selector and the LEFT countdown, harmony position under the PLAY header, one colour rule for the orbit arcs (cyan track / orange global), pearl thumbs and soft tubes, ELASTIC as a rubber band. Details: [release notes](docs/release-110.md).
+- LFO held makes the FX macros and the STASIS TONE momentary. LATCH STACK is not available on HARMONY-bus and CHORD EXT chords (they latch as NEW).
+- CHORD EXT takes the keys physically held when the gap ends; independent HARMONY key and local CHORD shape saved with the project; CAPTURE QUANT, PLAY SAVE and STASIS changes of the private candidate.
+- **Project format:** AFTERBURNER and the STASIS TONE are saved with the project (size, offsets and checksum unchanged; a project with non-default values is refused by 1.0.0). The candidate before this release could not save projects; fixed.
+- Not tested on an FM-1 as a whole; host tests and the emulator pass locally, the hosted CI was not available.
+
 ## [1.0.0] - 2026-11-17
 
 - FORMAT 2 and six engines: ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE. No import of pre-1.0 backups; removed engines, Song/Chain and Scope. Back up first with the old matching tool.
