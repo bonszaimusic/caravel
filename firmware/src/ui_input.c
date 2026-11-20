@@ -1033,8 +1033,16 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
-    if (pg->graph == GR_SCALE) { /* conditional KEY screen: K1 KEY FROM */
-        if (slot == 0u) {
+#if CARAVEL_UX_LAYERS
+    if (page_over && pg->graph == GR_SCALE && slot < 2u && UXL_PLAY && !harm_has_key(TSEL)) {
+        /* PLAY's SCL layer on a track that plays from the HARMONY bus / EXT: ROOT and SCL are the HARMONY key (as PLAY's HARM area) */
+        uxl_hm_key_turn(slot == 0u ? P_ROOT : P_SCALE, steps);
+        ui.force = 1;
+        return;
+    }
+#endif
+    if (pg->graph == GR_SCALE) { /* conditional KEY screen: K1 KEY FROM (the SCL layer's K1 is ROOT, not KEY FROM) */
+        if (slot == 0u && !page_over) {
             uint32_t cur = link_src[song.sel], n = 0, is_src = 0, x;
             for (x = 0; x < NTRK; x++)
                 is_src |= link_src[x] == song.sel + 1u;

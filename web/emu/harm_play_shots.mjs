@@ -36,4 +36,9 @@ go("play_harm_notes_own_key", () => { ex.web_test_harm_on(1); ex.web_test_harm_r
 // K1/K2 on a FOLLOW track set the HARMONY key (H ROOT / H SCL)
 ex.web_test_harm_reset(); ex.web_test_harm_on(1); ex.web_test_harm_role(0, R.FOLLOW); ex.web_test_select(0); render(300);
 tap("SCL"); render(300); for (let i = 0; i < 3; i++) { ex.web_enc(3, 1); render(100); } ex.web_enc(4, 1); render(100); shot("play_harm_follow_key_edited");
+// the SCL hold layer (SEL SET) on a FOLLOW track and on a NOTES track
+for (const [n, r] of [["follow", R.FOLLOW], ["notes", R.NOTES]]) {
+  ex.web_test_harm_reset(); ex.web_test_harm_on(1); ex.web_test_harm_role(0, r); ex.web_test_select(0); render(300);
+  ex.web_buttons(1 << B.SCL); render(900); shot(`play_scl_layer_${n}`); ex.web_buttons(0); render(300);
+}
 console.log("done");

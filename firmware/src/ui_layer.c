@@ -686,6 +686,11 @@ static void layer_key(uint32_t l, uint32_t k)
             lys.fill |= 1u << k;                        /* E4: FILL while held (layer_keys) */
         }
     } else if (l == LAYER_SCL) {
+        if (UXL_PLAY && !harm_has_key(TSEL)) {          /* a bus / EXT track: the key is the HARMONY key */
+            harmony_key_root = (uint8_t)((k + 5u) % 12u);
+            harmony_key_scale = (uint8_t)harmony_key_scale_eff();
+            harmony_key_mode = 1u;
+        } else
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */
     } else if (l == LAYER_EDIT && !key_black(k)) {
         if (p < NENG_SHOWN && p < LY_INIT)
@@ -1124,7 +1129,7 @@ static void layer_glo(void)
 }
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
 {
-    uint32_t i, sc = (uint32_t)TSEL->p[P_SCALE];
+    uint32_t i, sc = UXL_PLAY && !harm_has_key(TSEL) ? harmony_key_scale_eff() : (uint32_t)TSEL->p[P_SCALE];
     for (i = 0; i < 16u && i <= (uint32_t)TP[P_SCALE].max; i++) {
         int32_t x = LC_X(i % 4u), y = 4 + 29 * (int32_t)(i / 4u);
         uint16_t ink, fill = lc_fill(i == sc ? LS_SEL : LS_OFF, &ink);
@@ -1290,8 +1295,9 @@ static int uxl_layer_cards(uint32_t l)
         } else if (l==LAYER_GLO) {
             tag[0]='T';tag[1]=(char)('1'+k);tag[2]=0;label=tag;
             d=&TP[P_LEVEL];v=trk[k].p[P_LEVEL];
-        } else { d=page_desc(&LY_SCL,k,&vp); if(d&&vp)v=*vp; }
-        if(d) {label=l==LAYER_GLO?tag:d->label;param_format(d,v,b,&unit);ratio=RATIO(d,v);}
+        } else { d=page_desc(&LY_SCL,k,&vp); if(d&&vp)v=*vp; if(k<2u && UXL_PLAY && !harm_has_key(TSEL)) v=k==0u?(int32_t)harmony_key_root_eff():(int32_t)harmony_key_scale_eff(); }
+        if(d) {label=l==LAYER_GLO?tag:d->label;param_format(d,v,b,&unit);ratio=RATIO(d,v);
+               if(l==LAYER_SCL && k<2u && UXL_PLAY && !harm_has_key(TSEL)) label=k==0u?"H ROOT":"H SCL";}
         cv_begin(57,44,T_BG);cv_bg=T_BG;
         cv_rrect(0,0,57,44,5,T_SURF,T_BG);
         cv_text_on(5,1,&AF_S,label,T_TEXT,T_SURF);

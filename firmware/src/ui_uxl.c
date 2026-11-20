@@ -1570,47 +1570,52 @@ static void uxl_hc_short(char *b, uint32_t idx, uint32_t minor)
     b[n] = 0;
     if (minor && t[n] == 'm' && t[n + 1u] != 'a') { b[n] = 'm'; b[n + 1u] = 0; }
 }
-static uint32_t uxl_hc_sig(void)                            /* the readout changes 16 times per chord at most */
+static uint32_t uxl_hc_sig(void)                            /* the readout changes 8 times per chord at most */
 {
     uxl_hc_t h;
     uxl_hc_get(&h);
-    return h.ok ? 1u + (uint32_t)h.cur * 7u + (uint32_t)h.left * 31u + (uint32_t)(h.prog >> 6) * 131u : 0u;
+    return h.ok ? 1u + (uint32_t)h.cur * 7u + (uint32_t)h.left * 31u + (uint32_t)(h.prog >> 7) * 131u : 0u;
 }
-/* PLAY, HARM area: inside the ring, below the CAPTURE widget: NOW / NEXT IN n and the four chords as a strip (the current one filling) */
-static void uxl_hc_paint_play(void)
+/* PLAY: a 2 px line at the foot of the header, the four chords of the progression side by side (their length in bars), the current one filling
+ * as it plays, the next one lit: where the harmony is and when the next chord comes, in every area of PLAY. */
+static void uxl_hc_paint_bar(void)
 {
     uxl_hc_t h;
-    char a[12], b[24];
     uint32_t i, tot = 0;
-    int32_t x = 88, w = 48;
+    int32_t x = 4, w = 232;
     uxl_hc_get(&h);
-    if (!h.ok) {
-        uxl_text_c(120, 150, &AF_S, "HARMONY OFF", T_DIM);
+    if (!h.ok)
         return;
-    }
-    uxl_hc_name(a, h.cur, sizeof a);
-    str_cpy(b, "NOW ", sizeof b);
-    str_cpy(b + 4, a, sizeof b - 4u);
-    uxl_text_c(120, 142, &AF_S, b, T_THEME);
-    uxl_hc_name(a, h.nxt, sizeof a);
-    str_cpy(b, "NEXT ", sizeof b);
-    str_cpy(b + 5, a, sizeof b - 5u);
-    uxl_text_c(120, 156, &AF_S, b, T_TEXT);
-    str_cpy(b, "IN ", sizeof b);
-    fmt_int(b + 3, (int32_t)h.left);
     for (i = 0; i < 4u; i++)
         tot += h.dur[i];
     for (i = 0; i < 4u; i++) {
-        int32_t sw = (int32_t)(h.dur[i] * (uint32_t)w / tot) - 1;
+        int32_t sw = (int32_t)(h.dur[i] * (uint32_t)(w - 6) / tot);
         if (i == h.cur) {
-            int32_t fill = sw * (int32_t)h.prog / 1000;
-            cv_rect(x, 172, sw, 5, T_MID);
-            cv_rect(x, 172, fill, 5, T_THEME);
+            cv_rect(x, 22, sw, 2, T_MID);
+            cv_rect(x, 22, sw * (int32_t)h.prog / 1000, 2, T_THEME);
         } else
-            cv_rect(x, 173, sw, 3, i == h.nxt ? T_MID : T_LINE);
-        x += sw + 1;
+            cv_rect(x, 22, sw, 2, i == h.nxt ? T_TEXT : T_LINE);
+        x += sw + 2;
     }
-    cv_text(140, 169, &AF_S, b, T_MID);                 /* bars left in this chord, counting the one now playing */
+}
+/* PLAY, HARM area: one short line inside the CAPTURE ring, below its box: "Am>F 1" = this chord, the next, and the bars until it */
+static void uxl_hc_paint_play(void)
+{
+    uxl_hc_t h;
+    char a[8], b[24];
+    uxl_hc_get(&h);
+    if (!h.ok) {
+        uxl_text_c(120, 138, &AF_S, "HARM OFF", T_DIM);
+        return;
+    }
+    uxl_hc_short(a, h.cur, 1u);
+    str_cpy(b, a, sizeof b);
+    str_cpy(b + str_len(b), ">", sizeof b - str_len(b));
+    uxl_hc_short(a, h.nxt, 1u);
+    str_cpy(b + str_len(b), a, sizeof b - str_len(b));
+    str_cpy(b + str_len(b), " ", sizeof b - str_len(b));
+    fmt_int(b + str_len(b), (int32_t)h.left);
+    uxl_text_c(120, 138, &AF_S, b, T_TEXT);
 }
 static void uxl_pt(int32_t cx, int32_t cy, int32_t r, int32_t a, int32_t *x, int32_t *y)   /* a clockwise from 12 o'clock */
 {
@@ -1746,6 +1751,7 @@ static void uxl_paint_head(void)
     fmt_int(b, song.g[G_BPM]);
     uxl_text_r(206, 5, &AF_M, b, ui.bpm_t ? T_ACCENT : T_THEME);
     cv_icon_mid(224, H_HEAD / 2, 16, song.playing ? ICON_X_PLAY : ICON_X_STOP, song.playing ? T_THEME : T_MID, T_BG);
+    uxl_hc_paint_bar();
 }
 /* Peek maps keep their layer and PLAY identity, messages have their own footer row. */
 static int uxl_layer_head_draw(void)
@@ -2581,7 +2587,7 @@ static uint32_t uxl_play_sig(void)
                     (uint32_t)song.g[G_BPM] * 101u + (uint32_t)song.rec * 5u + (uint32_t)TSEL->p[P_MUTE] * 999u + (uint32_t)uxl.pv * 77u + (uint32_t)uxl.pv_idx * 3u + uxl_cap_sig() + (ui.msg_t ? str_hash(7u, ui.msg) : 0u);
     s = s * 33u + uxl_start_help() + uxl.lvl * 977u;
     for(k=0;k<4u;k++) s=s*33u+hroot_get(k)+hdur_get(k)*17u;
-    s = s * 33u + harmony_on + harmony_bar * 7u + (uint32_t)song.g[G_RTYPE] * 131u + (uxl.area == UXL_HARM ? uxl_hc_sig() * 977u : 0u);
+    s = s * 33u + harmony_on + harmony_bar * 7u + (uint32_t)song.g[G_RTYPE] * 131u + uxl_hc_sig() * 977u;
 #if CARAVEL_ACTION_BANKS
     s = s * 33u + harmony_pending + harmony_hold * 17u + (uint32_t)(int32_t)harmony_shift * 977u;
 #endif
@@ -3047,8 +3053,8 @@ static void uxl_page_pos(char *out, uint32_t cap)
  * whether that configured relationship is presently usable.  Never store UI state. */
 #if !FELUCCA_FM4
 enum { UXL_HM_NONE, UXL_HM_FOLLOW, UXL_HM_CHORD, UXL_HM_EXT, UXL_HM_KEY };
-static const int16_t uxl_hm_x[5] = {91, 149, 91, 149, 120}; /* 4 tracks, then HARM bus */
-static const int16_t uxl_hm_y[5] = {87, 87, 145, 145, 116};
+static const int16_t uxl_hm_x[5] = {88, 152, 88, 152, 120}; /* 4 tracks, then HARM bus */
+static const int16_t uxl_hm_y[5] = {86, 86, 146, 146, 116};
 
 static uint32_t uxl_hm_view(const dual_t *dd, uint32_t row)
 {
@@ -3116,11 +3122,11 @@ static void uxl_hm_stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
 /* One line, 2 px when it touches the selected track. Roles: FOLLOW = arrow, CHORD = orange "C", EXT = violet "E" on the line;
  * KEY = dashes. Track-to-track diagonals bend around the centre (bus mark or KEY label) instead of crossing it. */
 /* One fixed colour per role (the same on every theme, so the legend is learnable): FOLLOW green, CHORD orange, EXT violet, KEY yellow.
- * Not ready: the colour at 50 %; ready but not on the selected track: 90 %; on the selected track: full colour and 2 px. */
+ * Not ready: the colour at 62 %; ready but not on the selected track: 90 %; on the selected track: full colour and 2 px. */
 static uint16_t uxl_hm_ink(uint32_t style, int ready, int hl)
 {
     uint16_t ink = style == UXL_HM_FOLLOW ? 0x5F30u : style == UXL_HM_CHORD ? 0xFD05u : style == UXL_HM_EXT ? 0xDB7Fu : 0xFEE8u;
-    return ux_mix(T_BG, ink, !ready ? 50 : hl ? 100 : 90);
+    return ux_mix(T_BG, ink, !ready ? 62 : hl ? 100 : 90);
 }
 static void uxl_hm_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t style, uint16_t c, int32_t thick)
 {
@@ -3148,7 +3154,7 @@ static void uxl_hm_edge(uint32_t source, uint32_t dest, uint32_t style, uint16_t
     if (source == dest || source > NTRK || dest >= NTRK)
         return;
     if (source < NTRK && (source ^ dest) == 3u) {              /* T1-T4, T2-T3: around the centre */
-        int32_t bx = 120 + (source < 1u || dest < 1u ? 22 : -22), by = 116;
+        int32_t bx = 120 + (source < 1u || dest < 1u ? 24 : -24), by = 116;
         int32_t ax = x0 + uxl_hm_sign(bx - x0) * 10, ay = y0 + uxl_hm_sign(by - y0) * 9;
         int32_t ex = x1 - uxl_hm_sign(x1 - bx) * 10, ey = y1 - uxl_hm_sign(y1 - by) * 9;
         uxl_hm_line(ax, ay, bx, by, style == UXL_HM_KEY ? UXL_HM_KEY : UXL_HM_NONE, c, thick);
@@ -3237,9 +3243,9 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
             str_cpy(nb + 1, nn, sizeof nb - 1u);
             str_cpy(nb + str_len(nb), " ", sizeof nb - str_len(nb));
             fmt_int(nb + str_len(nb), (int32_t)hc.left);
-            uxl_text_c(120, 158, &AF_S, nb, T_TEXT);
+            uxl_text_c(120, 160, &AF_S, nb, T_TEXT);
         } else
-            uxl_text_c(120, 158, &AF_S, view == UXL_HM_KEY ? "KEY FROM" : "ROUTE", T_MID);
+            if (view != UXL_HM_KEY) uxl_text_c(120, 160, &AF_S, "ROUTE", T_MID);
     }
 }
 #endif /* !FELUCCA_FM4 */

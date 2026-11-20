@@ -735,6 +735,7 @@ EXPORT void web_test_harm_csrc(uint32_t t, uint32_t src) { if (t < NTRK && src <
 EXPORT void web_test_harm_bus(uint32_t t) { if (t < NTRK) { trk[t].p[P_CSRC] = 0; trk[t].p[P_CHRD] = CH_BUS; harmony_follow[t] = 1u; ui.force = 1; } }
 EXPORT uint32_t web_test_harm_key(uint32_t what) { return what == 0u ? harmony_key_root_eff() : what == 1u ? harmony_key_scale_eff() : what == 2u ? harmony_key_mode : harmony_chord_at(harmony_bar); }
 EXPORT void web_test_harm_prog(uint32_t i, uint32_t root, uint32_t dur) { if (i < 4u) { hroot_set(i, (uint8_t)root); hdur_set(i, (uint8_t)dur); ui.force = 1; } }
+EXPORT uint32_t web_test_harm_linkget(uint32_t t) { return t < NTRK ? link_src[t] : 0u; }
 EXPORT void web_test_harm_reset(void) { uint32_t i; harmony_on = 0; harmony_key_mode = 0; for (i = 0; i < NTRK; i++) { link_src[i] = 0; harmony_follow[i] = 0; trk[i].p[P_CSRC] = 0; trk[i].p[P_CHRD] = CH_OFF; } ui.force = 1; }
 EXPORT uint32_t web_test_cap_events(uint32_t i) { return i < NTRK ? cap_ln[i] : 0u; }   /* (tests: the events of a track's loop) */
 EXPORT uint32_t web_test_cap_post(uint32_t op, uint32_t i, uint32_t nb) { return cap_post(op, i, nb); }   /* (tests: a command as the UI posts it, none run until the next block) */

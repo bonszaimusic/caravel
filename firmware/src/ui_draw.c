@@ -1441,6 +1441,12 @@ static void draw_columns(void)
             draw_column(c, d->label, "OFF", "STASIS", T_DIM, -1, ICON_AUTO);
             continue;
         }
+        if (page_over && cur_page()->graph == GR_SCALE && c < 2u && UXL_PLAY && !harm_has_key(TSEL)) {   /* PLAY's SCL layer: the HARMONY key */
+            int16_t hv = (int16_t)(c == 0u ? harmony_key_root_eff() : harmony_key_scale_eff());
+            param_format(d, hv, val, &unit);
+            draw_column(c, c == 0u ? "H ROOT" : "H SCL", val, unit, T_THEME, RATIO(d, hv), ICON_AUTO);
+            continue;
+        }
         param_format(d, *vp, val, &unit);
 #if CARAVEL_REVERB_MINIMAL
         if (cur_page()->graph == GR_STLAYER &&
