@@ -520,7 +520,7 @@ if (d.ex.web_test_ev) {
   check("FILTER: unlatched FX release retains the stored track filter", f.ex.web_test_p(105) === v1);
   f.tap("FX"); f.render(300);                                     // STASIS
   f.turn("K4", -5);
-  check("FILTER: K4 of the STASIS group is the same filter", f.ex.web_test_p(105) !== v1);
+  check("FILTER: K4 of the STASIS group is the separate STASIS TONE (CARAVEL_STASIS_EXPAND), not the track filter", f.ex.web_test_p(105) === v1);   // (without the expansion K4 is the filter again)
 }
 // CAPTURE length (E78): with REC held only K1 is shown, named LENGTH with its four steps; without, the area's four arcs
 if (d.ex.web_test_cap_events) {
