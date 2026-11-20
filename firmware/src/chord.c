@@ -14,6 +14,7 @@
  * key, mchord for a MIDI note) and its release ends exactly those, so CHRD / VOIC changed while it is held
  * leave nothing hanging. A note several sources hold sounds once and ends with the last of them. */
 enum { CH_OFF, CH_DIA3, CH_DIA7, CH_MAJ, CH_MIN, CH_DOM7, CH_MAJ7, CH_MIN7, CH_SUS4, CH_POW, CH_BUS };
+static int latch_chords(const track_t *t) { return t->p[P_CSRC] != 0 || t->p[P_CHRD] == CH_BUS; }   /* seq.c latch_mode: no STACK on bus / EXT chords */
 enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS };
 #define CHORD_MAX 4u
 #define MCHORD_N 24u                     /* MIDI notes held as chords at once (more: their root alone) */

@@ -13,4 +13,5 @@ ex.web_test_set_latch(0, 2); render(300); check("plain track: STACK stays", ex.w
 ex.web_test_harm_bus(0); render(300); check("HARMONY bus chord: STACK becomes NEW", ex.web_test_latch(0) === 1);
 ex.web_test_harm_reset(); ex.web_test_set_latch(1, 2); ex.web_test_harm_csrc(1, 1); render(300); check("CHORD EXT: STACK becomes NEW", ex.web_test_latch(1) === 1);
 ex.web_test_harm_reset(); ex.web_test_set_latch(2, 2); render(300); check("after the role is plain again a new STACK is allowed", ex.web_test_latch(2) === 2);
+ex.web_test_harm_reset(); ex.web_test_set_latch(3, 2); ex.web_test_harm_chrd(3, 3); render(300); check("a local chord shape keeps STACK", ex.web_test_latch(3) === 2);
 console.log(fails ? fails + " FAILED" : "all ok");
