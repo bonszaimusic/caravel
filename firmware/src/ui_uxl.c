@@ -1601,6 +1601,7 @@ static uint32_t uxl_hc_sig(void)                            /* the readout chang
 }
 /* PLAY: a 2 px line at the foot of the header, the four chords of the progression side by side (their length in bars), the current one filling
  * as it plays, the next one lit: where the harmony is and when the next chord comes, in every area of PLAY. */
+static void uxl_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c);
 static void uxl_hc_paint_bar(void)
 {
     uxl_hc_t h;
@@ -1615,11 +1616,15 @@ static void uxl_hc_paint_bar(void)
     }
     for (i = 0; i < 4u; i++) {
         int32_t sw = (int32_t)(len[i] * (uint32_t)(w - 6) / tot);
-        if (i == h.cur) {                               /* the actual position: 3 px, the elapsed part bright with a white tip */
-            int32_t fill = sw * (int32_t)h.prog / 1000;
-            cv_rect(x, 21, sw, 3, ux_mix(T_LINE, 0x7FEFu, 38));   /* a colour of its own: progress is not a track (cyan) nor a global value (orange) */
-            cv_rect(x, 21, fill, 3, 0x7FEFu);
-            if (fill > 0) cv_rect(x + fill - 1 < x ? x : x + fill - 1, 20, 2, 5, T_TEXT);
+        if (i == h.cur) {                               /* the actual position: the elapsed part light blue on the orange rest of the chord, the pearl at its end */
+            int32_t fill = sw * (int32_t)h.prog / 1000, px = x + fill;
+            cv_rect(x, 21, sw, 3, T_THEME);
+            cv_rect(x, 21, fill, 3, 0x6E5Fu);
+            if (px < x + 2) px = x + 2;
+            if (px > x + sw - 2) px = x + sw - 2;
+            uxl_disc(px, 21, 3, ux_mix(T_TEXT, T_BG, 40));          /* the pearl: rim, body, gloss */
+            uxl_disc(px, 21, 2, T_TEXT);
+            cv_pset(px - 1, 20, 0xFFFFu);
         } else
             cv_rect(x, 22, sw, 2, i == h.nxt ? T_TEXT : T_LINE);
         x += sw + 2;
