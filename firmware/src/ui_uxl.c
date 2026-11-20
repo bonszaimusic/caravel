@@ -1168,6 +1168,22 @@ static void uxl_select(int32_t s)       /* SELECT in PLAY: the group within the 
         ui.force = 1;
     }
 }
+/* HARM area: a track that plays from the HARMONY bus, a chord from it, or EXT has no key of its own (the BUILD KEY page is hidden for it too):
+ * its ROOT and SCL arcs then set the global HARMONY key, as BUILD's HARM page does, and say so ("H ROOT", "H SCL", the G mark). */
+static int uxl_hm_key_global(const uxl_tg_t *t)
+{
+    return uxl.area == UXL_HARM && t->kind == HP_TRACK && (t->id == P_ROOT || t->id == P_SCALE) && !harm_has_key(TSEL);
+}
+static void uxl_hm_key_turn(uint32_t id, int32_t s)
+{
+    int32_t st = s > 0 ? 1 : -1;
+    uint32_t root = harmony_key_root_eff(), scale = harmony_key_scale_eff();
+    if (id == P_ROOT) root = (uint32_t)((((int32_t)root + st) % 12 + 12) % 12);
+    else scale = (uint32_t)clamp((int32_t)scale + st, 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1);
+    harmony_key_root = (uint8_t)root;
+    harmony_key_scale = (uint8_t)scale;
+    harmony_key_mode = 1u;                              /* an explicit edit decouples the key from T1 */
+}
 static void uxl_cap_knob(uint32_t k, int32_t s);
 static void uxl_knob(uint32_t k, int32_t s)
 {
@@ -1207,6 +1223,13 @@ static void uxl_knob(uint32_t k, int32_t s)
 #endif
     if (tg[k].kind == UXL_KFILT) {                      /* FILTER edits P_FILT; other FX macros keep their current live behavior */
         uxl_fx_turn(tg[k].id, k, s);
+        uxl.hot_k = (uint8_t)k;
+        uxl.hot_t = 40;
+        ui.force = 1;
+        return;
+    }
+    if (uxl_hm_key_global(&tg[k])) {
+        uxl_hm_key_turn(tg[k].id, s);
         uxl.hot_k = (uint8_t)k;
         uxl.hot_t = 40;
         ui.force = 1;
@@ -1506,6 +1529,88 @@ static void uxl_text_c(int32_t cx, int32_t y, const aafont_t *f, const char *s, 
 static void uxl_text_r(int32_t xr, int32_t y, const aafont_t *f, const char *s, uint16_t fg)
 {
     cv_text(xr - text_w(f, s), y, f, s, fg);
+}
+/* ---- HARMONY position: which chord of the four sounds, which comes next, in how many bars (BUILD's route map and PLAY's HARM area).
+ * Read only; no state is stored. harmony_bar counts whole bars from the start; the fraction comes from the bar clock. */
+typedef struct { uint8_t ok, cur, nxt, left; uint16_t prog; uint8_t dur[4]; } uxl_hc_t;   /* prog: 0..1000, the elapsed part of the current chord */
+static void uxl_hc_get(uxl_hc_t *h)
+{
+    uint32_t total = 0, i, bar, idx, start, frac;
+    h->ok = 0;
+    if (!harmony_on)
+        return;
+    for (i = 0; i < 4u; i++) {
+        h->dur[i] = (uint8_t)(1u << hdur_get(i));
+        total += h->dur[i];
+    }
+    bar = harmony_bar % total;
+    idx = harmony_chord_at(harmony_bar);
+    start = harmony_chord_start(idx);
+    frac = (perf_bars_q16 - harmony_phase) & 0xFFFFu;
+    h->cur = (uint8_t)idx;
+    h->nxt = (uint8_t)((idx + 1u) & 3u);
+    h->left = (uint8_t)(start + h->dur[idx] - bar);
+    h->prog = (uint16_t)((((bar - start) << 16) + frac) / h->dur[idx] * 1000u >> 16);
+    h->ok = 1;
+}
+static void uxl_hc_name(char *b, uint32_t idx, uint32_t cap)
+{
+    char t[16];
+    chord_name(t, (uint8_t)hroot_live(idx), harmony_mask_root(idx));
+    str_cpy(b, t, cap);
+}
+/* the short form for the small places: the root, and "m" for a minor chord (the quality is shown in full in PLAY) */
+static void uxl_hc_short(char *b, uint32_t idx, uint32_t minor)
+{
+    char t[16];
+    uint32_t n = 1u;
+    chord_name(t, (uint8_t)hroot_live(idx), harmony_mask_root(idx));
+    if (t[1] == '#' || t[1] == 'b') n = 2u;
+    memcpy(b, t, n);
+    b[n] = 0;
+    if (minor && t[n] == 'm' && t[n + 1u] != 'a') { b[n] = 'm'; b[n + 1u] = 0; }
+}
+static uint32_t uxl_hc_sig(void)                            /* the readout changes 16 times per chord at most */
+{
+    uxl_hc_t h;
+    uxl_hc_get(&h);
+    return h.ok ? 1u + (uint32_t)h.cur * 7u + (uint32_t)h.left * 31u + (uint32_t)(h.prog >> 6) * 131u : 0u;
+}
+/* PLAY, HARM area: inside the ring, below the CAPTURE widget: NOW / NEXT IN n and the four chords as a strip (the current one filling) */
+static void uxl_hc_paint_play(void)
+{
+    uxl_hc_t h;
+    char a[12], b[24];
+    uint32_t i, tot = 0;
+    int32_t x = 88, w = 48;
+    uxl_hc_get(&h);
+    if (!h.ok) {
+        uxl_text_c(120, 150, &AF_S, "HARMONY OFF", T_DIM);
+        return;
+    }
+    uxl_hc_name(a, h.cur, sizeof a);
+    str_cpy(b, "NOW ", sizeof b);
+    str_cpy(b + 4, a, sizeof b - 4u);
+    uxl_text_c(120, 142, &AF_S, b, T_THEME);
+    uxl_hc_name(a, h.nxt, sizeof a);
+    str_cpy(b, "NEXT ", sizeof b);
+    str_cpy(b + 5, a, sizeof b - 5u);
+    uxl_text_c(120, 156, &AF_S, b, T_TEXT);
+    str_cpy(b, "IN ", sizeof b);
+    fmt_int(b + 3, (int32_t)h.left);
+    for (i = 0; i < 4u; i++)
+        tot += h.dur[i];
+    for (i = 0; i < 4u; i++) {
+        int32_t sw = (int32_t)(h.dur[i] * (uint32_t)w / tot) - 1;
+        if (i == h.cur) {
+            int32_t fill = sw * (int32_t)h.prog / 1000;
+            cv_rect(x, 172, sw, 5, T_MID);
+            cv_rect(x, 172, fill, 5, T_THEME);
+        } else
+            cv_rect(x, 173, sw, 3, i == h.nxt ? T_MID : T_LINE);
+        x += sw + 1;
+    }
+    cv_text(140, 169, &AF_S, b, T_MID);                 /* bars left in this chord, counting the one now playing */
 }
 static void uxl_pt(int32_t cx, int32_t cy, int32_t r, int32_t a, int32_t *x, int32_t *y)   /* a clockwise from 12 o'clock */
 {
@@ -2225,6 +2330,8 @@ static void uxl_paint(void)
         if (!d)
             continue;
         v = hp_get(r);
+        if (uxl_hm_key_global(&tg[k]))                  /* the HARMONY key, not the track's */
+            v = tg[k].id == P_ROOT ? (int32_t)harmony_key_root_eff() : (int32_t)harmony_key_scale_eff();
         uxl_orbit_arc(k, d, v, hot);
         param_format(d, v, b, &u);
         }
@@ -2238,9 +2345,10 @@ static void uxl_paint(void)
         }
 #endif
         lab = tg[k].kind == UXL_KFILT ? uxl_fxm_label(tg[k].id) : tg[k].lab ? tg[k].lab : d->label;
+        if (uxl_hm_key_global(&tg[k])) lab = tg[k].id == P_ROOT ? "H ROOT" : "H SCL";
         {
             /* PLAY intentionally mixes TRACK and GLOBAL targets in one area. */
-            int global = tg[k].kind == HP_GLOBAL || tg[k].kind == UXL_KTONE;
+            int global = tg[k].kind == HP_GLOBAL || tg[k].kind == UXL_KTONE || uxl_hm_key_global(&tg[k]);
             int gl = uxl.area == UXL_SHAPE && g == 0u ? (int)k : uxl.area == UXL_MOVE && g == 0u && k == 0u ? 4 : -1;
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
@@ -2267,6 +2375,11 @@ static void uxl_paint(void)
 #endif
 #if CARAVEL_UX_CAPTURE
     uxl_paint_widget();
+    if (uxl.area == UXL_HARM && !uxl.cap_view)
+        uxl_hc_paint_play();
+#else
+    if (uxl.area == UXL_HARM)
+        uxl_hc_paint_play();
 #endif
     if (uxl.pv) {                                       /* SAFE PREVIEW: the sound chosen: its name above the circle */
         char en[10], nm[16];
@@ -2468,7 +2581,7 @@ static uint32_t uxl_play_sig(void)
                     (uint32_t)song.g[G_BPM] * 101u + (uint32_t)song.rec * 5u + (uint32_t)TSEL->p[P_MUTE] * 999u + (uint32_t)uxl.pv * 77u + (uint32_t)uxl.pv_idx * 3u + uxl_cap_sig() + (ui.msg_t ? str_hash(7u, ui.msg) : 0u);
     s = s * 33u + uxl_start_help() + uxl.lvl * 977u;
     for(k=0;k<4u;k++) s=s*33u+hroot_get(k)+hdur_get(k)*17u;
-    s = s * 33u + harmony_on + harmony_bar * 7u + (uint32_t)song.g[G_RTYPE] * 131u;
+    s = s * 33u + harmony_on + harmony_bar * 7u + (uint32_t)song.g[G_RTYPE] * 131u + (uxl.area == UXL_HARM ? uxl_hc_sig() * 977u : 0u);
 #if CARAVEL_ACTION_BANKS
     s = s * 33u + harmony_pending + harmony_hold * 17u + (uint32_t)(int32_t)harmony_shift * 977u;
 #endif
@@ -2957,7 +3070,7 @@ static int uxl_hm_key_ready(uint32_t track, uint32_t source)
 }
 static uint32_t uxl_hm_sig(uint32_t view)
 {
-    uint32_t i, sig = harmony_on + harmony_key_mode * 7u + song.sel * 31u + view * 131u;
+    uint32_t i, sig = harmony_on + harmony_key_mode * 7u + song.sel * 31u + view * 131u + uxl_hc_sig() * 977u;
     for (i = 0; i < NTRK; i++) {
         const track_t *t = &trk[i];
         int32_t src = t->p[P_CSRC];
@@ -3086,8 +3199,12 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
                     i == song.sel || source == song.sel);
         }
     if (view != UXL_HM_KEY) {
+        uxl_hc_t hc;
+        char hn[8];
+        uxl_hc_get(&hc);
+        if (hc.ok) uxl_hc_short(hn, hc.cur, 0u); else str_cpy(hn, "H", sizeof hn);
         cv_rrect(111, 108, 18, 16, 4, harmony_on ? T_THEME : T_DIM, T_BG);
-        uxl_text_c(120, 109, &AF_S, "H", harmony_on ? T_THEME : T_DIM);
+        uxl_text_c(120, 109, &AF_S, hn, harmony_on ? T_THEME : T_DIM);
     } else
         uxl_text_c(120, 110, &AF_S, "KEY", T_MID);
     for (i = 0; i < NTRK; i++) {
@@ -3110,7 +3227,20 @@ static void uxl_hm_paint(const dual_t *dd, uint32_t row, uint32_t view)
     } else if (dd && dd->kind == DK_LINK && row && harm_role(TSEL) == HROLE_EXT)
         uxl_text_c(120, 158, &AF_S, "K4: RETRIG", T_MID);
     else
-        uxl_text_c(120, 158, &AF_S, view == UXL_HM_KEY ? "KEY FROM" : "ROUTE", T_MID);
+    {
+        uxl_hc_t hc;
+        char nb[16], nn[8];
+        uxl_hc_get(&hc);
+        if (view != UXL_HM_KEY && hc.ok) {              /* the next chord and in how many bars */
+            uxl_hc_short(nn, hc.nxt, 1u);
+            str_cpy(nb, ">", sizeof nb);
+            str_cpy(nb + 1, nn, sizeof nb - 1u);
+            str_cpy(nb + str_len(nb), " ", sizeof nb - str_len(nb));
+            fmt_int(nb + str_len(nb), (int32_t)hc.left);
+            uxl_text_c(120, 158, &AF_S, nb, T_TEXT);
+        } else
+            uxl_text_c(120, 158, &AF_S, view == UXL_HM_KEY ? "KEY FROM" : "ROUTE", T_MID);
+    }
 }
 #endif /* !FELUCCA_FM4 */
 

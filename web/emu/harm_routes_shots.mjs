@@ -24,6 +24,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const shot = (name) => { render(150); png(`${outDir}/${name}.png`, new Uint16Array(mem.buffer, ex.web_screen(), 240 * 240)); };
 render(2500);
 const R = { NOTES: 0, FOLLOW: 1, CHORD: 2, EXT: 3 };
+const prog = () => { [[0, 0], [9, 1], [5, 0], [7, 2]].forEach(([r, d], i) => ex.web_test_harm_prog(i, r, d)); };
 const role = (t, r) => ex.web_test_harm_role(t, r);
 // scenario: [name, setup(), selected track, SCL pages to shoot]
 const scen = [
@@ -37,6 +38,7 @@ const scen = [
   ["key_from_t1",          () => { ex.web_test_harm_on(0); ex.web_test_harm_key_mode(0); for (let t = 0; t < 4; t++) role(t, R.NOTES); ex.web_test_harm_link(1, 1); }, 1, 4],
   ["key_from_t1_two",      () => { ex.web_test_harm_on(0); ex.web_test_harm_key_mode(0); for (let t = 0; t < 4; t++) role(t, R.NOTES); ex.web_test_harm_link(1, 1); ex.web_test_harm_link(2, 1); ex.web_test_harm_link(3, 2); }, 2, 4],
   ["chord_local_from_key", () => { ex.web_test_harm_on(1); ex.web_test_harm_key_mode(0); for (let t = 0; t < 4; t++) role(t, R.CHORD); ex.web_test_harm_link(1, 1); ex.web_test_harm_link(2, 1); }, 1, 4],
+  ["follow_playing_bar2",  () => { prog(); ex.web_test_harm_on(1); for (let t = 0; t < 4; t++) role(t, R.NOTES); role(1, R.FOLLOW); tap("PLAY"); render(5200); }, 0, 1],
   ["multi_targets",        () => { ex.web_test_harm_on(1); for (let t = 0; t < 4; t++) role(t, R.NOTES); role(0, R.FOLLOW); ex.web_test_harm_bus(1); ex.web_test_harm_csrc(2, 1); ex.web_test_harm_csrc(3, 3); }, 0, 1],
 ];
 for (const [name, setup, sel, pages] of scen) {
