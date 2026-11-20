@@ -1659,6 +1659,38 @@ static void uxl_ring(int32_t cx, int32_t cy, int32_t r0, int32_t r1, int32_t a0,
  * the global labels). flags: bit 0 the arc is being turned (lighter), bit 1 global. */
 #define UXL_ARC_HOT 1
 #define UXL_ARC_G 2
+/* the point at angle a (degrees clockwise from 12 o'clock) and radius r on the orbit ring */
+static void uxl_ring_pt(int32_t a, int32_t r, int32_t *x, int32_t *y)
+{
+    *x = 120 + (r * uxl_sin(a) + 128) / 256;
+    *y = 116 - (r * uxl_sin(a + 90) + 128) / 256;
+}
+/* a filled disc that touches only its own pixels (cv_rrect paints its corners: wrong on a ring) */
+static void uxl_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c)
+{
+    int32_t dx, dy;
+    for (dy = -r; dy <= r; dy++)
+        for (dx = -r; dx <= r; dx++)
+            if (dx * dx + dy * dy <= r * r + r / 2)
+                cv_pset(cx + dx, cy + dy, c);
+}
+/* a round end of the 13 px ring */
+static void uxl_ring_cap(int32_t a, uint16_t c, uint16_t under)
+{
+    int32_t x, y;
+    (void)under;
+    uxl_ring_pt(a, 65, &x, &y);
+    uxl_disc(x, y, 6, c);
+}
+/* the thumb: a light disc with a gap round it (it never merges into the ring) and a dot in the arc's colour */
+static void uxl_ring_thumb(int32_t a, uint16_t dot, uint16_t disc)
+{
+    int32_t x, y;
+    uxl_ring_pt(a, 65, &x, &y);
+    uxl_disc(x, y, 8, T_BG);
+    uxl_disc(x, y, 6, disc);
+    uxl_disc(x, y, 2, dot);
+}
 static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int flags)   /* f, z: degrees of the arc (0..76): the value, the zero */
 {
     static const int16_t START[4] = {277, 7, 187, 97};         /* K1/K2 top, K3/K4 bottom, reading order; 76 degrees each */
@@ -1668,45 +1700,49 @@ static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int flags)   /* f,
     a0 = START[k] + (f < z ? f : z);
     a1 = START[k] + (f < z ? z : f);
     uxl_ring(CX, CY, 58, 71, START[k], START[k] + 76, a0, a1 > a0 ? a1 : a0 - 1, T_LINE, c);
-    {   /* the end marker */
-        int32_t x, y;
-        x = CX + (66 * uxl_sin(START[k] + f) + 128) / 256;
-        y = CY - (66 * uxl_sin(START[k] + f + 90) + 128) / 256;
-        cv_rect(x - 4, y - 4, 9, 9, T_TEXT);
+    uxl_ring_cap(START[k], T_LINE, T_BG);                         /* round ends: the rail, then the fill */
+    uxl_ring_cap(START[k] + 76, T_LINE, T_BG);
+    if (a1 > a0) {
+        uxl_ring_cap(a0, c, T_LINE);
+        uxl_ring_cap(a1, c, T_LINE);
     }
+    uxl_ring_thumb(START[k] + f, c, (flags & UXL_ARC_HOT) ? T_TEXT : ux_mix(T_TEXT, T_BG, 12));
 }
 /* a spring on an arc (E63): a coil from the value it returns to (the anchor) to the weight, which is where the parameter is now.
  * Stretched, the coil is longer; at rest it is a short coil beside the anchor, so an armed arc still reads as a spring. */
 static void uxl_orbit_spring(uint32_t k, int32_t fa, int32_t fl)
 {
     static const int16_t START[4] = {277, 7, 187, 97};
-    int32_t d = fl - fa, ad = d < 0 ? -d : d, n, i, a0 = fa, a1 = fl, x, y, px = 0, py = 0;
-    if (ad >= 2)                                        /* stretched: the stretch itself lit on the ring */
-        uxl_ring(120, 116, 58, 71, START[k] + (fa < fl ? fa : fl), START[k] + (fa < fl ? fl : fa), 0, 0, T_ACCENT, T_ACCENT);
-    if (ad < 3) {                                       /* at rest: a coil beside the anchor, towards the middle of the arc */
-        a0 = fa;
-        a1 = fa + (fa < 38 ? 20 : -20);
+    int32_t d = fl - fa, ad = d < 0 ? -d : d, n, i, a0 = fa, a1 = fl, x, y, px = 0, py = 0, cyc, amp = 5;
+    if (ad >= 2)                                        /* stretched: the stretch itself lit on the rail, softly */
+        uxl_ring(120, 116, 58, 71, START[k] + (fa < fl ? fa : fl), START[k] + (fa < fl ? fl : fa), 0, 0, ux_mix(T_LINE, T_ACCENT, 40), T_ACCENT);
+    if (ad < 3) {                                       /* at rest: a short soft coil beside the anchor, towards the middle of the arc */
+        a1 = fa + (fa < 38 ? 34 : -34);
         fl = fa;
+        amp = 5;
     }
-    n = (a1 > a0 ? a1 - a0 : a0 - a1) / 4;
-    if (n < 5) n = 5;
-    if (n > 18) n = 18;
-    for (i = 0; i <= n; i++) {
-        int32_t ang = START[k] + a0 + (a1 - a0) * i / n, r = 66 + (i == 0 || i == n ? 0 : (i & 1) ? 11 : -11);
-        x = 120 + (r * uxl_sin(ang) + 128) / 256;
-        y = 116 - (r * uxl_sin(ang + 90) + 128) / 256;
-        if (i) {
-            cv_line(px, py, x, y, T_ACCENT);
-            cv_line(px + 1, py, x + 1, y, T_ACCENT);
-            cv_line(px, py + 1, x, y + 1, T_ACCENT);
-        }
-        px = x;
-        py = y;
+    n = 120;
+    if (ad >= 3) amp = ad / 2 + 1 < 5 ? ad / 2 + 1 : 5;   /* a short stretch is a nearly straight band, no tight loops */
+    cyc = ad < 3 ? 4 : ad / 6;                          /* at rest 4 turns; stretched: a turn per ~6 degrees, 1..9 turns */
+    if (cyc < 1) cyc = 1;
+    if (cyc > 9) cyc = 9;
+    for (i = 0; i <= n; i++) {                          /* a smooth wave along the arc, fading in and out at both ends */
+        int32_t ang = START[k] + a0 + (a1 - a0) * i / n;
+        int32_t env = i < 10 ? i : i > n - 10 ? n - i : 10;
+        int32_t r = 65 + (env * amp * uxl_sin((i * 360 * cyc / n) % 360) + 1280) / 2560;
+        uxl_ring_pt(ang, r, &x, &y);
+        cv_pset(x, y, T_ACCENT);                        /* a dense run of points: a smooth 2 px line without the stair steps */
+        cv_pset(x + 1, y, T_ACCENT);
+        cv_pset(x, y + 1, T_ACCENT);
+        (void)px; (void)py;
     }
-    x = 120 + (66 * uxl_sin(START[k] + fl) + 128) / 256;   /* the weight */
-    y = 116 - (66 * uxl_sin(START[k] + fl + 90) + 128) / 256;
-    cv_rrect(x - 8, y - 8, 17, 17, 8, T_ACCENT, T_BG);
-    cv_rrect(x - 3, y - 3, 7, 7, 3, T_BG, T_ACCENT);
+    {   /* the anchor: a hollow ring on the rail; the weight: the thumb, in the accent */
+        int32_t ax, ay;
+        uxl_ring_pt(START[k] + fa, 65, &ax, &ay);
+        uxl_disc(ax, ay, 6, T_ACCENT);
+        uxl_disc(ax, ay, 3, T_BG);
+    }
+    uxl_ring_thumb(START[k] + fl, T_BG, T_ACCENT);
 }
 static void uxl_orbit_arc(uint32_t k, const param_desc_t *d, int32_t v, int flags)
 {
