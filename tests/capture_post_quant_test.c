@@ -3,9 +3,8 @@
  * Uses the existing *actual* capture.c and audio-clock/voice/UI fixture.
  * Run with tests/capture_post_quant.sh (generated build/gen required).
  * Not an FM-1 target or CPU/ISR timing measurement. */
-#define main capture_baseline_fixture_main
+#define UX_CAPTURE_TEST_NO_MAIN 1
 #include "ux_capture_test.c"
-#undef main
 #include <assert.h>
 
 static void cq_fresh(void)

@@ -104,6 +104,7 @@ static void midi_capture(void)
         REQUIRE("loop playback never records itself",cap_rn[track]==recorded);
     }
 }
+#ifndef UX_CAPTURE_TEST_NO_MAIN                      /* capture_post_quant_test.c reuses this fixture and has its own main */
 int main(void)
 {
     unsigned i, over;
@@ -295,3 +296,4 @@ int main(void)
            sizeof cap_hn+sizeof cap_held+sizeof cap_open,failures);
     return failures ? 1 : 0;
 }
+#endif

@@ -23,7 +23,9 @@ PROFILE=['-DFELUCCA_HOME_PERF=1','-DFELUCCA_PERF_HW=1','-DFELUCCA_PAIR_MORPH=1',
 ELASTIC=['core','overlay','p1_shim','row','visual','trajectory','p13','sync']
 SANITIZED=['afterburner_host','format2_project','format2_settings','format2_performance','format2_editor','format2_backup','format2_presets','persistence','duplicate','fx_edit','live_full','midi_resync','midi_drift','voice_reserve','lfo2','lfo2_editor','ratchet','enum_order','fx_feedback','chordext','chordset','chordext_ui','harmony_roles_ui','chordext_capture','release_boot','chordsource','ux_capture','ux_play_midi']
 BASELINES=['tests/golden.txt','tests/cpu_baseline.txt','tests/cpu_format2_idle.txt','tests/target_budget.txt','tests/union_golden.txt','tests/chordext_baseline.txt','tests/chordext_format2_off.txt','tests/chordext_format2_scale.txt','tests/chordext_format2_harm.txt']
-EXTERNAL={'ux_render':'tests/ux_render.sh (visual session)'}
+EXTERNAL={'ux_render':'tests/ux_render.sh (visual session)',
+ 'capture_post_quant':'tests/capture_post_quant.sh: OPEN, does not link yet (hp_project_* from experiments/home-perf/home_store*.c are not in the host fixture)',
+ 'stasis_project_menu_ui':'OPEN, does not build with the host flags yet (pair_state.h needs CARAVEL_DUALCORE_D1, upreset.c f2_old)'}
 
 def inventory():
  legacy=json.loads((ROOT/'tests/format2_legacy_tests.json').read_text())
