@@ -1545,7 +1545,7 @@ static void uxl_text_r(int32_t xr, int32_t y, const aafont_t *f, const char *s, 
 }
 /* ---- HARMONY position: which chord of the four sounds, which comes next, in how many bars (BUILD's route map and PLAY's HARM area).
  * Read only; no state is stored. harmony_bar counts whole bars from the start; the fraction comes from the bar clock. */
-typedef struct { uint8_t ok, cur, nxt, left, extra, hold; uint16_t prog; uint8_t dur[4]; } uxl_hc_t;   /* prog: 0..1000, the elapsed part of the current chord */
+typedef struct { uint8_t ok, cur, nxt, left, extra, hold, len, elapsed; uint16_t prog; uint8_t dur[4]; } uxl_hc_t;   /* len: this chord's bars as they now stand (elapsed + left) */   /* prog: 0..1000, the elapsed part of the current chord */
 static void uxl_hc_get(uxl_hc_t *h)
 {
     uint32_t total = 0, i, bar, idx, start, frac;
@@ -1565,7 +1565,9 @@ static void uxl_hc_get(uxl_hc_t *h)
     h->extra = harmony_extra;
     h->hold = harmony_hold && harmony_pending != H_RESUME;
     h->left = (uint8_t)(start + h->dur[idx] - bar + harmony_extra);
-    h->prog = (uint16_t)((((bar - start) << 16) + frac) / h->dur[idx] * 1000u >> 16);
+    h->elapsed = (uint8_t)(bar - start + harmony_rep);
+    h->len = (uint8_t)(h->elapsed + h->left);
+    h->prog = h->hold ? 1000u : (uint16_t)((((uint32_t)h->elapsed << 16) + frac) / h->len * 1000u >> 16);
     h->ok = 1;
 }
 static void uxl_hc_name(char *b, uint32_t idx, uint32_t cap)
@@ -1602,18 +1604,22 @@ static uint32_t uxl_hc_sig(void)                            /* the readout chang
 static void uxl_hc_paint_bar(void)
 {
     uxl_hc_t h;
-    uint32_t i, tot = 0;
+    uint32_t i, tot = 0, len[4];
     int32_t x = 4, w = 232;
     uxl_hc_get(&h);
     if (!h.ok)
         return;
-    for (i = 0; i < 4u; i++)
-        tot += h.dur[i];
+    for (i = 0; i < 4u; i++) {                          /* the current chord at its length as it now stands (LEFT turned) */
+        len[i] = i == h.cur && !h.hold ? h.len : h.dur[i];
+        tot += len[i];
+    }
     for (i = 0; i < 4u; i++) {
-        int32_t sw = (int32_t)(h.dur[i] * (uint32_t)(w - 6) / tot);
-        if (i == h.cur) {
-            cv_rect(x, 22, sw, 2, T_MID);
-            cv_rect(x, 22, sw * (int32_t)h.prog / 1000, 2, T_THEME);
+        int32_t sw = (int32_t)(len[i] * (uint32_t)(w - 6) / tot);
+        if (i == h.cur) {                               /* the actual position: 3 px, the elapsed part bright with a white tip */
+            int32_t fill = sw * (int32_t)h.prog / 1000;
+            cv_rect(x, 21, sw, 3, ux_mix(T_LINE, T_THEME, 40));
+            cv_rect(x, 21, fill, 3, T_THEME);
+            if (fill > 0) cv_rect(x + fill - 1 < x ? x : x + fill - 1, 20, 2, 5, T_TEXT);
         } else
             cv_rect(x, 22, sw, 2, i == h.nxt ? T_TEXT : T_LINE);
         x += sw + 2;

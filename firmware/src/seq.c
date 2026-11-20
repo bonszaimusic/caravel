@@ -87,6 +87,7 @@ static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMON
 /* Transient performance overlay. Only events_block moves the musical playhead. */
 enum {H_NONE,H_HOLD,H_PREV,H_NEXT,H_RESET,H_RESUME,H_J0,H_J1,H_J2,H_J3,H_LONG,H_SHORT};   /* H_J0..3: to chord n at the next bar line, keeping the progress in the chord; H_LONG / H_SHORT: the chord's remaining bars +1 / -1 */
 static volatile uint8_t harmony_command, harmony_pending, harmony_hold;
+static uint8_t harmony_rep;                      /* bars of the current chord already repeated (LEFT turned up): its elapsed bars for the display */
 static uint8_t harmony_extra;                    /* bars the current chord is held beyond its length (0..16; past that: HOLD); audio context only, never saved */
 static volatile int8_t harmony_shift_want;
 static int8_t harmony_shift;
@@ -94,7 +95,7 @@ static volatile uint8_t harmony_shift_pending, harmony_shift_dirty;
 static uint8_t harmony_cc_hi[4];
 static void harmony_perf_clear(void)
 {
- harmony_command=harmony_pending=harmony_hold=harmony_shift_pending=harmony_shift_dirty=0;harmony_extra=0;
+ harmony_command=harmony_pending=harmony_hold=harmony_shift_pending=harmony_shift_dirty=0;harmony_extra=0;harmony_rep=0;
  harmony_shift=harmony_shift_want=0;
  memset(harmony_cc_hi,0,sizeof harmony_cc_hi);
 }
@@ -294,7 +295,7 @@ static void harmony_perf_apply(uint32_t bar)
    idx=j;off=e2;
   }
   if(cmd==H_RESUME)harmony_hold=0;
-  harmony_extra=0;
+  harmony_extra=0;harmony_rep=0;
   harmony_bar=harmony_chord_start(idx)+off;harmony_base_bar=(bar-harmony_bar)&0xFFFFu;
   harmony_pending=H_NONE;
  }
@@ -2768,8 +2769,8 @@ static void events_block(uint32_t n)
         harmony_bar = (HARM_BAR() - harmony_base_bar) & 0xFFFFu;   /* (the bar count is 16 bits: the difference wraps with it) */
 #if CARAVEL_ACTION_BANKS
         if(boundary&&harmony_extra&&!harmony_hold&&!harmony_pending&&harmony_chord_at(harmony_bar)!=old_chord){
-            harmony_base_bar=(harmony_base_bar+1u)&0xFFFFu;harmony_bar=hb;harmony_extra--;   /* the chord would end: one more bar of it */
-        }
+            harmony_base_bar=(harmony_base_bar+1u)&0xFFFFu;harmony_bar=hb;harmony_extra--;harmony_rep++;   /* the chord would end: one more bar of it */
+        }else if(boundary&&harmony_chord_at(harmony_bar)!=old_chord)harmony_rep=0;
         if(boundary){
             if(harmony_pending)harmony_bar=hb; /* a queued NEXT advances once, not once plus the natural change */
             harmony_perf_apply(HARM_BAR());

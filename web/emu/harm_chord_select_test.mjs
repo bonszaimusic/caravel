@@ -44,4 +44,11 @@ setup(); playTo(300); ex.web_enc(5, 1); render(150); render(8800); check("extra 
 setup(); playTo(300); for (let i = 0; i < 18; i++) { ex.web_enc(5, 1); render(60); } console.log("18x longer:", st());
 check("past 16: HOLD (INF)", ex.web_test_harm_hc(4) === 1); render(14000); check("INF: still chord 0 after 14 s", ex.web_test_harm_hc(0) === 0);
 ex.web_enc(5, -1); render(200); console.log("INF -1:", st()); check("INF -> 16 bars", ex.web_test_harm_hc(4) === 0 && ex.web_test_harm_hc(3) === 16);
+// 5: the header bar's data: the chord's length as it stands, the elapsed bars keep counting through the repeats
+setup(); playTo(300); ex.web_enc(5, 1); render(150); ex.web_enc(5, 1); render(150);
+check("len = 4 + 2 after two bars more", ex.web_test_harm_hc(6) === 6);
+render(7500); const el1 = ex.web_test_harm_hc(7); render(2000); const el2 = ex.web_test_harm_hc(7);
+console.log("elapsed through the repeat:", el1, el2, st());
+check("elapsed keeps counting into the repeated bars (no jump back)", el2 >= el1 && el2 >= 4 && ex.web_test_harm_hc(0) === 0);
+check("len stays 6 while it repeats", ex.web_test_harm_hc(6) === 6);
 console.log(fails ? fails + " FAILED" : "all ok");
