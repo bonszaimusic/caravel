@@ -1617,8 +1617,8 @@ static void uxl_hc_paint_bar(void)
         int32_t sw = (int32_t)(len[i] * (uint32_t)(w - 6) / tot);
         if (i == h.cur) {                               /* the actual position: 3 px, the elapsed part bright with a white tip */
             int32_t fill = sw * (int32_t)h.prog / 1000;
-            cv_rect(x, 21, sw, 3, ux_mix(T_LINE, T_THEME, 40));
-            cv_rect(x, 21, fill, 3, T_THEME);
+            cv_rect(x, 21, sw, 3, ux_mix(T_LINE, 0x7FEFu, 38));   /* a colour of its own: progress is not a track (cyan) nor a global value (orange) */
+            cv_rect(x, 21, fill, 3, 0x7FEFu);
             if (fill > 0) cv_rect(x + fill - 1 < x ? x : x + fill - 1, 20, 2, 5, T_TEXT);
         } else
             cv_rect(x, 22, sw, 2, i == h.nxt ? T_TEXT : T_LINE);
