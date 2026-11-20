@@ -1655,12 +1655,16 @@ static void uxl_ring(int32_t cx, int32_t cy, int32_t r0, int32_t r1, int32_t a0,
         }
 }
 /* the value as an arc over its quadrant: bipolar parameters fill from their zero */
-static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int hot)   /* f, z: degrees of the arc (0..76): the value, the zero */
+/* One rule for every arc on the device: cyan = a value of the selected track, orange = a global value (the same orange as the bus node and
+ * the global labels). flags: bit 0 the arc is being turned (lighter), bit 1 global. */
+#define UXL_ARC_HOT 1
+#define UXL_ARC_G 2
+static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int flags)   /* f, z: degrees of the arc (0..76): the value, the zero */
 {
     static const int16_t START[4] = {277, 7, 187, 97};         /* K1/K2 top, K3/K4 bottom, reading order; 76 degrees each */
     int32_t a0, a1;
     const int32_t CX = 120, CY = 116;
-    uint16_t c = hot ? T_ACCENT : T_THEME;
+    uint16_t base = (flags & UXL_ARC_G) ? T_THEME : T_ACCENT, c = (flags & UXL_ARC_HOT) ? ux_mix(base, T_TEXT, 45) : base;
     a0 = START[k] + (f < z ? f : z);
     a1 = START[k] + (f < z ? z : f);
     uxl_ring(CX, CY, 58, 71, START[k], START[k] + 76, a0, a1 > a0 ? a1 : a0 - 1, T_LINE, c);
@@ -1668,7 +1672,7 @@ static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int hot)   /* f, z
         int32_t x, y;
         x = CX + (66 * uxl_sin(START[k] + f) + 128) / 256;
         y = CY - (66 * uxl_sin(START[k] + f + 90) + 128) / 256;
-        cv_rect(x - 4, y - 4, 9, 9, hot ? T_ACCENT : T_TEXT);
+        cv_rect(x - 4, y - 4, 9, 9, T_TEXT);
     }
 }
 /* a spring on an arc (E63): a coil from the value it returns to (the anchor) to the weight, which is where the parameter is now.
@@ -1704,12 +1708,12 @@ static void uxl_orbit_spring(uint32_t k, int32_t fa, int32_t fl)
     cv_rrect(x - 8, y - 8, 17, 17, 8, T_ACCENT, T_BG);
     cv_rrect(x - 3, y - 3, 7, 7, 3, T_BG, T_ACCENT);
 }
-static void uxl_orbit_arc(uint32_t k, const param_desc_t *d, int32_t v, int hot)
+static void uxl_orbit_arc(uint32_t k, const param_desc_t *d, int32_t v, int flags)
 {
     int32_t span = d->max - d->min, f = span > 0 ? (v - d->min) * 76 / span : 0, z = 0;
     if (d->min < 0 && d->max > 0)
         z = (0 - d->min) * 76 / span;
-    uxl_orbit_arc_f(k, f, z, hot);
+    uxl_orbit_arc_f(k, f, z, flags);
 }
 static uint16_t uxl_hot(uint32_t k) { return uxl.hot_t && uxl.hot_k == k ? T_ACCENT : T_TEXT; }
 
@@ -2314,7 +2318,7 @@ static void uxl_paint(void)
         if (tg[k].kind == UXL_KTONE) {
             v = song.g[G_RTYPE] == 3u ? stasis_tone : 64;
             d = &UXL_STTONE_DESC;
-            uxl_orbit_arc(k, d, v, hot);
+            uxl_orbit_arc(k, d, v, (hot ? UXL_ARC_HOT : 0) | UXL_ARC_G);
             if (song.g[G_RTYPE] == 3u) fmt_int(b, v);
             else str_cpy(b, "N/A", sizeof b);
             u = "";
@@ -2324,7 +2328,7 @@ static void uxl_paint(void)
         if (tg[k].kind == UXL_KFILT) {                  /* per-track FILTER or the other live FX macros */
             v = uxl_fx_get(tg[k].id);
             d = tg[k].id == 0u ? &UXL_FILT_DESC : &UXL_FX_DESC;
-            uxl_orbit_arc(k, d, v, hot);
+            uxl_orbit_arc(k, d, v, hot ? UXL_ARC_HOT : 0);
             uxl_fx_text(tg[k].id, b, sizeof b);
             u = "";
             r = (hp_ref_t){0};
@@ -2336,7 +2340,7 @@ static void uxl_paint(void)
         v = hp_get(r);
         if (uxl_hm_key_global(&tg[k]))                  /* the HARMONY key, not the track's */
             v = tg[k].id == P_ROOT ? (int32_t)harmony_key_root_eff() : (int32_t)harmony_key_scale_eff();
-        uxl_orbit_arc(k, d, v, hot);
+        uxl_orbit_arc(k, d, v, (hot ? UXL_ARC_HOT : 0) | (tg[k].kind == HP_GLOBAL || uxl_hm_key_global(&tg[k]) ? UXL_ARC_G : 0));
         param_format(d, v, b, &u);
         }
 #if CARAVEL_UX_EVOLVE && CARAVEL_ELASTIC_P1
@@ -2357,14 +2361,12 @@ static void uxl_paint(void)
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx, cy, hot); else cv_text(cx, cy, &AF_M, lab, hot ? T_ACCENT : global ? T_THEME : T_TEXT);
-                if (global && !uxl_hm_key_global(&tg[k])) cv_text(cx + 80, cy - 1, &AF_S, "G", T_THEME);
                 cv_text(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));           /* the value smaller than the title: the arc shows it too */
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx + text_w(&AF_S, b) + 5, vy + 3, 6, 6, 2, T_THEME, T_BG);
 #endif
             } else {
                 if (gl >= 0) uxl_glyph((uint32_t)gl, cx - UXL_GW, cy, hot); else uxl_text_r(cx, cy, &AF_M, lab, hot ? T_ACCENT : global ? T_THEME : T_TEXT);
-                if (global && !uxl_hm_key_global(&tg[k])) cv_text(cx - 85, cy - 1, &AF_S, "G", T_THEME);
                 uxl_text_r(cx, vy, &AF_S, b, tg[k].kind == UXL_KFILT && !tg[k].id && !tf_eff(TSEL) ? T_DIM : uxl_hot(k));
 #if CARAVEL_UX_EVOLVE
                 if (uxl_morph_has(r)) cv_rrect(cx - text_w(&AF_S, b) - 11, vy + 3, 6, 6, 2, T_THEME, T_BG);
@@ -3354,7 +3356,7 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
             continue;
         }
         if (!off && !(chx && k == 3u))                                  /* (NOTES is a display: no arc) */
-            uxl_orbit_arc(k, d, v, hot);
+            uxl_orbit_arc(k, d, v, (hot ? UXL_ARC_HOT : 0) | (rps[act] && rps[act]->scope == SC_GLOBAL ? UXL_ARC_G : 0));
         {
             uint8_t nm = fmt_named;
             param_format(d, v, val, &unit);
@@ -3380,8 +3382,7 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
                 uxl_text_r(cx, cy, &AF_M, d->label, lc);
                 uxl_text_r(cx, cy + 21, &AF_S, line, off ? T_DIM : hot ? T_ACCENT : T_MID);
             }
-            /* G is independent of the knob label and avoids renaming it. */
-            if (global) cv_text(cx < 120 ? cx + 80 : cx - 85, cy - 1, &AF_S, "G", T_THEME);
+            /* global = orange arc and orange label (no G mark any more) */
         }
         if (chx && cv.detail[0]) {                                      /* the second small line: the source's chord, why a status, n of m */
             if (cx < 120)
