@@ -733,7 +733,7 @@ EXPORT void web_test_harm_key_mode(uint32_t on) { harmony_key_mode = on ? 1u : 0
 EXPORT void web_test_harm_link(uint32_t t, uint32_t src) { if (t < NTRK && src <= NTRK) { link_src[t] = (uint8_t)src; ui.force = 1; } }
 EXPORT void web_test_harm_csrc(uint32_t t, uint32_t src) { if (t < NTRK && src <= 5u) { trk[t].p[P_CSRC] = (int16_t)src; ui.force = 1; } }
 EXPORT void web_test_harm_bus(uint32_t t) { if (t < NTRK) { trk[t].p[P_CSRC] = 0; trk[t].p[P_CHRD] = CH_BUS; harmony_follow[t] = 1u; ui.force = 1; } }
-EXPORT uint32_t web_test_harm_key(uint32_t what) { return what == 0u ? harmony_key_root_eff() : what == 1u ? harmony_key_scale_eff() : what == 2u ? harmony_key_mode : harmony_chord_at(harmony_bar); }
+EXPORT uint32_t web_test_harm_key(uint32_t what) { return what == 0u ? harmony_key_root_eff() : what == 1u ? harmony_key_scale_eff() : what == 2u ? harmony_key_mode : what == 4u ? harmony_root_next : harmony_chord_at(harmony_bar); }
 EXPORT void web_test_harm_prog(uint32_t i, uint32_t root, uint32_t dur) { if (i < 4u) { hroot_set(i, (uint8_t)root); hdur_set(i, (uint8_t)dur); ui.force = 1; } }
 EXPORT uint32_t web_test_harm_linkget(uint32_t t) { return t < NTRK ? link_src[t] : 0u; }
 #if CARAVEL_UX_EVOLVE && CARAVEL_ELASTIC_P1

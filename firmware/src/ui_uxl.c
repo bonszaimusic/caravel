@@ -1190,10 +1190,15 @@ static int uxl_hm_key_global(const uxl_tg_t *t)
 }
 static void uxl_hm_key_turn(uint32_t id, int32_t s)
 {
-    int32_t st = s > 0 ? 1 : -1;
+    int32_t st = s;                                      /* (the detents of this frame) */
     uint32_t root = harmony_key_root_eff(), scale = harmony_key_scale_eff();
-    if (id == P_ROOT) root = (uint32_t)((((int32_t)root + st) % 12 + 12) % 12);
-    else scale = (uint32_t)clamp((int32_t)scale + st, 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1);
+    if (id == P_ROOT) {                                  /* the ROOT waits for the next chord (several detents add up); back on the sounding root: nothing waits */
+        uint32_t cur = harmony_root_next ? (uint32_t)harmony_root_next - 1u : root;
+        cur = (uint32_t)((((int32_t)cur + st) % 12 + 12) % 12);
+        harmony_root_next = cur == root ? 0u : (uint8_t)(cur + 1u);
+        return;
+    }
+    scale = (uint32_t)clamp((int32_t)scale + st, 0, (int32_t)(sizeof N_SCALE / sizeof N_SCALE[0]) - 1);
     harmony_key_root = (uint8_t)root;
     harmony_key_scale = (uint8_t)scale;
     harmony_key_mode = 1u;                              /* an explicit edit decouples the key from T1 */
@@ -2478,10 +2483,17 @@ static void uxl_paint(void)
         if (!d)
             continue;
         v = hp_get(r);
-        if (uxl_hm_key_global(&tg[k]))                  /* the HARMONY key, not the track's */
-            v = tg[k].id == P_ROOT ? (int32_t)harmony_key_root_eff() : (int32_t)harmony_key_scale_eff();
+        if (uxl_hm_key_global(&tg[k]))                  /* the HARMONY key, not the track's; a ROOT turned waits for the next chord */
+            v = tg[k].id == P_ROOT ? (int32_t)(harmony_root_next ? (uint32_t)harmony_root_next - 1u : harmony_key_root_eff()) : (int32_t)harmony_key_scale_eff();
         uxl_orbit_arc(k, d, v, (hot ? UXL_ARC_HOT : 0) | (tg[k].kind == HP_GLOBAL || uxl_hm_key_global(&tg[k]) ? UXL_ARC_G : 0));
         param_format(d, v, b, &u);
+        if (uxl_hm_key_global(&tg[k]) && tg[k].id == P_ROOT && harmony_root_next) {   /* "C>D": the sounding root, then the one that waits */
+            char nx[12];
+            param_format(d, (int32_t)harmony_key_root_eff(), nx, &u);
+            str_cpy(nx + str_len(nx), ">", sizeof nx - str_len(nx));
+            str_cpy(nx + str_len(nx), b, sizeof nx - str_len(nx));
+            str_cpy(b, nx, sizeof b);
+        }
         }
 #if CARAVEL_UX_EVOLVE && CARAVEL_ELASTIC_P1
         if (hp_el1.on && hp_el_free_track[song.sel] && r.kind == HP_TRACK) {   /* a spring on this arc: where it is now */

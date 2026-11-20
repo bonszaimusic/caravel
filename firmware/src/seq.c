@@ -78,6 +78,18 @@ static uint32_t harmony_key_scale_eff(void)
 {
     return harmony_key_mode ? harmony_key_scale : (uint32_t)trk[0].p[P_SCALE];
 }
+/* The HARMONY key's ROOT turned in PLAY waits for the next chord: root + 1 (0: nothing waits), set by the UI, taken at the audio control boundary
+ * when the chord changes (at once while stopped or with HARMONY off). Runtime only, never stored. */
+static volatile uint8_t harmony_root_next;
+static void harmony_root_commit(void)
+{
+    uint32_t r = harmony_root_next;
+    if (!r) return;
+    harmony_key_scale = (uint8_t)harmony_key_scale_eff();   /* (an explicit edit decouples the key from T1, as the HARM page does) */
+    harmony_key_root = (uint8_t)(r - 1u);
+    harmony_key_mode = 1u;
+    harmony_root_next = 0;
+}
 
 static uint8_t harmony_edit_dur;                 /* HARMONY: K1..K4 edit the DUR row instead of the roots */
 static uint8_t link_src[NTRK];                   /* 0 OFF, 1..4 = T1..T4 */
@@ -2715,6 +2727,7 @@ static void events_block(uint32_t n)
 #if CARAVEL_ACTION_BANKS
     if(!harmony_on){
         if(harmony_command||harmony_pending||harmony_hold||harmony_shift||harmony_shift_pending||harmony_shift_dirty)harmony_perf_clear();
+        harmony_root_commit();                                   /* no chord to wait for */
     }
     else {
         uint8_t cmd=harmony_command,shift_dirty=harmony_shift_dirty;
@@ -2737,6 +2750,7 @@ static void events_block(uint32_t n)
             }
             cmd=H_NONE;
         }else if(cmd)harmony_pending=cmd;
+        if(!song.playing)harmony_root_commit();                  /* stopped: the root takes effect at once */
         if(!song.playing && (cmd||shift_dirty)){uint8_t keep=cmd?H_NONE:harmony_pending;harmony_pending=cmd?harmony_pending:H_NONE;harmony_perf_apply(HARM_BAR());if(keep)harmony_pending=keep;}   /* a SHIFT edit while stopped leaves a queued PREV / NEXT / RESET queued */
     }
 #endif
@@ -2779,6 +2793,9 @@ static void events_block(uint32_t n)
             if(harmony_pending)harmony_bar=hb; /* a queued NEXT advances once, not once plus the natural change */
             harmony_perf_apply(HARM_BAR());
         }
+#endif
+#if CARAVEL_ACTION_BANKS
+        if(boundary&&harmony_root_next&&harmony_chord_at(harmony_bar)!=old_chord)harmony_root_commit();   /* the next chord is in the new key */
 #endif
         arp_bar_sync();
         if (boundary && harmony_on && (old_chord != harmony_chord_at(harmony_bar) || old_mask != harmony_mask_bar(harmony_bar)))

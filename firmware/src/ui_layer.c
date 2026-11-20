@@ -687,9 +687,8 @@ static void layer_key(uint32_t l, uint32_t k)
         }
     } else if (l == LAYER_SCL) {
         if (UXL_PLAY && !harm_has_key(TSEL)) {          /* a bus / EXT track: the key is the HARMONY key */
-            harmony_key_root = (uint8_t)((k + 5u) % 12u);
-            harmony_key_scale = (uint8_t)harmony_key_scale_eff();
-            harmony_key_mode = 1u;
+            uint32_t r = (k + 5u) % 12u;                    /* the root waits for the next chord, as the arc's does */
+            harmony_root_next = r == harmony_key_root_eff() ? 0u : (uint8_t)(r + 1u);
         } else
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */
     } else if (l == LAYER_EDIT && !key_black(k)) {
