@@ -107,6 +107,7 @@ static void setup(void)
     memset(midi_owners, 0, sizeof midi_owners); memset(midi_bend_q8, 0, sizeof midi_bend_q8);
     memset(midi_bend_target, 0, sizeof midi_bend_target); memset(&midi_clock, 0, sizeof midi_clock);
     memset(midi_in_source, 0, sizeof midi_in_source);
+    ext_midi_clear_all();                                    /* physical holds of an earlier test must not stay down */
     mi_r = mi_w = mo_r = mo_w = 0; midi_in_overflow = 0; midi_beat_samples = 0;
     for (k = 0; k < NTRK; k++) latch_forget(k);
     latch_req = 0; panic_req = 0;
@@ -1395,7 +1396,8 @@ static int t32(void)
           (xext[1].chord & 0xFFFu) == ((1u << 0) | (1u << 4) | (1u << 7));
     u_usb(900, 0x80, 64, 0); run_to(1120);
     ce_info(1, &o);
-    ok &= o.state == EXT_ST_AMBIG && o.have_chord; /* remembered valid chord */
+    ok &= o.state == EXT_ST_OK && o.have_chord && o.root == 0u &&
+          (xext[1].chord & 0xFFFu) == ((1u << 0) | (1u << 7)); /* C+G left down: a perfect fifth is a valid power chord (dyads: fourth / fifth), it replaces C major */
     u_usb(1200, 0x80, 60, 0); u_usb(1200, 0x90, 67, 0); run_to(1420);
     ce_info(1, &o);
     ok &= o.state == EXT_ST_OK && o.have_chord && !ext_held[0][60] &&

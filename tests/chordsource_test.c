@@ -36,10 +36,11 @@ static void fresh(unsigned source, unsigned follower)
     song.sel=(uint8_t)source;song.g[G_ROUTE]=0;song.playing=0;harmony_on=0;
     trk[follower].p[P_CSRC]=(int16_t)(source+2u);ticks(1);ce_reset();
 }
-static void note(unsigned track,unsigned n,unsigned v) { midi_event(v?0x90u:0x80u,track,n,v); }
+static void note(unsigned track,unsigned n,unsigned v) { midi_event_source(v?0x90u:0x80u,track,n,v,1u); }   /* USB: the physical hold the EXT source follows (71df9ef) */
 static void triad(unsigned source,unsigned a,unsigned b,unsigned c)
 {
     note(source,a,90);note(source,b,90);note(source,c,90);
+    ticks(45);                                          /* the chord is what is held when it settles (EXT_GAP): released before that nothing is recognised (71df9ef) */
     note(source,a,0);note(source,b,0);note(source,c,0);
 }
 static int has_pool(unsigned f,unsigned a,unsigned b,unsigned c)
@@ -81,12 +82,14 @@ static void recogniser(void)
 static void collection(void)
 {
     fresh(0,1);ck("live source starts WAIT",source_info(1).state==EXT_ST_WAIT);
-    triad(0,60,64,67);ticks(40);ck("no partial commit before 41 blocks",source_info(1).state==EXT_ST_WAIT);
+    note(0,60,90);note(0,64,90);note(0,67,90);ticks(40);ck("no partial commit before 41 blocks",source_info(1).state==EXT_ST_WAIT);
     ticks(1);ck("complete C major commits at gap expiry",has_pool(1,11,2,9));
+    note(0,60,0);note(0,64,0);note(0,67,0);ticks(41);      /* the three keys come up: the chord stays as it was */
     ck("release of source notes does not clear context",source_info(1).root==0);
     triad(0,57,60,64);ticks(41);ck("A minor has independent G B F extension oracle",has_pool(1,7,11,5));
-    note(0,65,90);note(0,69,90);note(0,65,0);note(0,69,0);ticks(41);
+    note(0,57,0);note(0,60,0);note(0,64,0);note(0,65,90);note(0,69,90);ticks(41);   /* F+A held: no fourth/fifth, no third: ambiguous */
     ck("ambiguous third keeps last context and reports KEPT",source_info(1).state==EXT_ST_AMBIG&&source_info(1).why==EXT_WHY_KEPT&&has_pool(1,7,11,5));
+    note(0,65,0);note(0,69,0);
     note(1,60,80);ck("AMBIG keeps the previous pool playable, not merely visible",source_gates(1)>0);note(1,60,0);
     ext_cfg_t kept=ext_cfg(&trk[1]);ck("AMBIG retains SEQ/mono mapping",ext_map(&trk[1],&kept,60)>=0);
     uint32_t anchors[24]={60},last=60;ck("AMBIG retains the ARP pool",ext_arp(&trk[1],&kept,anchors,1,&last)==3);
@@ -97,20 +100,20 @@ static void collection(void)
     fresh(0,1);note(0,60,90);note(0,64,90);ticks(40);note(0,67,90);ticks(41);
     ck("arrival at W-1 extends the gap",has_pool(1,11,2,9));
     fresh(0,1);note(0,60,90);note(0,64,90);ticks(41);note(0,67,90);ticks(41);
-    ck("arrival at W starts a new gesture after the ambiguous dyad",!source_info(1).have_chord);
-    fresh(0,1);triad(0,60,64,67);
-    for(unsigned i=1;i<=137;i++){ticks(1);if(i%20u==0)note(0,60,90);}
+    ck("a third key after the ambiguous dyad: the three held keys are the chord (C major)",source_info(1).have_chord&&source_info(1).root==0);
+    fresh(0,1);note(0,60,90);note(0,64,90);note(0,67,90);
+    for(unsigned i=1;i<=136;i++){ticks(1);if(i%20u==0)note(0,72,(i/20u)%2u?90u:0u);}   /* a key goes down / up every 20 blocks: the gap keeps restarting, the hard cap does not; the window counts from the first block after the source is set (one block before the keys): 137 blocks in all */
     ck("hard cap does not commit early",source_info(1).state==EXT_ST_WAIT);ticks(1);
     ck("hard cap commits despite renewed note-ons",has_pool(1,11,2,9));
 }
 static void routing_and_lifecycle(void)
 {
-    fresh(0,1);triad(0,60,64,67);ticks(20);seq_stop();ticks(30);
+    fresh(0,1);note(0,60,90);note(0,64,90);note(0,67,90);ticks(20);seq_stop();ticks(30);
     ck("STOP discards an unfinished source gesture",source_info(1).state==EXT_ST_WAIT);
 
     for(unsigned s=0;s<4;s++) {unsigned f=(s+1)%4;fresh(s,f);triad(s,60,64,67);ticks(41);ck("every T1-T4 can be a live source",has_pool(f,11,2,9));}
     fresh(0,1);trk[0].p[P_CHRD]=CH_MAJ;note(0,60,90);
-    ck("known CHRD root commits immediately without collector delay",has_pool(1,11,2,9));
+    ck("a single physical MIDI key teaches no chord, even with CHRD set (the held keys decide, 71df9ef)",!source_info(1).have_chord);
     fresh(0,1);trk[0].p[P_MUTE]=1;triad(0,60,64,67);ticks(41);ck("muted source continues to conduct",has_pool(1,11,2,9));
     trk[1].p[P_CSRC]=3;ticks(1);ck("self source rejected",source_info(1).state==EXT_ST_NA&&source_info(1).why==EXT_WHY_SELF);
     trk[0].p[P_CSRC]=3;trk[1].p[P_CSRC]=2;ticks(1);
@@ -142,7 +145,7 @@ static void owners(void)
 }
 static void real_sources(void)
 {
-    fresh(0,1);
+    fresh(0,1);ticks(45);                                 /* the source is new: its first window (EXT_GAP) settles before the panel gesture */
     ce_ev_t keys[]={ {0,CE_KEY,7,1,0},{5000,CE_KEY,11,1,0},{12000,CE_KEY,14,1,0},
         {15000,CE_KEY,7,0,0},{16000,CE_KEY,11,0,0},{17000,CE_KEY,14,0,0} };
     ce_sched(keys,6);ce_run_until(45000);
@@ -153,9 +156,9 @@ static void real_sources(void)
     ck("pedal release never clears or changes context",has_pool(1,11,2,9));
     fresh(0,1);note(0,60,90);note(0,64,90);note(0,67,90);ticks(41);
     note(0,64,0);note(0,67,0);note(0,65,90);note(0,69,90);ticks(41);
-    ck("legato's old held C is not silently added to new F/A dyad",source_info(1).state==EXT_ST_AMBIG&&has_pool(1,11,2,9));
+    ck("legato: the old held C counts with the new F/A, the held keys are the chord (F major over C)",source_info(1).state==EXT_ST_OK&&source_info(1).root==5);
     fresh(0,1);note(0,60,90);note(0,64,90);ticks(42);note(0,67,90);ticks(41);
-    ck("W+1 arrival starts a separate single-note gesture",!source_info(1).have_chord);
+    ck("a third key one block later: still the three held keys (C major)",source_info(1).have_chord&&source_info(1).root==0);
     fresh(0,1);triad(0,60,64,67);ticks(41);
     trk[0].p[P_AMODE]=AM_UP;arp_add(&trk[0],57);arp_add(&trk[0],60);arp_add(&trk[0],64);
     for(unsigned k=0;k<90;k++)arp_step(&trk[0],CTL,CTL);
@@ -187,12 +190,13 @@ static void latency(void)
         fresh(0,1);triad(0,60,64,67);ticks(41);
         trk[1].p[P_AMODE]=AM_CHORD;note(1,60,90);
         trk[1].arp_pos=phase;
-        triad(0,57,60,64);
+        note(0,57,90);note(0,60,90);note(0,64,90);   /* the new chord stays down: its commit is 41 blocks after the last key */
         for(unsigned b=1;b<=41;b++) {
             ticks(1);arp_step(&trk[1],CTL,CTL);
             if(b<41)ck("ARP remains on old pool strictly before gap expiry",has_pool(1,11,2,9));
         }
         ck("new pool is available to ARP in the commit block",has_pool(1,7,11,5));
+        note(0,57,0);note(0,60,0);note(0,64,0);
         latest=41;
     }
     printf("live latency: 1000 ARP phases, last-input to commit %u blocks = %.3f ms; additional resolver delay 0 blocks (host control model)\n",latest,latest*32000.0/44100.0);
