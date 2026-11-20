@@ -739,6 +739,7 @@ EXPORT uint32_t web_test_harm_linkget(uint32_t t) { return t < NTRK ? link_src[t
 #if CARAVEL_UX_EVOLVE && CARAVEL_ELASTIC_P1
 EXPORT void web_test_el_arm(void) { uxl_el_arm_toggle(); }   /* (shots) PLAY's ELASTIC A1: arm / disarm the selected track */
 #endif
+EXPORT uint32_t web_test_harm_hc(uint32_t f) { uxl_hc_t h; uxl_hc_get(&h); return !h.ok ? 255u : f == 0u ? h.cur : f == 1u ? h.nxt : f == 2u ? h.left : f == 3u ? h.extra : f == 4u ? h.hold : h.prog; }   /* (tests) the harmony readout */
 EXPORT void web_test_harm_reset(void) { uint32_t i; harmony_on = 0; harmony_key_mode = 0; for (i = 0; i < NTRK; i++) { link_src[i] = 0; harmony_follow[i] = 0; trk[i].p[P_CSRC] = 0; trk[i].p[P_CHRD] = CH_OFF; } ui.force = 1; }
 EXPORT uint32_t web_test_cap_events(uint32_t i) { return i < NTRK ? cap_ln[i] : 0u; }   /* (tests: the events of a track's loop) */
 EXPORT uint32_t web_test_cap_post(uint32_t op, uint32_t i, uint32_t nb) { return cap_post(op, i, nb); }   /* (tests: a command as the UI posts it, none run until the next block) */

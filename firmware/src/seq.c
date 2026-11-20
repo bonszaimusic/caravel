@@ -85,15 +85,16 @@ static uint8_t link_retrig[NTRK];                /* 0 OFF, 1 HARM (was CHORD), 2
 static uint8_t harmony_follow[NTRK];             /* per track: follow the HARMONY bus (1: yes); felucca_init sets it on, as INIT and every load do (round 7: an initializer would cost 64 B of RAM against the guard) */
 #if CARAVEL_ACTION_BANKS
 /* Transient performance overlay. Only events_block moves the musical playhead. */
-enum {H_NONE,H_HOLD,H_PREV,H_NEXT,H_RESET,H_RESUME};
+enum {H_NONE,H_HOLD,H_PREV,H_NEXT,H_RESET,H_RESUME,H_J0,H_J1,H_J2,H_J3,H_LONG,H_SHORT};   /* H_J0..3: to chord n at the next bar line, keeping the progress in the chord; H_LONG / H_SHORT: the chord's remaining bars +1 / -1 */
 static volatile uint8_t harmony_command, harmony_pending, harmony_hold;
+static uint8_t harmony_extra;                    /* bars the current chord is held beyond its length (0..16; past that: HOLD); audio context only, never saved */
 static volatile int8_t harmony_shift_want;
 static int8_t harmony_shift;
 static volatile uint8_t harmony_shift_pending, harmony_shift_dirty;
 static uint8_t harmony_cc_hi[4];
 static void harmony_perf_clear(void)
 {
- harmony_command=harmony_pending=harmony_hold=harmony_shift_pending=harmony_shift_dirty=0;
+ harmony_command=harmony_pending=harmony_hold=harmony_shift_pending=harmony_shift_dirty=0;harmony_extra=0;
  harmony_shift=harmony_shift_want=0;
  memset(harmony_cc_hi,0,sizeof harmony_cc_hi);
 }
@@ -279,13 +280,22 @@ static uint32_t harmony_chord_start(uint32_t idx)
 /* Called at the audio control boundary, stopped immediately or playing at a bar line. */
 static void harmony_perf_apply(uint32_t bar)
 {
- uint32_t idx=harmony_chord_at(harmony_bar),cmd=harmony_pending;
+ uint32_t idx=harmony_chord_at(harmony_bar),cmd=harmony_pending,off=0;
  if(cmd){
   if(cmd==H_PREV)idx=(idx+3u)&3u;
   else if(cmd==H_NEXT||cmd==H_RESUME)idx=(idx+1u)&3u;
   else if(cmd==H_RESET){idx=0;harmony_hold=0;harmony_shift=harmony_shift_want=0;harmony_shift_pending=0;}
+  else if(cmd>=H_J0&&cmd<=H_J3){   /* to chord j at this bar line, as far into it as we were into the old one (whole bars) */
+   uint32_t total=0,i,d=1u<<hdur_get(idx),pos,e,j=cmd-H_J0,dj=1u<<hdur_get(j),e2;
+   for(i=0;i<4u;i++)total+=1u<<hdur_get(i);
+   pos=harmony_bar%total;e=pos-harmony_chord_start(idx)+(song.playing?1u:0u);   /* (playing: the bar that begins now) */
+   if(e>d-1u)e=d-1u;
+   e2=e*dj/d;if(e2>dj-1u)e2=dj-1u;
+   idx=j;off=e2;
+  }
   if(cmd==H_RESUME)harmony_hold=0;
-  harmony_bar=harmony_chord_start(idx);harmony_base_bar=(bar-harmony_bar)&0xFFFFu;
+  harmony_extra=0;
+  harmony_bar=harmony_chord_start(idx)+off;harmony_base_bar=(bar-harmony_bar)&0xFFFFu;
   harmony_pending=H_NONE;
  }
  if(harmony_shift_pending){harmony_shift=harmony_shift_want;harmony_shift_pending=0;}
@@ -2708,6 +2718,19 @@ static void events_block(uint32_t n)
         if(cmd==H_HOLD){
             if(harmony_hold){harmony_pending=harmony_pending==H_RESUME?H_NONE:H_RESUME;}
             else {harmony_hold=1;harmony_pending=H_NONE;}
+        }else if(cmd==H_LONG){                                   /* the countdown up: one more bar; past 16: HOLD (infinity) */
+            if(!harmony_hold){if(harmony_extra<16u)harmony_extra++;else harmony_hold=1;}
+            cmd=H_NONE;
+        }else if(cmd==H_SHORT){                                  /* down: from HOLD to 16, then the extra bars, then the chord's own bars (at least 1 stays) */
+            if(harmony_hold){harmony_hold=0;harmony_extra=16;}
+            else if(harmony_extra)harmony_extra--;
+            else if(song.playing){
+                uint32_t total=0,i,idx=harmony_chord_at(harmony_bar),left;
+                for(i=0;i<4u;i++)total+=1u<<hdur_get(i);
+                left=harmony_chord_start(idx)+(1u<<hdur_get(idx))-harmony_bar%total;
+                if(left>=2u)harmony_base_bar=(harmony_base_bar-1u)&0xFFFFu;
+            }
+            cmd=H_NONE;
         }else if(cmd)harmony_pending=cmd;
         if(!song.playing && (cmd||shift_dirty)){uint8_t keep=cmd?H_NONE:harmony_pending;harmony_pending=cmd?harmony_pending:H_NONE;harmony_perf_apply(HARM_BAR());if(keep)harmony_pending=keep;}   /* a SHIFT edit while stopped leaves a queued PREV / NEXT / RESET queued */
     }
@@ -2744,6 +2767,9 @@ static void events_block(uint32_t n)
 #endif
         harmony_bar = (HARM_BAR() - harmony_base_bar) & 0xFFFFu;   /* (the bar count is 16 bits: the difference wraps with it) */
 #if CARAVEL_ACTION_BANKS
+        if(boundary&&harmony_extra&&!harmony_hold&&!harmony_pending&&harmony_chord_at(harmony_bar)!=old_chord){
+            harmony_base_bar=(harmony_base_bar+1u)&0xFFFFu;harmony_bar=hb;harmony_extra--;   /* the chord would end: one more bar of it */
+        }
         if(boundary){
             if(harmony_pending)harmony_bar=hb; /* a queued NEXT advances once, not once plus the natural change */
             harmony_perf_apply(HARM_BAR());
