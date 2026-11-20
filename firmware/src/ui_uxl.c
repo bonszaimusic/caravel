@@ -122,6 +122,7 @@ static struct {
     uint8_t inter, uset;                /* INTERACT (BUILD): the mode is on; the tracks (bit t) that have a set of their own */
     uint8_t ev_a, ev_g, ev_init;        /* EVOLVE: the group last played, an arc turned (a ROW is this group's four targets) */
 } uxl;
+static void uxl_play_enter(void) { uxl.play = 1u; }
 
 #define UXL_ON 1
 #define UXL_PLAY (uxl.play)

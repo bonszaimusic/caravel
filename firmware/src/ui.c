@@ -142,6 +142,9 @@ static void uxl_layer_body(uint32_t l);
 #define uxl_harm_keys(k) (k)
 #define uxl_fx_label(p) ((const char *)0)
 #define uxl_fx_map_filter() ((void)0)
+#define uxl_play_enter() ((void)0)
+#else
+static void uxl_play_enter(void);               /* ui_uxl.c: uxl is defined after this file */
 #endif
 
 /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
@@ -999,7 +1002,7 @@ static void play_project_save_leave(void)
 {
     if (!play_project_save_only) return;
     play_project_save_only = 0u;
-    uxl.play = 1u;
+    uxl_play_enter();
     ui.page = play_project_old_page;
     ui.home = play_project_old_home;
     ui.act = 0u;
