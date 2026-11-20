@@ -1710,38 +1710,43 @@ static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int flags)   /* f,
 }
 /* a spring on an arc (E63): a coil from the value it returns to (the anchor) to the weight, which is where the parameter is now.
  * Stretched, the coil is longer; at rest it is a short coil beside the anchor, so an armed arc still reads as a spring. */
+/* ELASTIC on an arc as a rubber band: the anchor is a hollow ring, the weight the thumb, between them a taut 3 px band along the rail
+ * with fine ticks across it, one per ~5 degrees of stretch (the more it is pulled, the denser). At rest the band is gone and the thumb
+ * carries a thin accent outline: armed. Both ends are clamped to the arc, so nothing can leave the ring. A handful of short lines only. */
 static void uxl_orbit_spring(uint32_t k, int32_t fa, int32_t fl)
 {
     static const int16_t START[4] = {277, 7, 187, 97};
-    int32_t d = fl - fa, ad = d < 0 ? -d : d, n, i, a0 = fa, a1 = fl, x, y, px = 0, py = 0, cyc, amp = 5;
-    if (ad >= 2)                                        /* stretched: the stretch itself lit on the rail, softly */
-        uxl_ring(120, 116, 58, 71, START[k] + (fa < fl ? fa : fl), START[k] + (fa < fl ? fl : fa), 0, 0, ux_mix(T_LINE, T_ACCENT, 40), T_ACCENT);
-    if (ad < 3) {                                       /* at rest: a short soft coil beside the anchor, towards the middle of the arc */
-        a1 = fa + (fa < 38 ? 34 : -34);
-        fl = fa;
-        amp = 5;
+    int32_t d, ad, n, i, x, y, px = 0, py = 0, ax, ay;
+    fa = fa < 0 ? 0 : fa > 76 ? 76 : fa;
+    fl = fl < 0 ? 0 : fl > 76 ? 76 : fl;
+    d = fl - fa;
+    ad = d < 0 ? -d : d;
+    if (ad >= 2) {
+        n = ad / 4 + 1;                                  /* the band: short straight pieces along the arc */
+        for (i = 0; i <= n; i++) {
+            int32_t ang = START[k] + fa + d * i / n;
+            uxl_ring_pt(ang, 65, &x, &y);
+            if (i) {
+                cv_line(px, py, x, y, T_ACCENT);
+                cv_line(px + 1, py, x + 1, y, T_ACCENT);
+                cv_line(px, py + 1, x, y + 1, T_ACCENT);
+            }
+            px = x;
+            py = y;
+        }
+        for (i = 1; i < ad / 5; i++) {                   /* the tension ticks */
+            int32_t ang = START[k] + fa + d * i * 5 / ad, x2, y2;
+            uxl_ring_pt(ang, 61, &x, &y);
+            uxl_ring_pt(ang, 69, &x2, &y2);
+            cv_line(x, y, x2, y2, T_ACCENT);
+        }
+    } else {                                             /* armed, at rest: an outline round the thumb */
+        uxl_ring_pt(START[k] + fl, 65, &x, &y);
+        uxl_disc(x, y, 9, T_ACCENT);
     }
-    n = 120;
-    if (ad >= 3) amp = ad / 2 + 1 < 5 ? ad / 2 + 1 : 5;   /* a short stretch is a nearly straight band, no tight loops */
-    cyc = ad < 3 ? 4 : ad / 6;                          /* at rest 4 turns; stretched: a turn per ~6 degrees, 1..9 turns */
-    if (cyc < 1) cyc = 1;
-    if (cyc > 9) cyc = 9;
-    for (i = 0; i <= n; i++) {                          /* a smooth wave along the arc, fading in and out at both ends */
-        int32_t ang = START[k] + a0 + (a1 - a0) * i / n;
-        int32_t env = i < 10 ? i : i > n - 10 ? n - i : 10;
-        int32_t r = 65 + (env * amp * uxl_sin((i * 360 * cyc / n) % 360) + 1280) / 2560;
-        uxl_ring_pt(ang, r, &x, &y);
-        cv_pset(x, y, T_ACCENT);                        /* a dense run of points: a smooth 2 px line without the stair steps */
-        cv_pset(x + 1, y, T_ACCENT);
-        cv_pset(x, y + 1, T_ACCENT);
-        (void)px; (void)py;
-    }
-    {   /* the anchor: a hollow ring on the rail; the weight: the thumb, in the accent */
-        int32_t ax, ay;
-        uxl_ring_pt(START[k] + fa, 65, &ax, &ay);
-        uxl_disc(ax, ay, 6, T_ACCENT);
-        uxl_disc(ax, ay, 3, T_BG);
-    }
+    uxl_ring_pt(START[k] + fa, 65, &ax, &ay);           /* the anchor */
+    uxl_disc(ax, ay, 6, T_ACCENT);
+    uxl_disc(ax, ay, 3, T_BG);
     uxl_ring_thumb(START[k] + fl, T_BG, T_ACCENT);
 }
 static void uxl_orbit_arc(uint32_t k, const param_desc_t *d, int32_t v, int flags)
