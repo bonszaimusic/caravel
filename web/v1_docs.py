@@ -26,7 +26,7 @@ GUIDES = ("start-here", "basics", "engine-analog", "engine-phys", "engine-sem", 
 DIAGRAMS = ("01_audio_routing", "02_sem", "03_hades", "04_drone", "05_ensemble", "06_analog", "07_phys")
 ART = "docs/tutorials/1-0-audio-engine-diagrams/"
 PAGES = {**{f"docs/tutorials/{name}.md": f"tutorials/{name}/index.html" for name in GUIDES},
-         "docs/release-100.md": "tutorials/release-notes/index.html",
+         "docs/release-110.md": "tutorials/release-notes/index.html",
          "docs/engines/overview.md": "tutorials/engines/index.html",
          "docs/engines/tips.md": "tutorials/engine-tips/index.html",
          ART + "README.md": "tutorials/audio-engine-diagrams/index.html"}
@@ -85,7 +85,7 @@ def relative(current, target):
     return posixpath.relpath(target, posixpath.dirname(current))
 
 
-def page_shell(label, body, output, commit, published=False):
+def page_shell(label, body, output, commit, published=False, version="1.0.0"):
     esc = html.escape
     nav = [("Candidate guides", "tutorials/index.html"), ("Installer", "webapp/installer/index.html"),
            ("Editor", "webapp/editor/index.html"), ("Emulator", "emulator/index.html")]
@@ -98,17 +98,17 @@ def page_shell(label, body, output, commit, published=False):
               '<br>FORMAT 2 requires matching projects, presets and backups. Keep the complete Classic backup saved before upgrading.</aside>'
             + f'<main><h1>{esc(label)}</h1>{body}</main><footer>Documentation source <code>{commit}</code>. '
             + f'<a href="{relative(output, "tutorials/SOURCE.json")}">Source and byte-preservation receipt</a> · '
-            + f'<a href="{relative(output, "firmware/caravel-1.0.0-source.tar.gz")}">Matching candidate source archive</a>'
+            + f'<a href="{relative(output, f"firmware/caravel-{version}-source.tar.gz")}">Matching candidate source archive</a>'
               '</footer></body></html>\n')
     if published:
-        result = result.replace("Candidate guides", "Guides").replace("Caravel 1.x candidate", "Caravel 1.0.0")
+        result = result.replace("Candidate guides", "Guides").replace("Caravel 1.x candidate", f"Caravel {version}")
         result = result.replace(" — not published", "")
         result = result.replace("Private candidate documentation; publication review remains open.", "Release documentation.")
         result = result.replace("Matching candidate source archive", "Matching source archive")
     return result
 
 
-def candidate_landing(text, published=False):
+def candidate_landing(text, published=False, version="1.0.0"):
     if text.count("<main>") != 1 or text.count(OLD_EDITOR_BLURB) != 1:
         raise ValueError("candidate landing markers changed")
     notice = ('<section class="box risk" id="v1-candidate-status"><span class="tag">PRIVATE CANDIDATE</span>'
@@ -116,7 +116,7 @@ def candidate_landing(text, published=False):
               '<p>FM-1 hardware acceptance is still open. Publication requires separate approval.</p>'
               '<p><a href="tutorials/">TUTORIALS — current 1.x candidate guides and engine diagram drafts</a></p></section>')
     if published:
-        notice = ('<section class="box" id="v1-release-status"><span class="tag">CARAVEL 1.0.0</span>'
+        notice = ('<section class="box" id="v1-release-status"><span class="tag">CARAVEL ' + version + '</span>'
                   '<h2>Six engines, BUILD / PLAY and AFTERBURNER</h2>'
                   '<p><a href="tutorials/">TUTORIALS — 1.x guides and engine diagrams</a> · '
                   '<a href="tutorials/release-notes/">Release notes and compatibility</a></p>'
@@ -200,7 +200,7 @@ def build(site, source, commit, out, published=False):
         raise ValueError("output overlaps input")
     before = tree(site)
     record = json.loads((site / "firmware/release-build.json").read_text())
-    if record.get("source", {}).get("commits", {}).get(".") != commit or record.get("version") != "1.0.0":
+    if record.get("source", {}).get("commits", {}).get(".") != commit or not re.fullmatch(r"1\.[0-9]+\.[0-9]+", str(record.get("version"))):
         raise ValueError("site/source commit or version mismatch")
     if (site / "tutorials").exists():
         raise ValueError("refuse to replace existing tutorials")
@@ -222,7 +222,7 @@ def build(site, source, commit, out, published=False):
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".v1-docs-", dir=out.parent) as temporary:
         stage = Path(temporary) / "site"; shutil.copytree(site, stage)
-        (stage / "index.html").write_text(candidate_landing((site / "index.html").read_text(encoding="utf-8"), published), encoding="utf-8")
+        (stage / "index.html").write_text(candidate_landing((site / "index.html").read_text(encoding="utf-8"), published, record["version"]), encoding="utf-8")
         receipt = {"schema": 1, "kind": "published-1.x-documentation" if published else "private-1.x-candidate-documentation", "source_commit": commit,
                    "hardware_acceptance": "open", "publication_review": "owner-approved" if published else "open", "not_a_deployment": True,
                    "sources": {}, "original_site_sha256": before}
@@ -242,9 +242,9 @@ def build(site, source, commit, out, published=False):
                     gallery += f'<figure><img src="{relative(output, png)}" alt="{diagram}" loading="lazy"><figcaption>Documentation draft · <a href="{relative(output, svg)}">Original SVG</a> · <a href="{relative(output, png)}">Original PNG</a></figcaption></figure>'
                 body = gallery + body
             path = stage / output; path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(page_shell(title(text), body, output, commit, published), encoding="utf-8")
+            path.write_text(page_shell(title(text), body, output, commit, published, record["version"]), encoding="utf-8")
         links = "<ul>" + "".join(f'<li><a href="{relative("tutorials/index.html", target)}">{html.escape(title(sources[name][0].decode()))}</a></li>' for name, target in PAGES.items()) + "</ul>"
-        (stage / "tutorials/index.html").write_text(page_shell("Caravel 1.0.0 guides" if published else "Caravel 1.x candidate guides", links, "tutorials/index.html", commit, published), encoding="utf-8")
+        (stage / "tutorials/index.html").write_text(page_shell(f"Caravel {record['version']} guides" if published else "Caravel 1.x candidate guides", links, "tutorials/index.html", commit, published, record["version"]), encoding="utf-8")
         after = tree(stage)
         if any(after.get(name) != value for name, value in before.items() if name != "index.html"):
             raise ValueError("an existing site file changed")
