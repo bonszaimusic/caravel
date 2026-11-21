@@ -64,6 +64,33 @@ or a firmware application that cannot boot. Keep your backups and official V15.
 To go back to the stock firmware, use **Return to official V15** on the installer page and select the unmodified official `FM-1.fwsc`
 from M-VAVE. The browser validates the file locally; nothing is sent to a server. Caravel projects do not open in the official V15.
 
+### M-Flasher / ROM UBOOT (Caravel 1.x only)
+
+For a **running Caravel 1.x** device, open the 1.x web installer in Chrome or Edge
+and expand **Recovery → Enter UBOOT for M-Flasher**. Authorize Web MIDI/SysEx
+and confirm the action. The page requires protocol 18 and sends only the
+Caravel UBOOT request. **No firmware package is required; this button never
+writes, erases, verifies or restores flash.** A successful browser send does
+not confirm the USB mode transition.
+
+Afterward, start [M-Flasher](https://github.com/jvitkauskas/m-flasher)
+and check whether the chip's USB download-mode device appears (`WL80UBOOT1.00`, USB ID
+`4c4a:8057`, measured on a real FM-1; other chip revisions may report
+`WL82 UBOOT1.00` as in the M-Flasher guide). M-Flasher's older MIDI scan can fail to recognize
+Caravel by name while the firmware is running; once ROM UBOOT has been
+entered, it uses a separate USB interface. Alternatively, with the
+firmware running **and playback stopped**, hold **OCT- and OCT+ together
+for approximately five seconds** to enter UBOOT. Holding them at
+power-on runs calibration instead.
+
+Back up before any **subsequent** flash/restore action in M-Flasher;
+that external operation may erase data even though the Caravel mode switch
+does not. If the device is already in ROM UBOOT, the browser's Web MIDI
+control cannot find it. This feature does not install m-bootloader,
+change USB identities, permit Classic firmware updates or bypass any
+Caravel package checks. Hardware detection is system-dependent; see
+the [FAQ](faq.md#uboot-and-the-normal-update-loader).
+
 ## Command line
 
 Needs Python 3 and the MIDI libraries:

@@ -1,5 +1,20 @@
 # Changelog
 
+## Website revision W2 for 1.1.0 - 2026-11-21
+
+**Web installer only. The firmware stays Caravel 1.1.0: no new package, nothing to flash again.** Installed devices need no action. The matching web source is `web/hotfix_w2/` (pinned in the installer footer).
+
+- **New: Recovery, "Enter UBOOT for M-Flasher" in the web installer.** A running Caravel 1.x FM-1 (protocol 18) is asked over MIDI to restart into the chip's USB download mode (UBOOT), which M-Flasher uses for recovery. It sends one SysEx request. It does **not** start the update loader, erase, write, verify or restore flash, and needs no firmware package. The request is confirmed in a dialog; MIDI access with SysEx must be allowed in the browser. A successful send is not proof that the chip switched: check the new USB device. Back up before you use M-Flasher for anything else.
+- **Why:** M-Flasher's older MIDI scan can fail to recognise a running Caravel by name, so recovery depended on the OCT- and OCT+ gesture alone.
+- **Device name.** After the switch the chip appears as a USB device named `WL80UBOOT1.00` (USB ID `4c4a:8057`), measured on a real FM-1. The upstream M-Flasher guide names `WL82 UBOOT1.00`, which other chip revisions may report. The installer and the docs ([installing](docs/installing.md), [FAQ](docs/faq.md)) name both.
+- **Unchanged, byte for byte:** firmware package `caravel-1.1.0.fwsc` (SHA-256 `1e1a126ca1d7570f8fb917d381afaa6b78885fb3b08baa084775f3a948a570ba`), source archive, checksum list, editor, emulator, Classic snapshot. The site is built from the release tag with a fail-closed installer-only overlay, and the previous site is kept for rollback.
+- **Tested:** on a real FM-1 running 1.1.0 (macOS, Chrome, direct USB, installer candidate built from the same web text): after the request the USB list changed from `Caravel` (`1209:0001`) to `WL80UBOOT1.00` (`4c4a:8057`) within about a second; after a power cycle the device started as `Caravel` again; nothing was written. Host tests of the web code and mocked Web MIDI tests pass.
+- **Not tested:** the published installer itself on hardware, M-Flasher (including how it filters device names), the chip revision that reports `WL82 UBOOT1.00`, Windows and Linux, Edge.
+
+## Caravel Academy: Stages 1 and 2 - 2026-11-21
+
+- Interactive lessons with the real firmware in the browser emulator: Stage 1 "Strings before anything else" and Stage 2 "Lay CELL AIR underneath", each with a YouTube Short. Later stages follow with their videos; they are not part of the public page yet.
+
 ## [1.1.0] - 2026-11-21
 
 - HARM route map in BUILD, PLAY HARM area with the chord selector and the LEFT countdown, harmony position under the PLAY header, one colour rule for the orbit arcs (cyan track / orange global), pearl thumbs and soft tubes, ELASTIC as a rubber band. Details: [release notes](docs/release-110.md).

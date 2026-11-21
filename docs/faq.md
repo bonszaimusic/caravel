@@ -127,10 +127,28 @@ They are different connection modes:
 | Normal Caravel / its USB-MIDI update loader | The web installer starts the update handshake. An interrupted loader write can be resumed with the same installer. |
 | Chip USB download mode (UBOOT) | Recovery tools such as M-Flasher communicate outside Caravel's normal MIDI implementation. The normal web installer may not find it. |
 
-With **Caravel already running**, hold **OCT- and OCT+ together for about
+With **Caravel already running and playback stopped**, hold **OCT- and OCT+ together for about
 5 seconds**. A countdown appears, then Caravel requests UBOOT; this transition
 alone does not erase projects. Inspect the new USB entry on the computer.
-The upstream M-Flasher guide describes the download-mode device as **WL82 UBOOT1.00**.
+The new USB entry is the chip's ROM download-mode device. Measured on a real FM-1 running Caravel 1.1.0 (macOS): **`WL80UBOOT1.00`**, USB ID `4c4a:8057`. The upstream M-Flasher guide names **`WL82 UBOOT1.00`**, so other chip revisions can report that name instead; both are the same download mode. Look for either name (or the USB ID) rather than for one exact string.
+
+**Caravel 1.x also has a Web-Installer shortcut:** under **Recovery**, select
+**Enter UBOOT for M-Flasher**. In Chrome/Edge, approve MIDI/SysEx access and
+confirm the request. The installer verifies a **running Caravel 1.x / protocol 18**
+device and sends only its UBOOT mode-switch command. It does **not** install,
+erase or restore firmware, and cannot verify from Web MIDI whether the chip
+successfully entered UBOOT. Check the device in M-Flasher afterward. A missing
+MIDI device when already in UBOOT is normal: M-Flasher uses the chip's USB
+download-mode interface, not the running firmware's MIDI port.
+
+**Why the shortcut matters:** older M-Flasher versions can ignore the *running*
+Caravel device because their MIDI device-name filter does not include
+`Caravel`, and they send a legacy soft key that Caravel 1.x intentionally
+ignores. The installer shortcut (or the two octave buttons) bypasses both
+problems by entering ROM UBOOT directly. M-Flasher must still recognize the
+resulting download-mode device. Keep a backup before using its flashing or
+restore actions; those actions can alter the device even though this mode switch
+does not. If UBOOT does not appear, do not repeatedly force firmware writes.
 
 Holding both octave buttons **during power-on** opens Caravel's hardware
 calibration instead. The running-firmware shortcut cannot help if Caravel never
