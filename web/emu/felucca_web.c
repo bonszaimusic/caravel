@@ -1020,6 +1020,73 @@ EXPORT int32_t web_action_snapshot_value(uint32_t slot,uint32_t index)
 #endif
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return song.playing; }
+/* Read-only guided-tour state from the actual emulator firmware UI, not pixels.
+ * Bits: 0 PLAY (0 BUILD); 1..2 selected track T1..T4; 8 help; 9..13 active engine.
+ * Only added to the browser wrapper. No embedded firmware or DSP change. */
+EXPORT uint32_t web_tour_state(void)
+{
+#if CARAVEL_UX_LAYERS
+    uint32_t help = (uxl.lvl || (uxl.hint_until && fm1_ms < uxl.hint_until)) ? 1u : 0u;
+    return (uint32_t)(uxl.play ? 1u : 0u) | (((uint32_t)song.sel & 3u) << 1) |
+           (help << 8) | (((uint32_t)TSEL->eng_req & 31u) << 9);
+#else
+    return 0xFFFFFFFFu;
+#endif
+}
+
+/* Explicit opt-in start palette for a deep-linked browser lesson. In-memory ONLY:
+ * user must first confirm overwriting unsaved track sounds in the web UI.
+ * Loads the factory source sounds of the lesson (1-based numbering). Does not rewrite a PROJECT, create a SEQ/HARMONY fixture,
+ * persist flash, replace firmware or restore prerequisites invisibly. */
+/* Read-only source starter inspection. Changes ONLY missing source presets and
+ * exact factory-default T1 values after separately confirmed browser action.
+ * Bits: 1 T1 preset, 2 TONE factory 127, 4 FILT OFF, 8 ATK factory 85,
+ * 16 T2 source preset, 32 T3 source preset. Custom non-default values survive.
+ * No sequencer, HARMONY, FLASH, PROJECT or unsaved content is restored here. */
+EXPORT uint32_t web_tour_starter_missing(uint32_t stage)
+{
+    uint32_t missing = 0;
+    if (stage >= 10u) return 0;
+    if (trk[0].engine != ENGI_ENSEMBLE || trk[0].preset != 5u) {
+        missing |= 1u;
+    } else {
+        if (trk[0].p[P_E2] == 127) missing |= 2u;
+        if (trk[0].p[P_FILT] == 0) missing |= 4u;
+        if (trk[0].p[P_ATK] == 85) missing |= 8u;
+    }
+    if (stage >= 1u && (trk[1].engine != ENGI_DRONE || trk[1].preset != 5u))
+        missing |= 16u;
+    if (stage >= 7u && (trk[2].engine != ENGI_HADES || trk[2].preset != 0u))
+        missing |= 32u;
+    return missing;
+}
+EXPORT void web_tour_starter(uint32_t stage)
+{
+    uint32_t missing = web_tour_starter_missing(stage);
+    if (stage >= 10u || !missing) return;
+    if (missing & 1u) host_preset(&trk[0], ENGI_ENSEMBLE, 5u);
+    /* A new source preset gets its three warm targets; existing ENSEMBLE 6
+     * presets have only EXACT factory-default values changed. Custom settings,
+     * including a deliberately chosen cutoff, are never overwritten. */
+    if (missing & (1u | 2u)) trk[0].p[P_E2] = 84;
+    if (missing & (1u | 4u)) trk[0].p[P_FILT] = -32;
+    if (missing & (1u | 8u)) trk[0].p[P_ATK] = 109;
+    if (missing & 16u) host_preset(&trk[1], ENGI_DRONE, 5u);
+    if (missing & 32u) host_preset(&trk[2], ENGI_HADES, 0u);
+    /* Preserve the user's selected track and current pages; stage guidance
+     * uses actual read-only firmware track/engine/page checks. */
+    ui.force = 1u;
+}
+/* BUILD page title, read-only. The actual PLAY view is drawn separately from cur_page,
+ * so return an empty title there. This is a page label, NOT OCR of the LCD. */
+EXPORT const char *web_tour_page_title(void)
+{
+#if CARAVEL_UX_LAYERS
+    return uxl.play ? "" : cur_page()->title;
+#else
+    return "";
+#endif
+}
 EXPORT uint32_t web_sample_rate(void) { return FS; }
 
 

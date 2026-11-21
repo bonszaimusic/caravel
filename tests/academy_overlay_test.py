@@ -63,6 +63,13 @@ class OverlayTests(unittest.TestCase):
             ao.verify_emulator(self.emulator("leak", page(titles=("Strings", "hook text 3"))), "1.1.0", [1], TITLES, self.worklet(), stages)
         self.assertIn("unreleased stage 4", str(c.exception))
 
+    def test_public_bundle_mode_skips_the_unreleased_text_search_but_keeps_the_other_checks(self):
+        w = self.worklet(); stages = [{"title": "Coming soon", "texts": []} for _ in range(10)]; stages[0] = {"title": "Strings", "texts": ["Strings"]}
+        titles = ["Strings"] + ["Coming soon"] * 9
+        ao.verify_emulator(self.emulator("ok", page(titles=("Strings", "Coming soon"))), "1.1.0", [1], titles, w, stages, public_bundle=True)
+        with self.assertRaises(SystemExit): ao.verify_emulator(self.emulator("tiles", page(titles=("Strings",)) + '<h3>INDIVIDUAL LESSONS</h3>'), "1.1.0", [1], titles, w, stages, public_bundle=True)
+        with self.assertRaises(SystemExit): ao.verify_emulator(self.emulator("gone", page(titles=("x",))), "1.1.0", [1], titles, w, stages, public_bundle=True)
+
     def test_missing_released_stage_is_refused(self):
         with self.assertRaises(SystemExit): ao.verify_emulator(self.emulator("e", page(titles=("x",))), "1.1.0", [1], TITLES, self.worklet())
 

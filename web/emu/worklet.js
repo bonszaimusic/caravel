@@ -93,6 +93,18 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
+      else if (m.type === "tourProjectInspect" && ex.web_test_project_used) {
+        let used = 0;
+        for (let i = 0; i < 4; i++)
+          if (ex.web_test_project_used(i)) used |= 1 << i;
+        this.port.postMessage({ type: "tourProjectInspection", used,
+          flashWrites: ex.web_flash_writes_count(), stage: m.stage >>> 0 });
+      }
+      else if (m.type === "tourStarterInspect" && ex.web_tour_starter_missing)
+        this.port.postMessage({ type: "tourStarterInspection", stage: m.stage >>> 0,
+          missing: ex.web_tour_starter_missing(m.stage >>> 0) });
+      else if (m.type === "tourStarter" && ex.web_tour_starter)
+        ex.web_tour_starter(m.stage >>> 0); // only after user consent to inspected changes
       else if (m.type === "p12demo") {                 // local preview helper, not firmware
         for (let t = 0; t < 4; t++) ex.web_p12_demo_track(t);
         ex.web_home_row(0);
@@ -102,6 +114,24 @@ if (typeof registerProcessor === "function") {
     publish() {
       const ex = this.ex, mem = ex.memory.buffer;
       const msg = { type: "frame" };
+      // Actual read-only firmware layer/track state for the optional web tutor.
+      const tourState = ex.web_tour_state ? ex.web_tour_state() : 0xFFFFFFFF;
+      if (tourState !== this.sentTourState) {
+        this.sentTourState = tourState;
+        msg.tourState = tourState;
+      }
+      if (ex.web_tour_page_title) {
+        const p = ex.web_tour_page_title(), bytes = new Uint8Array(mem);
+        let title = "";
+        if (p > 0 && p < bytes.length) {
+          for (let j = 0; j < 24 && p + j < bytes.length && bytes[p+j]; j++)
+            title += String.fromCharCode(bytes[p+j]);
+        }
+        if (title !== this.sentTourTitle) {
+          this.sentTourTitle = title;
+          msg.tourPageTitle = title;
+        }
+      }
       const leds = [ex.web_lit_buttons(), ex.web_lit_keys(), ex.web_dim_buttons(), ex.web_dim_keys(), ex.web_dim_level(),
                     ex.web_breath_buttons(), ex.web_breath_keys(), ex.web_mid_keys ? ex.web_mid_keys() : 0];
       const an = ex.web_anim_levels ? ex.web_anim_levels() : 0;   // the power-on sweep: each LED's level
@@ -128,7 +158,9 @@ if (typeof registerProcessor === "function") {
         this.sentWrites = writes;
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
-      if (msg.leds || msg.fb || msg.sectors || msg.load !== undefined) this.port.postMessage(msg, transfer);
+      if (msg.leds || msg.fb || msg.sectors || msg.load !== undefined ||
+          msg.tourState !== undefined || msg.tourPageTitle !== undefined)
+        this.port.postMessage(msg, transfer);
     }
 
     // A click's down and up can arrive within one render quantum, but the FM-1's contacts never close for less than

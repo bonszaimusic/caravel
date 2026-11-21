@@ -27,5 +27,8 @@ emcc -DCARAVEL_UX_CAPTURE=1 -DCARAVEL_FORMAT2=1 -DCARAVEL_SLIM=1 -DCARAVEL_UX_LA
 [ "${EMU_PREVIEW:-1}" = 0 ] && PREVIEW='' || PREVIEW=' (preview)'
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@PREVIEW@/$PREVIEW/g" web/emu/index.html > build/emu/index.html
 cp web/emu/worklet.js build/emu/
+# The Academy data in this repository is the public bundle (released stages only, see academy-release.json);
+# the build only copies it next to the page. The overlay step of the Pages job inlines it.
+cp web/emu/tutorial_data.mjs build/emu/
 cp web/emu/fonts/DotGothic16-subset.woff web/emu/fonts/OFL.txt build/emu/fonts/
 echo "emu: build/emu ($(wc -c < build/emu/felucca.wasm | tr -d ' ') B wasm, $VERSION)"

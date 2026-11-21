@@ -42,9 +42,15 @@ def load_marker(main_tree):
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
     released = data.get("released")
+    require(data.get("data") in (None, "public-bundle"), 'academy-release.json "data" must be absent or "public-bundle"')
     require(isinstance(released, list) and released and all(isinstance(n, int) and 1 <= n <= 10 for n in released)
             and len(set(released)) == len(released), "released must be a non-empty list of unique stage numbers 1..10")
     return sorted(released)
+
+
+def marker_mode(main_tree):
+    """"public-bundle": main already carries only the released stage data (no filter, no unreleased text to look for)."""
+    return json.loads((Path(main_tree) / MARKER).read_text(encoding="utf-8")).get("data") == "public-bundle"
 
 
 def stage_texts(main_tree):
@@ -72,7 +78,7 @@ def commit_of(tree):
     return subprocess.check_output(["git", "-C", str(tree), "rev-parse", "HEAD"], text=True).strip()
 
 
-def build_emulator(tag_tree, main_tree, version, released, workdir):
+def build_emulator(tag_tree, main_tree, version, released, workdir, public_bundle=False):
     work = Path(workdir) / "academy-work"
     # a separate copy of the tag's tree (the firmware includes more than firmware/ and tests/), without git data and build output;
     # the generated headers come from the job's own build/gen, the browser files from main
@@ -82,13 +88,13 @@ def build_emulator(tag_tree, main_tree, version, released, workdir):
     shutil.rmtree(work / "web" / "emu")
     shutil.copytree(Path(main_tree) / "web" / "emu", work / "web" / "emu")
     env = dict(os.environ, EMU_VERSION="v" + version.lower(), EMU_PREVIEW="0")
-    if len(released) < 10:
+    if len(released) < 10 and not public_bundle:
         flt = work / "web" / "emu" / "academy_filter.mjs"
         require(flt.is_file(), "a subset of stages is released but web/emu/academy_filter.mjs is missing: the page would carry unreleased lessons")
     subprocess.run(["sh", str(work / "web" / "emu" / "build.sh")], cwd=work, env=env, check=True)
     emu = work / "build" / "emu"
     flt = work / "web" / "emu" / "academy_filter.mjs"
-    if flt.is_file():
+    if flt.is_file() and not public_bundle:
         subprocess.run(["node", str(flt), str(work / MARKER), str(emu)], cwd=work, check=True)
     subprocess.run(["node", str(work / "web" / "emu" / "academy_inline.mjs"), str(emu)], cwd=work, check=True)
     return emu
@@ -104,7 +110,7 @@ def files_of(directory):
     return out
 
 
-def verify_emulator(emu, version, released, titles, main_worklet, stages=None):
+def verify_emulator(emu, version, released, titles, main_worklet, stages=None, public_bundle=False):
     emu = Path(emu)
     require(files_of(emu) == EMU_FILES, "emulator output must be exactly " + ", ".join(sorted(EMU_FILES)) + ", got " + ", ".join(sorted(files_of(emu))))
     html = (emu / "index.html").read_text(encoding="utf-8")
@@ -114,10 +120,11 @@ def verify_emulator(emu, version, released, titles, main_worklet, stages=None):
     require('id="tour-toggle"' in html, "the Academy button is missing from the page")
     require((emu / "felucca.wasm").read_bytes().startswith(b"\0asm\x01\0\0\0"), "invalid WASM header")
     require((emu / "worklet.js").read_bytes() == Path(main_worklet).read_bytes(), "worklet.js differs from main's")
+    require("INDIVIDUAL LESSONS" not in html and 'data-tour="' not in html, "the page still carries the reference lesson tiles")
     for number, title in enumerate(titles, start=1):
-        if number not in released:
+        if number not in released and not public_bundle:
             require(title not in html, "the page still carries the title of unreleased stage %d: %r" % (number, title))
-    for number, texts in (unique_texts(stages, released).items() if stages else ()):
+    for number, texts in (unique_texts(stages, released).items() if stages and not public_bundle else ()):
         for text in texts:
             require(text not in html, "the page still carries text of unreleased stage %d: %r" % (number, text))
     for number in released:
@@ -160,11 +167,12 @@ def main():
     if released is None:
         print("no academy-release.json on main: the emulator stays as built from the release tag")
         return
+    public_bundle = marker_mode(args.main_tree)
     stages = stage_texts(args.main_tree)
     titles = [x["title"] for x in stages]
     with tempfile.TemporaryDirectory() as tmp:
-        emu = build_emulator(args.tag_tree, args.main_tree, args.version, released, tmp)
-        verify_emulator(emu, args.version, released, titles, Path(args.main_tree) / "web" / "emu" / "worklet.js", stages)
+        emu = build_emulator(args.tag_tree, args.main_tree, args.version, released, tmp, public_bundle)
+        verify_emulator(emu, args.version, released, titles, Path(args.main_tree) / "web" / "emu" / "worklet.js", stages, public_bundle)
         swap_emulator(args.site, emu)
     write_receipt(args.site, commit_of(args.tag_tree), commit_of(args.main_tree), args.version, released)
     print("Academy overlay applied: stages %s, firmware %s, web files %s" % (released, commit_of(args.tag_tree)[:8], commit_of(args.main_tree)[:8]))

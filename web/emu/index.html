@@ -108,6 +108,105 @@ kbd { font: 600 11px/1.4 var(--mono); border: 1px solid var(--raise); border-rad
 footer { margin: 0; font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
 footer nav { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 2px 14px; }
 footer small { display: block; font-size: 11px; }
+
+/* Optional browser-only tutorial academy: prominent launcher and separate library. */
+.tour-launch { display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; margin:-6px 0 18px; }
+.tour-launch span { color:var(--dim); font-size:12px; }
+.tour-launch #tour-toggle {
+  background:#dcff31; color:#16220c; border:2px solid #fcffa0; border-radius:9px;
+  font:800 clamp(15px, 2vw, 19px)/1.2 var(--mono); letter-spacing:.05em;
+  padding:14px 22px; min-height:50px; box-shadow:0 0 0 2px #36470c,0 0 22px rgba(210,255,40,.48);
+}
+.tour-launch #tour-toggle:hover, .tour-launch #tour-toggle:focus-visible {
+  background:#f1ff8b; color:#111b08; box-shadow:0 0 0 3px #cfff24,0 0 28px rgba(210,255,40,.68);
+}
+.tour-launch #tour-toggle[aria-expanded="true"] { background:#f1ff8b; }
+.tour-scrim { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:29; }
+.tour-scrim[hidden], .tour-library[hidden], .tour-panel[hidden] { display:none; }
+.tour-library, .tour-panel { box-sizing:border-box; z-index:30; background:var(--box);
+  border:2px solid #dcff31; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.72); }
+.tour-library { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:min(660px,calc(100vw - 24px)); max-height:calc(100dvh - 30px);
+  overflow-y:auto; padding:20px; }
+.tour-library .tour-head { display:flex; gap:12px; align-items:center; justify-content:space-between; }
+.tour-library h2 { margin:0; font:800 21px/1.25 var(--mono); }
+.tour-library .tour-intro { color:var(--dim); font-size:13px; margin:8px 0 16px; }
+.tour-library h3 { color:#dcff31; font:800 12px/1.4 var(--mono); letter-spacing:.09em; margin:16px 0 8px; }
+.tour-tiles { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.tour-tiles button { display:block; text-align:left; width:100%; border:1px solid var(--amb);
+  border-radius:6px; background:var(--bg); padding:12px; min-height:78px; }
+.tour-tiles button:hover, .tour-tiles button:focus-visible { border-color:#dcff31; outline:2px solid #dcff31; }
+.tour-tile-title { display:block; color:var(--text); font-weight:700; font-size:13px; }
+.tour-tile-detail { display:block; color:var(--dim); font-size:12px; margin-top:4px; }
+.tour-panel { position:fixed; right:16px; bottom:16px; width:min(410px,calc(100vw - 32px));
+  max-height:min(66vh,460px); overflow-y:auto; padding:18px; }
+.tour-panel .tour-top { display:flex; gap:12px; align-items:center; justify-content:space-between; }
+.tour-panel .tour-progress { color:var(--amb); font:700 11px/1.3 var(--mono); letter-spacing:.08em; }
+.tour-panel h2 { font:700 18px/1.3 var(--mono); margin:8px 0; }
+.tour-panel p { margin:0 0 12px; }
+.tour-panel .tour-hint { font-size:12px; color:var(--dim); }
+.tour-panel .tour-nav { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.tour-panel button { padding:8px 12px; }
+.tour-panel .tour-mode { display:inline-block; font:800 11px/1.3 var(--mono);
+  letter-spacing:.06em; border-radius:4px; padding:5px 8px; margin-top:10px; }
+.tour-panel[data-layer="BUILD"] .tour-mode { color:#111b08; background:#f5c56b; }
+.tour-panel[data-layer="PLAY"] .tour-mode { color:#10241c; background:#70f6ae; }
+.tour-panel[data-layer="START"] .tour-mode { color:#111b08; background:#dcff31; }
+.hit.tour-target { z-index:2; outline:4px solid #dcff31; outline-offset:3px;
+  box-shadow:0 0 0 4px rgba(0,0,0,.65); }
+#go.tour-target { outline:4px solid #dcff31; outline-offset:4px; }
+@media(max-width:700px) {
+  .tour-library { padding:12px; }
+  .tour-library h2 { font-size:17px; }
+  .tour-tiles { grid-template-columns:1fr; }
+  .tour-tiles button { min-height:59px; }
+  .tour-panel { right:8px; bottom:8px; width:min(380px,calc(100vw - 16px)); max-height:40vh; padding:12px; }
+  .tour-panel h2 { font-size:15px; margin:6px 0; }
+  .tour-panel p { font-size:12px; }
+}
+.tour-feature { border:2px solid #dcff31; background:var(--surf); border-radius:8px;
+  padding:14px; margin-bottom:16px; }
+.tour-feature .tour-feature-label { display:block; color:#dcff31;
+  font:800 11px/1.3 var(--mono); letter-spacing:.1em; }
+.tour-feature h3 { font:800 18px/1.3 var(--mono); color:var(--text); margin:6px 0; }
+.tour-feature p { margin:0 0 12px; }
+.tour-feature .tour-ambient-action { background:#dcff31; color:#15220b; border-color:#dcff31;
+  font-weight:800; letter-spacing:.02em; width:100%; min-height:44px; text-align:center; }
+.tour-route-summary { display:flex; justify-content:space-between; gap:12px;
+  align-items:center; flex-wrap:wrap; margin:12px 0 8px; font-size:12px; }
+.tour-route-summary button { padding:5px 8px; font-size:11px; }
+.tour-route-stages { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+.tour-route-stages span { display:block; font-size:11px; padding:6px 8px;
+  color:var(--dim); border:1px solid var(--line); border-radius:4px; }
+.tour-route-stages span.done { color:#dcff31; border-color:#83a334; }
+.tour-panel .tour-checkpoint { border-left:4px solid #dcff31; background:var(--surf);
+  color:var(--text); font-size:13px; padding:10px; margin-top:12px; }
+.tour-panel .tour-checkpoint[hidden], .tour-panel .tour-mark-stage[hidden] { display:none; }
+.tour-panel .tour-mark-stage { border-color:#dcff31; background:#dcff31; color:#15220b;
+  padding:10px 12px; margin:0 0 12px; font-weight:800; }
+.tour-panel .tour-mark-stage:disabled { border-color:var(--line); color:var(--dim);
+  background:var(--surf); }
+.tour-panel .tour-state-warning { background:#543022; border:1px solid #ffb17c;
+  color:#fff2e8; padding:10px; margin:10px 0; border-radius:5px; }
+.tour-panel .tour-caption { font-size:13px; font-weight:800; color:#dcff31; margin-bottom:8px; }
+.tour-panel .tour-stage-hook { font-weight:700; font-size:13px; color:var(--text); }
+.tour-panel .tour-phase { font-size:12px; color:var(--amb); font-weight:700; margin:4px 0 8px; }
+.tour-panel .tour-observed { font-size:11px; color:var(--dim); margin:5px 0; }
+.tour-panel .tour-hold-tip { font-size:12px; color:var(--text); border-left:3px solid #dcff31;
+  padding:6px 10px; background:var(--surf); }
+.tour-panel .tour-starter { font-size:12px; margin-bottom:12px; border-color:#dcff31; }
+.tour-panel .tour-start-state { padding:8px 10px; border-left:3px solid #ffba6e; font-size:12px;
+  color:var(--text); background:var(--surf); }
+.tour-route-stages button { font:inherit; text-align:left; width:100%; padding:6px 8px;
+  border:1px solid var(--line); color:var(--dim); background:var(--bg); border-radius:4px; }
+.tour-route-stages button:hover,.tour-route-stages button:focus-visible { border-color:#dcff31; outline:2px solid #dcff31; }
+.tour-route-stages button.done { color:#dcff31; border-color:#83a334; }
+@media(max-width:500px) {
+  .tour-route-stages { grid-template-columns:1fr; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .tour-launch #tour-toggle { transition:none; }
+}
 </style>
 </head>
 <body>
@@ -130,6 +229,57 @@ footer small { display: block; font-size: 11px; }
   <div class="start" id="start"><button class="primary" id="go" type="button">Switch on</button><p id="status" hidden></p></div>
 </div>
 </section>
+
+<div class="tour-launch">
+  <button id="tour-toggle" type="button" aria-controls="tour-library tour-panel" aria-expanded="false">★ TUTORIALS · AMBIENT</button>
+  <span>Caravel 1.1 · interactive lessons · optional</span>
+</div>
+<div id="tour-scrim" class="tour-scrim" hidden></div>
+<section id="tour-library" class="tour-library" role="dialog" aria-modal="true" aria-labelledby="tour-library-title" hidden>
+  <div class="tour-head"><h2 id="tour-library-title">CARAVEL ACADEMY · 1.1</h2>
+    <button id="tour-library-close" type="button" aria-label="Close tutorial library">Close</button></div>
+  <p class="tour-intro">Choose a lesson. BUILD prepares sounds, sequences and harmony; PLAY performs them. Lessons guide your real controls without resetting the emulator.</p>
+  <section class="tour-feature" aria-label="Main learning path">
+    <span class="tour-feature-label">RECOMMENDED · COMPLETE PROJECT</span>
+    <h3>Your first ambient track</h3>
+    <p>10 guided stages: hear a note, build a pad, add movement and a sparse motif, shape harmony, save, then perform it live.</p>
+    <button id="tour-ambient-start" type="button" class="tour-ambient-action">Start the ambient track journey</button>
+    <div class="tour-route-summary"><strong id="tour-route-count">0 of 10 stages verified</strong>
+      <button id="tour-route-reset" type="button" aria-label="Reset ambient journey checkmarks only">Reset checkmarks</button></div>
+    <div id="tour-route-stages" class="tour-route-stages" aria-label="Ambient track stage checklist"></div>
+    <p class="tour-hint">After saving a PROJECT in the emulator, make a separate Academy checkpoint. Restoring is manual and replaces the browser's current saved flash only after consent.</p>
+    <button id="tour-checkpoint-restore" type="button">Restore saved Academy checkpoint</button>
+    <button id="tour-checkpoint-undo" type="button">Undo last checkpoint restore</button>
+    <p id="tour-checkpoint-status" class="tour-hint" aria-live="polite"></p>
+  </section>
+</section>
+<aside id="tour-panel" class="tour-panel" aria-label="Caravel guided lesson" hidden>
+  <div class="tour-top">
+    <span id="tour-progress" class="tour-progress" aria-live="polite"></span>
+    <button id="tour-close" type="button" aria-label="Close lesson">Close</button>
+  </div>
+  <span id="tour-mode" class="tour-mode"></span>
+  <p id="tour-observed" class="tour-observed" aria-live="polite">Waiting for emulator state</p>
+  <p id="tour-state-warning" class="tour-state-warning" role="status" aria-live="polite" hidden></p>
+  <h2 id="tour-title"></h2>
+  <p id="tour-stage-hook" class="tour-stage-hook" hidden></p>
+  <p id="tour-phase" class="tour-phase" hidden></p>
+  <p id="tour-caption" class="tour-caption"></p>
+  <p id="tour-start-state" class="tour-start-state" hidden></p>
+  <button id="tour-starter" type="button" class="tour-starter" hidden>Load source starter (replaces track sounds)</button>
+  <p id="tour-description"></p>
+  <p id="tour-hold-tip" class="tour-hold-tip" hidden></p>
+  <p id="tour-checkpoint" class="tour-checkpoint" aria-live="polite" hidden></p>
+  <button id="tour-mark-stage" type="button" class="tour-mark-stage" hidden>✓ I checked this stage</button>
+  <button id="tour-checkpoint-save" type="button">Save Academy checkpoint (after PROJECT SAVE)</button>
+  <p class="tour-hint">Use the highlighted real control. Check the LCD before Next: the lesson does not automatically detect your current mode.</p>
+  <div class="tour-nav">
+    <button id="tour-all" type="button">All tutorials</button>
+    <button id="tour-stage-link" type="button" hidden>Copy stage link</button>
+    <button id="tour-prev" type="button">Back</button>
+    <button id="tour-next" type="button" class="primary">Next</button>
+  </div>
+</aside>
 
 <div class="boxes">
 <section class="box sec">
@@ -164,6 +314,7 @@ footer small { display: block; font-size: 11px; }
 
 <script type="module">
 import { midiKnob, KNOB_MODES } from "./worklet.js";
+import { TOUR_AMBIENT_STAGES, TOUR_LESSONS, TOUR_PRESETS } from "./tutorial_data.mjs";
 const NS = "http://www.w3.org/2000/svg";
 // panel.c's labels (bit = label) and encoder roles
 const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
@@ -547,6 +698,548 @@ async function midiOn() {
   } catch { /* no permission: the panel only */ }
 }
 
+// ------------------------------------------------------------------ explicit Academy PROJECT checkpoint (browser flash, not live RAM)
+// Only the most recent checkpoint is kept to reduce browser quota pressure.
+// A checkpoint snapshots flash AFTER the user saves a real firmware PROJECT;
+// it cannot capture unsaved sequence, sound, or harmony edits.
+const TOUR_CHECKPOINT_KEY = "caravel-v1-emu-academy-checkpoint-v1";
+const TOUR_RESTORE_BACKUP_KEY = "caravel-v1-emu-academy-before-restore-v1";
+function tourFlashHash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function tourValidFlash(raw) {
+  if (typeof raw !== "string" || raw.length < 5) return false;
+  try {
+    const sectors = JSON.parse(raw);
+    if (!sectors || Array.isArray(sectors) || typeof sectors !== "object" ||
+        !Object.keys(sectors).length) return false;
+    return Object.entries(sectors).every(([offset, encoded]) => {
+      const n = Number(offset);
+      if (!/^\d+$/.test(offset) || n % 4096 !== 0 ||
+          !((n >= 0x97000 && n < 0xE0000) ||
+            (n >= 0xE5000 && n < 0xFC000) ||
+            (n >= 0xFC000 && n < 0x100000)) ||
+          typeof encoded !== "string") return false;
+      return atob(encoded).length === 4096;
+    });
+  } catch { return false; }
+}
+function tourReadCheckpoint() {
+  try {
+    const data = JSON.parse(localStorage.getItem(TOUR_CHECKPOINT_KEY) || "null");
+    return data && data.version === 1 && Number.isInteger(data.stage) &&
+      data.stage >= 1 && data.stage <= 10 &&
+      tourValidFlash(data.flash) && tourFlashHash(data.flash) === data.hash ? data : null;
+  } catch { return null; }
+}
+function tourCheckpointStatus(message) {
+  const el = document.getElementById("tour-checkpoint-status");
+  el.textContent = message;
+}
+function tourRefreshCheckpoint() {
+  const saved = tourReadCheckpoint();
+  tourCheckpointStatus(saved ?
+    "Saved checkpoint: Stage " + saved.stage + " · " + new Date(saved.time).toLocaleString() +
+    ". This is stored in this browser only." :
+    "No valid Academy checkpoint in this browser. Stage checkmarks are not a PROJECT backup.");
+}
+function tourCaptureAfterInspection(m) {
+  const stage = tourSteps[tourIndex]?.stage;
+  if (!Number.isInteger(stage) || stage !== m.stage ||
+      stage >= TOUR_RELEASED_STAGES || !node) return;
+  if (!m.used) {
+    window.alert("No saved firmware PROJECT slot was detected. First use Caravel PROJECT SAVE, then retry.");
+    return;
+  }
+  let flash;
+  try { flash = localStorage.getItem(STORE); } catch {}
+  if (!tourValidFlash(flash)) {
+    window.alert("Browser flash is unavailable or invalid. No checkpoint was created. Check storage permissions and save your PROJECT first.");
+    return;
+  }
+  const slots = [1, 2, 3, 4].filter((n) => (m.used & (1 << (n - 1))) !== 0);
+  if (!window.confirm("Checkpoint Stage " + (stage + 1) + "?\\n\\n" +
+      "Saved PROJECT slots detected: " + slots.join(", ") + ".\\n" +
+      "Confirm you used PROJECT SAVE for your CURRENT music. Unsaved RAM edits will NOT be included. " +
+      "This replaces the previous Academy checkpoint, but does not change the running synth or current flash.")) return;
+  const record = { version: 1, stage: stage + 1, time: new Date().toISOString(),
+    flash, hash: tourFlashHash(flash) };
+  try {
+    localStorage.setItem(TOUR_CHECKPOINT_KEY, JSON.stringify(record));
+    if (!tourReadCheckpoint()) throw new Error("checkpoint verification failed");
+    tourRefreshCheckpoint();
+    window.alert("Academy checkpoint saved in this browser. It contains saved flash data, not unsaved edits. Test a reload before relying on it.");
+  } catch (err) {
+    window.alert("Checkpoint NOT saved (storage quota or permission): " + err.message);
+  }
+}
+document.getElementById("tour-checkpoint-save").addEventListener("click", () => {
+  const stage = tourSteps[tourIndex]?.stage;
+  if (!node || !Number.isInteger(stage) || stage >= TOUR_RELEASED_STAGES) {
+    window.alert("Start a released Academy stage and switch on the emulator first.");
+    return;
+  }
+  send({ type: "tourProjectInspect", stage });
+});
+document.getElementById("tour-checkpoint-restore").addEventListener("click", () => {
+  const saved = tourReadCheckpoint();
+  if (!saved) {
+    window.alert("No valid checkpoint found in this browser.");
+    return;
+  }
+  if (node) {
+    window.alert("Restore is only possible BEFORE switching on the emulator. Reload the page and choose Restore before Switch on. Your running music was not changed.");
+    return;
+  }
+  let current;
+  try { current = localStorage.getItem(STORE); }
+  catch { window.alert("Browser storage is unavailable; nothing changed."); return; }
+  if (current !== null && !tourValidFlash(current)) {
+    window.alert("Existing saved flash is not valid; refusing to overwrite it."); return;
+  }
+  if (current === saved.flash) {
+    window.alert("The saved browser flash already matches this checkpoint. No changes needed.");
+    return;
+  }
+  if (!window.confirm("Restore Stage " + saved.stage + " checkpoint?\\n\\n" +
+      "This replaces the browser's CURRENT saved flash, including other saved projects and presets. " +
+      "The current flash will first be backed up separately. Unsaved RAM changes cannot be restored.\\n\\n" +
+      "Nothing will be changed without confirmation.")) return;
+  try {
+    // Fail closed if the emergency copy cannot be written (quota/private mode).
+    if (current !== null) {
+      localStorage.setItem(TOUR_RESTORE_BACKUP_KEY, current);
+      if (localStorage.getItem(TOUR_RESTORE_BACKUP_KEY) !== current)
+        throw new Error("pre-restore backup verification failed");
+    }
+    localStorage.setItem(STORE, saved.flash);
+    if (localStorage.getItem(STORE) !== saved.flash)
+      throw new Error("restored flash verification failed");
+    // No previous flash means there is nothing to undo. Never offer a stale
+    // emergency copy from a different restoration as the last backup.
+    if (current === null) localStorage.removeItem(TOUR_RESTORE_BACKUP_KEY);
+    tourCheckpointStatus("Stage " + saved.stage + " flash restored. Switch on and verify PROJECT contents on the LCD.");
+    window.alert("Checkpoint restored to browser flash. Now Switch on and verify the PROJECT. An emergency copy of previous saved flash is kept when one existed.");
+  } catch (err) {
+    // A failed write must not erase existing storage.
+    try {
+      if (current === null) localStorage.removeItem(STORE);
+      else localStorage.setItem(STORE, current);
+    } catch {}
+    window.alert("Restore failed; original browser flash was retained where storage permitted: " + err.message);
+  }
+});
+document.getElementById("tour-checkpoint-undo").addEventListener("click", () => {
+  if (node) {
+    window.alert("Undo is available only before Switch on. Reload the page first; current music is unchanged.");
+    return;
+  }
+  let prior, current;
+  try {
+    prior = localStorage.getItem(TOUR_RESTORE_BACKUP_KEY);
+    current = localStorage.getItem(STORE);
+  } catch { window.alert("Browser storage is unavailable."); return; }
+  if (!tourValidFlash(prior)) {
+    window.alert("No valid pre-restore backup is available."); return;
+  }
+  if (current !== null && !tourValidFlash(current)) {
+    window.alert("Current browser flash is invalid; no changes made."); return;
+  }
+  if (prior === current) { window.alert("Previous flash is already active."); return; }
+  if (!window.confirm("Undo last Academy restore? This replaces current saved browser flash with the pre-restore copy. Any subsequent saved PROJECT changes in current flash will be lost. Continue?"))
+    return;
+  try {
+    localStorage.setItem(STORE, prior);
+    if (localStorage.getItem(STORE) !== prior)
+      throw new Error("undo write verification failed");
+    window.alert("Previous browser flash restored. Switch on and verify the saved PROJECT.");
+  } catch (err) {
+    try {
+      if (current === null) localStorage.removeItem(STORE);
+      else localStorage.setItem(STORE, current);
+    } catch {}
+    window.alert("Undo failed; attempted to preserve current flash: " + err.message);
+  }
+});
+tourRefreshCheckpoint();
+
+// ------------------------------------------------------------------ optional guided tour
+// Caravel 1.1 tutorial library: no audio, firmware or storage side effects.
+const TOUR_BOOT = { layer:"START", title:"Switch on", target:"go",
+  body:"Switch on the actual Caravel emulator first. Wait until the LCD is ready. The lesson will then continue automatically." };
+// The main learning path is ordered: 10 musical outcomes, not 10 unrelated controls.
+// The complete path is optional; the twelve short lessons remain reference material.
+const TOUR_AMBIENT = {
+  id:"ambient-route", title:"Your first ambient track", route:true,
+  steps:TOUR_AMBIENT_STAGES.flatMap((stage) => stage.steps)
+};
+// The full curriculum is ten episodes; the shipped module can contain only its
+// approved prefix. No future stage title, instruction or link is needed here.
+const TOUR_TOTAL_STAGES = 10;
+const TOUR_RELEASED_STAGES = TOUR_AMBIENT_STAGES.length;
+const TOUR_DONE_KEY = "caravel-v1-emu-ambient-stage-checks-v1";
+function tourReadDone() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TOUR_DONE_KEY));
+    if (Array.isArray(saved) && saved.length === TOUR_TOTAL_STAGES)
+      return saved.map((value) => value === true);
+  } catch { /* browser storage may be denied */ }
+  return Array(TOUR_TOTAL_STAGES).fill(false);
+}
+let tourDone = tourReadDone();
+function tourSaveDone() {
+  try { localStorage.setItem(TOUR_DONE_KEY, JSON.stringify(tourDone)); }
+  catch { /* still usable without storage */ }
+}
+function tourRenderRoute() {
+  const list = document.getElementById("tour-route-stages");
+  list.textContent = "";
+  for (let i = 0; i < TOUR_TOTAL_STAGES; i++) {
+    const stage = TOUR_AMBIENT_STAGES[i], published = !!stage;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.disabled = !published;
+    item.setAttribute("aria-label", published ?
+      "Start ambient stage " + (i + 1) + ": " + stage.title :
+      "Stage " + (i + 1) + ": Coming soon");
+    if (published) item.addEventListener("click", () => tourOpen("ambient-route", i));
+    item.className = published && tourDone[i] ? "done" : "";
+    item.textContent = published ?
+      (tourDone[i] ? "✓ " : "○ ") + (i + 1) + ". " + stage.title :
+      "○ " + (i + 1) + ". Coming soon";
+    list.appendChild(item);
+  }
+  const count = tourDone.slice(0, TOUR_RELEASED_STAGES).filter(Boolean).length;
+  document.getElementById("tour-route-count").textContent =
+    count + " of " + TOUR_RELEASED_STAGES + " released stages verified · " +
+    TOUR_TOTAL_STAGES + " planned · Checkmarks do not save your PROJECT. " +
+    "Use PROJECT SAVE before closing the emulator; saved browser flash may be unavailable in private mode.";
+  const start = document.getElementById("tour-ambient-start");
+  start.disabled = TOUR_RELEASED_STAGES === 0;
+  start.textContent = TOUR_RELEASED_STAGES === 0 ? "Coming soon with Short #01" :
+    count > 0 && count < TOUR_RELEASED_STAGES ? "Continue your ambient track journey" :
+    count === TOUR_RELEASED_STAGES ? "Replay released stages" :
+    "Start the ambient track journey";
+}
+const tourToggle = document.getElementById("tour-toggle");
+const tourLibrary = document.getElementById("tour-library");
+const tourPanel = document.getElementById("tour-panel");
+const tourScrim = document.getElementById("tour-scrim");
+const tourStartOverlay = document.getElementById("start");
+let tourLesson = null;
+let tourSteps = [];
+let tourIndex = -1;
+let tourTarget = null;
+let tourFirmware = null; // read from actual WASM, not guessed from UI or saved progress
+let tourPageTitle = null; // BUILD page title (not LCD pixel OCR)
+function tourReceivePageTitle(title) {
+  if (typeof title !== "string" || title === tourPageTitle) return;
+  tourPageTitle = title;
+  if (tourIndex >= 0 && !tourPanel.hidden) tourShow(tourIndex);
+}
+let tourBootDestination = 1;
+function tourReceiveState(value) {
+  if (!Number.isInteger(value) || value === 0xFFFFFFFF) return;
+  const next = { layer: (value & 1) ? "PLAY" : "BUILD",
+    track: (value >> 1) & 3, help: !!(value & 256), engine: (value >> 9) & 31 };
+  const changed = !tourFirmware || next.layer !== tourFirmware.layer ||
+    next.track !== tourFirmware.track || next.help !== tourFirmware.help ||
+    next.engine !== tourFirmware.engine;
+  tourFirmware = next;
+  if (!changed || tourIndex < 0 || tourPanel.hidden) return;
+  const step = tourSteps[tourIndex];
+  if (step !== TOUR_BOOT && !next.help && step.layer === next.layer &&
+      step.actions?.some((a) => a.do === "ensure-layer") && tourIndex < tourSteps.length - 1) {
+    tourShow(tourIndex + 1); // HOME is a toggle: skip a redundant toggle when already correct
+  } else tourShow(tourIndex);
+}
+// Keep the active control outside the floating card on phones and desktop.
+function tourPlace() {
+  tourPanel.style.left = tourPanel.style.right = tourPanel.style.top = tourPanel.style.bottom = "";
+  if (!tourTarget || tourIndex < 0) return;
+  const r = tourTarget.getBoundingClientRect();
+  if (innerWidth <= 700) {
+    if (r.top + r.height / 2 > innerHeight * 0.55) {
+      tourPanel.style.top = "8px";
+      tourPanel.style.bottom = "auto";
+    }
+  } else if (r.left + r.width / 2 > innerWidth * 0.6) {
+    tourPanel.style.left = "16px";
+    tourPanel.style.right = "auto";
+  }
+}
+function tourMark() {
+  for (const hit of device.querySelectorAll(".hit.tour-target")) hit.classList.remove("tour-target");
+  document.getElementById("go").classList.remove("tour-target");
+  if (tourIndex < 0) { tourTarget = null; tourPlace(); return; }
+  const step = tourSteps[tourIndex];
+  const wrongLayer = step.layer !== "START" && tourFirmware && (tourFirmware.layer !== step.layer || tourFirmware.help);
+  const wrongTrack = !wrongLayer && tourFirmware && Number.isInteger(step.expected?.track) &&
+    tourFirmware.track !== step.expected.track;
+  const wrongEngine = !wrongLayer && !wrongTrack && tourFirmware &&
+    Number.isInteger(step.expected?.engine) && tourFirmware.engine !== step.expected.engine;
+  const wrongPage = !wrongLayer && !wrongTrack && !wrongEngine &&
+    step.expected?.pageTitle && tourPageTitle && tourFirmware?.layer === "BUILD" &&
+    tourPageTitle !== step.expected.pageTitle;
+  const pageButton = {ENV:"ENV",LFO:"LFO","LFO DEST":"LFO",FX:"FX",HARM:"SCL",HARMONY:"SCL",STEP:"SEQ"}[step.expected?.pageTitle];
+  const name = wrongLayer ? "HOME" : wrongTrack ? "ALGORITHM" :
+    wrongEngine && !["EDIT","KNOB 1","KNOB 2"].includes(step.target) ? "EDIT" :
+    wrongPage && pageButton ? pageButton : step.target;
+  const hit = name === "go" ? document.getElementById("go") :
+    Array.from(device.querySelectorAll(".hit")).find((el) => el.getAttribute("aria-label") === name);
+  if (hit && (name !== "go" || !tourStartOverlay.hidden)) hit.classList.add("tour-target");
+  tourTarget = hit || null;
+  tourPlace();
+}
+function tourShow(n) {
+  tourIndex = Math.min(Math.max(0,n),tourSteps.length - 1);
+  const step = tourSteps[tourIndex];
+  if (step !== TOUR_BOOT && tourFirmware && !tourFirmware.help &&
+      tourFirmware.layer === step.layer &&
+      step.actions?.some((a) => a.do === "ensure-layer") &&
+      tourIndex < tourSteps.length - 1) {
+    tourShow(tourIndex + 1); // do not flip a layer already correct on resumed lessons
+    return;
+  }
+  tourPanel.setAttribute("data-layer", step.layer);
+  document.getElementById("tour-mode").textContent =
+    step.layer === "BUILD" ? "BUILD · PREPARE" : step.layer === "PLAY" ? "PLAY · PERFORM" : "START";
+  let progress = tourLesson.title + " · STEP " + (tourIndex + 1) + " / " + tourSteps.length;
+  if (tourLesson.route && Number.isInteger(step.stage)) {
+    const stageStep = tourSteps.slice(0,tourIndex + 1).filter((s) => s.stage === step.stage).length;
+    progress = "AMBIENT · STAGE " + (step.stage + 1) + "/10 · " +
+      stageStep + "/" + TOUR_AMBIENT_STAGES[step.stage].steps.length;
+  }
+  document.getElementById("tour-progress").textContent = progress;
+  document.getElementById("tour-title").textContent = step.title;
+  document.getElementById("tour-caption").textContent = step.caption || "";
+  const label = TOUR_PRESETS.find((p) => p.engineIndex === tourFirmware?.engine)?.engine ||
+    (tourFirmware ? "ENG " + tourFirmware.engine : "");
+  document.getElementById("tour-observed").textContent = tourFirmware ?
+    "ACTUAL EMULATOR · " + tourFirmware.layer + " · T" + (tourFirmware.track + 1) +
+    " · " + label + (tourPageTitle ? " · PAGE " + tourPageTitle : "") :
+    "Waiting for actual emulator BUILD/PLAY state";
+  document.getElementById("tour-description").textContent = step.instruction || step.body || "";
+  const warning = document.getElementById("tour-state-warning");
+  const mismatch = step.layer !== "START" && tourFirmware && tourFirmware.layer !== step.layer;
+  const help = step.layer !== "START" && tourFirmware && tourFirmware.help;
+  const wrongTrack = !mismatch && !help && tourFirmware && Number.isInteger(step.expected?.track) &&
+    tourFirmware.track !== step.expected.track;
+  const wrongEngine = !mismatch && !help && !wrongTrack && tourFirmware &&
+    Number.isInteger(step.expected?.engine) && tourFirmware.engine !== step.expected.engine;
+  const wrongPage = !mismatch && !help && !wrongTrack && !wrongEngine &&
+    step.expected?.pageTitle && tourPageTitle && tourFirmware?.layer === "BUILD" &&
+    tourPageTitle !== step.expected.pageTitle;
+  warning.hidden = !mismatch && !help && !wrongTrack && !wrongEngine && !wrongPage;
+  warning.textContent = help ?
+    "First dismiss the TWO LEVELS / LEVELS help with a short key tap; then check the layer." :
+    mismatch ? "WRONG LAYER · Firmware is in " + tourFirmware.layer +
+      ", this step needs " + step.layer + ". Hold HOME about one second; then continue." :
+    wrongTrack ? "WRONG TRACK · Current selection T" + (tourFirmware.track+1) +
+      ", this step needs T" + (step.expected.track+1) + ". Turn ALGORITHM to select it." :
+    wrongEngine ? "WRONG ENGINE · This step needs " +
+      (TOUR_PRESETS.find((p) => p.engineIndex === step.expected.engine)?.engine ||
+      "engine " + step.expected.engine) +
+      ". Hold EDIT, set ENG (K1), choose the named preset (K2), release EDIT." :
+    wrongPage ? "WRONG PAGE · BUILD currently shows " + tourPageTitle +
+      ", this step needs " + step.expected.pageTitle + ". Use its family button and page navigation." : "";
+  const stage = tourLesson.route && Number.isInteger(step.stage) ?
+    TOUR_AMBIENT_STAGES[step.stage] : null;
+  const first = stage && (stage.steps[0] === step ||
+    (stage.steps[0].actions?.some((a) => a.do === "ensure-layer") && stage.steps[1] === step));
+  const phaseEntry = stage?.phases?.find((p) => p.startStepId === step.id);
+  const laterPhase = !!(phaseEntry && phaseEntry !== stage.phases[0]);
+  const startState = document.getElementById("tour-start-state");
+  startState.hidden = !first && !laterPhase;
+  startState.textContent = laterPhase ? "PHASE START CHECK · " + phaseEntry.startState.description +
+    " · The source starter cannot reconstruct this phase's missing SEQ/HARMONY/project prerequisites." :
+    first ? "START CHECK · " + stage.startState.description +
+    " · The optional RAM-only starter loads sources with T1 TONE ~66%, FILT 50 LP and ATK 2.71 s; it does not reconstruct earlier sequence or harmony edits." : "";
+  document.getElementById("tour-starter").hidden = !first;
+  const hook = document.getElementById("tour-stage-hook");
+  hook.hidden = !first && !laterPhase;
+  hook.textContent = laterPhase ? "PHASE GOAL · " + phaseEntry.hook : first ? "STAGE GOAL · " + stage.hook : "";
+  const phase = document.getElementById("tour-phase");
+  phase.hidden = !stage;
+  const estimate = stage?.estimatedMinutes;
+  phase.textContent = stage ? (step.phase ? "SECTION · " + step.phase + " · " : "") +
+    (estimate ? "~" + estimate.min + "–" + estimate.max + " min (estimate, not timed)" : "") : "";
+  const hold = document.getElementById("tour-hold-tip");
+  const controls = step.actions?.filter((a) => a.do === "hold").map((a) => a.control) || [];
+  const inline = step.instruction || step.body || "";
+  const named = /hold (EDIT|FX|LFO|ARP|HOME|REC|SEQ)/i.exec(inline);
+  if (named && !controls.includes(named[1].toUpperCase())) controls.push(named[1].toUpperCase());
+  hold.hidden = !controls.length;
+  hold.textContent = controls.length ?
+    "HOLD " + controls.join(", ") + " · Mouse: Shift-click to latch the panel button, then Shift-click again to release. Touch: keep a finger down while using the other control. Release after the action." : "";
+  const checkpoint = document.getElementById("tour-checkpoint");
+  checkpoint.hidden = !step.check && !step.phaseCheckpoint;
+  checkpoint.textContent = step.check ? "CHECKPOINT · " + step.check + (stage ? " · " + stage.result : "") : (step.phaseCheckpoint ? "PHASE CHECKPOINT · " + step.phaseCheckpoint : "");
+  const done = document.getElementById("tour-mark-stage");
+  done.hidden = !tourLesson.route || !step.check || !Number.isInteger(step.stage);
+  if (!done.hidden) {
+    done.disabled = tourDone[step.stage];
+    done.textContent = tourDone[step.stage] ? "✓ Stage verified by you" : "✓ I checked this stage";
+  }
+  const link = document.getElementById("tour-stage-link");
+  link.hidden = !stage;
+  const next = document.getElementById("tour-next");
+  next.disabled = !!(mismatch || help || wrongTrack || wrongEngine || wrongPage);
+  next.textContent = tourIndex === tourSteps.length - 1 ? "Finish" : "Next";
+  document.getElementById("tour-prev").disabled = tourIndex === 0;
+  tourMark();
+}
+function tourClose() {
+  tourIndex = -1; tourLesson = null; tourSteps = [];
+  tourPanel.hidden = true;
+  tourLibrary.hidden = true;
+  tourScrim.hidden = true;
+  tourToggle.setAttribute("aria-expanded","false");
+  tourMark();
+}
+function tourMenu() {
+  tourIndex = -1; tourLesson = null; tourSteps = [];
+  tourPanel.hidden = true;
+  tourLibrary.hidden = false;
+  tourScrim.hidden = false;
+  tourToggle.setAttribute("aria-expanded","true");
+  tourMark();
+  tourRenderRoute();
+  document.getElementById("tour-ambient-start").focus();
+}
+function tourOpen(id, stageIndex = null) {
+  if (id === TOUR_AMBIENT.id && (TOUR_RELEASED_STAGES === 0 ||
+      (Number.isInteger(stageIndex) && (stageIndex < 0 || stageIndex >= TOUR_RELEASED_STAGES)))) {
+    tourMenu();
+    document.getElementById("tour-route-count").textContent = Number.isInteger(stageIndex) ?
+      "Stage " + (stageIndex + 1) + " · Coming soon with the corresponding YouTube Short" :
+      "Academy Stage 01 · Coming soon";
+    return;
+  }
+  tourLesson = id === TOUR_AMBIENT.id ? TOUR_AMBIENT :
+    TOUR_LESSONS.find((lesson) => lesson.id === id);
+  if (!tourLesson || !tourLesson.steps.length) return;
+  tourSteps = tourStartOverlay.hidden ? tourLesson.steps : [TOUR_BOOT, ...tourLesson.steps];
+  tourLibrary.hidden = true;
+  tourScrim.hidden = true;
+  tourPanel.hidden = false;
+  tourToggle.setAttribute("aria-expanded","true");
+  const incomplete = tourLesson.route ? tourDone.findIndex((done) => !done) : -1;
+  const requested = tourLesson.route && Number.isInteger(stageIndex) &&
+    stageIndex >= 0 && stageIndex < TOUR_AMBIENT_STAGES.length ? stageIndex : incomplete;
+  const found = requested >= 0 ? tourSteps.findIndex((step) => step.stage === requested) : -1;
+  tourBootDestination = found >= 0 ? found : tourStartOverlay.hidden ? 0 : 1;
+  tourShow(tourStartOverlay.hidden ? tourBootDestination : 0);
+}
+document.getElementById("tour-ambient-start").addEventListener("click", () => tourOpen("ambient-route"));
+function tourConfirmStarterInspection(m) {
+  const stage = tourSteps[tourIndex]?.stage;
+  if (!Number.isInteger(stage) || stage !== m.stage || !node) return;
+  const mask = m.missing >>> 0;
+  if (mask === 0) {
+    window.alert("Source starter: the required source and factory warm defaults are already prepared. No settings changed. Custom sound values are preserved.");
+    return;
+  }
+  const changes = [];
+  if (mask & 1) changes.push("REPLACE T1 SOUND with ENSEMBLE 6 STRING MACHINE (previous T1 sound edits will be lost)");
+  if (mask & 2) changes.push("T1 factory TONE 100% → 66%");
+  if (mask & 4) changes.push("T1 factory FILT OFF → 50 LP");
+  if (mask & 8) changes.push("T1 factory ATK 476ms → 2.71s");
+  if (mask & 16) changes.push("REPLACE T2 SOUND with the lesson's T2 source sound");
+  if (mask & 32) changes.push("REPLACE T3 SOUND with the lesson's T3 source sound");
+  if (!window.confirm("Load only the missing source starter items?\\n\\n" +
+    changes.map((x) => "• " + x).join("\\n") +
+    "\\n\\nExisting matching source presets and all custom non-default parameter values are preserved. REL remains unchanged. Sequencer/HARMONY/PROJECT are neither recreated nor saved. Continue?")) return;
+  send({ type:"tourStarter", stage });
+}
+document.getElementById("tour-starter").addEventListener("click", () => {
+  const stage = tourSteps[tourIndex]?.stage;
+  if (!Number.isInteger(stage)) return;
+  if (!node) { window.alert("Switch on the emulator first."); return; }
+  // The worklet reads the REAL WASM state; do not guess based on checkmarks.
+  send({ type:"tourStarterInspect", stage });
+});
+document.getElementById("tour-stage-link").addEventListener("click", async () => {
+  const step = tourSteps[tourIndex];
+  if (!Number.isInteger(step?.stage)) return;
+  const url = new URL(location.href);
+  url.searchParams.set("stage", String(step.stage + 1));
+  try { await navigator.clipboard.writeText(url.toString()); }
+  catch { window.prompt("Copy this stage URL:", url.toString()); }
+});
+document.getElementById("tour-route-reset").addEventListener("click", () => {
+  tourDone = Array(TOUR_TOTAL_STAGES).fill(false);
+  tourSaveDone();
+  tourRenderRoute();
+});
+document.getElementById("tour-mark-stage").addEventListener("click", () => {
+  if (!tourLesson?.route || tourIndex < 0) return;
+  const step = tourSteps[tourIndex];
+  if (!step.check || !Number.isInteger(step.stage)) return;
+  tourDone[step.stage] = true; // confirmed by the user, not verified from firmware
+  tourSaveDone();
+  tourRenderRoute();
+  tourShow(tourIndex);
+});
+tourToggle.addEventListener("click", () => {
+  if (tourLibrary.hidden) tourMenu();
+  else { tourClose(); tourToggle.focus(); }
+});
+document.getElementById("tour-library-close").addEventListener("click", () => { tourClose(); tourToggle.focus(); });
+document.getElementById("tour-close").addEventListener("click", () => { tourClose(); tourToggle.focus(); });
+document.getElementById("tour-all").addEventListener("click", tourMenu);
+document.getElementById("tour-prev").addEventListener("click", () => { if (tourIndex >= 0) tourShow(tourIndex - 1); });
+document.getElementById("tour-next").addEventListener("click", () => {
+  if (tourIndex < 0) return;
+  if (tourIndex === tourSteps.length - 1) { tourMenu(); }
+  else tourShow(tourIndex + 1);
+});
+for (const item of document.querySelectorAll("[data-tour]")) {
+  item.addEventListener("click", () => tourOpen(item.getAttribute("data-tour")));
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && (!tourLibrary.hidden || tourIndex >= 0)) {
+    e.preventDefault();
+    e.stopPropagation();
+    tourClose();
+    tourToggle.focus();
+    return;
+  }
+  if (!tourLibrary.hidden) {
+    // The library is aria-modal: Tab must not reach the still-running FM-1 controls.
+    if (e.key === "Tab") {
+      const focusable = Array.from(tourLibrary.querySelectorAll("button:not([disabled])"));
+      const current = focusable.indexOf(document.activeElement);
+      if (focusable.length && (current < 0 ||
+          (current === focusable.length-1 && !e.shiftKey) ||
+          (current === 0 && e.shiftKey))) {
+        e.preventDefault();
+        (e.shiftKey && current === 0 ? focusable[focusable.length-1] : focusable[0]).focus();
+      }
+    }
+    e.stopPropagation(); // do not trigger background emulator shortcuts in the chooser
+  }
+});
+const tourObserver = new MutationObserver(() => {
+  if (tourIndex === 0 && tourSteps[0] === TOUR_BOOT && tourStartOverlay.hidden) tourShow(tourBootDestination);
+  else if (tourIndex >= 0) tourMark();
+});
+tourObserver.observe(device, { childList:true });
+tourObserver.observe(tourStartOverlay, { attributes:true, attributeFilter:["hidden"] });
+addEventListener("scroll",tourPlace,{passive:true});
+addEventListener("resize",tourPlace);
+
+// Each stage can be deep-linked without claiming prior PROJECT data is automatically loaded.
+if (typeof location !== "undefined") {
+  const raw = new URL(location.href).searchParams.get("stage") ||
+    /^#stage-(\d+)$/.exec(location.hash)?.[1];
+  const n = Number(raw);
+  if (raw && Number.isInteger(n) && n >= 1 && n <= TOUR_TOTAL_STAGES)
+    tourOpen("ambient-route", n - 1);
+}
+
 // ------------------------------------------------------------------ switching on
 const status = document.getElementById("status");
 const say = (t) => { status.textContent = t; status.hidden = !t; };
@@ -567,8 +1260,12 @@ async function switchOn() {
         const m = e.data;
         if (m.type === "ready") res();
         else if (m.type === "error") rej(new Error(m.message));
+        else if (m.type === "tourStarterInspection") tourConfirmStarterInspection(m);
+        else if (m.type === "tourProjectInspection") tourCaptureAfterInspection(m);
         else if (m.type === "frame") {
           if (m.fb) drawScreen(m.fb);
+          if (m.tourState !== undefined) tourReceiveState(m.tourState);
+          if (m.tourPageTitle !== undefined) tourReceivePageTitle(m.tourPageTitle);
           if (m.leds) drawLights(lastLeds = m.leds, m.anim);
           if (m.sectors && !saveFlash(m.sectors) && !warned) {
             warned = true;
