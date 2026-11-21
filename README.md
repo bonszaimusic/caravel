@@ -1,10 +1,10 @@
 # Caravel
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.0.0** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.0.0). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
+Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.1.0** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.1.0). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
 
 [Browser emulator](https://bonszaimusic.github.io/caravel/v1/emulator/) · [Web installer](https://bonszaimusic.github.io/caravel/v1/webapp/installer/) · [Web editor](https://bonszaimusic.github.io/caravel/v1/webapp/editor/) · [Tutorials](docs/tutorials/README.md) · [FAQ](docs/faq.md)
 
-The website keeps Classic and 1.x separate. These instructions describe 1.0.0.
+The website keeps Classic and 1.x separate. These instructions describe 1.1.0.
 
 ![Caravel BUILD overview](docs/tutorials/img/one-build.png)
 

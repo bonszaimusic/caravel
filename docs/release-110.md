@@ -2,7 +2,7 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Caravel 1.1.0 (release candidate notes)
 
-**Status: prepared, not published.** Host tests and the browser emulator pass (see *Validation*). A related test build was installed on one FM-1 and the owner reported the hardware test as successful; the final 1.1.0 package itself has not been installed or listened to. Previous release: [1.0.0](release-100.md).
+**Status: prepared for release on 2026-11-21.** Host tests and the browser emulator pass (see *Validation*). A related test build was installed on one FM-1 and the owner reported the hardware test as successful; the final 1.1.0 package itself has not been installed or listened to. Previous release: [1.0.0](release-100.md).
 
 ## What is new
 

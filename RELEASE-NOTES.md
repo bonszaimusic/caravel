@@ -1,4 +1,25 @@
-# Caravel 1.0.0 — 2026-11-17
+# Caravel 1.1.0 — 2026-11-21
+
+Caravel 1.1.0 builds on 1.0.0 (FORMAT 2, six engines, BUILD / PLAY). The full list is in [docs/release-110.md](docs/release-110.md); in short:
+
+- **HARM:** a route map of the HARMONY links in BUILD (one colour per role), and in PLAY a chord selector (K2 CHORD), a bars-left countdown (K3 LEFT, up to 16 bars, then HOLD) and a harmony position line under the header. A track that plays from the HARMONY bus or CHORD EXT edits the global HARMONY key from ROOT.
+- **Orbit look:** one colour rule (cyan = value of the selected track, orange = global), round arcs, pearl thumbs, ELASTIC drawn as a rubber band.
+- **LFO held** makes the FX macros and the STASIS TONE momentary too.
+- **LATCH STACK** is not available for chords from the HARMONY bus or CHORD EXT (they latch as NEW).
+- **CHORD EXT** takes the keys physically held when the gap ends.
+- Also in this release: CAPTURE QUANT (hold REC, K2 QUANT), PLAY SAVE into PROJECT and the other changes of the private candidate (see the commit history).
+
+## Project format: read this before saving
+
+**AFTERBURNER and the STASIS TONE are now saved with the project** (1.0.0 kept them for the session). The project size, offsets and checksum do not change. A project saved with non-default AFTERBURNER or TONE values is **refused by 1.0.0 firmware**; projects with default values are byte-identical to 1.0.0. Back up first, as for every update.
+
+## What was and was not checked
+
+Host tests and the browser emulator pass locally (`tools/docker_validate.sh host all`, including the CHORD EXT fuzzers and the mutation checks). A test build of this tree was installed on an FM-1 and the owner reported the hardware test as successful; no measurements were taken (CPU, RAM headroom 4,800 B on the target build as computed by the build checks). The hosted CI could not run (budget). Not covered: ThreadSanitizer under emulation, two tests that do not build yet (`capture_post_quant`, `stasis_project_menu_ui`, listed as open in `tools/validate_format2.py`), and the old 0.6.0 workflow `action-banks-android.yml`, which no longer matches the current UI.
+
+---
+
+# Caravel 1.0.0 — 2026-11-17 (previous release)
 
 Caravel 1.0.0 includes AFTERBURNER and the corrected HARMONY CHORDS page. The owner approved publication after reviewing the RC. Automated software checks passed; a complete FM-1 audio/load/update/restore acceptance is not documented.
 
