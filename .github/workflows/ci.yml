@@ -27,5 +27,6 @@ jobs:
           python3 tests/frozen_classic_test.py
           python3 tests/dual_site_test.py
           python3 tests/v1_docs_test.py
+          python3 tests/academy_overlay_test.py
           python3 tests/tutorial_pages_test.py
           python3 web/tutorial_pages.py --check-readme
