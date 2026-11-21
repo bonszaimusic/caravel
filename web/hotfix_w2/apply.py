@@ -70,9 +70,11 @@ def parse_metadata(original):
             and data.get('size') == FW_SIZE and data.get('pkg') == '../../firmware/' + FW_NAME,
             'existing installer is not bound to approved v1.1.0 release')
     link = re.search(r'<a id="matching-source" href="([^"]+)"', original)
-    require(link is not None and link.group(1).startswith('https://github.com/bonszaimusic/caravel/'),
-            'missing public release source link')
-    return data, html.unescape(link.group(1))
+    source_url = '../../firmware/caravel-' + VERSION + '-source.tar.gz'
+    require(data.get('source') == source_url and link is not None
+            and html.unescape(link.group(1)) == source_url,
+            'missing matching release source archive link')
+    return data, source_url
 
 
 def source_commit(root):
@@ -104,6 +106,9 @@ def overlay(site, source, tagged, release, rollback, receipt, public_commit=None
     fwrel = read(release / FW_NAME)
     require(len(fwsite) == FW_SIZE and digest(fwsite) == FW_SHA and fwsite == fwrel,
             'published firmware was modified')
+    source_name = 'caravel-' + VERSION + '-source.tar.gz'
+    require(read(site / 'v1/firmware' / source_name) == read(release / source_name),
+            'published source archive was modified')
     source_files = {name: read(source / 'web/hotfix_w2' / name)
                     for name in APPROVED_BLOBS}
     for name, expected in APPROVED_BLOBS.items():

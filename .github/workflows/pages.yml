@@ -213,7 +213,7 @@ jobs:
         run: |
           set -eu
           # Pin the publisher code and BOTH reviewed installer source blobs.
-          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = '2a18b03ee962d296283b46944adb13634cf2baef'
+          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = '96c744135084185e231b3b23d2921dbe8a390b1b'
           test "$(git hash-object build/site-content/web/hotfix_w2/index_pkg.html)" = '9dd110983422993a0fcd1f651bf8c9720bacb195'
           test "$(git hash-object build/site-content/web/hotfix_w2/fm1ota.js)" = '7be5eec30718cce6615c63a388a9deb40c3e1251'
           python3 build/site-content/tests/hotfix_w2_test.py

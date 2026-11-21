@@ -29,13 +29,17 @@ class OverlayTests(unittest.TestCase):
         (self.source / 'web/hotfix_w2').mkdir(parents=True)
         self.old_pkg = b'approved package, fixture only'
         self.sha = H.digest(self.old_pkg)
-        self.meta = {'version': H.VERSION, 'release_verified': True, 'breaking': True,
+        self.meta = {'version': H.VERSION, 'source': '../../firmware/caravel-1.1.0-source.tar.gz',
+                     'release_verified': True, 'breaking': True,
                      'sha256': self.sha, 'size': len(self.old_pkg),
                      'pkg': '../../firmware/' + H.FW_NAME, 'product': 'FM-1_999'}
         (self.release / H.FW_NAME).write_bytes(self.old_pkg)
         (self.site / 'v1/firmware' / H.FW_NAME).write_bytes(self.old_pkg)
+        source = b'exact published source archive, test fixture'
+        (self.release / 'caravel-1.1.0-source.tar.gz').write_bytes(source)
+        (self.site / 'v1/firmware/caravel-1.1.0-source.tar.gz').write_bytes(source)
         self.baseline = ('<main>Caravel</main><a id="matching-source" '
-                         'href="https://github.com/bonszaimusic/caravel/blob/v1.1.0/README.md">Firmware source</a>'
+                         'href="../../firmware/caravel-1.1.0-source.tar.gz">Firmware source</a>'
                          '<script>const meta = '+json.dumps(self.meta)+';</script>')
         (self.site / H.PATH).write_text(self.baseline)
         (self.site / 'emulator' / 'index.html').write_text('original Academy stays')
@@ -72,11 +76,17 @@ class OverlayTests(unittest.TestCase):
         self.assertFalse((self.site / 'SITE_HOTFIX_MANIFEST.json').exists())
         self.assertEqual(json.loads(self.receipt.read_text())['changed'], [H.PATH])
         self.assertIn('Matching W2 web source', (self.site / H.PATH).read_text())
-        self.assertIn('https://github.com/bonszaimusic/caravel/blob/v1.1.0', (self.site / H.PATH).read_text())
+        self.assertIn('../../firmware/caravel-1.1.0-source.tar.gz', (self.site / H.PATH).read_text())
 
     def test_reject_modified_firmware(self):
         (self.site / 'v1/firmware' / H.FW_NAME).write_bytes(b'tampered')
         with self.assertRaisesRegex(ValueError, 'published firmware was modified'):
+            self.apply()
+        self.assertFalse(self.rb.exists())
+
+    def test_reject_modified_source_archive(self):
+        (self.site / 'v1/firmware/caravel-1.1.0-source.tar.gz').write_bytes(b'tampered')
+        with self.assertRaisesRegex(ValueError, 'source archive was modified'):
             self.apply()
         self.assertFalse(self.rb.exists())
 
@@ -87,8 +97,8 @@ class OverlayTests(unittest.TestCase):
         self.assertFalse(self.rb.exists())
 
     def test_reject_missing_release_source_link(self):
-        (self.site / H.PATH).write_text(self.baseline.replace('https://github.com/', 'https://example.org/'))
-        with self.assertRaisesRegex(ValueError, 'missing public release source link'):
+        (self.site / H.PATH).write_text(self.baseline.replace('../../firmware/caravel-1.1.0-source.tar.gz', '../wrong-source.tar.gz'))
+        with self.assertRaisesRegex(ValueError, 'missing matching release source archive link'):
             self.apply()
 
     def test_reject_existing_rollback_without_overwrite(self):
