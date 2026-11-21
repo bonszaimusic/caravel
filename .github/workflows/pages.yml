@@ -183,6 +183,11 @@ jobs:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           path: build/site-content
           persist-credentials: false
+      - name: Academy overlay (browser files from main, firmware from the release tag; only when main marks released stages)
+        if: startsWith(env.VER, '1.')
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          python3 build/site-content/web/academy_overlay.py --tag-tree . --main-tree build/site-content --site site --version "$VER"
       - name: Add performance downloads without changing release artifacts
         if: env.VER == '0.6.0' || env.VER == '0.7.0' || env.VER == '0.7.1' || env.VER == '0.7.2' || env.VER == '0.8.0' || env.VER == '0.9.0' || env.VER == '0.10.0' || env.VER == '0.10.1' || env.VER == '0.11.0' || env.VER == '0.12.0' || env.VER == '0.13.0'
         run: |
