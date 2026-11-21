@@ -1036,7 +1036,7 @@ EXPORT uint32_t web_tour_state(void)
 
 /* Explicit opt-in start palette for a deep-linked browser lesson. In-memory ONLY:
  * user must first confirm overwriting unsaved track sounds in the web UI.
- * Loads the factory source sounds of the lesson (1-based numbering). Does not rewrite a PROJECT, create a SEQ/HARMONY fixture,
+ * The source starter uses factory presets only; the browser requests user consent. Does not rewrite a PROJECT, create a SEQ/HARMONY fixture,
  * persist flash, replace firmware or restore prerequisites invisibly. */
 /* Read-only source starter inspection. Changes ONLY missing source presets and
  * exact factory-default T1 values after separately confirmed browser action.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GENERATED public Academy data; never edit. Source is in the private build.
-// Public release stage count: 1
+// Public release stage count: 2
 export const TOUR_AMBIENT_STAGES = [
   {
     "title": "Strings before anything else",
@@ -610,6 +610,235 @@ export const TOUR_AMBIENT_STAGES = [
       "basis": "editorial estimate, not timed on actual WASM",
       "verified": false
     }
+  },
+  {
+    "title": "Lay CELL AIR underneath",
+    "steps": [
+      {
+        "layer": "BUILD",
+        "target": "ALGORITHM",
+        "title": "Select T2",
+        "instruction": "Select T2 using ALGORITHM. Leave the ENSEMBLE 6 string bed on T1.",
+        "caption": "Add a second track T2",
+        "id": "step-2-1",
+        "stage": 1,
+        "actions": [
+          {
+            "do": "turn",
+            "control": "ALGORITHM",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 1,
+          "firmwareObserved": false
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "EDIT",
+        "title": "Hold EDIT to choose DRONE",
+        "instruction": "Hold EDIT (Shift-click to latch it with mouse). The EDIT selector has ENG on K1 and preset number on K2.",
+        "caption": "T2 becomes a moving drone",
+        "actions": [
+          {
+            "do": "hold",
+            "control": "EDIT",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "id": "step-2-2",
+        "stage": 1,
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 1,
+          "firmwareObserved": false
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Set engine DRONE",
+        "instruction": "With EDIT held, turn K1 ENG until DRONE is displayed.",
+        "caption": "DRONE moves beneath the strings",
+        "id": "step-2-3",
+        "stage": 1,
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 1,
+          "firmwareObserved": false,
+          "engine": 16
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 2",
+        "title": "Choose 6 CELL AIR",
+        "instruction": "Turn K2 to factory preset 6 CELL AIR (1-based number), verify the LCD, and release EDIT (Shift-click to unlatch on mouse).",
+        "caption": "Preset 6 is CELL AIR",
+        "id": "step-2-4",
+        "stage": 1,
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 2",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": "CELL AIR",
+          "track": 1,
+          "firmwareObserved": false,
+          "engine": 16
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "FX",
+        "title": "Open FX SENDS on T2",
+        "instruction": "Tap FX in BUILD to find the SENDS group for T2. Unlike ENSEMBLE, DRONE dry output can feel mono; provide space with reverb.",
+        "caption": "Give CELL AIR a shared room",
+        "id": "step-2-5",
+        "stage": 1,
+        "actions": [
+          {
+            "do": "press",
+            "control": "FX",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 1,
+          "firmwareObserved": false,
+          "engine": 16
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 4",
+        "title": "Add REV to CELL AIR",
+        "instruction": "Increase K4 REV on T2 by a moderate amount; monitor the actual LCD value and overall level.",
+        "caption": "The drone now has a long tail",
+        "id": "step-2-6",
+        "stage": 1,
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 4",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": "CELL AIR",
+          "track": 1,
+          "firmwareObserved": false,
+          "engine": 16
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "G3",
+        "title": "Listen to the foundation",
+        "instruction": "Hold G3 and D4 for an open fifth and compare to the ENSEMBLE layer. T2 should sit beneath T1 rather than overwhelm it.",
+        "caption": "CELL AIR underpins the string pad",
+        "check": "You hear a textured CELL AIR drone with a spatial tail. T1 remains ENSEMBLE 6 STRING MACHINE.",
+        "id": "step-2-7",
+        "stage": 1,
+        "actions": [
+          {
+            "do": "press",
+            "control": "G3",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 1,
+          "firmwareObserved": false,
+          "engine": 16
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      }
+    ],
+    "id": "stage-2",
+    "hook": "CELL AIR breathes beneath the warm G–D strings.",
+    "result": "CELL AIR moves beneath the strings.",
+    "startState": {
+      "mode": "manual",
+      "description": "BUILD. Select T2 and load DRONE 6 CELL AIR; if coming from a fresh emulator, first load T1 ENSEMBLE 6 STRING MACHINE for context.",
+      "automaticRestore": false,
+      "projectSlot": null
+    },
+    "estimatedMinutes": {
+      "min": 2,
+      "max": 4,
+      "basis": "editorial estimate, not timed on actual WASM",
+      "verified": false
+    }
   }
 ];
 export const TOUR_LESSONS = [];
@@ -620,5 +849,12 @@ export const TOUR_PRESETS = [
     "name": "STRING MACHINE",
     "track": 0,
     "engineIndex": 17
+  },
+  {
+    "engine": "DRONE",
+    "number": 6,
+    "name": "CELL AIR",
+    "track": 1,
+    "engineIndex": 16
   }
 ];

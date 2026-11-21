@@ -1147,8 +1147,8 @@ function tourConfirmStarterInspection(m) {
   if (mask & 2) changes.push("T1 factory TONE 100% → 66%");
   if (mask & 4) changes.push("T1 factory FILT OFF → 50 LP");
   if (mask & 8) changes.push("T1 factory ATK 476ms → 2.71s");
-  if (mask & 16) changes.push("REPLACE T2 SOUND with the lesson's T2 source sound");
-  if (mask & 32) changes.push("REPLACE T3 SOUND with the lesson's T3 source sound");
+  if (mask & 16) changes.push("REPLACE T2 SOUND with the required source preset");
+  if (mask & 32) changes.push("REPLACE T3 SOUND with the required source preset");
   if (!window.confirm("Load only the missing source starter items?\\n\\n" +
     changes.map((x) => "• " + x).join("\\n") +
     "\\n\\nExisting matching source presets and all custom non-default parameter values are preserved. REL remains unchanged. Sequencer/HARMONY/PROJECT are neither recreated nor saved. Continue?")) return;

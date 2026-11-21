@@ -1,4 +1,7 @@
 {
-  "released": [1],
+  "released": [
+    1,
+    2
+  ],
   "data": "public-bundle"
 }
