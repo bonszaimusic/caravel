@@ -118,6 +118,10 @@ def landing(with_v1: bool) -> str:
       '''<div class="card pending" aria-disabled="true"><small>IN DEVELOPMENT</small>
       <strong>Caravel 1.x</strong><span>PLAY / BUILD, CAPTURE and FORMAT 2</span>
       <span>Not released yet — no firmware download</span></div>''')
+    academy = ('''<a class="card academy" href="v1/emulator/#stage-1"><small>NEW · CARAVEL ACADEMY</small>
+      <strong>Your first ambient track</strong>
+      <span>Interactive lessons with the real firmware in your browser. <b>Stage 1 is live: Strings before anything else.</b> More stages open together with the YouTube series.</span>
+      <span>Start Stage 1 →</span></a>''' if with_v1 else "")
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Caravel — choose your generation</title>
@@ -133,7 +137,7 @@ background:#21190f;color:#f3e6d0;padding:22px;text-decoration:none}}
 a.card:hover,a.card:focus-visible{{outline:2px solid #ffaa29;outline-offset:2px}}
 .card small{{color:#ffaa29;letter-spacing:.1em;font-weight:700}}
 .card strong{{font-size:1.5rem}}.card span{{font-size:.93rem;color:#dcc9a8}}
-.pending{{opacity:.62;border-style:dashed}}.warning{{border-left:3px solid #ffaa29;padding:10px 18px;margin-top:28px}}
+.academy{{margin-top:20px;border-color:#dcff31;background:#1d2410}}.academy small{{color:#dcff31}}.pending{{opacity:.62;border-style:dashed}}.warning{{border-left:3px solid #ffaa29;padding:10px 18px;margin-top:28px}}
 a{{color:#ffbd58}}
 </style></head><body>
 <header><h1>CARAVEL</h1><p>Independent firmware for the M-VAVE FM-1</p></header>
@@ -143,6 +147,7 @@ a{{color:#ffbd58}}
 <span><strong>No longer maintained · nicht mehr gepflegt</strong><br>Frozen at 0.13.0; no further fixes or builds. Downloads remain available.</span>
 <span>Installer · Emulator · Editor · Tutorials</span></a>
 {modern}</div>
+{academy}
 <div class="warning"><strong>Important: Caravel 1.x is a breaking release.</strong>
 <p>FORMAT 2 cannot open older projects or backup files. Before upgrading, export and verify a complete backup with your matching Classic editor. Keep the original firmware, editor and backup for a return to Classic. Firmware reinstall alone does not restore old projects.</p></div>
 <p>Older links such as <a href="emulator/">/emulator/</a>, <a href="webapp/installer/">/webapp/installer/</a> and <a href="tutorials/">/tutorials/</a> continue to serve Classic.</p>

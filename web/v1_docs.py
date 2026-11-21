@@ -87,7 +87,7 @@ def relative(current, target):
 
 def page_shell(label, body, output, commit, published=False, version="1.0.0"):
     esc = html.escape
-    nav = [("Candidate guides", "tutorials/index.html"), ("Installer", "webapp/installer/index.html"),
+    nav = [("Candidate guides", "tutorials/index.html"), ("Academy", "emulator/index.html#stage-1"), ("Installer", "webapp/installer/index.html"),
            ("Editor", "webapp/editor/index.html"), ("Emulator", "emulator/index.html")]
     result = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{esc(label)} — Caravel 1.x candidate</title><style>{STYLE}</style></head><body><nav>'
@@ -118,6 +118,8 @@ def candidate_landing(text, published=False, version="1.0.0"):
     if published:
         notice = ('<section class="box" id="v1-release-status"><span class="tag">CARAVEL ' + version + '</span>'
                   '<h2>Six engines, BUILD / PLAY and AFTERBURNER</h2>'
+                  '<p><a href="emulator/#stage-1"><strong>NEW · CARAVEL ACADEMY — Stage 1 is live:</strong> Strings before anything else</a>. '
+                  'Interactive lessons in the browser emulator; more stages open together with the YouTube series.</p>'
                   '<p><a href="tutorials/">TUTORIALS — 1.x guides and engine diagrams</a> · '
                   '<a href="tutorials/release-notes/">Release notes and compatibility</a></p>'
                   '<p>Back up with the old matching tools before upgrading. Pre-1.0 data cannot be imported.</p></section>')
@@ -243,7 +245,9 @@ def build(site, source, commit, out, published=False):
                 body = gallery + body
             path = stage / output; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(page_shell(title(text), body, output, commit, published, record["version"]), encoding="utf-8")
-        links = "<ul>" + "".join(f'<li><a href="{relative("tutorials/index.html", target)}">{html.escape(title(sources[name][0].decode()))}</a></li>' for name, target in PAGES.items()) + "</ul>"
+        academy = ('<li><a href="' + relative("tutorials/index.html", "emulator/index.html") + '#stage-1"><strong>Caravel Academy (interactive, in the emulator):</strong> '
+                   'Stage 1 · Strings before anything else</a> — more stages open together with the YouTube series</li>') if published else ""
+        links = "<ul>" + academy + "".join(f'<li><a href="{relative("tutorials/index.html", target)}">{html.escape(title(sources[name][0].decode()))}</a></li>' for name, target in PAGES.items()) + "</ul>"
         (stage / "tutorials/index.html").write_text(page_shell(f"Caravel {record['version']} guides" if published else "Caravel 1.x candidate guides", links, "tutorials/index.html", commit, published, record["version"]), encoding="utf-8")
         after = tree(stage)
         if any(after.get(name) != value for name, value in before.items() if name != "index.html"):
