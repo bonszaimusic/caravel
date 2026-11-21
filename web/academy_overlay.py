@@ -47,14 +47,25 @@ def load_marker(main_tree):
     return sorted(released)
 
 
-def stage_titles(main_tree):
-    """Titles of all ten stages of main's data (they must not leak into the page when the stage is unreleased)."""
-    script = ("import(process.argv[1]).then(m=>console.log(JSON.stringify(m.TOUR_AMBIENT_STAGES.map(s=>s.title))))"
+def stage_texts(main_tree):
+    """Per stage: the display strings (title, hook, result, step titles and captions). Titles must exist for all ten stages."""
+    script = ("import(process.argv[1]).then(m=>console.log(JSON.stringify(m.TOUR_AMBIENT_STAGES.map(s=>({title:s.title,"
+              "texts:[s.title,s.hook,s.result,...s.steps.flatMap(x=>[x.title,x.caption])].filter(t=>typeof t==='string'&&t.length>=8)})))))"
               ".catch(e=>{console.error(e);process.exit(1)})")
     out = subprocess.check_output(["node", "-e", script, (Path(main_tree) / "web/emu/tutorial_data.mjs").resolve().as_uri()], text=True)
-    titles = json.loads(out)
-    require(len(titles) == 10 and all(isinstance(t, str) and t for t in titles), "tutorial data must name ten stages")
-    return titles
+    stages = json.loads(out)
+    require(len(stages) == 10 and all(isinstance(s["title"], str) and s["title"] for s in stages), "tutorial data must name ten stages")
+    return stages
+
+
+def stage_titles(main_tree):
+    return [s["title"] for s in stage_texts(main_tree)]
+
+
+def unique_texts(stages, released):
+    """Strings that occur only in unreleased stages (strings shared with a released stage cannot be leaks)."""
+    keep = {t for n, s in enumerate(stages, start=1) if n in released for t in s["texts"]}
+    return {n: sorted({t for t in s["texts"] if t not in keep}) for n, s in enumerate(stages, start=1) if n not in released}
 
 
 def commit_of(tree):
@@ -93,7 +104,7 @@ def files_of(directory):
     return out
 
 
-def verify_emulator(emu, version, released, titles, main_worklet):
+def verify_emulator(emu, version, released, titles, main_worklet, stages=None):
     emu = Path(emu)
     require(files_of(emu) == EMU_FILES, "emulator output must be exactly " + ", ".join(sorted(EMU_FILES)) + ", got " + ", ".join(sorted(files_of(emu))))
     html = (emu / "index.html").read_text(encoding="utf-8")
@@ -106,6 +117,9 @@ def verify_emulator(emu, version, released, titles, main_worklet):
     for number, title in enumerate(titles, start=1):
         if number not in released:
             require(title not in html, "the page still carries the title of unreleased stage %d: %r" % (number, title))
+    for number, texts in (unique_texts(stages, released).items() if stages else ()):
+        for text in texts:
+            require(text not in html, "the page still carries text of unreleased stage %d: %r" % (number, text))
     for number in released:
         require(titles[number - 1] in html, "released stage %d is missing from the page" % number)
 
@@ -146,10 +160,11 @@ def main():
     if released is None:
         print("no academy-release.json on main: the emulator stays as built from the release tag")
         return
-    titles = stage_titles(args.main_tree)
+    stages = stage_texts(args.main_tree)
+    titles = [x["title"] for x in stages]
     with tempfile.TemporaryDirectory() as tmp:
         emu = build_emulator(args.tag_tree, args.main_tree, args.version, released, tmp)
-        verify_emulator(emu, args.version, released, titles, Path(args.main_tree) / "web" / "emu" / "worklet.js")
+        verify_emulator(emu, args.version, released, titles, Path(args.main_tree) / "web" / "emu" / "worklet.js", stages)
         swap_emulator(args.site, emu)
     write_receipt(args.site, commit_of(args.tag_tree), commit_of(args.main_tree), args.version, released)
     print("Academy overlay applied: stages %s, firmware %s, web files %s" % (released, commit_of(args.tag_tree)[:8], commit_of(args.main_tree)[:8]))

@@ -54,6 +54,15 @@ class OverlayTests(unittest.TestCase):
             ao.verify_emulator(self.emulator("e", page(titles=("Strings", "CELL AIR"))), "1.1.0", [1], TITLES, self.worklet())
         self.assertIn("unreleased stage 2", str(c.exception))
 
+    def test_other_unreleased_text_is_refused(self):
+        stages = [{"title": TITLES[i], "texts": [TITLES[i], "hook text %d" % i, "result text %d" % i]} for i in range(10)]
+        stages[1]["texts"].append("shared caption")      # shared with stage 1 below: not a leak
+        stages[0]["texts"].append("shared caption")
+        ao.verify_emulator(self.emulator("ok", page(titles=("Strings", "shared caption"))), "1.1.0", [1], TITLES, self.worklet(), stages)
+        with self.assertRaises(SystemExit) as c:
+            ao.verify_emulator(self.emulator("leak", page(titles=("Strings", "hook text 3"))), "1.1.0", [1], TITLES, self.worklet(), stages)
+        self.assertIn("unreleased stage 4", str(c.exception))
+
     def test_missing_released_stage_is_refused(self):
         with self.assertRaises(SystemExit): ao.verify_emulator(self.emulator("e", page(titles=("x",))), "1.1.0", [1], TITLES, self.worklet())
 
