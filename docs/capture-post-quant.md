@@ -1,4 +1,6 @@
-# Post-CAPTURE Quantize (private prototype)
+# Post-CAPTURE Quantize (new in 1.1.0)
+
+> **Status in 1.1.0:** the target build passes its memory checks (RAM headroom 4,800 B); the CPU cost on the FM-1 has **not** been measured; the host regression `tests/capture_post_quant_test.c` does not link yet (listed as OPEN in `tools/validate_format2.py`). Treat QUANT as new and report problems.
 
 For live note loops in **PLAY**: hold **REC**, turn **K2 QUANT**. The existing **K1 LENGTH** remains unchanged. The screen displays the owner track as `T1`–`T4`; when PAIR is active, use the same owner as CAPTURE.
 
