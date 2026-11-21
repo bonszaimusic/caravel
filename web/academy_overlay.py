@@ -53,14 +53,14 @@ def marker_mode(main_tree):
     return json.loads((Path(main_tree) / MARKER).read_text(encoding="utf-8")).get("data") == "public-bundle"
 
 
-def stage_texts(main_tree):
+def stage_texts(main_tree, expected=10):
     """Per stage: the display strings (title, hook, result, step titles and captions). Titles must exist for all ten stages."""
     script = ("import(process.argv[1]).then(m=>console.log(JSON.stringify(m.TOUR_AMBIENT_STAGES.map(s=>({title:s.title,"
               "texts:[s.title,s.hook,s.result,...s.steps.flatMap(x=>[x.title,x.caption])].filter(t=>typeof t==='string'&&t.length>=8)})))))"
               ".catch(e=>{console.error(e);process.exit(1)})")
     out = subprocess.check_output(["node", "-e", script, (Path(main_tree) / "web/emu/tutorial_data.mjs").resolve().as_uri()], text=True)
     stages = json.loads(out)
-    require(len(stages) == 10 and all(isinstance(s["title"], str) and s["title"] for s in stages), "tutorial data must name ten stages")
+    require(len(stages) == expected and all(isinstance(s["title"], str) and s["title"] for s in stages), "tutorial data must name %d stages" % expected)
     return stages
 
 
@@ -168,7 +168,7 @@ def main():
         print("no academy-release.json on main: the emulator stays as built from the release tag")
         return
     public_bundle = marker_mode(args.main_tree)
-    stages = stage_texts(args.main_tree)
+    stages = stage_texts(args.main_tree, len(released) if public_bundle else 10)
     titles = [x["title"] for x in stages]
     with tempfile.TemporaryDirectory() as tmp:
         emu = build_emulator(args.tag_tree, args.main_tree, args.version, released, tmp, public_bundle)
