@@ -105,6 +105,9 @@ def page_shell(label, body, output, commit, published=False, version="1.0.0"):
         result = result.replace(" — not published", "")
         result = result.replace("Private candidate documentation; publication review remains open.", "Release documentation.")
         result = result.replace("Matching candidate source archive", "Matching source archive")
+        academy = ('</nav><aside class="status" style="border-left-color:#dcff31"><strong>NEW · Caravel Academy:</strong> interactive lessons with the real firmware in your browser. '
+                   f'<a href="{relative(output, "emulator/index.html")}#stage-1">Start Stage 1 · Strings before anything else</a>. More stages open together with the YouTube series.</aside>')
+        result = result.replace("</nav>", academy, 1)
     return result
 
 

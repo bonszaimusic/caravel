@@ -4,6 +4,8 @@
 
 <a href="https://bonszaimusic.github.io/caravel/v1/tutorials/"><img src="img/tutorials-banner.png" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a>
 
+> **New: Caravel Academy.** Interactive lessons with the real firmware in your browser. **[Start Stage 1 · Strings before anything else](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-1)** — more stages open together with the YouTube series.
+
 **Caravel 1.0.0 candidate — not published.** The planned [version-specific tutorials](https://bonszaimusic.github.io/caravel/v1/tutorials/) are not live yet; use these Markdown lessons until release. The existing [Classic 0.13.0 tutorials](https://bonszaimusic.github.io/caravel/tutorials/) remain unchanged. Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: [listen](https://bonszaimusic.github.io/caravel/sounds/).
 
 ### Start

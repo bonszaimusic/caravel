@@ -476,6 +476,8 @@ def readme_text(data):
             rows.append(f'| <img src="img/{t["thumb"]}" width="120" alt="{thumb_alt}: {t["title"]}"> | {name} · about {t["minutes"]} min | {t["tagline"]}{extra} |')
     return (f"{README_MARK}\n<!-- SPDX-License-Identifier: GPL-3.0-only -->\n# Caravel tutorials\n\n"
             f'<a href="{SITE_URL}"><img src="img/{data["banner"]}" alt="Caravel tutorials: learn the FM-1 step by step. Open the tutorials." width="100%"></a>\n\n'
+            "> **New: Caravel Academy.** Interactive lessons with the real firmware in your browser. "
+            "**[Start Stage 1 · Strings before anything else](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-1)** — more stages open together with the YouTube series.\n\n"
             f"**Caravel 1.0.0 candidate — not published.** The planned [version-specific tutorials]({SITE_URL}) are not live yet; use these Markdown lessons until release. The existing [Classic 0.13.0 tutorials](https://bonszaimusic.github.io/caravel/tutorials/) remain unchanged. "
             "Firmware screenshots use the actual renderer; clearly labelled concept diagrams and FM-1 figures are illustrations. Sound examples are native DSP renders, not device recordings: "
             "[listen](https://bonszaimusic.github.io/caravel/sounds/).\n"
