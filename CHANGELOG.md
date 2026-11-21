@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0] - prepared, not published
+## [1.1.0] - 2026-11-21
 
 - HARM route map in BUILD, PLAY HARM area with the chord selector and the LEFT countdown, harmony position under the PLAY header, one colour rule for the orbit arcs (cyan track / orange global), pearl thumbs and soft tubes, ELASTIC as a rubber band. Details: [release notes](docs/release-110.md).
 - LFO held makes the FX macros and the STASIS TONE momentary. LATCH STACK is not available on HARMONY-bus and CHORD EXT chords (they latch as NEW).

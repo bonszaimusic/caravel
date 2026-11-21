@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <!-- Copyright (C) 2026 bonszaimusic -->
-# Caravel 1.1.0 (release candidate notes)
+# Caravel 1.1.0
 
-**Status: prepared for release on 2026-11-21.** Host tests and the browser emulator pass (see *Validation*). A related test build was installed on one FM-1 and the owner reported the hardware test as successful; the final 1.1.0 package itself has not been installed or listened to. Previous release: [1.0.0](release-100.md).
+**Status: released 2026-11-21 (tag `v1.1.0`, commit `75e6da1`).** Host tests and the browser emulator pass (see *Validation*). A related test build was installed on one FM-1 and the owner reported the hardware test as successful; the final 1.1.0 package itself has not been installed or listened to. Previous release: [1.0.0](release-100.md).
 
 ## What is new
 
