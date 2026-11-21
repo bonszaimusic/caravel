@@ -182,6 +182,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           path: build/site-content
+          fetch-depth: 0 # W2 source URL must pin its actual public code commit
           persist-credentials: false
       - name: Academy overlay (browser files from main, firmware from the release tag; only when main marks released stages)
         if: startsWith(env.VER, '1.')
@@ -207,6 +208,37 @@ jobs:
             --site build/v1-base-site --out "$RUNNER_TEMP/v1-site" --published
           node build/site-content/web/check_generation_site.mjs "$RUNNER_TEMP/v1-site"
           python3 build/site-content/web/dual_site.py --classic "$RUNNER_TEMP/classic-frozen" --v1 "$RUNNER_TEMP/v1-site" --out site
+      - name: Verified W2 recovery installer only (no firmware build)
+        if: env.VER == '1.1.0'
+        run: |
+          set -eu
+          # Pin the publisher code and BOTH reviewed installer source blobs.
+          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = '2a18b03ee962d296283b46944adb13634cf2baef'
+          test "$(git hash-object build/site-content/web/hotfix_w2/index_pkg.html)" = '9dd110983422993a0fcd1f651bf8c9720bacb195'
+          test "$(git hash-object build/site-content/web/hotfix_w2/fm1ota.js)" = '7be5eec30718cce6615c63a388a9deb40c3e1251'
+          python3 build/site-content/tests/hotfix_w2_test.py
+          python3 build/site-content/web/hotfix_w2/apply.py \
+            --site site --source build/site-content --tagged . \
+            --release "$RUNNER_TEMP/release" \
+            --rollback "$RUNNER_TEMP/w2-rollback-site" \
+            --receipt "$RUNNER_TEMP/w2-qa.json"
+          # Existing full 1.x release, OTA, generation and emulator guards remain binding.
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'build/site-content/web')
+          from dual_site import verify_site
+          print('W2 post-overlay verify:', verify_site(Path('site/v1'), '1.1.0'))
+          PY
+          node build/site-content/web/check_generation_site.mjs site/v1
+      - name: Preserve original site for W2 rollback before deployment
+        if: env.VER == '1.1.0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: caravel-v1.1.0-pre-W2-rollback-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: ${{ runner.temp }}/w2-rollback-site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
