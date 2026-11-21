@@ -106,7 +106,7 @@ def page_shell(label, body, output, commit, published=False, version="1.0.0"):
         result = result.replace("Private candidate documentation; publication review remains open.", "Release documentation.")
         result = result.replace("Matching candidate source archive", "Matching source archive")
         academy = ('</nav><aside class="status" style="border-left-color:#dcff31"><strong>NEW · Caravel Academy:</strong> interactive lessons with the real firmware in your browser. '
-                   f'<a href="{relative(output, "emulator/index.html")}#stage-1">Stage 1 · Strings before anything else</a> and <a href="{relative(output, "emulator/index.html")}#stage-2">Stage 2 · Lay CELL AIR underneath</a> are open. More stages follow together with the YouTube series.</aside>')
+                   f'<a href="{relative(output, "emulator/index.html")}#stage-1">Stage 1 · Strings before anything else</a> and <a href="{relative(output, "emulator/index.html")}#stage-2">Stage 2 · Lay CELL AIR underneath</a> (<a href="https://www.youtube.com/shorts/QukahShkb2M">video</a>) are open. More stages follow together with the YouTube series.</aside>')
         result = result.replace("</nav>", academy, 1)
     return result
 
@@ -121,7 +121,7 @@ def candidate_landing(text, published=False, version="1.0.0"):
     if published:
         notice = ('<section class="box" id="v1-release-status"><span class="tag">CARAVEL ' + version + '</span>'
                   '<h2>Six engines, BUILD / PLAY and AFTERBURNER</h2>'
-                  '<p><strong>NEW · CARAVEL ACADEMY — Stages 1 and 2 are live:</strong> <a href="emulator/#stage-1">Strings before anything else</a> · <a href="emulator/#stage-2">Lay CELL AIR underneath</a>. '
+                  '<p><strong>NEW · CARAVEL ACADEMY — Stages 1 and 2 are live:</strong> <a href="emulator/#stage-1">Strings before anything else</a> · <a href="emulator/#stage-2">Lay CELL AIR underneath</a> (<a href="https://www.youtube.com/shorts/QukahShkb2M">Stage 2 video</a>). '
                   'Interactive lessons in the browser emulator; more stages follow together with the YouTube series.</p>'
                   '<p><a href="tutorials/">TUTORIALS — 1.x guides and engine diagrams</a> · '
                   '<a href="tutorials/release-notes/">Release notes and compatibility</a></p>'
@@ -249,7 +249,7 @@ def build(site, source, commit, out, published=False):
             path = stage / output; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(page_shell(title(text), body, output, commit, published, record["version"]), encoding="utf-8")
         academy = ('<li><a href="' + relative("tutorials/index.html", "emulator/index.html") + '#stage-1"><strong>Caravel Academy (interactive, in the emulator):</strong> '
-                   'Stage 1 · Strings before anything else</a> · <a href="' + relative("tutorials/index.html", "emulator/index.html") + '#stage-2">Stage 2 · Lay CELL AIR underneath</a> — more stages follow together with the YouTube series</li>') if published else ""
+                   'Stage 1 · Strings before anything else</a> · <a href="' + relative("tutorials/index.html", "emulator/index.html") + '#stage-2">Stage 2 · Lay CELL AIR underneath</a> (<a href="https://www.youtube.com/shorts/QukahShkb2M">video</a>) — more stages follow together with the YouTube series</li>') if published else ""
         links = "<ul>" + academy + "".join(f'<li><a href="{relative("tutorials/index.html", target)}">{html.escape(title(sources[name][0].decode()))}</a></li>' for name, target in PAGES.items()) + "</ul>"
         (stage / "tutorials/index.html").write_text(page_shell(f"Caravel {record['version']} guides" if published else "Caravel 1.x candidate guides", links, "tutorials/index.html", commit, published, record["version"]), encoding="utf-8")
         after = tree(stage)
