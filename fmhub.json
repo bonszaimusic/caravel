@@ -1,8 +1,13 @@
 {
-  "what": "Six-engine FM-1 synthesizer: ANALOG, PHYS, SEM, HADES, DRONE and ENSEMBLE; BUILD/PLAY, live panel/MIDI note CAPTURE, CHORD EXT, STASIS and evolving performance.",
+  "what": "Caravel 1.1 for the M-VAVE FM-1: six synthesis engines (ANALOG, PHYS, SEM, HADES, DRONE, ENSEMBLE) across four tracks. Shape and perform with BUILD/PLAY, HARMONY, MIDI CAPTURE loops, STASIS, RANDOM, JOURNEY and ELASTIC. Explore the browser emulator and Caravel Academy.",
   "author": "BonszaiMusic",
-  "kinds": "synth",
-  "play": "https://bonszaimusic.github.io/caravel/emulator/",
-  "editor": "https://bonszaimusic.github.io/caravel/webapp/editor/",
-  "image": "docs/tutorials/img/one-sound.png"
+  "kinds": [
+    "synth"
+  ],
+  "play": "https://bonszaimusic.github.io/caravel/v1/emulator/",
+  "editor": "https://bonszaimusic.github.io/caravel/v1/webapp/editor/",
+  "cheat": "https://bonszaimusic.github.io/caravel/v1/tutorials/",
+  "image": "docs/firmwarehub/caravel-cover.webp",
+  "color": "#D7FF32",
+  "sounds": "none"
 }
