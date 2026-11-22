@@ -396,7 +396,7 @@ class PagesBehaviorTest(unittest.TestCase):
                 if version == '0.6.0':
                     self.assertNotIn('CARAVEL_ACTION_BANKS', text)
 
-    def release_gate(self, metadata, *, version=VERSION, event_tag="", error=None):
+    def release_gate(self, metadata, *, version="1.1.0", event_tag="", error=None, gh_expected=True):
         script = workflow_python("Select and validate the exact release tag")
         with tempfile.TemporaryDirectory(prefix="caravel-pages-gate-") as temp:
             env_file, output_file = Path(temp) / "env", Path(temp) / "output"
@@ -414,23 +414,26 @@ class PagesBehaviorTest(unittest.TestCase):
                     self.assertEqual(output_file.read_text(), "")
                     raise
                 finally:
-                    gh.assert_called_once_with(
-                        ["gh", "release", "view", "v0.1.0", "--repo", "fixture/caravel",
+                    if not gh_expected:
+                        gh.assert_not_called()
+                    else:
+                        gh.assert_called_once_with(
+                            ["gh", "release", "view", "v1.1.0", "--repo", "fixture/caravel",
                          "--json", "tagName,isDraft,isPrerelease,publishedAt"],
                         check=True, capture_output=True, text=True)
             return env_file.read_text(), output_file.read_text()
 
     @staticmethod
     def published_release():
-        return {"tagName": "v0.1.0", "isDraft": False, "isPrerelease": False,
+        return {"tagName": "v1.1.0", "isDraft": False, "isPrerelease": False,
                 "publishedAt": "2026-10-19T00:00:00Z"}
 
     def test_release_gate_accepts_published_exact_tag_for_manual_and_release_events(self):
-        for version, event_tag in ((VERSION, ""), ("", "v0.1.0")):
+        for version, event_tag in (("1.1.0", ""), ("", "v1.1.0")):
             with self.subTest(version=version, event_tag=event_tag):
                 env, output = self.release_gate(self.published_release(), version=version, event_tag=event_tag)
-                self.assertEqual(output, "tag=v0.1.0\n")
-                self.assertEqual(env, "VER=0.1.0\nRELEASE_TAG=v0.1.0\nEMU_VERSION=v0.1.0\n")
+                self.assertEqual(output, "tag=v1.1.0\n")
+                self.assertEqual(env, "VER=1.1.0\nRELEASE_TAG=v1.1.0\nEMU_VERSION=v1.1.0\n")
         text = (ROOT / ".github/workflows/pages.yml").read_text()
         query = text.index('["gh", "release", "view"')
         self.assertLess(query, text.index("uses: actions/checkout"))
@@ -438,7 +441,7 @@ class PagesBehaviorTest(unittest.TestCase):
 
     def test_release_gate_rejects_draft_unpublished_prerelease_and_wrong_tag(self):
         for field, value in (("isDraft", True), ("isPrerelease", True), ("publishedAt", None),
-                             ("publishedAt", ""), ("tagName", "v0.2.0"), ("tagName", "0.1.0")):
+                             ("publishedAt", ""), ("tagName", "v0.2.0"), ("tagName", "1.1.0")):
             with self.subTest(field=field, value=value):
                 metadata = {**self.published_release(), field: value}
                 with self.assertRaisesRegex(SystemExit, "published, non-draft and non-prerelease"):
@@ -449,6 +452,12 @@ class PagesBehaviorTest(unittest.TestCase):
                 del metadata[field]
                 with self.assertRaises(SystemExit):
                     self.release_gate(metadata)
+
+    def test_release_gate_rejects_legacy_release_without_even_querying_github(self):
+        for legacy in ("0.13.0", "0.7.0", "0.1.0"):
+            with self.subTest(legacy=legacy):
+                with self.assertRaisesRegex(SystemExit, "Refusing a legacy-only Pages deployment"):
+                    self.release_gate(self.published_release(), version=legacy, gh_expected=False)
 
     def test_release_gate_fails_closed_when_gh_cannot_find_release(self):
         error = subprocess.CalledProcessError(1, ["gh", "release", "view"], stderr="release not found")

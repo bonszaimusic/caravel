@@ -21,6 +21,10 @@ on:
       - 'web/stasis_pages.py'
       - 'tests/tutorial_pages_test.py'
       - '.github/workflows/pages.yml'
+      - 'web/dual_site.py'
+      - 'web/default_routes.py'
+      - 'tests/dual_site_test.py'
+      - 'tests/default_routes_test.py'
   release:
     types: [published]
   # Releases made with GITHUB_TOKEN do not trigger the release event.
@@ -70,6 +74,8 @@ jobs:
                   check=True, capture_output=True, text=True).stdout.strip().removeprefix("v")
           if not re.fullmatch(r"[0-9]\.[0-9]{1,2}(?:\.[0-9]){0,2}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?", version):
               raise SystemExit("Invalid release version")
+          if not version.startswith("1."):
+              raise SystemExit("Refusing a legacy-only Pages deployment: defaults must stay on current 1.x. Classic is bundled from the frozen archive.")
           tag = "v" + version
           result = subprocess.run(
               ["gh", "release", "view", tag, "--repo", os.environ["GH_REPO"],
@@ -200,6 +206,11 @@ jobs:
         run: |
           python3 build/site-content/tests/faq_links_test.py
           python3 build/site-content/web/faq_links.py --site site
+      - name: Test generation URL routing and archive isolation
+        if: startsWith(env.VER, '1.')
+        run: |
+          python3 build/site-content/tests/default_routes_test.py
+          python3 build/site-content/tests/dual_site_test.py
       - name: Compose generation-isolated 1.x and frozen Classic
         if: startsWith(env.VER, '1.')
         run: |
@@ -222,6 +233,11 @@ jobs:
             --release "$RUNNER_TEMP/release" \
             --rollback "$RUNNER_TEMP/w2-rollback-site" \
             --receipt "$RUNNER_TEMP/w2-qa.json"
+          # W2 patches /v1/ only. The default installer must use identical,
+          # verified W2 content (no fallback to the original 1.1 installer).
+          test -f site/webapp/installer/index.html
+          cp site/v1/webapp/installer/index.html site/webapp/installer/index.html
+          cmp site/v1/webapp/installer/index.html site/webapp/installer/index.html
           # Existing full 1.x release, OTA, generation and emulator guards remain binding.
           python3 - <<'PY'
           from pathlib import Path
@@ -229,8 +245,10 @@ jobs:
           sys.path.insert(0, 'build/site-content/web')
           from dual_site import verify_site
           print('W2 post-overlay verify:', verify_site(Path('site/v1'), '1.1.0'))
+          print('W2 default verify:', verify_site(Path('site'), '1.1.0'))
           PY
           node build/site-content/web/check_generation_site.mjs site/v1
+          node build/site-content/web/check_generation_site.mjs site
       - name: Preserve original site for W2 rollback before deployment
         if: env.VER == '1.1.0'
         uses: actions/upload-artifact@v4
