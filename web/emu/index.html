@@ -290,7 +290,7 @@ footer small { display: block; font-size: 11px; }
   <span><kbd>[</kbd> <kbd>]</kbd> OCT</span>
   <span><kbd>↑</kbd> <kbd>↓</kbd> SELECT</span>
   <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
-  <span><kbd>Shift</kbd>-click holds a button</span>
+  <span><kbd>Shift</kbd>-click holds a button or piano key</span>
   <span>Hold HOME for BUILD / PLAY</span>
   <span id="midiknobs" hidden><label><input type="checkbox" id="knobson"> MIDI CC 20–27 turn the panel's knobs</label>
   <select id="knobmode" aria-label="How the controller sends CC 20–26" hidden>
@@ -364,7 +364,7 @@ function label(parent, x, y, s, size, font = SANS, ink = "var(--label)") {
 const KEYNAMES = ["F", "F♯", "G", "G♯", "A", "A♯", "B", "C", "C♯", "D", "D♯", "E"];
 const keyName = (k) => KEYNAMES[k % 12] + (3 + Math.floor((k + 5) / 12));
 
-let node = null, btnMask = 0, keyMask = 0, latched = 0, masterValue = 700, lastLeds = [0, 0, 0, 0, 0], layout = null;
+let node = null, btnMask = 0, keyMask = 0, latched = 0, keyLatched = 0, masterValue = 700, lastLeds = [0, 0, 0, 0, 0], layout = null;
 const angle = Object.fromEntries(KNOBS.map((n) => [n, 0]));
 angle.MASTER = -135 + 270 * masterValue / 1023;
 const knobs = [], buttons = [], keys = [];
@@ -459,11 +459,15 @@ function syncButtons(redraw) {
   }
 }
 function syncKeys(redraw) {
-  let m = 0;
+  let m = keyLatched;
   for (const k of keyBy.values()) m |= 1 << k;
   if (m !== keyMask) { keyMask = m; send({ type: "keys", mask: m }); }
   else if (!redraw) return;
-  keys.forEach((k, i) => k.g.classList.toggle("held", !!(m & (1 << i))));
+  keys.forEach((k, i) => {
+    k.g.classList.toggle("held", !!(m & (1 << i)));
+    k.g.classList.toggle("latched", !!(keyLatched & (1 << i)));
+    if (k.hit) k.hit.setAttribute("aria-pressed", !!(m & (1 << i)));
+  });
 }
 function bindButton(b) {
   b.hit.addEventListener("pointerdown", (e) => {
@@ -482,6 +486,8 @@ function bindButton(b) {
 function bindKey(k, i) {
   k.hit.addEventListener("pointerdown", (e) => {
     e.preventDefault();
+    if (e.shiftKey || e.button === 2) { keyLatched ^= 1 << i; syncKeys(true); return; }
+    if (keyLatched & (1 << i)) { keyLatched &= ~(1 << i); syncKeys(true); return; }
     k.hit.setPointerCapture(e.pointerId);
     keyBy.set("p" + e.pointerId, i);
     syncKeys();
@@ -1073,7 +1079,7 @@ function tourShow(n) {
   if (named && !controls.includes(named[1].toUpperCase())) controls.push(named[1].toUpperCase());
   hold.hidden = !controls.length;
   hold.textContent = controls.length ?
-    "HOLD " + controls.join(", ") + " · Mouse: Shift-click to latch the panel button, then Shift-click again to release. Touch: keep a finger down while using the other control. Release after the action." : "";
+    "HOLD " + controls.join(", ") + " · Mouse: Shift-click to latch a panel button or piano key; Shift-click again to release. Touch: keep a finger down while using the other control. Release after the action." : "";
   const checkpoint = document.getElementById("tour-checkpoint");
   checkpoint.hidden = !step.check && !step.phaseCheckpoint;
   checkpoint.textContent = step.check ? "CHECKPOINT · " + step.check + (stage ? " · " + stage.result : "") : (step.phaseCheckpoint ? "PHASE CHECKPOINT · " + step.phaseCheckpoint : "");

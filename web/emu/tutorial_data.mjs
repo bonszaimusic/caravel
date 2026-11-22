@@ -528,7 +528,7 @@ export const TOUR_AMBIENT_STAGES = [
         "layer": "BUILD",
         "target": "KNOB 4",
         "title": "Open and close the cutoff",
-        "instruction": "For a stronger demonstration, hold the G–D fifth one octave higher as G4 + D5 (mouse: Shift-click each key to latch; touch: hold both). Wait for the 2.71 s attack. In BUILD / INSERT 2 turn K4 FILT from its starting 50 LP to 75 LP, then all the way to OFF, then return to 50 LP for the warm sound. Confirm each LCD destination; do not count detents. The local KI measured a larger tonal-centroid spread for LP 75 versus OFF on the lower G3–D4 chord; the actual higher-octave sweep still needs listening acceptance.",
+        "instruction": "For a stronger demonstration, hold the G–D fifth one octave higher as G4 + D5 (mouse: Shift-click G4 and D5 to latch both, then Shift-click each again to release; touch: hold both). Wait for the 2.71 s attack. In BUILD / INSERT 2 turn K4 FILT from its starting 50 LP to 75 LP, then all the way to OFF, then return to 50 LP for the warm sound. Confirm each LCD destination; do not count detents. At 75 LP, the sound becomes quieter and darker; with the filter OFF, it opens up and sounds brighter. Return to 50 LP to restore warmth.",
         "caption": "Hear the cutoff open across the octave",
         "actions": [
           {
