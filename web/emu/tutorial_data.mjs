@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GENERATED public Academy data; never edit. Source is in the private build.
-// Public release stage count: 2
+// Public release stage count: 3
 export const TOUR_AMBIENT_STAGES = [
   {
     "title": "Strings before anything else",
@@ -836,6 +836,133 @@ export const TOUR_AMBIENT_STAGES = [
     "estimatedMinutes": {
       "min": 2,
       "max": 4,
+      "basis": "editorial estimate, not timed on actual WASM",
+      "verified": false
+    }
+  },
+  {
+    "title": "Give the sound a slow envelope",
+    "steps": [
+      {
+        "layer": "BUILD",
+        "target": "ENV",
+        "title": "Open ENV",
+        "stage": 2,
+        "id": "step-3-1",
+        "instruction": "Tap ENV in BUILD. The ENV group shows ATK, DEC, SUS and REL; these are preparation parameters, not PLAY macros.",
+        "caption": "Open ENV",
+        "actions": [
+          {
+            "do": "press",
+            "control": "ENV",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "ENV"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Explore the slow attack",
+        "stage": 2,
+        "id": "step-3-2",
+        "instruction": "T1 ENSEMBLE already has an approximately 2.71 s attack from Stage 1 (or the explicit source starter). Confirm BUILD / ENV shows ATK around 2.71 s. Optionally lengthen it to hear an even slower swell, then return to 2.71 s before proceeding. If you started independently with the factory preset and see about 476 ms, first raise it to 2.71 s. Stage 3 focuses on shaping the envelope further and increasing REL.",
+        "caption": "Review the slow 2.71-second attack",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "steps": null,
+            "seconds": null,
+            "verified": false,
+            "until": "LCD ATK 2.71 s at end of demonstration",
+            "targetValue": 109,
+            "sourceDerived": true
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": "ATK 2.71 s",
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "ENV"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        },
+        "measurementNote": "Local KI reported +76 steps ~600 ms in an earlier setup, NOT transferable to STRING MACHINE preset with factory ATK=85/127. Re-measure from the active 1.1 preset; no verified delta yet."
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 4",
+        "title": "Lengthen REL",
+        "check": "With REL near 10.0 s, the sound should fade noticeably more slowly after release than at 982 ms or 3.13 s. Keep ATK near 2.71 s.",
+        "stage": 2,
+        "id": "step-3-3",
+        "instruction": "On BUILD / ENV K4 REL, turn toward the maximum until the LCD reads approximately 10.0 s (raw 127; from factory 95 this was about 32 detents in a local emulator run). Keep ATK near 2.71 s. Hold G3 + D4, then release: the decay should now be audibly longer than at 982 ms or 3.13 s. Use the LCD as the goal because knob acceleration can vary.",
+        "caption": "Set REL close to 10 seconds",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 4",
+            "seconds": null,
+            "steps": null,
+            "verified": false,
+            "startValue": 95,
+            "targetValue": 127,
+            "until": "LCD REL ~10.0 s",
+            "observedDetents": {
+              "approx": 32,
+              "source": "Local KI real-firmware emulator feedback PR #80 #7078796218",
+              "accelerationDependent": true
+            }
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "ENV"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        },
+        "measurementNote": "Local KI PR #80 #7078796218 measured T1 ENSEMBLE 6: REL 95 (982 ms) and 111 (3.13 s) decayed ~10–11 dB/s, while REL 127 (10.0 s) decayed ~4–5 dB/s. Audio measurements are reviewer-reported, not independently rerun here."
+      }
+    ],
+    "id": "stage-3",
+    "hook": "Let the sound breathe between notes.",
+    "result": "Each note rises and releases softly.",
+    "startState": {
+      "mode": "manual",
+      "description": "BUILD T1 ENSEMBLE 6 already prepared with ENV ATK ~2.71 s (raw 109) from Stage 1 or the optional confirmed RAM-only starter; factory-only direct entry starts at 476 ms, and you must raise ATK before exploring release. REL is still the factory 982 ms until changed in this stage.",
+      "automaticRestore": false,
+      "projectSlot": null
+    },
+    "estimatedMinutes": {
+      "min": 1,
+      "max": 3,
       "basis": "editorial estimate, not timed on actual WASM",
       "verified": false
     }
