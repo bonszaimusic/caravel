@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import tempfile
 import frozen_classic
+import default_routes
 
 CLASSIC = "0.13.0"
 SITE_ORIGIN = "https://bonszaimusic.github.io/caravel/"
@@ -105,8 +106,8 @@ def rewrite_v1_links(root: Path) -> None:
     """Keep absolute legacy site links inside v1 instead of crossing to Classic."""
     for path in root.rglob("*.html"):
         original = path.read_text(encoding="utf-8")
-        updated = re.sub(re.escape(SITE_ORIGIN) + r"(?!classic/|v1/)", SITE_ORIGIN + "v1/", original)
-        updated = re.sub(r'(?<=href=")/caravel/(?!classic/|v1/)', '/caravel/v1/', updated)
+        updated = re.sub(re.escape(SITE_ORIGIN) + r"(?!classic/|v1/|0\.13/|versions/)", SITE_ORIGIN + "v1/", original)
+        updated = re.sub(r'(?<=href=")/caravel/(?!classic/|v1/|0\.13/|versions/)', '/caravel/v1/', updated)
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
@@ -122,6 +123,16 @@ def landing(with_v1: bool) -> str:
       <strong>Your first ambient track</strong>
       <span>Interactive lessons with the real firmware in your browser. <b>Stage 1 is live: Strings before anything else.</b> More stages open together with the YouTube series.</span>
       <span>Start Stage 1 →</span></a>''' if with_v1 else "")
+    note = ('''<p>Default links such as <a href="emulator/">/emulator/</a>,
+    <a href="webapp/installer/">/webapp/installer/</a> and
+    <a href="tutorials/">/tutorials/</a> serve current Caravel 1.x.
+    The complete frozen 0.13.0 site is available under <a href="0.13/">/0.13/</a>
+    (and the older <a href="classic/">/classic/</a> alias).
+    Version-unique old download URLs remain available.</p>''' if with_v1 else
+    '''<p>Caravel 1.x is not yet a verified input to this site build.
+    Default links continue to serve Classic 0.13.0 until a verified 1.x
+    release is available. The <a href="0.13/">/0.13/</a> and
+    <a href="classic/">/classic/</a> archives are also available.</p>''')
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Caravel — choose your generation</title>
@@ -142,7 +153,7 @@ a{{color:#ffbd58}}
 </style></head><body>
 <header><h1>CARAVEL</h1><p>Independent firmware for the M-VAVE FM-1</p></header>
 <main><h2>Choose your firmware generation</h2><div class="grid">
-<a class="card" href="classic/"><small>LEGACY / CLASSIC · NO LONGER MAINTAINED</small><strong>Caravel 0.13.0</strong>
+<a class="card" href="0.13/"><small>LEGACY / CLASSIC · NO LONGER MAINTAINED</small><strong>Caravel 0.13.0</strong>
 <span>Original HOME / ACTION workflow and legacy engines</span>
 <span><strong>No longer maintained · nicht mehr gepflegt</strong><br>Frozen at 0.13.0; no further fixes or builds. Downloads remain available.</span>
 <span>Installer · Emulator · Editor · Tutorials</span></a>
@@ -150,7 +161,7 @@ a{{color:#ffbd58}}
 {academy}
 <div class="warning"><strong>Important: Caravel 1.x is a breaking release.</strong>
 <p>FORMAT 2 cannot open older projects or backup files. Before upgrading, export and verify a complete backup with your matching Classic editor. Keep the original firmware, editor and backup for a return to Classic. Firmware reinstall alone does not restore old projects.</p></div>
-<p>Older links such as <a href="emulator/">/emulator/</a>, <a href="webapp/installer/">/webapp/installer/</a> and <a href="tutorials/">/tutorials/</a> continue to serve Classic.</p>
+{note}
 <p><a href="https://github.com/bonszaimusic/caravel/releases">GitHub Releases</a> · <a href="https://github.com/bonszaimusic/caravel">Source and documentation</a></p>
 </main></body></html>\n'''
 
@@ -174,7 +185,7 @@ Fixes continue in Caravel 1.x. Existing Classic downloads remain available.</p><
 <p>Classic and Caravel 1.x use incompatible project, preset and backup formats.
 Keep a complete Classic backup and the matching firmware and editor before upgrading.
 Reinstalling firmware alone does not restore your old data.</p>
-<p><a href="../">Choose your generation</a></p></main></body></html>\n'''
+<p><a href="../versions/">Choose your generation</a></p></main></body></html>\n'''
 
 
 def build(classic: Path, modern: Path | None, out: Path,
@@ -205,22 +216,42 @@ def build(classic: Path, modern: Path | None, out: Path,
             raise ValueError("Classic release.html collides with preserved original landing")
         (stage / "classic/index.html").rename(stage / "classic/release.html")
         (stage / "classic/index.html").write_text(classic_landing(), encoding="utf-8")
-        # Preserve EVERY old root URL, including deep tutorials, PDFs and downloads.
-        for entry in classic.iterdir():
-            if entry.name == "index.html":
-                continue
-            if entry.name in ("classic", "v1", "versions.json"):
-                raise ValueError("Classic entry collides with generation namespace")
-            if entry.is_dir():
-                shutil.copytree(entry, stage / entry.name)
-            else:
-                shutil.copyfile(entry, stage / entry.name)
         if modern:
             shutil.copytree(modern, stage / "v1")
             rewrite_v1_links(stage / "v1")
-        (stage / "index.html").write_text(landing(bool(modern)), encoding="utf-8")
+            # The full verified 1.x site now serves default /caravel/... paths.
+            # Legacy archive bytes and old-only deep links remain accessible.
+            default_routes.activate(classic, modern, stage)
+            # Do not accept a copied but non-functional default site.
+            installed = verify_site(stage, newer["version"])
+            if installed != newer:
+                raise ValueError("default 1.x release identity diverges")
+        else:
+            # Fail-safe when no verified 1.x release exists: keep Classic at
+            # the default paths rather than exposing an unverified installer.
+            for entry in classic.iterdir():
+                if entry.name == "index.html":
+                    continue
+                if entry.name in ("classic", "0.13", "v1", "versions", "versions.json"):
+                    raise ValueError("Classic entry collides with generation namespace")
+                if entry.is_dir():
+                    shutil.copytree(entry, stage / entry.name)
+                else:
+                    shutil.copyfile(entry, stage / entry.name)
+            (stage / "index.html").write_text(landing(False), encoding="utf-8")
+            shutil.copytree(classic, stage / "0.13")
+            if (stage / "0.13/release.html").exists():
+                raise ValueError("Classic alias release.html collision")
+            (stage / "0.13/index.html").rename(stage / "0.13/release.html")
+            (stage / "0.13/index.html").write_text(classic_landing(), encoding="utf-8")
+            default_routes.namespace_html_links(stage / "0.13", "0.13")
+        (stage / "versions").mkdir()
+        (stage / "versions/index.html").write_text(
+            default_routes.version_chooser(landing(bool(modern))), encoding="utf-8")
         versions = {"classic": {"path": "classic/", **klass},
-                    "v1": {"path": "v1/", **newer} if newer else None}
+                    "0.13": {"path": "0.13/", **klass},
+                    "v1": {"path": "v1/", **newer} if newer else None,
+                    "default": {"path": "", **(newer or klass)}}
         (stage / "versions.json").write_text(json.dumps(versions, indent=2) + "\n", encoding="utf-8")
         stage.rename(out)
     print(f"Dual site verified: Classic {CLASSIC}; v1 {newer['version'] if newer else 'not published'}; {out}")

@@ -65,6 +65,8 @@ class DualSiteTests(unittest.TestCase):
         out = self.root / "site"
         self.build(source, None, out)
         self.assertIn("IN DEVELOPMENT", (out / "index.html").read_text())
+        self.assertIn("Default links continue to serve Classic 0.13.0", (out / "index.html").read_text())
+        self.assertNotIn("serve current Caravel 1.x", (out / "index.html").read_text())
         self.assertIn("nicht mehr gepflegt", (out / "index.html").read_text())
         for p in source.rglob("*"):
             if p.is_file():
@@ -82,10 +84,20 @@ class DualSiteTests(unittest.TestCase):
             original = (source / name).read_bytes()
             self.assertEqual(original, (out / name).read_bytes())
             self.assertEqual(original, (out / "classic" / name).read_bytes())
-        self.assertIsNone(json.loads((out / "versions.json").read_text())["v1"])
+        versions = json.loads((out / "versions.json").read_text())
+        self.assertIsNone(versions["v1"])
+        self.assertEqual(versions["default"]["version"], "0.13.0")
+        self.assertEqual(versions["0.13"]["path"], "0.13/")
+        self.assertEqual((out / "0.13/emulator/felucca.wasm").read_bytes(),
+                         (source / "emulator/felucca.wasm").read_bytes())
+        self.assertIn('<base href="/caravel/">', (out / "versions/index.html").read_text())
 
     def test_two_versions_isolate_and_rewrite_modern_links(self):
         old, new = self.site("0.13.0"), self.site("1.0.0")
+        # Model an old-only HTML deep link and a version-unique legacy file.
+        # The generic site() fixture normally creates both in each generation.
+        (new / "tutorials/a/index.html").unlink()
+        (new / "previously-unlisted.txt").unlink()
         url = dual_site.SITE_ORIGIN + "tutorials/"
         (new / "tutorials/index.html").write_text('<a href="' + url + '">Docs</a>')
         out = self.root / "result"
@@ -93,14 +105,44 @@ class DualSiteTests(unittest.TestCase):
         # the complete 1.x site by check_generation_site.mjs, not a dummy HTML fixture.
         with patch.object(dual_site, "verify_generation_behavior", return_value={"result":"PASS"}):
             self.build(old, new, out)
-        self.assertIn('href="v1/"', (out / "index.html").read_text())
+        self.assertIn('href="/caravel/versions/"', (out / "index.html").read_text())
+        self.assertIn('<base href="/caravel/">', (out / "versions/index.html").read_text())
+        self.assertIn('href="v1/"', (out / "versions/index.html").read_text())
+        self.assertIn('href="0.13/"', (out / "versions/index.html").read_text())
+        self.assertIn("serve current Caravel 1.x", (out / "versions/index.html").read_text())
         self.assertIn("/caravel/v1/tutorials/", (out / "v1/tutorials/index.html").read_text())
-        self.assertNotIn("/caravel/v1/", (out / "classic/tutorials/index.html").read_text())
+        self.assertIn('/caravel/tutorials/', (out / "tutorials/index.html").read_text())
         self.assertEqual((out / "emulator/felucca.wasm").read_bytes(),
-                         (out / "classic/emulator/felucca.wasm").read_bytes())
-        self.assertNotEqual((out / "v1/emulator/felucca.wasm").read_bytes(),
+                         (out / "v1/emulator/felucca.wasm").read_bytes())
+        self.assertEqual((out / "webapp/installer/index.html").read_bytes(),
+                         (new / "webapp/installer/index.html").read_bytes())
+        self.assertEqual((out / "webapp/editor/index.html").read_bytes(),
+                         (new / "webapp/editor/index.html").read_bytes())
+        self.assertEqual((out / "tutorials/index.html").read_bytes(),
+                         (new / "tutorials/index.html").read_bytes())
+        self.assertNotEqual((out / "emulator/felucca.wasm").read_bytes(),
                             (out / "classic/emulator/felucca.wasm").read_bytes())
-        self.assertEqual(json.loads((out / "versions.json").read_text())["v1"]["version"], "1.0.0")
+        self.assertEqual((out / "classic/emulator/felucca.wasm").read_bytes(),
+                         (out / "0.13/emulator/felucca.wasm").read_bytes())
+        self.assertEqual((out / "classic/firmware/caravel-0.13.0.fwsc").read_bytes(),
+                         (out / "0.13/firmware/caravel-0.13.0.fwsc").read_bytes())
+        self.assertEqual((out / "firmware/caravel-0.13.0.fwsc").read_bytes(),
+                         (old / "firmware/caravel-0.13.0.fwsc").read_bytes())
+        self.assertEqual((out / "firmware/SHA256SUMS").read_bytes(),
+                         (new / "firmware/SHA256SUMS").read_bytes())
+        self.assertEqual((out / "0.13/firmware/SHA256SUMS").read_bytes(),
+                         (old / "firmware/SHA256SUMS").read_bytes())
+        # A Classic-only tutorial deep link never silently runs an obsolete
+        # page with 1.x assets at the default path.
+        self.assertIn('/caravel/0.13/tutorials/a/', (out / "tutorials/a/index.html").read_text())
+        self.assertIn('location.search+location.hash', (out / "tutorials/a/index.html").read_text())
+        self.assertEqual((out / "tutorials/a/index.html").read_text().count('location.replace'), 1)
+        self.assertEqual((out / "previously-unlisted.txt").read_bytes(),
+                         (old / "previously-unlisted.txt").read_bytes())
+        versions = json.loads((out / "versions.json").read_text())
+        self.assertEqual(versions["v1"]["version"], "1.0.0")
+        self.assertEqual(versions["default"]["version"], "1.0.0")
+        self.assertEqual(versions["0.13"]["version"], "0.13.0")
 
     def test_refuse_wrong_hash_preview_and_version(self):
         old = self.site("0.13.0")
