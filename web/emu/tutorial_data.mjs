@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GENERATED public Academy data; never edit. Source is in the private build.
-// Public release stage count: 3
+// Public release stage count: 4
 export const TOUR_AMBIENT_STAGES = [
   {
     "title": "Strings before anything else",
@@ -963,6 +963,173 @@ export const TOUR_AMBIENT_STAGES = [
     "estimatedMinutes": {
       "min": 1,
       "max": 3,
+      "basis": "editorial estimate, not timed on actual WASM",
+      "verified": false
+    }
+  },
+  {
+    "title": "Add a little slow motion",
+    "steps": [
+      {
+        "layer": "BUILD",
+        "target": "LFO",
+        "title": "Open LFO",
+        "stage": 3,
+        "id": "step-4-1",
+        "instruction": "Tap LFO until the LFO SHAPE / RATE group is selected. In the underlying LFO page K1 is RATE and K2 is WAVE.",
+        "caption": "Open LFO",
+        "actions": [
+          {
+            "do": "press",
+            "control": "LFO",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "LFO"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Slow down RATE",
+        "stage": 3,
+        "id": "step-4-2",
+        "instruction": "On BUILD / LFO turn K1 RATE left until the LCD reads about 0.2 Hz (0.24 Hz measured in the local emulator). From the observed 1.18 Hz starting point this took around 30 detents; follow the displayed frequency, not a fixed count.",
+        "caption": "Set LFO RATE near 0.2 Hz",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "seconds": null,
+            "steps": null,
+            "verified": false,
+            "until": "LCD RATE ~0.2 Hz",
+            "targetValue": 0.24,
+            "observedDetents": {
+              "approx": 30,
+              "direction": "left",
+              "source": "Local KI PR #80 #7078796218",
+              "accelerationDependent": true
+            }
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "LFO"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "SELECT",
+        "title": "Find LFO AMOUNTS",
+        "stage": 3,
+        "id": "step-4-3",
+        "instruction": "In SELECT PAGE mode turn four detents forward from LFO through LFO SYNC, LFO2 and LFO2 SYNC until the LCD page title reads LFO DEST. There K2 controls FLT (filter modulation).",
+        "caption": "Find LFO DEST in four turns",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "SELECT",
+            "seconds": null,
+            "steps": 4,
+            "verified": false,
+            "until": "LCD page title LFO DEST",
+            "observedDetents": {
+              "approx": 4,
+              "source": "Local KI PR #80 #7078796218",
+              "conditionalStart": "LFO page, SELECT in PAGE mode"
+            }
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": "LFO DEST",
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "LFO DEST"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 2",
+        "title": "Modulate FILTER slightly",
+        "check": "Your sustained tone should move gently instead of sounding static. If it wobbles sharply, decrease FILTER amount or RATE.",
+        "stage": 3,
+        "id": "step-4-4",
+        "instruction": "On BUILD / LFO DEST turn K2 FLT right until the LCD reads about +40 % (+41 % in the local emulator after approximately 28 detents). Hold the chord and hear the cutoff breathe slowly without a fast wobble.",
+        "caption": "Set FLT modulation near +40%",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 2",
+            "seconds": null,
+            "steps": null,
+            "verified": false,
+            "until": "LCD FLT ~+40 %",
+            "targetValue": 41,
+            "observedDetents": {
+              "approx": 28,
+              "direction": "right",
+              "source": "Local KI PR #80 #7078796218",
+              "accelerationDependent": true
+            }
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": "FLT +40 % (approx.)",
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "LFO DEST"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      }
+    ],
+    "id": "stage-4",
+    "hook": "Small changes make the texture feel alive.",
+    "result": "The pad now shifts without a hard pulse.",
+    "startState": {
+      "mode": "manual",
+      "description": "BUILD T1 ENSEMBLE 6 with TONE 84/127, FILT -32 (50 LP) and ATK 109 (~2.71 s) if the optional source starter was confirmed; REV and REL remain at factory values unless you set them manually. Direct entry requires preparing T1; no prior PROJECT is restored automatically.",
+      "automaticRestore": false,
+      "projectSlot": null
+    },
+    "estimatedMinutes": {
+      "min": 2,
+      "max": 4,
       "basis": "editorial estimate, not timed on actual WASM",
       "verified": false
     }
