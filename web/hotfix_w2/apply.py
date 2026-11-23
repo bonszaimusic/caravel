@@ -12,10 +12,16 @@ import shutil
 import subprocess
 import sys
 
+# The releases this overlay is approved for: version -> (SHA-256, size) of caravel-<version>.fwsc.
+# 1.1.0 is the release the W2 installer was reviewed on; 1.1.1 carries the same web installer text over
+# (its installer protocol is unchanged: the USB update fix is firmware and loader only).
+RELEASES = {
+    '1.1.0': ('1e1a126ca1d7570f8fb917d381afaa6b78885fb3b08baa084775f3a948a570ba', 610138),
+    '1.1.1': ('5998df51551eb487ef60bd5ad08c11725f0ffa049fb543ba7a58359a1b075fe4', 610193),
+}
 VERSION = '1.1.0'
-FW_SHA = '1e1a126ca1d7570f8fb917d381afaa6b78885fb3b08baa084775f3a948a570ba'
-FW_SIZE = 610138
-FW_NAME = 'caravel-1.1.0.fwsc'
+FW_SHA, FW_SIZE = RELEASES[VERSION]
+FW_NAME = 'caravel-' + VERSION + '.fwsc'
 PATH = 'v1/webapp/installer/index.html'
 APPROVED_BLOBS = {
     'index_pkg.html': '9dd110983422993a0fcd1f651bf8c9720bacb195',
@@ -26,6 +32,15 @@ APPROVED_BLOBS = {
 def require(ok, reason):
     if not ok:
         raise ValueError(reason)
+
+
+def select_release(version):
+    """Bind the overlay to one approved release (default 1.1.0); anything else is refused."""
+    global VERSION, FW_SHA, FW_SIZE, FW_NAME
+    require(version in RELEASES, 'W2 is not approved for release ' + str(version))
+    VERSION = version
+    FW_SHA, FW_SIZE = RELEASES[version]
+    FW_NAME = 'caravel-' + version + '.fwsc'
 
 
 def read(path):
@@ -128,9 +143,13 @@ def overlay(site, source, tagged, release, rollback, receipt, public_commit=None
                                 lambda m: m[1] + html.escape(firmware_source, quote=True) + m[2], installer)
     require(count == 1 and installer.count('</main>') == 1, 'source link or main element mismatch')
     source_url = 'https://github.com/bonszaimusic/caravel/tree/' + public_commit + '/web/hotfix_w2'
-    stamp = ('<p id="site-hotfix" class="small">Firmware v1.1.0 · website W2 · '
-             '<a href="' + html.escape(source_url, quote=True) + '">Matching W2 web source</a>.'
-             ' Firmware package unchanged.</p>')
+    if VERSION == '1.1.0':
+        stamp = ('<p id="site-hotfix" class="small">Firmware v1.1.0 · website W2 · '
+                 '<a href="' + html.escape(source_url, quote=True) + '">Matching W2 web source</a>.'
+                 ' Firmware package unchanged.</p>')
+    else:                      # a later release: its firmware is its own, only the installer page text is W2's
+        stamp = ('<p id="site-hotfix" class="small">Firmware v' + VERSION + ' · installer page with the W2 recovery '
+                 'button · <a href="' + html.escape(source_url, quote=True) + '">Matching W2 web source</a>.</p>')
     installer = installer.replace('</main>', stamp + '\n</main>')
     require('WL80UBOOT1.00' in installer and 'WL82 UBOOT1.00' in installer
             and 'Enter UBOOT (no flash write)' in installer,
@@ -147,7 +166,7 @@ def overlay(site, source, tagged, release, rollback, receipt, public_commit=None
                 'W2 modified more than the installer')
         require(digest(read(site / 'v1/firmware' / FW_NAME)) == FW_SHA,
                 'firmware SHA256 drift after W2')
-        report = {'schema': 1, 'revision': 'W2', 'firmware': 'v1.1.0',
+        report = {'schema': 1, 'revision': 'W2', 'firmware': 'v' + VERSION,
                   'firmware_sha256': FW_SHA, 'public_web_source_commit': public_commit,
                   'firmware_source_url': firmware_source,
                   'approved_blobs': APPROVED_BLOBS, 'original': snapshot,
@@ -166,8 +185,10 @@ def main():
     for name in ('site', 'source', 'tagged', 'release', 'rollback', 'receipt'):
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--public-commit')
+    parser.add_argument('--version', default='1.1.0')
     args = parser.parse_args()
     try:
+        select_release(args.version)
         overlay(args.site, args.source, args.tagged, args.release,
                 args.rollback, args.receipt, args.public_commit)
     except Exception as exc:

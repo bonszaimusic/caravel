@@ -180,6 +180,9 @@ jobs:
         run: |
           . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           EMU_PREVIEW=0 sh web/emu/build.sh
+          # A tag cut from main carries the Academy bundle step of build.sh; the verified emulator is the file set of
+          # make_site.py. The Academy data is added by the overlay step below (from main), not by this build.
+          rm -f build/emu/tutorial_data.mjs
           python3 web/make_site.py "$RUNNER_TEMP/release/caravel-$VER.fwsc" "$VER" site \
             --release-dir "$RUNNER_TEMP/release" --emulator build/emu
           if [ "$VER" = 0.6.0 ]; then python3 web/stasis_pages.py --check-site site; fi
@@ -220,16 +223,16 @@ jobs:
           node build/site-content/web/check_generation_site.mjs "$RUNNER_TEMP/v1-site"
           python3 build/site-content/web/dual_site.py --classic "$RUNNER_TEMP/classic-frozen" --v1 "$RUNNER_TEMP/v1-site" --out site
       - name: Verified W2 recovery installer only (no firmware build)
-        if: env.VER == '1.1.0'
+        if: env.VER == '1.1.0' || env.VER == '1.1.1'
         run: |
           set -eu
           # Pin the publisher code and BOTH reviewed installer source blobs.
-          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = '96c744135084185e231b3b23d2921dbe8a390b1b'
+          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = 'f656260bf4b420e0fe6a0419a8e767dc2b4b177b'
           test "$(git hash-object build/site-content/web/hotfix_w2/index_pkg.html)" = '9dd110983422993a0fcd1f651bf8c9720bacb195'
           test "$(git hash-object build/site-content/web/hotfix_w2/fm1ota.js)" = '7be5eec30718cce6615c63a388a9deb40c3e1251'
           python3 build/site-content/tests/hotfix_w2_test.py
           python3 build/site-content/web/hotfix_w2/apply.py \
-            --site site --source build/site-content --tagged . \
+            --site site --source build/site-content --tagged . --version "$VER" \
             --release "$RUNNER_TEMP/release" \
             --rollback "$RUNNER_TEMP/w2-rollback-site" \
             --receipt "$RUNNER_TEMP/w2-qa.json"
@@ -241,19 +244,19 @@ jobs:
           # Existing full 1.x release, OTA, generation and emulator guards remain binding.
           python3 - <<'PY'
           from pathlib import Path
-          import sys
+          import os, sys
           sys.path.insert(0, 'build/site-content/web')
           from dual_site import verify_site
-          print('W2 post-overlay verify:', verify_site(Path('site/v1'), '1.1.0'))
-          print('W2 default verify:', verify_site(Path('site'), '1.1.0'))
+          print('W2 post-overlay verify:', verify_site(Path('site/v1'), os.environ['VER']))
+          print('W2 default verify:', verify_site(Path('site'), os.environ['VER']))
           PY
           node build/site-content/web/check_generation_site.mjs site/v1
           node build/site-content/web/check_generation_site.mjs site
       - name: Preserve original site for W2 rollback before deployment
-        if: env.VER == '1.1.0'
+        if: env.VER == '1.1.0' || env.VER == '1.1.1'
         uses: actions/upload-artifact@v4
         with:
-          name: caravel-v1.1.0-pre-W2-rollback-${{ github.run_id }}
+          name: caravel-v${{ env.VER }}-pre-W2-rollback-${{ github.run_id }}
           retention-days: 30
           if-no-files-found: error
           path: ${{ runner.temp }}/w2-rollback-site

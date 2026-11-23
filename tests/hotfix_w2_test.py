@@ -118,5 +118,26 @@ class OverlayTests(unittest.TestCase):
         self.assertFalse((self.site / 'SITE_HOTFIX_MANIFEST.json').exists())
 
 
+class ReleaseSelectionTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = (H.VERSION, H.FW_SHA, H.FW_SIZE, H.FW_NAME)
+        self.addCleanup(lambda: setattr_all(self.saved))
+
+    def test_only_approved_releases_can_be_selected(self):
+        H.select_release('1.1.1')
+        self.assertEqual((H.VERSION, H.FW_NAME, H.FW_SIZE), ('1.1.1', 'caravel-1.1.1.fwsc', 610193))
+        self.assertEqual(H.FW_SHA, '5998df51551eb487ef60bd5ad08c11725f0ffa049fb543ba7a58359a1b075fe4')
+        H.select_release('1.1.0')
+        self.assertEqual((H.VERSION, H.FW_NAME, H.FW_SIZE), ('1.1.0', 'caravel-1.1.0.fwsc', 610138))
+        for version in ('1.1.2', '1.0.0', '1.1', '', None):
+            with self.assertRaises(ValueError):
+                H.select_release(version)
+        self.assertEqual(H.VERSION, '1.1.0')                      # a refusal changes nothing
+
+
+def setattr_all(saved):
+    H.VERSION, H.FW_SHA, H.FW_SIZE, H.FW_NAME = saved
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
