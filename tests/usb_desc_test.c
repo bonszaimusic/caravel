@@ -384,8 +384,9 @@ int main(void)
         uint32_t fn;
         int ok = midi_if >= 0 && !usb.uboot_req && !usb.ota_req;
         ok &= ep1_take(KEY, sizeof KEY) && usb.uboot_req;
-        ok &= ep1_take(OLD, sizeof OLD) && !usb.ota_req;
-        check("legacy update command is rejected before protocol18 entry", ok);
+        ok &= ep1_take(OLD, sizeof OLD) && !usb.ota_req && usb.ota_classic_req;
+        usb.ota_classic_req = 0;
+        check("legacy update command only asks (usb_update.c), never starts the update", ok);
         ok &= ep1_take(UPG, sizeof UPG) && usb.ota_req;
         ok &= ep1_take(OLD, sizeof OLD) && usb.ota_req;
         check("host loader entry sequence starts actual protocol18 USB parser", ok);

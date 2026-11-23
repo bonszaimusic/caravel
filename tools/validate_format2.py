@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'build/validation'
 SHARDS=['storage_usb','synthesis_midi','ui_storage','effects','cpu_dual','engines_samples','sanitizers','web_target']
 GROUPS={
- 'storage_usb':'storage input midi_uart timer5_midi',
+ 'storage_usb':'storage input midi_uart timer5_midi usb_update',
  'synthesis_midi':'scale track_mute chord chordext chordext_diff chordext_capture chordsource ux_capture ux_play_midi latch midi_control midi_resync midi_drift midi_clock_cc voice_reserve ratchet step15 seq155 detail step_play click swing',
  'ui_storage':'ux_elastic_arc harmony_build_display harmony_roles_ui chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
  'effects':'afterburner_host afterburner_ui speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity',

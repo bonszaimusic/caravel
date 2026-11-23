@@ -134,6 +134,7 @@
 #include "ota.c"
 #include "ota_hw.c"
 #include "editor.c"              /* web editor SysEx (needs the OTA SysEx plumbing) */
+#include "usb_update.c"          /* the Classic-protocol USB update (Firmware Hub): asks on the screen first */
 #endif
 #if FELUCCA_CDC
 #include "console.c"

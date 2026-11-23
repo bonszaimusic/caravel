@@ -1612,6 +1612,10 @@ static void confirm_text(char *a, char *b)
         str_cpy(b, f & 2u ? "ROOM > HALL" : f & 4u ? "SPRING > HALL" : "SAVE A COPY ONLY", 24);
         break;
     }
+    case CF_USB_UPDATE:                              /* a Classic client (the Firmware Hub) wants to install */
+        str_cpy(a, "UPDATE VIA USB?", 24);
+        str_cpy(b, "OLDER FW: NO 1.X DATA", 24);
+        break;
     case CF_CLEAR_TRK:
         str_cpy(a, "CLEAR TRACK 1?", 24);
         a[12] = (char)('1' + k % NTRK);

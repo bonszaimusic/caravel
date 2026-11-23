@@ -21,6 +21,9 @@ still pending: read the notes below first.
   coverage or recoverability. Keep the official package and backups of your projects and settings.
 - The firmware's USB IDs are test IDs; see the note under *Installing* in the [README](../README.md) and [NOTICE](../NOTICE).
 - Projects and settings that use Caravel-only features need Caravel or newer; see the compatibility notes in the README.
+- **To switch from Caravel to another firmware through the Firmware Hub you need Caravel 1.1.1 or later** (prepared, not yet published); Caravel 1.0.0 and
+  1.1.0 ignore the Hub's update command. Installing Caravel itself through the Hub also needs the 1.1.1 package. See
+  [Switching to another firmware](faq.md#switching-to-another-firmware-firmware-hub).
 - Hardware acceptance on a real FM-1 is pending; host tests and the emulator are not hardware measurements.
 - The web installer shows these warnings on its page and, for the way back to V15, saves a complete backup first. The command-line
   installer prints a short notice, asks for confirmation (unless `--yes`) and makes **no** backup: save your projects and settings

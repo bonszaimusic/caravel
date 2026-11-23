@@ -91,8 +91,13 @@ void ldr_main(void)
             fm1_enter_uboot();
         }
         ota_service();                              /* handshake */
-        if (usb.ota_req) {
+        /* The loader only runs once the unit has been asked to update: the dialog of usb_update.c (a Classic client), or
+         * Caravel's own installer, or OCT- held at power-on. So the Classic entry F0 22 24 35 7F F7 (the Firmware Hub sends
+         * only that one in step 2) may start the write here; Caravel 1.0 and 1.1 ignored it, and the Hub stopped with
+         * "the loader stopped after 0 requests". */
+        if (usb.ota_req || usb.ota_classic_req) {
             usb.ota_req = 0;
+            usb.ota_classic_req = 0;
             if (ldr_session() == 0) {
                 fm1_delay_ms(200);                  /* the "success" reply leaves */
                 usb_detach();

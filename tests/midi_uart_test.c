@@ -85,7 +85,8 @@ static int test_usb_sysex(void)
     feed((const uint8_t *)"\xF0\x22\x24\x35\x7D\xF7", 6);
     bad += check("usb: Classic soft key cannot enter recovery", !usb.uboot_req && !sx_ready);
     feed((const uint8_t *)"\xF0\x22\x24\x35\x7F\xF7", 6);
-    bad += check("usb: Classic upgrade cannot enter update", !usb.ota_req && !sx_ready);
+    bad += check("usb: Classic upgrade only asks (ota_classic_req), cannot start", !usb.ota_req && usb.ota_classic_req && !sx_ready);
+    usb.ota_classic_req = 0;
     feed((const uint8_t *)"\xF0\x7D\x43\x41\x7F\x11\x02\xF7", 8);
     bad += check("usb: wrong protocol cannot enter update", !usb.ota_req);
     ota_frame_done();

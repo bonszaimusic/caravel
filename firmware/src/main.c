@@ -252,6 +252,11 @@ static void fm1_main(void)
             lcd_fill(0, 0, 240, 240, T_BG);
             ui.force = 1;
         }
+        if (usb.ota_classic_req) {                      /* Classic upgrade command (the Firmware Hub): ask first */
+            usb.ota_classic_req = 0;
+            usb_update_classic_request();
+        }
+        usb_update_service();
 #endif
         if (usb.uboot_req) {                            /* generation-2 explicit software recovery request */
             fm1_audio_stop();
