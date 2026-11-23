@@ -5,7 +5,7 @@
 
 > **Caravel 1.0 candidate:** start fresh with FORMAT 2. Back up before updating using the old matching firmware/tool; pre-1.0 backups are not imported into 1.0. Keep the old firmware and backup for a return. [Current formats, controls, limits and device checklist](release-100.md). Historical recovery observations below keep their original version scope. UC25HQ80 is recognized but not tested on a real unit by this project; m-bootloader remains an external, documented tool, not integrated firmware.
 
-> **Switching to another firmware (for example through the Firmware Hub) needs Caravel 1.1.1 or later (prepared, not yet published).** Caravel 1.0.0 and 1.1.0 ignore the Hub's update command. [What to do](#switching-to-another-firmware-firmware-hub).
+> **Switching to another firmware (for example through the Firmware Hub) needs Caravel 1.1.1 or later.** Caravel 1.0.0 and 1.1.0 ignore the Hub's update command. [What to do](#switching-to-another-firmware-firmware-hub).
 
 USB connections, firmware changes and recovery for the M-VAVE FM-1.
 Last reviewed: **30 October 2026**. Reported recoveries are individual observations;
@@ -97,7 +97,7 @@ open Caravel projects. If the return fails with -5, follow the next entry.
 
 ## Switching to another firmware (Firmware Hub)
 
-**Needs Caravel 1.1.1 or later** (prepared, not yet published). Back up first: other firmware does not open Caravel projects, and projects saved by Caravel 1.x do not open in older Caravel.
+**Needs Caravel 1.1.1 or later**. Back up first: other firmware does not open Caravel projects, and projects saved by Caravel 1.x do not open in older Caravel.
 
 **Symptom.** On Caravel 1.0.0 or 1.1.0 the **Install** button of the Firmware Hub, or of another installer that uses the Classic update command, stops with *the device stopped after 0 requests: nothing was written* and the hint *The firmware on your FM-1 takes no updates*. Nothing was written and the FM-1 keeps running. If you install Caravel itself through the Hub, the Hub can instead stop later with *the loader stopped after 0 requests*: the FM-1 is then in its update loader with a black screen. It is not bricked; finish the update with Caravel's web installer or `tools/fm1_install.py` (with `--recovery-backup` and a backup you saved), as in [UBOOT and the normal update loader](#uboot-and-the-normal-update-loader).
 
@@ -110,7 +110,7 @@ open Caravel projects. If the return fails with -5, follow the next entry.
 1. **On Caravel 1.1.1 or later:** press Install in the Hub, then press **OCT+** on the FM-1 within about 8 seconds. If you press later, the FM-1 shows *PRESS INSTALL AGAIN*: press Install in the Hub again within one minute. **OCT-**, or no answer for one minute, cancels and writes nothing. The question does not appear in MENU, in the NAME screen or over another dialog: leave it and press Install again.
 2. **On Caravel 1.0.0 or 1.1.0:** update once to 1.1.1 with Caravel's own installer (the web installer or `tools/fm1_install.py`), then use the Hub. As a reported alternative, use **Return to official V15** in Caravel's installer first and install the other firmware from there (see [Changing firmware](#changing-firmware)).
 
-**What was tested.** On one FM-1, with a local build of 1.1.1 and a script that sends only the Classic command, as the Hub does: the question, the check of the package and the write all completed. The Hub itself in a browser has not been tried with 1.1.1, because it installs the published package and its loader; that works once 1.1.1 is published.
+**What was tested.** On one FM-1, with a local build of 1.1.1 and a script that sends only the Classic command, as the Hub does: the question, the check of the package and the write all completed. The Hub itself in a browser has not been tried with 1.1.1: it installs the published package and its loader, so it can only work with 1.1.1 once the Hub offers it (the Hub looks for new releases every night).
 
 ## Stock return error -5
 

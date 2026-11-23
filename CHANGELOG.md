@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.1] - prepared, not published
+## [1.1.1] - 2026-11-23
 
 - **Switching to another firmware through the Firmware Hub needs Caravel 1.1.1 or later.** Caravel 1.0.0 and 1.1.0 ignore the Classic update command (the Hub, the frozen Classic installer), so the Hub's Install stops with "the device stopped after 0 requests"; installing Caravel itself through the Hub stops in the loader ("the loader stopped after 0 requests", the FM-1 sits in its update loader with a black screen: finish with the installer and a backup). See the [FAQ](docs/faq.md#switching-to-another-firmware-firmware-hub). On 1.0.0 or 1.1.0 update once with Caravel's own installer.
 - **USB update from the Firmware Hub, firmware:** the Classic update command is accepted again, but it only asks: the unit shows "UPDATE VIA USB?" with the OCT− / OCT+ dialog and nothing is staged, erased or written without OCT+. Reason for asking: a 1.x project does not open in an older version. If OCT+ comes after the Hub has given up (about 10 s), press Install in the Hub again within one minute. In BUILD and in PLAY; not over MENU, NAME or another dialog (the unit says so). Caravel's own installer is unchanged.

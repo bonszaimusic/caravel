@@ -8,7 +8,7 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.1.1** — [re
 
 The website keeps Classic and 1.x separate. These instructions describe 1.1.1 (the controls are those of 1.1.0; 1.1.1 changes the USB update, see the CHANGELOG).
 
-> **Switching to another firmware, for example through the Firmware Hub, needs Caravel 1.1.1 or later (prepared, not yet published).** Caravel 1.0.0 and 1.1.0 ignore the Hub's update command: its Install button stops with "the device stopped after 0 requests" and nothing is written. From 1.1.1 on the FM-1 asks "UPDATE VIA USB?" on its screen: OCT+ installs, OCT- cancels. Installing Caravel itself through the Hub also needs the 1.1.1 package. On 1.0.0 or 1.1.0 update once with Caravel's own installer, or use its **Return to official V15** flow, then install the other firmware. **Back up first:** other firmware does not open Caravel projects. [Details in the FAQ](docs/faq.md#switching-to-another-firmware-firmware-hub).
+> **Switching to another firmware, for example through the Firmware Hub, needs Caravel 1.1.1 or later.** Caravel 1.0.0 and 1.1.0 ignore the Hub's update command: its Install button stops with "the device stopped after 0 requests" and nothing is written. From 1.1.1 on the FM-1 asks "UPDATE VIA USB?" on its screen: OCT+ installs, OCT- cancels. Installing Caravel itself through the Hub also needs the 1.1.1 package. On 1.0.0 or 1.1.0 update once with Caravel's own installer, or use its **Return to official V15** flow, then install the other firmware. **Back up first:** other firmware does not open Caravel projects. [Details in the FAQ](docs/faq.md#switching-to-another-firmware-firmware-hub).
 
 ![Caravel BUILD overview](docs/tutorials/img/one-build.png)
 
