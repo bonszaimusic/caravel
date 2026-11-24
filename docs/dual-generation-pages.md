@@ -54,7 +54,7 @@ version selector refuses legacy-only releases: a manually retriggered 0.x
 workflow must not silently replace the current 1.x default site.
 
 **No public deployment occurs merely because this source exists in
-`caravel-dev`.** Publication requires reviewed synchronization to the
+the development repository.** Publication requires reviewed synchronization to the
 public distribution and explicit owner sign-off for the ensuing Pages deploy.
 
 Before that deployment, use a release-generated full 1.x site plus the
