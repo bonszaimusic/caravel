@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GENERATED public Academy data; never edit. Source is in the private build.
-// Public release stage count: 4
+// Public release stage count: 5
 export const TOUR_AMBIENT_STAGES = [
   {
     "title": "Strings before anything else",
@@ -1130,6 +1130,365 @@ export const TOUR_AMBIENT_STAGES = [
     "estimatedMinutes": {
       "min": 2,
       "max": 4,
+      "basis": "editorial estimate, not timed on actual WASM",
+      "verified": false
+    }
+  },
+  {
+    "title": "Build a sparse motif",
+    "steps": [
+      {
+        "layer": "BUILD",
+        "target": "GLO",
+        "title": "Find BUILD CLOCK",
+        "instruction": "In BUILD tap GLO (it opens MIXER), then turn SELECT one detent forward until the page title reads CLOCK; BPM is K1. Do not double-tap GLO into MENU.",
+        "caption": "Set a calm ambient pulse",
+        "actions": [
+          {
+            "do": "press",
+            "control": "GLO",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "pageTitle": "CLOCK"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        },
+        "stage": 4,
+        "id": "step-5-1"
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Set 70 BPM",
+        "instruction": "On BUILD CLOCK, turn K1 BPM left until the LCD reads 70 (from the factory 120 BPM this takes about 50 detents; follow the LCD). This is the recommended fixed tempo for the sparse piece.",
+        "caption": "70 BPM keeps the movement unhurried",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "pageTitle": "CLOCK"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        },
+        "stage": 4,
+        "id": "step-5-2"
+      },
+      {
+        "layer": "BUILD",
+        "target": "SEQ",
+        "title": "Open the STEP grid",
+        "stage": 4,
+        "id": "step-5-3",
+        "instruction": "Tap SEQ to show BUILD / STEP on T1 with the transport stopped, then tap REC once to arm step recording: the LCD says KEYS WRITE STEPS. Without REC the piano keys write nothing.",
+        "caption": "Open the STEP grid",
+        "actions": [
+          {
+            "do": "press",
+            "control": "SEQ",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "G3",
+        "title": "Place the first note",
+        "stage": 4,
+        "id": "step-5-4",
+        "instruction": "With KEYS WRITE STEPS armed, press G3: it is written at STEP 1 and the cursor moves on to step 2. Turn K1 one detent left to select the note again, then turn K3 (LEN) right until LEN reads 4: a single step is far too short for the 2.71 s attack and would be nearly silent. G3 anchors the motif to the G drone.",
+        "caption": "Place the root G3 in the sequence",
+        "actions": [
+          {
+            "do": "press",
+            "control": "G3",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Move the STEP cursor with K1",
+        "stage": 4,
+        "id": "step-5-5",
+        "instruction": "Turn K1 (STEP) right to step 5 (four detents from step 1), an empty step, so that a gap of one beat stays between the notes.",
+        "caption": "Move the STEP cursor with K1",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "id": "step-5-6",
+        "stage": 4,
+        "layer": "BUILD",
+        "target": "D4",
+        "title": "Add D4 to the motif",
+        "instruction": "Press D4, the fifth of G: it is written at step 5 and the cursor moves to step 6. Turn K1 one detent left, then K3 (LEN) right to 4 again.",
+        "caption": "Place D4 above the G drone",
+        "actions": [
+          {
+            "do": "press",
+            "control": "D4",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "engine": 17,
+          "firmwareObserved": false,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "id": "step-5-7",
+        "stage": 4,
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Move past another gap",
+        "instruction": "Turn K1 (STEP) right to step 9 (four detents), again leaving a gap.",
+        "caption": "Leave room between the notes",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "engine": 17,
+          "firmwareObserved": false,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "id": "step-5-8",
+        "stage": 4,
+        "layer": "BUILD",
+        "target": "C4",
+        "title": "Add C4 for a suspended color",
+        "instruction": "Press C4 (a fourth above G, not a major third; the G drone stays stable): it is written at step 9. Turn K1 one detent left, then K3 (LEN) to 4.",
+        "caption": "Place a soft C4 suspension",
+        "actions": [
+          {
+            "do": "press",
+            "control": "C4",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "engine": 17,
+          "firmwareObserved": false,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "id": "step-5-9",
+        "stage": 4,
+        "layer": "BUILD",
+        "target": "KNOB 1",
+        "title": "Move to the final gap",
+        "instruction": "Turn K1 (STEP) right to step 13 (four detents), the last separated step.",
+        "caption": "Leave one more open space",
+        "actions": [
+          {
+            "do": "turn",
+            "control": "KNOB 1",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "engine": 17,
+          "firmwareObserved": false,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "id": "step-5-10",
+        "stage": 4,
+        "layer": "BUILD",
+        "target": "F4",
+        "title": "Add F4 as a passing color",
+        "instruction": "Press F4 (the minor seventh above G, a passing color): it is written at step 13. Turn K1 one detent left, then K3 (LEN) to 4. The pattern repeats from G3.",
+        "caption": "Add F4, then return toward G",
+        "actions": [
+          {
+            "do": "press",
+            "control": "F4",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "engine": 17,
+          "firmwareObserved": false,
+          "pageTitle": "STEP"
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      },
+      {
+        "layer": "BUILD",
+        "target": "PLAY / STOP",
+        "title": "Audition the motif",
+        "check": "You should hear an intentionally sparse repeating motif from T1 (dry with the factory REL, melting into the drone with REL near 10 s). This is BUILD's step sequencer, not PLAY CAPTURE.",
+        "stage": 4,
+        "id": "step-5-11",
+        "instruction": "Tap REC to disarm step recording, then press PLAY / STOP to hear the sequence. A few long notes with ample silence work well for ambient music; with REL near 10 s (Stage 3) the notes melt into the drone.",
+        "caption": "Audition the motif",
+        "actions": [
+          {
+            "do": "press",
+            "control": "PLAY / STOP",
+            "seconds": null,
+            "steps": null,
+            "verified": false
+          }
+        ],
+        "expected": {
+          "layer": "BUILD",
+          "lcdText": null,
+          "track": 0,
+          "firmwareObserved": false,
+          "engine": 17
+        },
+        "capabilities": {
+          "web": true,
+          "fm1": "guided-control-reference",
+          "videoSoundSource": "caravel-web-emulator"
+        }
+      }
+    ],
+    "id": "stage-5",
+    "hook": "A slow G–D motif leaves space for the drone.",
+    "result": "Sparse G3–D4–C4–F4 notes leave breathing room without breaking the G center.",
+    "startState": {
+      "mode": "manual",
+      "description": "BUILD with T1 ENSEMBLE 6 (optional source starter) and, for the best result, REL near 10 s as at the end of Stage 3 plus a latched G on T2 DRONE (Stage 10 explains LATCH NEW). Direct entry requires preparing T1 first; the sequence is not restored.",
+      "automaticRestore": false,
+      "projectSlot": null
+    },
+    "estimatedMinutes": {
+      "min": 4,
+      "max": 7,
       "basis": "editorial estimate, not timed on actual WASM",
       "verified": false
     }
