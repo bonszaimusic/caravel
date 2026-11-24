@@ -104,6 +104,10 @@ class V1DocsTests(unittest.TestCase):
         self.assertNotIn("not published", content)
         self.assertIn("hardware acceptance is still open", content)
         self.assertIn(self.sha, content)
+        # Academy list: every stage link must be a real relative link, never source text left in the HTML
+        self.assertNotIn("relative(", content)
+        for n in (1, 2, 3, 4, 5):
+            self.assertIn('href="../emulator/index.html#stage-%d"' % n, content)
         self.assertEqual((out / "firmware/app.bin").read_bytes(), b"firmware")
 
     def test_navigation_status_and_source_receipt(self):
