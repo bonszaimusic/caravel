@@ -223,11 +223,11 @@ jobs:
           node build/site-content/web/check_generation_site.mjs "$RUNNER_TEMP/v1-site"
           python3 build/site-content/web/dual_site.py --classic "$RUNNER_TEMP/classic-frozen" --v1 "$RUNNER_TEMP/v1-site" --out site
       - name: Verified W2 recovery installer only (no firmware build)
-        if: env.VER == '1.1.0' || env.VER == '1.1.1'
+        if: startsWith(env.VER, '1.')
         run: |
           set -eu
           # Pin the publisher code and BOTH reviewed installer source blobs.
-          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = 'f656260bf4b420e0fe6a0419a8e767dc2b4b177b'
+          test "$(git hash-object build/site-content/web/hotfix_w2/apply.py)" = 'f8d804c34cea40bc1b2c74361ecdf7356bc75838'
           test "$(git hash-object build/site-content/web/hotfix_w2/index_pkg.html)" = '9dd110983422993a0fcd1f651bf8c9720bacb195'
           test "$(git hash-object build/site-content/web/hotfix_w2/fm1ota.js)" = '7be5eec30718cce6615c63a388a9deb40c3e1251'
           python3 build/site-content/tests/hotfix_w2_test.py
@@ -253,7 +253,7 @@ jobs:
           node build/site-content/web/check_generation_site.mjs site/v1
           node build/site-content/web/check_generation_site.mjs site
       - name: Preserve original site for W2 rollback before deployment
-        if: env.VER == '1.1.0' || env.VER == '1.1.1'
+        if: startsWith(env.VER, '1.')
         uses: actions/upload-artifact@v4
         with:
           name: caravel-v${{ env.VER }}-pre-W2-rollback-${{ github.run_id }}

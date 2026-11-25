@@ -134,6 +134,48 @@ class ReleaseSelectionTest(unittest.TestCase):
                 H.select_release(version)
         self.assertEqual(H.VERSION, '1.1.0')                      # a refusal changes nothing
 
+    def _release(self, version, loader=b'reviewed loader', record_version=None, tamper=False):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        package = b'package of ' + version.encode()
+        (root / ('caravel-' + version + '.fwsc')).write_bytes(package + (b'x' if tamper else b''))
+        (root / ('caravel-' + version + '-loader.bin')).write_bytes(loader)
+        record = {'version': record_version or version, 'binaries': {
+            'caravel-' + version + '.fwsc': H.digest(package),
+            'caravel-' + version + '-loader.bin': H.digest(b'reviewed loader')}}
+        (root / 'release-build.json').write_text(json.dumps(record))
+        return root, package
+
+    def test_a_later_release_with_a_reviewed_loader_is_approved(self):
+        root, package = self._release('1.2.0')
+        with mock.patch.dict(H.APPROVED_LOADERS, {H.digest(b'reviewed loader'): 'fixture'}):
+            H.select_release('1.2.0', root)
+        self.assertEqual((H.VERSION, H.FW_NAME, H.FW_SIZE, H.FW_SHA),
+                         ('1.2.0', 'caravel-1.2.0.fwsc', len(package), H.digest(package)))
+
+    def test_a_later_release_with_an_unreviewed_loader_is_refused(self):
+        root, _ = self._release('1.2.0', loader=b'another loader')
+        with mock.patch.dict(H.APPROVED_LOADERS, {H.digest(b'reviewed loader'): 'fixture'}):
+            with self.assertRaises(ValueError):
+                H.select_release('1.2.0', root)
+        self.assertEqual(H.VERSION, '1.1.0')
+
+    def test_a_later_release_needs_a_matching_build_record_and_package(self):
+        with mock.patch.dict(H.APPROVED_LOADERS, {H.digest(b'reviewed loader'): 'fixture'}):
+            for kwargs in ({'record_version': '1.2.1'}, {'tamper': True}):
+                root, _ = self._release('1.2.0', **kwargs)
+                with self.assertRaises(ValueError):
+                    H.select_release('1.2.0', root)
+            with self.assertRaises(ValueError):
+                H.select_release('1.2.0')                           # no release inventory
+            with self.assertRaises(ValueError):
+                H.select_release('1.2.0', Path('/nonexistent'))
+        self.assertEqual(H.VERSION, '1.1.0')
+
+    def test_the_real_1_2_0_loader_is_reviewed(self):
+        self.assertIn('fdfe40c98a55c7e528ec8c412d1121dd5e84effbde100d73428e3a08ffe931ef', H.APPROVED_LOADERS)
+
 
 def setattr_all(saved):
     H.VERSION, H.FW_SHA, H.FW_SIZE, H.FW_NAME = saved

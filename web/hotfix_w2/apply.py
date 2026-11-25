@@ -12,12 +12,20 @@ import shutil
 import subprocess
 import sys
 
-# The releases this overlay is approved for: version -> (SHA-256, size) of caravel-<version>.fwsc.
-# 1.1.0 is the release the W2 installer was reviewed on; 1.1.1 carries the same web installer text over
-# (its installer protocol is unchanged: the USB update fix is firmware and loader only).
+# The W2 recovery installer is meant to be on for every release. Two ways a release is approved, both fail-closed:
+#  1. RELEASES: releases the overlay was reviewed on, version -> (SHA-256, size) of caravel-<version>.fwsc.
+#     1.1.0 is the release the W2 installer was reviewed on; 1.1.1 carries the same web installer text over.
+#  2. Any later 1.x release whose update loader is a reviewed one (APPROVED_LOADERS): the W2 flow rests on the loader that
+#     ships inside the package, so a release with a loader nobody reviewed with W2 is refused (the Pages job stops) instead
+#     of silently getting an installer that was never tried with its loader. The package hash and size are then taken from
+#     the release's own verified build record (release-build.json), and every check below (the published firmware and source
+#     equal the release files, nothing but the installer page changes) still applies.
 RELEASES = {
     '1.1.0': ('1e1a126ca1d7570f8fb917d381afaa6b78885fb3b08baa084775f3a948a570ba', 610138),
     '1.1.1': ('5998df51551eb487ef60bd5ad08c11725f0ffa049fb543ba7a58359a1b075fe4', 610193),
+}
+APPROVED_LOADERS = {
+    'fdfe40c98a55c7e528ec8c412d1121dd5e84effbde100d73428e3a08ffe931ef': 'update loader of 1.1.1 and 1.2.0',
 }
 VERSION = '1.1.0'
 FW_SHA, FW_SIZE = RELEASES[VERSION]
@@ -34,13 +42,34 @@ def require(ok, reason):
         raise ValueError(reason)
 
 
-def select_release(version):
-    """Bind the overlay to one approved release (default 1.1.0); anything else is refused."""
+def select_release(version, release=None):
+    """Bind the overlay to one release: a reviewed one (RELEASES), or a later 1.x release with a reviewed loader."""
     global VERSION, FW_SHA, FW_SIZE, FW_NAME
-    require(version in RELEASES, 'W2 is not approved for release ' + str(version))
+    require(isinstance(version, str) and re.fullmatch(r'1\.[0-9]{1,2}\.[0-9]', version) is not None,
+            'W2 is not approved for release ' + str(version))
+    name = 'caravel-' + version + '.fwsc'
+    if version in RELEASES:
+        sha, size = RELEASES[version]
+    else:
+        require(release is not None, 'W2 is not approved for release ' + version + ' (no release inventory given)')
+        release = Path(release)
+        try:
+            record = json.loads(read(release / 'release-build.json').decode('utf-8'))
+        except (ValueError, OSError):
+            raise ValueError('W2 needs the verified release-build.json of release ' + version)
+        binaries = record.get('binaries') if isinstance(record, dict) else None
+        require(isinstance(binaries, dict) and record.get('version') == version,
+                'release-build.json does not describe release ' + version)
+        loader_name = 'caravel-' + version + '-loader.bin'
+        loader = binaries.get(loader_name)
+        require(loader in APPROVED_LOADERS and digest(read(release / loader_name)) == loader,
+                'W2 is not approved for release ' + version + ': its update loader was not reviewed with the W2 installer')
+        data = read(release / name)
+        require(binaries.get(name) == digest(data), 'release package does not match its build record')
+        sha, size = digest(data), len(data)
     VERSION = version
-    FW_SHA, FW_SIZE = RELEASES[version]
-    FW_NAME = 'caravel-' + version + '.fwsc'
+    FW_SHA, FW_SIZE = sha, size
+    FW_NAME = name
 
 
 def read(path):
@@ -83,7 +112,7 @@ def parse_metadata(original):
     require(data.get('version') == VERSION and data.get('release_verified') is True
             and data.get('breaking') is True and data.get('sha256') == FW_SHA
             and data.get('size') == FW_SIZE and data.get('pkg') == '../../firmware/' + FW_NAME,
-            'existing installer is not bound to approved v1.1.0 release')
+            'existing installer is not bound to the selected verified release')
     link = re.search(r'<a id="matching-source" href="([^"]+)"', original)
     source_url = '../../firmware/caravel-' + VERSION + '-source.tar.gz'
     require(data.get('source') == source_url and link is not None
@@ -188,7 +217,7 @@ def main():
     parser.add_argument('--version', default='1.1.0')
     args = parser.parse_args()
     try:
-        select_release(args.version)
+        select_release(args.version, args.release)
         overlay(args.site, args.source, args.tagged, args.release,
                 args.rollback, args.receipt, args.public_commit)
     except Exception as exc:
