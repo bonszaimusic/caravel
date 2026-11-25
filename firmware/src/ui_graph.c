@@ -472,7 +472,7 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ (ui.frame / 2u);                  /* scope: redraw every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (pg->graph == GR_STLAYER) h ^= ui.frame / 2u;
 #endif
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
@@ -1281,17 +1281,28 @@ static void draw_graph(void)
             cv_oy = 0;
             panel_note("TURN TO PICK", "[OCT+] CONFIRM", 0);
             break;
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
         case GR_STLAYER:
             cv_oy = 0;
             panel_note(stasis_layer_status(), stasis_layer_can_cancel() ? "[OCT+] CANCEL" : "[OCT+] ADD / BLEND", 0);
             break;
-#if CARAVEL_STASIS_EXPAND
+#endif
+#if CARAVEL_REVERB_MINIMAL && CARAVEL_STASIS_EXPAND
         case GR_STGRAIN:
             cv_oy = 0;
+            #if CARAVEL_STASIS2
+            if(str_eq(cur_page()->title,"REGION")) {
+                const char *reg = st.region_status==STREG_FILL ? "REGION FILL" :
+                    st.region_status==STREG_WAIT ? "REGION WAIT" :
+                    st.region_status==STREG_LIMIT ? "REGION LIMIT" : "REGION FIT";
+                panel_note(reg, "K1 POS K2 LENGTH K3 REV K4 QUALITY", 0);
+            }
+            else
+                panel_note("STASIS GRAIN", "K1 SIZE / K2 POS / K3 WINDOW / K4 REV", 0);
+#else
             panel_note("STASIS GRAIN", "K1 SIZE / K2 SCAN / K3 WINDOW / K4 REV", 0);
-            break;
 #endif
+            break;
 #endif
         case GR_FMOP:
         case GR_FMOP2:

@@ -10,6 +10,8 @@
 # FORMAT 2, six engines and BUILD / PLAY use the target profile below.
 # CAPTURE is enabled by default; EMU_CFLAGS can explicitly override it with
 # -DCARAVEL_UX_CAPTURE=0 for a comparison build.
+# 1.2.0: STASIS 2.0, the V7 PCM scope and the PLAY-style BUILD FX pages are on by default. EMU_STASIS2=0,
+# EMU_STASIS_SCOPE_V6=0 and EMU_UX_BUILD_FX=0 build the 1.1.1 behaviour for comparison.
 # The page shows the version (FELUCCA_VERSION) marked "(preview)" before its release; EMU_PREVIEW=0 drops the mark.
 set -e
 cd "$(dirname "$0")/../.."
@@ -20,7 +22,7 @@ VERSION=$(sed -n 's/^#define FELUCCA_VERSION "\([^"]*\)".*/\1/p' firmware/src/fe
 if [ -n "${EMU_VERSION:-}" ]; then VERSION="${EMU_VERSION}"; fi
 mkdir -p build/emu/fonts
 # shellcheck disable=SC2086
-emcc -DCARAVEL_UX_CAPTURE=1 -DCARAVEL_FORMAT2=1 -DCARAVEL_SLIM=1 -DCARAVEL_UX_LAYERS=1 -DCARAVEL_UX_EVOLVE=1 -DCARAVEL_ELASTIC_P1=1 -DCARAVEL_ELASTIC_PLAYABLE=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DFELUCCA_HOME_PERF=1 -DFELUCCA_PAIR_MORPH=1 -DFELUCCA_PERF_HW=1 -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_CPU2=0 ${EMU_OPT:--O2} -ffp-contract=off -std=gnu99 -w ${EMU_CFLAGS:-} \
+emcc -DCARAVEL_UX_CAPTURE=1 -DCARAVEL_FORMAT2=1 -DCARAVEL_SLIM=1 -DCARAVEL_UX_LAYERS=1 -DCARAVEL_UX_EVOLVE=1 -DCARAVEL_ELASTIC_P1=1 -DCARAVEL_ELASTIC_PLAYABLE=1 -DFELUCCA_RANDOM_MORPH=1 -DCARAVEL_REVERB_MINIMAL=1 -DCARAVEL_STASIS_EXPAND=1 -DCARAVEL_STASIS2=${EMU_STASIS2:-1} -DCARAVEL_STASIS_SCOPE_V6=${EMU_STASIS_SCOPE_V6:-1} -DCARAVEL_UX_BUILD_FX_PLAY_STYLE=${EMU_UX_BUILD_FX:-1} -DFELUCCA_HOME_PERF=1 -DFELUCCA_PAIR_MORPH=1 -DFELUCCA_PERF_HW=1 -DCARAVEL_ACTION_BANKS=1 -DFELUCCA_CPU2=0 ${EMU_OPT:--O2} -ffp-contract=off -std=gnu99 -w ${EMU_CFLAGS:-} \
     "-DFELUCCA_VERSION=\"$VERSION\"" -Ibuild/gen -Ifirmware/src \
     --no-entry -sSTANDALONE_WASM -sSTACK_SIZE=1048576 -sINITIAL_MEMORY=33554432 -sFILESYSTEM=0 \
     -o build/emu/felucca.wasm web/emu/felucca_web.c

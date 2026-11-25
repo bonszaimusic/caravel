@@ -1,4 +1,23 @@
-# Caravel 1.1.0 — 2026-11-21
+# Caravel 1.2.0 (release candidate)
+
+Caravel 1.2.0 builds on 1.1.1 and brings **STASIS 2.0** into the standard build, with the PLAY and BUILD screens that go with it. The full list is in [docs/release-120.md](docs/release-120.md).
+
+- **One source, five PLAY groups.** TEXTURE (GRAIN, STR, MOTN, TONE), REGION (POS, LENGTH, REVERSE, SOURCE) and TANK (TYPE, FEED, DRY, HALL) join SENDS and FILTER. The V7 scope shows the recorded peaks, the real grain heads and the region.
+- **DRY per track, HALL and FEED.** DRY 0 leaves only STASIS; FEED and HALL are 0 / 100 / 300 %.
+- **Grains 23 / 46 / 93 / 186 ms**, and MOTN scatters them across the REGION window.
+- **BUILD FX pages in the PLAY look**, with the BUILD header unchanged.
+
+## Project format: read this before saving
+
+REGION settings that differ from the defaults are saved with the project (marker A6). **1.1.1 and earlier cannot read such a project.** Projects with default REGION settings are unchanged, and 1.2.0 reads every 1.1.1 project. FEED, HALL and the SOURCE state are not saved.
+
+## What was and was not checked
+
+Host tests and the emulator pass locally; a test build ran on one FM-1 without flicker or problems and sounded good. **Not measured:** the CPU load against 1.1.1, and the hosted CI. The A4 test for HQ HOLD to LIVE still fails (a seam when FREEZE is released in HQ; not audible in tests).
+
+---
+
+# Caravel 1.1.0 (older) — 2026-11-21
 
 Caravel 1.1.0 builds on 1.0.0 (FORMAT 2, six engines, BUILD / PLAY). The full list is in [docs/release-110.md](docs/release-110.md); in short:
 

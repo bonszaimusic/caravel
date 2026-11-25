@@ -12,6 +12,8 @@ const key=(k,ms=90)=>{e.web_keys(1<<k);render(ms);e.web_keys(0);render(120);};
 const hold=k=>key(k,680);
 const setting=k=>e.web_action_setup_value(k);
 const dsp=k=>e.web_stasis_granular_get(k);
+const v5=e.web_stasis_ring_capacity()===65536;
+assert.ok(e.web_stasis_ring_capacity()===32768 || v5,'known STASIS ring size');
 function turn(index,steps){e.web_enc(index,steps);render(135);}
 function stereoPeak(){
  const l=new Float32Array(e.memory.buffer,e.web_out_l(),128);
@@ -65,7 +67,13 @@ assert.equal(dsp(11),1,'HOLD freezes retroactive audio');
 const frozenWrite=dsp(5);
 turn(5,1);assert.equal(dsp(2),1,'quality cannot change during HOLD');
 render(400);assert.equal(dsp(5),frozenWrite,'held capture cannot be overwritten');
-key(23);render(300);assert.ok(dsp(6)>0,'ADD records into second bank');
+if(v5){
+  key(23);render(300);
+  assert.equal(dsp(6),0,'no STASIS2 second-bank recording');
+  assert.equal(dsp(7),0,'no STASIS2 layer merger');
+}else{
+  key(23);render(300);assert.ok(dsp(6)>0,'legacy ADD records into second bank');
+}
 render(1800); /* allow background merge to complete before changing resolution */
 e.web_stasis_test_hold(0);render(2700);
 assert.equal(dsp(11),0,'return to LIVE');
@@ -78,8 +86,17 @@ render(500);assert.equal(dsp(9),0,'audio thread adopted 93ms grain');
 turn(6,-1);assert.equal(dsp(3),0,'reverse OFF');
 turn(0,1);assert.equal(dsp(14),0,'SELECT back to FX page');
 assert.equal(setting(0),90,'original STR stays canonical');
-assert.equal(setting(2),32,'LAYER AMT preserved');
-key(21);assert.equal(e.web_action_stasis_capt(),1,'physical STASIS HOLD action');
-key(21);assert.equal(e.web_action_stasis_capt(),0,'physical STASIS RELEASE action');
+assert.equal(setting(2),v5?-1:32,v5?'no retired layer setup knob':'legacy LAYER AMT preserved');
+if(v5){
+  assert.equal(dsp(19),65536,'STASIS2 full capacity exported from audio');
+  assert.ok(dsp(16)>=0 && dsp(16)<=3,'valid REGION WAIT/FILL/FIT/LIMIT');
+  assert.equal(e.web_stasis2_fx_key_map(11),14,'C5 does not trigger PHSR');
+  // The dedicated stage-2 WASM test drives FX-held B4, C5-long and D5.
+}else{
+  key(21);assert.equal(e.web_action_stasis_capt(),1,'legacy physical STASIS HOLD action');
+  key(21);assert.equal(e.web_action_stasis_capt(),0,'legacy physical STASIS RELEASE action');
+}
 e.web_keys(0);
-console.log('STASIS EXPAND C/WASM PASS: 93/186/372ms grains, 22.05/11.025kHz windows, dual-bank ADD, MOD SCAN, REVERSE, HOLD safety, FX compatibility and real audio.');
+console.log(v5 ?
+ 'STASIS2 C/WASM PASS: full PCM ring, no second bank, three qualities, MOD SCAN, REVERSE and HOLD (host/WASM only).' :
+ 'STASIS legacy C/WASM PASS: three qualities, dual-bank ADD, MOD SCAN, REVERSE and HOLD (host/WASM only).');

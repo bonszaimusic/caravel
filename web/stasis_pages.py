@@ -123,7 +123,7 @@ HUB_START="<!-- CARAVEL-TUTORIALS-START -->";HUB_END="<!-- CARAVEL-TUTORIALS-END
 def tutorial_hub():
     return HUB_START+('<section class="chapter" id="all-tutorials"><div class="eyebrow">ALL TUTORIALS</div><h2>Pick a lesson</h2><ul>'
         '<li><a href="'+MORPH_PAGE+'/"><strong>Random Morph and Morph Journey</strong></a>: save sounds, morph between them and chain the morphs hands-free (0.9.0).</li>'
-        '<li><a href="#lesson-1"><strong>STASIS: HOLD, ADD and BLEND</strong></a>: the four lessons below, with a PDF guide and <a href="../sounds/">sound examples</a>.</li>'
+        '<li><strong>STASIS textures</strong>: use the current performance guide for FREEZE, source and region controls; old 0.6.0 material is retained only as a historical archive.</li>'
         '<li><a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/home-and-stasis.md"><strong>HOME, Pair Morph, macros and saving</strong></a>: the performance workflow, with a <a href="https://github.com/bonszaimusic/caravel/blob/main/docs/tutorials/Caravel-0.5.0-Quickstart.pdf">six-page PDF quickstart</a>.</li>'
         '</ul></section>')+HUB_END
 def add_morph_tutorial(site,look,ship,root=ROOT,version="0.9.0"):

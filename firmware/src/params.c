@@ -65,7 +65,9 @@ static const char *const N_DASH[] = {"--"};
 /* Old stored 0/1 remain HALL aliases. Slot 3 is STASIS, not ABYSS. */
 static const char *const N_RTYPE[] = {"HALL", "HALL", "HALL", "STASIS"};
 static const char *const N_STCAP[] = {"LIVE", "HOLD"};  /* CAPT captures already-playing sound */
+#if !CARAVEL_STASIS2
 static const char *const N_STLAYER[] = {"ADD", "BLEND"};
+#endif
 /* Former FRZ/global ID 26 becomes continuously variable EVOLVE. */
 #else
 static const char *const N_RTYPE[] = {"ROOM", "SPRING", "HALL", "STASIS"};
@@ -93,7 +95,11 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
                                      , "CAPT", "STR", "MOTN" /* shared STASIS bus targets */
 #endif
 #if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS2
+                                     , "POS" /* same stored MOD destination ID as legacy SCAN */
+#else
                                      , "SCAN" /* independently modulatable STASIS read position */
+#endif
 #endif
 };
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
@@ -176,7 +182,13 @@ static const param_desc_t TP[P_COUNT] = {
                     [P_FM##k##_REL] = PD("REL", F_TIME, 0, 127, 0)
 #define FMOP_SL(k) [P_FM##k##_SUS] = PD("SUS", F_PCT, 0, 127, 127), \
                    [P_FM##k##_LEVEL] = PD("LVL", F_PCT, 0, 127, 127)
-    FMOP_ADR(1), FMOP_SL(1), FMOP_ADR(2), FMOP_SL(2), FMOP_ADR(3), FMOP_SL(3), FMOP_SL(4),
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+/* operator 4's LEVEL id is the track's DRY (core.h P_DRY): 100 % by default as the operator value was */
+#define FMOP_SL4 [P_FM4_SUS] = PD("SUS", F_PCT, 0, 127, 127), [P_DRY] = PD("DRY", F_PCT, 0, 127, 127)
+#else
+#define FMOP_SL4 FMOP_SL(4)
+#endif
+    FMOP_ADR(1), FMOP_SL(1), FMOP_ADR(2), FMOP_SL(2), FMOP_ADR(3), FMOP_SL(3), FMOP_SL4,
 #if FELUCCA_FM4
     FMOP_ADR(4),
 #else
@@ -243,7 +255,11 @@ static const param_desc_t GP[G_COUNT] = {
      * showed the USB state), SYNC was a placeholder, CPU a reading; the USB state and the CPU load are MENU > SYSTEM >
      * INFO's now (ui_menu.c). Kept: the ids and G_COUNT are fixed by the formats and the protocol */
     [G_MIDI] = PE("MIDI", N_MIDI_INPUT, 0),
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_STASIS2
+    /* Retired LAYER slots keep their wire IDs and exact old value bounds.
+     * They are not exposed as parameters and must never be repurposed. */
+    [G_SYNC] = PE("RESV", N_ONOFF, 0),
+#elif CARAVEL_REVERB_MINIMAL
     [G_STMODE] = PE("MODE", N_STLAYER, 0),
 #else
     [G_SYNC] = PE("SYNC", N_DASH, 0),
@@ -251,7 +267,9 @@ static const param_desc_t GP[G_COUNT] = {
     /* MIDI IN's routing, edited on MENU > MIDI > MIDI IN (1.2: menu_items.c MI_MIDIIN; up to 1.1.5 GLO > SYSTEM ROUT),
      * stored with the project as before. (was "--": stored 0 = CH1-4, as MIDI IN always was) */
     [G_ROUTE] = PE("ROUT", N_ROUTE, 0),
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_STASIS2
+    [G_INFO] = PD("RESV", F_PCT, 0, 127, 32),
+#elif CARAVEL_REVERB_MINIMAL
     [G_STAMT] = PD("AMT", F_PCT, 0, 127, 32),
 #else
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
@@ -261,7 +279,9 @@ static const param_desc_t GP[G_COUNT] = {
     [G_LOAD] = PE("LOAD", N_GO, 0),
     [G_SAVE] = PE("SAVE", N_GO, 0),
     [G_ENGSEL] = PE("ENG", N_ENGNAME, 0),
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_STASIS2
+    [G_ENGGO] = {"RESV", F_INT, 1, 30, 6, 0, "s"},
+#elif CARAVEL_REVERB_MINIMAL
     [G_STTIME] = {"TIME", F_INT, 1, 30, 6, 0, "s"},
 #else
     [G_ENGGO] = PE("SET", N_GO, 0),
@@ -611,7 +631,13 @@ static const page_t PAGES[] = {
 #endif
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
 #if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_STASIS2
+    /* Keep the historical page index stable for saved HOME references;
+     * the page is not visible and contains no live edit/action controls. */
+    {"", FAM_FX, SC_GLOBAL, GR_STLAYER, {0xFF, 0xFF, 0xFF, 0xFF}},
+#else
     {"LAYER", FAM_FX, SC_GLOBAL, GR_STLAYER, {G_STMODE, G_STAMT, G_STTIME, 0xFF}},
+#endif
 #if CARAVEL_STASIS_EXPAND
     /* Native FX page exposes the very SAME int16_t fields as ACTION SETUP. */
     {"GRAIN", FAM_FX, SC_GLOBAL, GR_STGRAIN, {0xFF,0xFF,0xFF,0xFF}},
@@ -707,6 +733,12 @@ static const page_t PAGES[] = {
      * stasis_fx_pages() and explicitly locates this page by title. */
     {"AFTER", FAM_FX, SC_GLOBAL, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
 #endif
+#if CARAVEL_STASIS2
+    /* A new page appended after all legacy indices: no old HOME page ref
+     * changes its meaning. These fields stay volatile until FORMAT2 V5
+     * serialization is separately budgeted and versioned. */
+    {"REGION", FAM_FX, SC_GLOBAL, GR_STGRAIN, {0xFF,0xFF,0xFF,0xFF}},
+#endif
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
@@ -720,14 +752,38 @@ static const param_desc_t ST_STR_DESC = PD("STR", F_PCT, 0, 127, 90);
  * G_RDAMP continues to store HALL DAMP and is not read while STASIS plays. */
 static const param_desc_t ST_MOTION_DESC = PD("MOTN", F_PCT, 0, 127, 45);
 #if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS2
+static const char *const N_STGRAIN[] = {"23ms","46ms","93ms","186ms"};
+#else
 static const char *const N_STGRAIN[] = {"93ms","186ms","372ms"};
+#endif
+#if CARAVEL_STASIS2
+/* The capture rate decides how much audio fits in the ring: 44.1 / 22.05 / 11.025 kHz = 1.5 / 3.0 / 5.9 s.
+ * It is the length of the SOURCE history, not of a grain, so the page says so. */
+static const char *const N_STWINDOW[] = {"1.5s","3.0s","5.9s"};
+#define ST_HISTORY_LABEL "HISTORY"
+#else
 static const char *const N_STWINDOW[] = {"HQ","LONG","DRONE"};
+#define ST_HISTORY_LABEL "WINDOW"
+#endif
 static const param_desc_t ST_GRAIN_DESC[4] = {
- PE("GRAIN",N_STGRAIN,1),
+ PE("GRAIN",N_STGRAIN,ST_GRAIN_DEFAULT),
+#if CARAVEL_STASIS2
+ PD("POS",F_PCT,0,127,0),
+#else
  PD("SCAN",F_PCT,0,127,0),
- PE("WINDOW",N_STWINDOW,0),
+#endif
+ PE(ST_HISTORY_LABEL,N_STWINDOW,0),
  PE("REVERSE",N_ONOFF,0)
 };
+#if CARAVEL_STASIS2
+static const param_desc_t ST_REGION_DESC[4] = {
+  PD("POS",F_PCT,0,127,0),
+  PD("LENGTH",F_PCT,0,127,64),
+  PE("REVERSE",N_ONOFF,0),
+  PE(ST_HISTORY_LABEL,N_STWINDOW,0)
+};
+#endif
 #endif
 #endif
 #if CARAVEL_AFTERBURNER
@@ -754,6 +810,15 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     }
 #endif
 #if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS2
+    if(str_eq(pg->title,"REGION")) {
+        static int16_t *const fields[4]={
+            &st_expand.scan,&st_expand.length,&st_expand.reverse,&st_expand.quality
+        };
+        *valp=fields[slot];
+        return &ST_REGION_DESC[slot];
+    }
+#endif
     if(pg->graph==GR_STGRAIN){
         static int16_t *const fields[4]={
             &st_expand.grain,&st_expand.scan,&st_expand.quality,&st_expand.reverse

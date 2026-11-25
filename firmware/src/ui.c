@@ -613,7 +613,7 @@ static int page_visible(uint32_t i)
     }
     /* HARMONY's progression can be edited even while the bus is OFF. */
 #if CARAVEL_REVERB_MINIMAL
-    if (PAGES[i].graph == GR_STLAYER) return song.g[G_RTYPE] == 3u;
+    if (PAGES[i].graph == GR_STLAYER) return !CARAVEL_STASIS2 && song.g[G_RTYPE] == 3u;
 #endif
 #if CARAVEL_STASIS_EXPAND
     if (PAGES[i].graph == GR_STGRAIN) return song.g[G_RTYPE] == 3u;
@@ -652,7 +652,12 @@ static uint32_t stasis_fx_pages(uint8_t *pages)
      * append-only/unchanged for project and HOME compatibility. */
     static const char *const names[]={"FX","DLY","CHORUS","REVERB",
         "GRAIN",
+#if CARAVEL_STASIS2
+        "REGION",
+#endif
+#if !CARAVEL_STASIS2
         "LAYER",
+#endif
 #if CARAVEL_AFTERBURNER
         "AFTER",
 #endif
@@ -758,7 +763,7 @@ static void page_entered(void)
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
     ui.act = pg->graph == GR_USER ? 4u : 0u;     /* the save screen is ready for OCT+ */
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (!ui.home && pg->graph == GR_STLAYER) ui.act = 4u;
 #endif
     ui.tl_clean = 0;
@@ -1651,6 +1656,9 @@ static void pat_load_ui(track_t *t, uint32_t n)
  * (core.h CHORDSET_ID) are the track's too */
 static int param_kept(uint32_t i)
 {
+#if CARAVEL_STASIS2
+    if (DRY_ID(i)) return 1;                  /* the track's DRY is part of its channel strip: a sound load leaves it */
+#endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
            (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_LATCH || i == P_SQNT ||
            CHORDSET_ID(i);
@@ -2144,7 +2152,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     uint32_t c, m = 0;
     if (ui.home)
         return 0;
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (pg->graph == GR_STLAYER) return 8u;
 #endif
     if (pg->graph == GR_EVENTS) return 16u;     /* AUTOMATION: no knob is an action; OCT+ by the row (ev_oct) */
@@ -2179,7 +2187,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
 {
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
     uint32_t id = cur_page()->id[c & 3u];
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (cur_page()->graph == GR_STLAYER)
         return stasis_layer_can_cancel() ? "CANCEL" : song.g[G_STMODE] == 1 ? "BLEND" : "ADD";
 #endif
@@ -2209,7 +2217,7 @@ static int act_ready(void)
     uint32_t c = act_col(), s = song.sel, id;
     if (!c--)
         return 0;
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (cur_page()->graph == GR_STLAYER)
         return stasis_layer_can_start() || stasis_layer_can_cancel();
 #endif

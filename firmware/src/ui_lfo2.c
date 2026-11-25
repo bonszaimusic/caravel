@@ -111,7 +111,11 @@ static const dual_t DUALS[] = {
     {"FX", "DLY", "FX SENDS", "DELAY", "FX SENDS", "DELAY", DK_PLAIN},
 #if CARAVEL_STASIS_EXPAND
     {"CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", DK_PLAIN},
+#if !CARAVEL_STASIS2
+    /* Old dual GRAIN/LAYER layout exists only in the baseline profile.
+     * V5 GRAIN is a regular BUILD page until the new UI stage. */
     {"GRAIN", "LAYER", "GRAIN", "LAYER", "STASIS GRAIN", "STASIS LAYER", DK_PLAIN},
+#endif
 #else
     {"REVERB", "CHORUS", "REVERB", "CHORUS", "REVERB", "CHORUS", DK_PLAIN},
 #endif
@@ -463,7 +467,7 @@ static void lfo_cards(const page_t *pg)
         sig = sig * 33u + harmony_key_root_eff() * 131u + harmony_key_scale_eff() * 17u + harmony_key_mode * 997u;
         sig = sig * 33u + link_setup_row * 131u + (src && src <= NTRK ? (uint32_t)trk[src - 1u].p[P_SCALE] * 17u : 0u);
     }
-#if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS_EXPAND && !CARAVEL_STASIS2
     if(rps[1] && rps[1]->graph==GR_STLAYER)
         sig=sig*33u+st_layer.phase+st_layer.request*8u+st.auto_hold*32u+st.releasing*64u+st.stopping*128u;
 #endif
@@ -546,7 +550,7 @@ static void lfo_cards(const page_t *pg)
             int32_t x = 6 + (int32_t)col * 58;
             if (col)   /* all HARMONY setup cards are distinct */
                 cv_rect(x - 1, y + 26, 1, 47, T_RAISE);
-#if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS_EXPAND && !CARAVEL_STASIS2
             if(rps[row] && rps[row]->graph==GR_STLAYER && col==3u){
                 const char *action=stasis_layer_can_cancel()?"CANCEL":song.g[G_STMODE]==1?"BLEND":"ADD";
                 cv_text_in(x,y+27-AF_S_CAP_Y,56,&AF_S,action,T_TEXT,T_SURF);
@@ -576,7 +580,7 @@ static void lfo_cards(const page_t *pg)
             int icon = (dd->kind == DK_LFO || dd->kind == DK_LFO2) && !row && col == 1u;      /* LFO: the WAVE card carries a pictogram */
             int disabled = !row && !col && (dd->kind == DK_LFO2 ? lfo2_config[song.sel].p[L2_SYNC] :
                                             dd->kind == DK_LFO ? TSEL->p[P_LSYNC] : 0);
-#if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS_EXPAND && !CARAVEL_STASIS2
             if(rps[row] && rps[row]->graph==GR_STLAYER &&
                 ((col==1u && song.g[G_STMODE]==1)||(col==2u && song.g[G_STMODE]!=1)))disabled=1;
 #endif

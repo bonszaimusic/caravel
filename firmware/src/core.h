@@ -87,6 +87,14 @@
 #ifndef CARAVEL_STASIS_EXPAND
 #define CARAVEL_STASIS_EXPAND 0
 #endif
+/* Private stage-1 probe. OFF preprocesses to the original STASIS paths.
+ * ON bypasses the retired ADD/BLEND bank and uses the full PCM source ring. */
+#ifndef CARAVEL_STASIS2
+#define CARAVEL_STASIS2 0
+#endif
+#if CARAVEL_STASIS2 && (!CARAVEL_REVERB_MINIMAL || !CARAVEL_STASIS_EXPAND)
+#error "STASIS2 REGION requires minimal reverb and expanded capture"
+#endif
 /* 1.0 AFTERBURNER, a separate post-reverb tail. RC build escape hatch:
  * -DCARAVEL_AFTERBURNER=0 removes all buffers, DSP and editing UI. */
 #ifndef CARAVEL_AFTERBURNER
@@ -111,12 +119,39 @@ static struct {
  * int16_t matches the firmware's page_desc / param_turn ABI exactly:
  * FX > GRAIN and ACTION > STASIS edit the same fields, never shadow copies.
  * Existing STR/MOTN/LAYER continue to live only in song.g. */
+/* STASIS grain sizes. Flag off: 0..2 = 93/186/372 ms (4096<<g output samples), default 186 ms.
+ * STASIS2: four steps 0..3 = 23/46/93/186 ms (1024<<g), default 186 ms (the 372 ms step is gone, a very short grain
+ * is worth more than a very long one; measured: no extra cost per sample); the stored value is the 2 bit GRAIN field
+ * of the A6 project extension (unreleased, so its meaning may change: index 2 was 186 ms, now 93 ms). */
+#if CARAVEL_STASIS2
+#define ST_GRAIN_BASE 1024u
+#define ST_GRAIN_MAX 3
+#define ST_GRAIN_DEFAULT 3u
+#define ST_GRAIN_ENV_SHIFT 6u
+#else
+#define ST_GRAIN_BASE 4096u
+#define ST_GRAIN_MAX 2
+#define ST_GRAIN_DEFAULT 1u
+#define ST_GRAIN_ENV_SHIFT 4u
+#endif
 static struct {
  int16_t grain;    /* 0=4096, 1=8192, 2=16384 output samples */
  int16_t quality;  /* 0=44.1k, 1=22.05k, 2=11.025k capture */
- int16_t scan;     /* 0..127; modulation may offset this */
+ int16_t scan;     /* legacy MOD destination retained; STASIS2 names it POS */
  int16_t reverse;  /* 0 forward, 1 reverse per grain */
-} st_expand = {.grain=1u,.quality=0u,.scan=0u,.reverse=0u};
+#if CARAVEL_STASIS2
+ int16_t length;   /* source REGION LENGTH, 0..127, runtime-only */
+#endif
+} st_expand = {.grain=ST_GRAIN_DEFAULT,.quality=0u,.scan=0u,.reverse=0u
+#if CARAVEL_STASIS2
+ ,.length=64u
+#endif
+};
+#if CARAVEL_STASIS2
+/* STASIS hall controls, runtime only (fx.c): FEED = grains into the hall (TEXTURE K4), HALL = the hall's return level
+ * (TANK K4). 127 = 100 % = the sound as before; the project has no free bit, so a load starts at 100 %. */
+static volatile uint8_t st_hall_feed = 64u, st_hall_ret = 64u;
+#endif
 /* Global STASIS TONE (PLAY > SPACE > STASIS K4): 64 preserves the
  * approved STASIS sound. Independent of track FILTER / HALL DAMP.
  * Persisted with AFTER in the fixed-length FORMAT-2 FUNW FX extension. */
@@ -228,12 +263,26 @@ _Static_assert(P_FM4_ATK == 76 && P_FM4_DEC == 77 && P_FM4_SUS == 78 && P_FM4_RE
                P_CHRD == 81 && P_CSRC == 76 && P_CEXT == 77 && P_COCT == 79,
                "CHORD SOURCE / EXT / OCT are the retired ids 76, 77, 79");
 #define CHORDSET_ID(i) ((i) == P_CSRC || (i) == P_CEXT || (i) == P_COCT)
+/* STASIS2: the track's DRY, how much of its own sound is heard beside the sends (PLAY > SPACE > TANK K3), lives in the retired
+ * DIGITAL operator-4 LEVEL id 80: inert without FELUCCA_FM4, default 127 = 100 %, so a project that never touched it is
+ * byte-identical and the sound is unchanged. It is a channel strip value like LEVEL and PAN (ui.c param_kept). */
+#if CARAVEL_STASIS2
+#define P_DRY P_FM4_LEVEL
+_Static_assert(P_FM4_LEVEL == 80, "DRY is the retired id 80");
+#define DRY_ID(i) ((i) == P_DRY)
+#endif
 /* EXT's stored order (0 = 7+9, 1 = 7, 2 = 7+9+13) <-> the order the UI shows (0 = 7, 1 = 7+9, 2 = 7+9+13): the swap of
  * 0 and 1. A stored value outside 0..2 reads as the default 7+9 (shown 1); a shown index outside 0..2 stores 7+9 (0) */
 static inline uint32_t chordext_disp(uint32_t stored) { return stored == 1u ? 0u : stored == 2u ? 2u : 1u; }
 static inline uint32_t chordext_stored(uint32_t disp) { return disp == 0u ? 1u : disp == 2u ? 2u : 0u; }
 #else
 #define CHORDSET_ID(i) 0
+#endif
+#ifndef DRY_ID
+#define DRY_ID(i) 0
+#endif
+#if CARAVEL_STASIS2 && FELUCCA_FM4
+#error "STASIS2 DRY lives in the retired DIGITAL id 80 and needs FELUCCA_FM4=0"
 #endif
 /* Clear ephemeral live-source collection and follower memory when an accepted project
  * replaces the tracks. HARM is resolved directly from the bus; nothing new is stored. */

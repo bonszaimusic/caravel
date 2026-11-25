@@ -37,6 +37,9 @@ for (const st of JSON.parse(fs.readFileSync(scriptPath, "utf8"))) {
   else if (op === "eng") { ex.web_test_engine(a, b || 0); render(300); }   // a track 0 engine (and its preset), for screens of every engine
   else if (op === "midi") { ex.web_midi(a[0], a[1], a[2]); render(b || 20); }
   else if (op === "ownfilter") { ex.web_test_filter_own(a); render(200); }
+  else if (op === "stasis_type") { if (!ex.web_stasis_test_type) throw Error("STASIS2 build required"); ex.web_stasis_test_type(a); render(150); }
+  else if (op === "stasis_hold") { if (!ex.web_stasis_test_hold) throw Error("STASIS2 build required"); ex.web_stasis_test_hold(a); render(150); }
+  else if (op === "stasis_theme") { if (!ex.web_stasis2_test_palette) throw Error("STASIS2 UX build required"); ex.web_stasis2_test_palette(a, b); render(150); }
   else if (op === "shot") { render(120); png(`${outDir}/${a}.png`, new Uint16Array(mem.buffer, ex.web_screen(), 240 * 240)); }
 }
 console.log("shots done");

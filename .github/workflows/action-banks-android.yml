@@ -11,6 +11,10 @@ on:
       - 'firmware/src/**'
       - 'web/emu/**'
       - 'tests/stasis_continuity_test.c'
+      - 'tests/stasis_v5_stage1_test.c'
+      - 'tests/stasis_region_math_test.c'
+      - 'tests/stasis_v5_wasm_test.mjs'
+      - 'tools/stasis2_probe.sh'
       - '.github/workflows/action-banks-android.yml'
       - '.github/workflows/release-071.yml'
       - '.github/workflows/release-072.yml'
@@ -81,6 +85,10 @@ jobs:
           export JIELI_TOOLCHAIN="$RUNNER_TEMP/jieli/toolchain"
           export AC79_SDK="$RUNNER_TEMP/ac79-sdk"
           sh build.sh
+      - name: STASIS2 full-ring and REGION host geometry and stereo continuity (A4 is a documented known limit of 1.2.0)
+        env:
+          STASIS2_A4_KNOWN_LIMIT: '1'
+        run: sh tools/stasis2_probe.sh
       - name: Install pinned WebAssembly toolchain
         run: |
           git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"

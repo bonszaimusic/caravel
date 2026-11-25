@@ -29,6 +29,19 @@ static void lcd_sync(void)          /* finish the running transfer (before touch
     lcd_busy = 0;
 }
 
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+/* Do not delay knob/gesture handling for a *background* scope update.
+ * lcd_busy is the pending ownership flag, not the live hardware state:
+ * after the last page blit it can remain 1 even when DMA is already done.
+ * Probe SPI completion before retiring that pending transfer. */
+static uint8_t lcd_scope_ready(void)
+{
+    if (lcd_busy && !fm1_lcd_transfer_done()) return 0u;
+    lcd_sync(); /* known-completed transaction: deselect + clear ownership */
+    return 1u;
+}
+#endif
+
 static void lcd_cmd(uint8_t c)
 {
     lcd_sync();

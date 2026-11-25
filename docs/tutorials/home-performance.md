@@ -21,7 +21,7 @@ RANDOM changes the targets in the track's own performance set. JOURNEY moves bet
 
 ## 3. SPACE and STASIS
 
-Tap FX for SPACE and browse SENDS, FILTER and STASIS. STASIS holds an audio texture and can add or blend layers. CAPTURE holds note gestures instead. Start with low levels, then compare dry and wet sound.
+Tap FX for SPACE and browse the currently available effects. STASIS holds an audio texture; CAPTURE separately holds note gestures. The private STASIS 2.0 preview adds a bounded REGION and distinct FREEZE / long-press NEW SOURCE controls. Older installed firmware may use different controls; follow the labels on your device. Start with low levels, then compare dry and wet sound.
 
 ![SPACE](img/one-space.png)
 

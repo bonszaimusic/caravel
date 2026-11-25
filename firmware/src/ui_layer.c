@@ -945,6 +945,11 @@ static uint32_t layer_leds(uint32_t *br)
             e = perf_key(k);
             can = e < PF_N && ((ok >> e) & 1u);
             on = can && ((held >> e) & 1u);
+#if CARAVEL_STASIS2
+            /* The physical keyboard is monochrome: all live STASIS actions
+             * are permanently lit rather than merely breathing. */
+            if (!b && uxl_stasis_cell_state(p)) { on = 1; can = 0; }
+#endif
         } else if (l == LAYER_GLO) {                    /* sounding lit; SOLO held lit, the others, C4, F4 breathe */
             on = b ? p < NTRK && glo_sounding(p) : (p < NTRK && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
                  (p == 6u && seq_fill);
@@ -989,11 +994,18 @@ static const char B_NOTE[NTRK] = {'F', 'G', 'A', 'C'};  /* black keys 1..4: F# G
 #define LF_H 19                                          /* FX: the white keys' rows (F3 .. B3, C4 .. F4, G4 .. C5, D5 .. G5) */
 #define LM_Y 96                                          /* the black keys' row (22 px) */
 #define LM_H 22
-enum { LS_OFF, LS_SEL, LS_HELD, LS_WAIT, LS_DIM, LS_MUTE };
+enum { LS_OFF, LS_SEL, LS_HELD, LS_WAIT, LS_DIM, LS_MUTE
+#if CARAVEL_STASIS2
+       , LS_STASIS, LS_STASIS_ACTIVE, LS_STASIS_PENDING
+#endif
+};
 /* 1.5 (#173): | LS_ALT, an idle (OFF, DIM) cell of the FX map's 2nd and 4th columns in a fill of its own, the columns
  * light / dark in turn as the piano roll's keys, so the effects are told apart at a glance: SURF -> TEXT 22 % (the
  * idle RAISE is 12 %); LINE (idle cells unfilled) 10 %; MONO (its one grey) none */
 #define LS_ALT 0x10u
+#if CARAVEL_STASIS2
+#define LS_STASIS_PICK 0x20u  /* selected key on the STASIS FX legend */
+#endif
 static uint16_t lc_alt(void)
 {
     return ux.raise == UI_BW_GREY && ux.dim == UI_BW_GREY ? T_RAISE : ux_mix(T_SURF, T_TEXT, ux.style ? 10 : 22);
@@ -1008,10 +1020,20 @@ static uint16_t lc_fill(uint32_t st, uint16_t *ink)
         *ink = T_INK;
         return T_KEY;
     }
-    if (st == LS_HELD) {
+    if (st == LS_HELD
+#if CARAVEL_STASIS2
+        || st == LS_STASIS_ACTIVE
+#endif
+       ) {
         *ink = T_BG;
         return T_ACCENT;
     }
+#if CARAVEL_STASIS2
+    if (st == LS_STASIS || st == LS_STASIS_PENDING) {
+        *ink = T_TEXT;
+        return T_SURF; /* distinct from the filled LS_SEL/T_THEME cell */
+    }
+#endif
     if (st == LS_SEL || st == LS_WAIT) {
         *ink = T_INK;
         return T_THEME;
@@ -1048,6 +1070,24 @@ static void lcell(int32_t x, int32_t y, int32_t h, const char *note, uint32_t ic
 {
     uint16_t ink, fill = lc_fill(st, &ink), idle = fill == T_RAISE || ((st & LS_ALT) && fill == lc_alt());
     fill = lc_box(x, y, LC_W, h, fill);
+#if CARAVEL_STASIS2
+    /* Geometry, not color alone: important for MONO where THEME=ACCENT.
+     * Idle = outlined surface + underbar, ACTIVE = inverted accent/frame. */
+    if ((st & ~LS_ALT) == LS_STASIS) {
+        cv_frame(x+1,y+1,LC_W-2,h-2,T_ACCENT);
+        cv_rect(x+3,y+h-3,LC_W-6,2,T_ACCENT);
+    } else if ((st & ~LS_ALT) == LS_STASIS_ACTIVE) {
+        cv_frame(x+1,y+1,LC_W-2,h-2,T_TEXT);
+        cv_rect(x+3,y+h-3,LC_W-6,2,T_BG);
+    } else if ((st & ~LS_ALT) == LS_STASIS_PENDING) {
+        uint32_t j;
+        /* Four geometric segments remain readable in LINE and MONO. */
+        cv_frame(x+1,y+1,LC_W-2,h-2,T_THEME);
+        for(j=0u;j<4u;j++)
+            cv_rect(x+4+(LC_W-8)*(int32_t)j/4,y+h-6,(LC_W-12)/4,3,
+                    j<(uint32_t)uxl_new_step?T_ACCENT:T_MID);
+    }
+#endif
     if (note)
         cv_text_on(x + 5, y + 3, &AF_S, note, idle ? T_MID : ink, fill);
     if (h > 30) {                                   /* the icon's cell over the name, 6 px between, centred */
@@ -1094,11 +1134,24 @@ static void layer_fx(void)
     char n[3] = {0, 0, 0};
     for (p = 0; p < PF_KEYS; p++) {                     /* the white keys F3 .. G5, 4 a row: the effect each holds */
         e = perf_map[p];
+#if CARAVEL_STASIS2
+        {
+            uint32_t sv=uxl_stasis_cell_state(p);
+            st=sv==2u?LS_STASIS_ACTIVE:sv==3u?LS_STASIS_PENDING:sv==1u?LS_STASIS:
+               p==ed?LS_SEL:e>=PF_NFX||!((ok>>e)&1u)?LS_DIM:
+               !((held>>e)&1u)?LS_OFF:(act>>e)&1u?LS_HELD:LS_WAIT;
+        }
+#else
         st = p == ed ? LS_SEL : uxl_fx_label(p) ? LS_OFF : e >= PF_NFX || !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF
-           : (act >> e) & 1u ? LS_HELD : LS_WAIT;       /* (the key PRESETS assigns: the selection's fill) */
+           : (act >> e) & 1u ? LS_HELD : LS_WAIT;
+#endif       /* (the key PRESETS assigns: the selection's fill) */
         n[0] = W_NOTE[p];
         lcell(LC_X(p % 4u), 4 + (LF_H + 4) * (int32_t)(p / 4u), LF_H, n, 0, 0, uxl_fx_label(p) ? uxl_fx_label(p) : e < PF_NFX ? PF_CELL[e] : "",
               st | (p & 1u ? LS_ALT : 0u), 0);           /* (#173: the 2nd and 4th columns' idle cells their own fill) */
+#if CARAVEL_STASIS2
+        if (p==ed && (st==LS_STASIS || st==LS_STASIS_ACTIVE || st==LS_STASIS_PENDING))
+            cv_rect(LC_X(p%4u)+LC_W-9,6+(LF_H+4)*(int32_t)(p/4u),4,3,T_TEXT);
+#endif
     }
     for (e = 0; e < NTRK; e++) {                        /* the mutes of the black keys 1..4 */
         bnote(n, e);
@@ -1434,8 +1487,18 @@ static void uly_model(uint32_t l, uly_t *m)
         str_cpy(m->small, fx_key_held() ? "ASSIGN" : ui.lock == LAYER_FX ? "LOCKED" : "HOLD", sizeof m->small);
         for (p = 0; p < PF_KEYS; p++) {
             e = perf_map[p];
+#if CARAVEL_STASIS2
+            {
+                uint32_t sv=uxl_stasis_cell_state(p);
+                st=sv==2u?LS_STASIS_ACTIVE:sv==3u?LS_STASIS_PENDING:sv==1u?LS_STASIS:
+                    p==ed?LS_SEL:e>=PF_NFX||!((ok>>e)&1u)?LS_DIM:
+                    !((held>>e)&1u)?LS_OFF:(act>>e)&1u?LS_HELD:LS_WAIT;
+                if(sv && p==ed)st|=LS_STASIS_PICK;
+            }
+#else
             st = p == ed ? LS_SEL : uxl_fx_label(p) ? LS_OFF : e >= PF_NFX || !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF
                : (act >> e) & 1u ? LS_HELD : LS_WAIT;
+#endif
             uly_add(m, uxl_fx_label(p) ? uxl_fx_label(p) : e < PF_NFX ? PF_CELL[e] : "", st, p % 4u, p / 4u, 1);
         }
         for (e = 0; e < NTRK; e++) {
@@ -1558,14 +1621,39 @@ static void uly_paint(const uly_t *m)
         int32_t x = 6 + (int32_t)c->col * 58, w = (int32_t)c->span * 54 + ((int32_t)c->span - 1) * 4, y = y0 + (int32_t)c->row * pitch, h = pitch - 4;
         uint16_t fill = T_RAISE, ink = T_MID;
         char f[16];
-        switch (c->st) {
+        switch (c->st
+#if CARAVEL_STASIS2
+                & ~LS_STASIS_PICK
+#endif
+               ) {
         case LS_SEL: case LS_WAIT: fill = T_THEME; ink = T_INK; break;
         case LS_HELD: fill = T_ACCENT; ink = T_BG; break;
+#if CARAVEL_STASIS2
+        case LS_STASIS_ACTIVE: fill = T_ACCENT; ink = T_BG; break;
+        case LS_STASIS: case LS_STASIS_PENDING: fill = T_SURF; ink = T_TEXT; break;
+#endif
         case LS_DIM: ink = T_DIM; break;
         case LS_MUTE: fill = T_KEY; ink = T_INK; break;
         default: break;
         }
         cv_rrect(x, y, w, h, 4, fill, T_BG);
+#if CARAVEL_STASIS2
+        if((c->st & ~LS_STASIS_PICK)==LS_STASIS){
+            cv_frame(x+1,y+1,w-2,h-2,T_ACCENT);
+            cv_rect(x+3,y+h-3,w-6,2,T_ACCENT);
+        }else if((c->st & ~LS_STASIS_PICK)==LS_STASIS_ACTIVE){
+            cv_frame(x+1,y+1,w-2,h-2,T_TEXT);
+            cv_rect(x+3,y+h-3,w-6,2,T_BG);
+        }else if((c->st & ~LS_STASIS_PICK)==LS_STASIS_PENDING){
+            uint32_t j;
+            cv_frame(x+1,y+1,w-2,h-2,T_THEME);
+            for(j=0u;j<4u;j++)
+                cv_rect(x+4+(w-8)*(int32_t)j/4,y+h-6,(w-12)/4,3,
+                        j<(uint32_t)uxl_new_step?T_ACCENT:T_MID);
+        }
+        if(c->st & LS_STASIS_PICK)
+            cv_rect(x+w-8,y+2,4,3,T_TEXT);
+#endif
         text_fit(f, sizeof f, c->name, &AF_S, w - 4);
         cv_text_on(x + (w - text_w(&AF_S, f)) / 2, y + (h > 14 ? 1 : 0), &AF_S, f, ink, fill);
     }
@@ -1661,7 +1749,12 @@ uxl_foot:
 #endif
 #if CARAVEL_UX_LAYERS
     if (uxl.play && l <= LAYER_SCL) {
-        const char *hint = l==LAYER_FX ? "B4 HOLD C5 ADD F5 BLEND G5 REL" :
+        const char *hint = l==LAYER_FX ?
+#if CARAVEL_STASIS2
+            (song.g[G_RTYPE]==3u?"B4 FRZ  C5 NEW LONG  D5 REL":"FX EFFECTS") :
+#else
+            "B4 HOLD C5 ADD F5 BLEND G5 REL" :
+#endif
             l==LAYER_GLO ? "KEYS MUTE/SOLO  PLAY RESTART" : "D5 PREV E5 NEXT F5 HOLD G5 RESET";
         cv_begin(240,H_FOOT,T_BG);cv_bg=T_BG;
         cv_free_text(4,0,&AF_S,ui.msg_t?ui.msg:hint,T_TEXT,T_BG,232);

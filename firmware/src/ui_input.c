@@ -990,7 +990,23 @@ static void edit_param(uint32_t slot, int32_t steps)
         return; /* keep the preset's DELAY values for HALL */
     }
 #if CARAVEL_STASIS_EXPAND
-    if(cur_page()->graph==GR_STGRAIN){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
+    if(cur_page()->graph==GR_STGRAIN){
+#if CARAVEL_STASIS2
+        if(str_eq(cur_page()->title,"REGION")) {
+            if(song.g[G_RTYPE]!=3u){ui_message("SET TYPE STASIS");return;}
+            if(slot==1u) {
+                st_expand.length=(int16_t)clamp((int32_t)st_expand.length+steps,0,127);
+            } else {
+                const uint8_t src[4]={1u,0u,3u,2u};
+                const char *msg=stasis_exp_turn(src[slot&3u],steps);
+                if(msg)ui_message(msg);
+            }
+            ui.force=1;
+            return;
+        }
+#endif
+        const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;
+    }
 #endif
 #if CARAVEL_UX_EVOLVE
     if(cur_page()->graph==GR_EVOLVE) { uxl_evp_knob(slot,steps); return; }
@@ -1271,7 +1287,7 @@ static void act_do(void)
         return; /* never invoke LOAD / INIT / ERASE from the PLAY shortcut */
     }
 #endif
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (cur_page()->graph == GR_STLAYER) {
         uint32_t cancel = stasis_layer_can_cancel();
         fm1_irq_off();

@@ -169,6 +169,16 @@ static void project_capture(project_t *p)
 #else
     p->st_tone = 64;
 #endif
+#if CARAVEL_STASIS2
+    p->st_region = (stasis_region_saved_t){
+        (uint8_t)clamp(st_expand.scan,0,127),
+        (uint8_t)clamp(st_expand.length,0,127),
+        (uint8_t)clamp(st_expand.grain,0,ST_GRAIN_MAX),
+        (uint8_t)clamp(st_expand.quality,0,2),
+        (uint8_t)clamp(st_expand.reverse,0,1)
+    };
+    p->st_region_present = 1u;
+#endif
     p->sel = song.sel;
     p->parts = NPART;
     p->phys = PROJ_PHYS;
@@ -430,6 +440,12 @@ static void project_init_runtime(void)
 #if CARAVEL_STASIS_EXPAND
     stasis_tone = 64; stasis_tone_sm = 64 * 256;
 #endif
+#if CARAVEL_STASIS2
+    /* A fresh song must not inherit source-region settings from an old one. */
+    st_expand.scan=0;st_expand.length=64;
+    st_expand.grain=(int16_t)ST_GRAIN_DEFAULT;st_expand.quality=0;st_expand.reverse=0;
+    st_hall_feed=st_hall_ret=64u;        /* FEED and HALL are runtime only: 64 = 100 % */
+#endif
     song.sel = 0;
     memset(song.mch, 0, sizeof song.mch);
     fm1_irq_on();
@@ -561,6 +577,16 @@ static int project_restore_runtime(const project_t *input)
 #if CARAVEL_STASIS_EXPAND
     stasis_tone = p->st_tone;
     stasis_tone_sm = (int32_t)stasis_tone * 256; /* no old-project glide */
+#endif
+#if CARAVEL_STASIS2
+    /* Complete source REGION and capture-quality project roundtrip.
+     * No legacy LAYER global ID is ever interpreted as a source setting. */
+    st_expand.scan=p->st_region.pos;
+    st_expand.length=p->st_region.length;
+    st_expand.grain=p->st_region.grain;
+    st_expand.quality=p->st_region.quality;
+    st_expand.reverse=p->st_region.reverse;
+    st_hall_feed=st_hall_ret=64u;        /* FEED and HALL are runtime only: a load starts at 100 % (64) */
 #endif
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);

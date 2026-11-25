@@ -1,12 +1,12 @@
 # Caravel
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.1.1** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.1.1). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
+Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.2.0** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.2.0). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
 
 > **New: Caravel Academy.** Interactive tutorials with the real firmware in your browser. **[Stage 1 · Strings before anything else](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-1)** ([video](https://youtube.com/shorts/4a8ya1iPiTQ)) and **[Stage 2 · Lay CELL AIR underneath](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-2)** ([video](https://www.youtube.com/shorts/QukahShkb2M)) are open, and so are **[Stage 3 · Give the sound a slow envelope](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-3)** and **[Stage 4 · Add a little slow motion](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-4)** ([one video for both](https://youtube.com/shorts/H4Z5J3FivAs)), and **[Stage 5 · Build a sparse motif](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-5)** ([video](https://youtube.com/shorts/ysNY5vNIwR0)) — more stages follow together with the YouTube series.
 
 [Browser emulator](https://bonszaimusic.github.io/caravel/v1/emulator/) · [Academy](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-1) · [Web installer](https://bonszaimusic.github.io/caravel/v1/webapp/installer/) · [Web editor](https://bonszaimusic.github.io/caravel/v1/webapp/editor/) · [Tutorials](docs/tutorials/README.md) · [FAQ](docs/faq.md)
 
-The website keeps Classic and 1.x separate. These instructions describe 1.1.1 (the controls are those of 1.1.0; 1.1.1 changes the USB update, see the CHANGELOG).
+The website keeps Classic and 1.x separate. These instructions describe 1.2.0 (the controls are those of 1.1.0 except STASIS: 1.2.0 brings STASIS 2.0 with the TEXTURE, REGION and TANK groups in PLAY SPACE, see [docs/release-120.md](docs/release-120.md) and the CHANGELOG).
 
 > **Switching to another firmware, for example through the Firmware Hub, needs Caravel 1.1.1 or later.** Caravel 1.0.0 and 1.1.0 ignore the Hub's update command: its Install button stops with "the device stopped after 0 requests" and nothing is written. From 1.1.1 on the FM-1 asks "UPDATE VIA USB?" on its screen: OCT+ installs, OCT- cancels. Installing Caravel itself through the Hub also needs the 1.1.1 package. On 1.0.0 or 1.1.0 update once with Caravel's own installer, or use its **Return to official V15** flow, then install the other firmware. **Back up first:** other firmware does not open Caravel projects. [Details in the FAQ](docs/faq.md#switching-to-another-firmware-firmware-hub).
 

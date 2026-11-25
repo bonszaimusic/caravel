@@ -168,6 +168,10 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     web_draws++;
 }
 static void lcd_sync(void) {}
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+/* The WebAssembly framebuffer blits are synchronous. */
+static uint8_t lcd_scope_ready(void) { return 1u; }
+#endif
 static void lcd_power(uint32_t s)              /* MENU > SCREEN OFF (lcd.c): off, the page dark; on: redrawn before */
 {
     if (!s) {
@@ -836,6 +840,19 @@ EXPORT void web_p12_test_select_track(uint32_t t)
 {
     if(t<NTRK){song.sel=t;ui.force=1;}
 }
+/* 1 when this build has the opt-in STASIS Scope V6 (live audio scope), so whole-screen comparisons can skip its disc. */
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+/* Test-only: one of the 32 source peaks (|PCM16| >> 8, 0..127) the scope draws. */
+EXPORT uint32_t web_stasis_scope_peak(uint32_t i) { return i < 32u ? (uint32_t)st_scope_peak[i] : 0u; }
+#endif
+EXPORT uint32_t web_stasis_scope_v6(void)
+{
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    return 1u;
+#else
+    return 0u;
+#endif
+}
 EXPORT uint32_t web_p12_scope_track(uint32_t t)
 { return t<NTRK?hp_el_scope_track[t]:0xFFFFFFFFu; }
 EXPORT uint32_t web_p12_pull_track_ms(uint32_t t)
@@ -892,6 +909,35 @@ EXPORT void web_action_setup_toggle(void)
 {if(action_enabled){action_setup=!action_setup;ui.force=1;}}
 EXPORT uint32_t web_action_key_note(uint32_t k) { return k<27u?kb_note[k]:0; }
 EXPORT uint32_t web_action_stasis_capt(void) { return (uint32_t)song.g[G_DRLVL]; }
+#if CARAVEL_STASIS2 && CARAVEL_UX_LAYERS
+/* Test-only physical effect-map/legend inspection; invokes the same refresh
+ * as the firmware UI. These symbols exist only in the private WASM probe. */
+EXPORT uint32_t web_stasis2_fx_key_map(uint32_t p)
+{
+    if(p>=PF_KEYS)return PF_N;
+    fx_map_sync();
+    return perf_map[p];
+}
+EXPORT uint32_t web_stasis2_fx_cell_state(uint32_t p)
+{ return p<PF_KEYS ? uxl_stasis_cell_state(p) : 0u; }
+/* Only the WASM test wrapper may select a temporary screenshot palette. */
+EXPORT void web_stasis2_test_palette(uint32_t palette, uint32_t line)
+{
+    ux.style=line?ST_LINE:ST_FLAT;
+    palette_set(palette);
+    ui.force=1u;
+}
+/* Inspect the same five-group PLAY SPACE map the actual knob/UI uses.
+ * Read-only; no synthetic UI inputs, no hardcoded parallel model. */
+EXPORT uint32_t web_stasis2_space_groups(void) { return uxl_area_ng(UXL_SPACE); }
+EXPORT uint32_t web_stasis2_space_target(uint32_t group,uint32_t knob)
+{
+    if(group>=uxl_area_ng(UXL_SPACE)||knob>=4u) return 0u;
+    uxl_tg_t t[4];
+    uxl_group(UXL_SPACE,group,t);
+    return (uint32_t)t[knob].kind<<16u | t[knob].id;
+}
+#endif
 #if CARAVEL_STASIS_EXPAND
 /* Read-only C/WASM hardware regressions. The browser UI itself always
  * uses the actual physical HOME/SELECT/K1..K4 and ACTION note gestures. */
@@ -941,6 +987,8 @@ EXPORT void web_stasis_grain_open(void)
  uint32_t p=web_stasis_grain_page();
  if(p<NPAGES&&page_visible(p)){ui.home=0;ui.page=p;ui.force=1;page_entered();}
 }
+/* Read-only capacity for V5 source regression and browser QA. */
+EXPORT uint32_t web_stasis_ring_capacity(void) { return ST_RING_LEN; }
 EXPORT uint32_t web_stasis_granular_get(uint32_t field)
 {
  switch(field){
@@ -950,8 +998,13 @@ EXPORT uint32_t web_stasis_granular_get(uint32_t field)
  case 3:return st_expand.reverse;
  case 4:return st.valid;
  case 5:return st.w;
+#if CARAVEL_STASIS2
+ case 6:return 0;  /* second capture bank retired */
+ case 7:return 0;
+#else
  case 6:return st_layer.valid;
  case 7:return st_layer.phase;
+#endif
  case 8:return st.active_quality;
  case 9:return st.active_grain;
  case 10:return st.gr_ready;
@@ -959,6 +1012,13 @@ EXPORT uint32_t web_stasis_granular_get(uint32_t field)
  case 12:return stasis_min_history();
  case 13:return mod_stasis.scan;
  case 14:return action_stasis_grain_page;
+#if CARAVEL_STASIS2
+ case 15:return st_expand.length;
+ case 16:return st.region_status;
+ case 17:return st.region_length;
+ case 18:return st.new_source;
+ case 19:return ST_RING_LEN;
+#endif
  default:return 0;
  }
 }

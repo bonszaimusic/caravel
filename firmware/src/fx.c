@@ -583,8 +583,45 @@ static int32_t part_buf[CTL];                            /* a part's block (mix_
  * holding automatically begins after its safe prefill threshold. No other
  * freeze switch exists: CAPT LIVE/HOLD owns the recording write head.
  */
-#define ST_RING_LEN (CARAVEL_REVERB_MINIMAL ? DLY_LEN / 2u : DLY_LEN)
+#define ST_RING_LEN (CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2 ? DLY_LEN / 2u : DLY_LEN)
 #define ST_RING_MASK (ST_RING_LEN - 1u)
+#if defined(CARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT
+#if !CARAVEL_STASIS2 || !CARAVEL_STASIS_EXPAND || \
+    !(defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+#error "STASIS join LUT requires STASIS2, STASIS_EXPAND and SOURCE_JOIN_EXPERIMENT=1"
+#endif
+#endif
+#if CARAVEL_STASIS2
+#include "stasis_region.h"
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+/* Production source-ring audio metering, explicitly gated until V6 QA.
+ * A display never inspects the PCM ring directly. All 32 bins are
+ * updated only by real recorded (potentially decimated) source samples. */
+#include "stasis_scope_level.h"
+static volatile uint8_t st_scope_peak[32] __attribute__((section(".pool")));
+#endif
+#if CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+#include "stasis_join.h" /* A4 A/B experiment only; not in target/default build. */
+#if defined(CARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT
+#include "stasis_join_lut.h" /* a separate, optional CPU-size A/B candidate */
+#endif
+#endif
+static volatile uint8_t st_new_source_request; /* UI-to-audio one-byte mailbox */
+/* PLAY > SPACE controls of the STASIS hall (runtime only: the project has no bit left for them, so a load starts at
+ * 100 %): FEED = how much of the grains goes into the hall (TEXTURE K4), HALL = the level the hall comes back with
+ * (TANK K4). 64 = 100 % (4096 in Q12), 0 = off, 127 = x3 (+9.5 dB): room above the default, not only below it. */
+#define ST_GAIN_Q12(v) ((uint32_t)(v) <= 64u ? (uint32_t)(v) * 64u : 4096u + (((uint32_t)(v) - 64u) * 8192u) / 63u)
+/* STASIS make-up: the hall return keeps its old level (x1). The direct grains sat ~18 dB under the hall (measured,
+ * frozen and live), so HALL 0 left almost nothing: they get x3 (+9.5 dB). More breaks the A4 gate with the join once MOTN scatters the grains
+ * (grid, MOTN 10..127: x3 max curvature 3650, x4 4862, against the unchanged limit 4000). Overridable for that sweep (tests only). */
+#ifndef ST_MAKEUP
+#define ST_MAKEUP 1u
+#endif
+#ifndef ST_LAYER_MAKEUP
+#define ST_LAYER_MAKEUP 3u
+#endif
+#define ST_Q12_OF(v) (((uint32_t)(v) * 8257u) >> 8u)       /* DRY: 0 -> 0, 127 -> 4096 exactly, error below one step */
+#endif
 #define ST_GRAIN_LEN 8192u               /* 186 ms windows, four times V0.1 */
 #define ST_HALF (ST_GRAIN_LEN / 2u)
 #define ST_LAG 12288u                   /* ~279ms back; unity-rate forward head never reads future */
@@ -601,14 +638,37 @@ static struct {
     int32_t stop_gain, release_gain;   /* independent STOP and HOLD->LIVE envelopes */
     int32_t smooth_l, smooth_r;
     uint8_t cap_prev, auto_hold, cap_pending, delay_dirty, gr_ready, stopping, releasing;
+#if CARAVEL_STASIS2
+    uint8_t new_source, region_status;
+    uint32_t region_length; /* effective captured frames, observable by UI/WASM */
+    uint32_t region_young;  /* last planned near boundary; detect source leaps */
+    uint32_t rng;           /* MOTN scatter: one LCG step per grain start */
+#endif
 #if CARAVEL_STASIS_EXPAND
     uint8_t active_quality, active_grain, record_n, reverse_mask;
     uint16_t grain_xfade; /* anti-click transition on grain length changes */
+#if CARAVEL_STASIS2 && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+    int16_t join_anchor; /* last sample before writer resumes at frozen seam */
+    uint16_t join_left; /* only active for 512 HQ source writes after release */
+#endif
     int32_t grain_xfade_l,grain_xfade_r;
     int32_t record_acc;
     int32_t record_lp[3]; /* pre-decimation antialias filter, no extra audio ring */
 #endif
 } st __attribute__((section(".pool")));
+
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_PCM_TRACE)
+/* Host-only diagnostic data for one CTL block of actual per-sample DSP.
+ * Disabled in firmware: no additional audio work, RAM or target calls. */
+static struct {
+    uint32_t w, valid, phase, gr_l[2], gr_r[2];
+    uint32_t read_l[2], read_r[2]; /* actual source-tap base at this audio sample */
+    uint32_t region_young, region_length;
+    int32_t gain, smooth_l, smooth_r, release_gain;
+    uint16_t xfade;
+    uint8_t auto_hold, releasing, gr_ready, region_status;
+} st_pcm_trace[CTL];
+#endif
 
 #if CARAVEL_STASIS_EXPAND
 /* Longer recording WITHOUT increasing DLY_LEN: each of the two fixed 32768
@@ -618,7 +678,7 @@ static struct {
  * GRAIN 4096/8192/16384 samples is independent of recording duration.
  */
 static inline uint32_t stasis_grain_samples(void)
-{ return 4096u << st.active_grain; }
+{ return ST_GRAIN_BASE << st.active_grain; }
 static inline uint32_t stasis_record_factor(void)
 { return 1u << st.active_quality; }
 static inline uint32_t stasis_lag_samples(void)
@@ -686,7 +746,7 @@ static const uint16_t stasis_grain_env[257]={
 };
 static inline uint32_t stasis_grain_weight(uint32_t triangle,uint32_t grain)
 {
- uint32_t u=triangle << (4u-grain);
+ uint32_t u=triangle << (ST_GRAIN_ENV_SHIFT-grain);
  uint32_t i=u>>7u,frac=u&127u;
  if(i>=256u)return 32768u;
  uint32_t a=stasis_grain_env[i],b=stasis_grain_env[i+1u];
@@ -694,7 +754,14 @@ static inline uint32_t stasis_grain_weight(uint32_t triangle,uint32_t grain)
 }
 #endif
 
+#if CARAVEL_STASIS2
+/* No ADD/BLEND capture bank, crossfade, merge or second write head in this
+ * profile. The original 128-KiB delay allocation is one PCM16 source ring. */
+static inline int32_t stasis_read(uint32_t address)
+{ return dly_buf[address & ST_RING_MASK]; }
+#else
 #include "stasis_layer.c"
+#endif
 
 #if CARAVEL_STASIS_EXPAND
 /* Single control path used by FX > GRAIN and HOME ACTION STASIS. The
@@ -706,8 +773,8 @@ static const char *stasis_exp_turn(uint32_t slot,int32_t steps)
  if(slot>=4u||!steps)return 0;
  if(song.g[G_RTYPE]!=3u)return "SET REVERB TYPE STASIS";
  if(slot==0u){
-  uint32_t requested=(uint32_t)clamp((int32_t)st_expand.grain+steps,0,2);
-  uint32_t required=((4096u<<requested)+4096u+ST_OFFSET+421u+4096u+
+  uint32_t requested=(uint32_t)clamp((int32_t)st_expand.grain+steps,0,ST_GRAIN_MAX);
+  uint32_t required=((ST_GRAIN_BASE<<requested)+4096u+ST_OFFSET+421u+4096u+
       256u+stasis_record_factor()-1u)>>st.active_quality;
   if(st.auto_hold && st.valid<required)
    return "GRAIN TOO LONG FOR CAPTURE";
@@ -716,10 +783,18 @@ static const char *stasis_exp_turn(uint32_t slot,int32_t steps)
   st_expand.scan=(int16_t)clamp((int32_t)st_expand.scan+steps,0,127);
  }else if(slot==2u){
   if(song.g[G_DRLVL] || mod_stasis.capt || st.auto_hold ||
-      st.cap_pending || st.releasing || st_layer.phase!=STL_IDLE)
+      st.cap_pending || st.releasing
+#if !CARAVEL_STASIS2
+       || st_layer.phase!=STL_IDLE
+#endif
+       )
    return "STASIS: RELEASE HOLD FIRST";
   st_expand.quality=(int16_t)clamp((int32_t)st_expand.quality+steps,0,2);
+#if CARAVEL_STASIS2
+  return "STASIS HISTORY: NEW LIVE CAPTURE";
+#else
   return "STASIS WINDOW: NEW LIVE CAPTURE";
+#endif
  }else{
   st_expand.reverse=(int16_t)clamp((int32_t)st_expand.reverse+steps,0,1);
  }
@@ -728,9 +803,26 @@ static const char *stasis_exp_turn(uint32_t slot,int32_t steps)
 #endif
 
 /* STASIS grain read at unity speed; tap changes only on silent heads. */
-static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
+static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r
+#if CARAVEL_STASIS2
+                                   , const stasis_region_t *region
+#endif
+                                   )
 {
 #if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS2
+    /* Geometry (including /127u) is planned once per audio block, never
+     * from the per-sample hot loop. Grain boundaries only clamp read taps. */
+    if(region->status<STREG_FIT)return;
+    uint32_t lag=stasis_lag_samples();
+    /* MOTN scatter: one fresh random per grain start (not per sample), the same for both channels so the
+     * stereo image of a grain stays together; 0 at MOTN 0 */
+    st.rng=st.rng*1664525u+1013904223u;
+    uint32_t wander=stasis_region_wander(*region,st.evolve_q8>>8u,st.rng>>16u);
+    uint32_t look_l=stasis_region_anchor(*region,region->young+lag+tap_l-256u+wander);
+    uint32_t look_r=stasis_region_anchor(*region,region->young+lag+
+                     (ST_OFFSET>>st.active_quality)+tap_r-256u+wander);
+#else
     uint32_t room=st.valid>stasis_min_history()?st.valid-stasis_min_history():0u;
     uint32_t scan=room*(uint32_t)clamp(mod_stasis.scan,0,127)/127u;
     uint32_t lag=stasis_lag_samples();
@@ -746,6 +838,7 @@ static inline void st_grain_start(uint32_t head, uint32_t tap_l, uint32_t tap_r)
         if(look_l>limit)look_l=limit;
         if(look_r>limit)look_r=limit;
     }
+#endif
     st.gr_l[head] = (st.w - look_l) & ST_RING_MASK;
     st.gr_r[head] = (st.w - look_r) & ST_RING_MASK;
     if(st_expand.reverse)st.reverse_mask|=(uint8_t)(1u<<head);
@@ -770,13 +863,25 @@ static inline __attribute__((always_inline)) int32_t stasis_grain_read(uint32_t 
  return a+(((b-a)*(int32_t)sub)>>st.active_quality);
 }
 #endif
+#if CARAVEL_STASIS2
+/* One-byte mailbox: the UI never edits the audio source ring or heads. */
+static void stasis_new_source_request(void) { st_new_source_request = 1u; }
+#endif
 static inline void stasis_transport_stop(void)
 {
     if (song.g[G_RTYPE] != 3u) return;
     song.g[G_DRLVL] = 0;               /* CAPT shows LIVE */
     st.cap_prev = st.auto_hold = st.cap_pending = st.releasing = 0;
     st.stopping = 1;
+#if CARAVEL_STASIS2
+    st.new_source = st_new_source_request = 0u;
+#if CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+    st.join_left = 0u;
+#endif
+#endif
+    #if !CARAVEL_STASIS2
     stasis_layer_stop();
+    #endif
     st.stop_gain = 32768;              /* wet grains fade; HALL naturally decays */
 }
 static inline void stasis_transport_start(void)
@@ -786,14 +891,27 @@ static inline void stasis_transport_start(void)
     st.stop_gain = st.release_gain = 32768;
     st.releasing = 0;
     st.gr_ready = 0;
-    st.valid = 0;                      /* no stale STOP tail in the next performance */
+    st.valid = 0;
+#if CARAVEL_STASIS2
+    st.new_source = st_new_source_request = 0u;
+    st.region_status = STREG_FILL;
+    st.region_length = 0u;
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    memset((void *)st_scope_peak, 0, sizeof st_scope_peak);
+#endif
+#if CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+    st.join_left = 0u;
+#endif
+#endif                      /* no stale STOP tail in the next performance */
     st.smooth_l = st.smooth_r = 0;     /* don't resurrect old grains on new PLAY */
 #if CARAVEL_STASIS_EXPAND
     st.record_acc=0;st.record_n=0;st.reverse_mask=0;
     memset(st.record_lp,0,sizeof st.record_lp);
     st.grain_xfade=0;
 #endif
+    #if !CARAVEL_STASIS2
     stasis_layer_reset();
+    #endif
 }
 
 /* Independent STASIS texture: the raw short grains never substitute for the
@@ -818,7 +936,10 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
      * Quality changes are applied only in LIVE, and restart prefill. */
     if(st.active_quality!=st_expand.quality && !st.auto_hold &&
        !st.cap_pending && !st.releasing && !st.stopping &&
-       st_layer.phase==STL_IDLE && !mod_stasis.capt){
+#if !CARAVEL_STASIS2
+       st_layer.phase==STL_IDLE &&
+#endif
+       !mod_stasis.capt){
         /* Changing capture sample rate discards the former ring. Fade the
          * audible grain layer rather than hard-muting it in one sample. */
         st.grain_xfade_l=st.smooth_l;
@@ -826,16 +947,24 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
         st.grain_xfade=512u;
         st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
         st.w=st.valid=st.phase=0;
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+        memset((void *)st_scope_peak, 0, sizeof st_scope_peak);
+#endif
         st.gr_ready=0;st.record_acc=0;st.record_n=0;
+#if CARAVEL_STASIS2 && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+        st.join_left=0u;
+#endif
         memset(st.record_lp,0,sizeof st.record_lp);
         st.smooth_l=st.smooth_r=0;st.reverse_mask=0;
+        #if !CARAVEL_STASIS2
         stasis_layer_reset();
+        #endif
     }
     /* Grain-length changes land within one control block of the cycle
      * boundary. An initial capture can reset phase at ANY sample inside a
      * 32-sample block; testing phase==0 only at block start could miss
      * the boundary forever. No frozen bank is rewritten. */
-    uint32_t requested_min=(((4096u<<(uint32_t)clamp(st_expand.grain,0,2))+4096u+
+    uint32_t requested_min=(((ST_GRAIN_BASE<<(uint32_t)clamp(st_expand.grain,0,ST_GRAIN_MAX))+4096u+
             ST_OFFSET+421u+4096u+256u+stasis_record_factor()-1u) >> st.active_quality);
     if(st.active_grain!=st_expand.grain &&
       (!st.auto_hold || st.valid>=requested_min) &&
@@ -847,16 +976,49 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
        st.grain_xfade_l=st.smooth_l;
        st.grain_xfade_r=st.smooth_r;
        st.grain_xfade=512u;
-       st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
+       st.active_grain=(uint8_t)clamp(st_expand.grain,0,ST_GRAIN_MAX);
        st.gr_ready=0;st.phase=0;st.reverse_mask=0;
     }
     uint32_t grain_len=stasis_grain_samples(),grain_half=grain_len>>1u;
     uint32_t min_valid=stasis_min_history(),factor=stasis_record_factor();
+#if CARAVEL_STASIS2
+    /* This plan is valid for the whole control block only while its
+     * capture mode remains the same. RELEASE can complete mid-block:
+     * do not seed from a FROZEN plan after LIVE writer activity resumes. */
+    uint32_t region_frozen=st.auto_hold||st.releasing;
+    stasis_region_t region=stasis_region_plan(st.valid,ST_RING_LEN,
+        grain_len,factor,(uint32_t)clamp(mod_stasis.scan,0,127),
+        (uint32_t)clamp(st_expand.length,0,127),region_frozen);
+    /* Large source-window moves must not splice a new sample history
+     * into one half of an audible texture. Restart both heads at zero
+     * phase behind the existing 512-sample wet-layer crossfade.
+     * Smaller modulation continues on normal silent-grain boundaries. */
+    if(st.gr_ready && st.region_status>=STREG_FIT &&
+       region.status>=STREG_FIT) {
+        uint32_t dy=region.young>st.region_young?
+                 region.young-st.region_young:st.region_young-region.young;
+        uint32_t dl=region.effective_length>st.region_length?
+                 region.effective_length-st.region_length:
+                 st.region_length-region.effective_length;
+        if(dy>(grain_len>>1u) || dl>(grain_len>>1u)) {
+            st.grain_xfade_l=st.smooth_l;
+            st.grain_xfade_r=st.smooth_r;
+            st.grain_xfade=512u;
+            st.gr_ready=0u;st.phase=0u;st.reverse_mask=0u;
+        }
+    }
+    st.region_young=region.young;
+    st.region_status=region.status;
+    st.region_length=region.effective_length;
+#endif
 #endif
 #if CARAVEL_REVERB_MINIMAL
     uint32_t cap = mod_stasis.capt;
 #else
     uint32_t cap = song.g[G_DRLVL] != 0;
+#endif
+#if CARAVEL_STASIS2
+    if(st.new_source||st_new_source_request)cap=0u; /* NEW overrides CAPT until safe prefill */
 #endif
     int32_t sine_l = osc_sine(st.drift_ph);
     int32_t sine_r = osc_sine(st.drift_ph + 0x50000000u);
@@ -885,13 +1047,22 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
     /* Preserve the user-preferred V4 STASIS rebalance with GRAV removed. */
     int32_t layer_gain = (int32_t)((strength * 240u + 63u) / 127u);
     int32_t hall_gain = (int32_t)((strength * 1408u + 63u) / 127u);
+#if CARAVEL_STASIS2
+    layer_gain *= (int32_t)ST_LAYER_MAKEUP;
+    hall_gain = (int32_t)(((uint32_t)hall_gain * ST_GAIN_Q12(st_hall_feed)) >> 12u);   /* FEED: grains into the hall */
+#endif
 #else
     int32_t layer_gain = (int32_t)((strength * 2304u + 63u) / 127u);
     int32_t hall_gain = (int32_t)((strength * 1024u + 63u) / 127u);
 #endif
     if (cap && !st.cap_prev && !st.stopping) {
         /* Retake HOLD without erasing the previous sound. */
+#if CARAVEL_STASIS2 && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+        st.join_left=0u; /* a fresh capture boundary gets a new seam anchor */
+#endif
+        #if !CARAVEL_STASIS2
         if (!st.releasing) stasis_layer_reset();
+#endif
         st.releasing = 0;
 #if CARAVEL_STASIS_EXPAND
         st.cap_pending = st.valid < min_valid;
@@ -908,9 +1079,25 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
         if (!st.releasing) st.auto_hold = 0;
     }
     st.cap_prev = (uint8_t)cap;
+#if CARAVEL_STASIS2
+    if(st_new_source_request) {
+#if CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+        st.join_left=0u; /* NEW intentionally discards the previous timeline */
+#endif
+        st_new_source_request=0u;
+        st.new_source=1u;
+        st.cap_pending=0u;
+        st.releasing=1u; /* fade old grains before changing source pointers */
+        st.release_gain=32768;
+    }
+#endif
+    #if !CARAVEL_STASIS2
     stasis_layer_block(rev_in, n);
+    #endif
     for (i = 0; i < n; i++) {
+#if !CARAVEL_STASIS2
         stasis_layer_tick(rev_in[i]);
+#endif
 #if CARAVEL_STASIS_EXPAND
         uint32_t p = st.phase & (grain_len - 1u);
         uint32_t q = (p + grain_half) & (grain_len - 1u);
@@ -922,13 +1109,45 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
 #endif
         if (!st.auto_hold && !st.stopping) {
             int32_t v = clamp(rev_in[i] >> 2, -32768, 32767);
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+            /* Experimental A4 only: smoothly connect the last pre-FREEZE
+             * sample to the resumed LIVE input across 512 HQ source frames.
+             * Only writer-boundary samples change; no additional audio ring.
+             * Enabled by a dedicated host A/B test, never by the regular
+             * STASIS2 flag. Do not promote without all 36 PCM cases PASS. */
+            if(st.join_left) {
+#if defined(CARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT
+                v=stasis_source_join_lut((int32_t)st.join_anchor,v,
+                                         st.join_left,stasis_grain_env);
+#else
+                v=stasis_source_join((int32_t)st.join_anchor,v,st.join_left);
+#endif
+                --st.join_left;
+            }
+#endif
 #if CARAVEL_STASIS_EXPAND
             /* Boxcar decimator; bounded +/-32768*4. The one source ring
              * gains 2x/4x history but not a single extra sample of RAM. */
             st.record_acc+=stasis_record_prefilter(v,st.record_lp,st.active_quality);
             if(++st.record_n>=factor){
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+                uint32_t write_slot=st.w++ & ST_RING_MASK;
+                int16_t recorded=(int16_t)clamp(st.record_acc/(int32_t)factor,-32768,32767);
+                dly_buf[write_slot]=recorded;
+                /* The bins follow the physical 65,536-frame audio ring, not
+                 * MIDI CAPTURE. Reset at the first write of each 2,048-frame
+                 * sector. No division or per-sample function calls. */
+                uint32_t bin=(write_slot>>11u)&31u;
+                uint32_t amplitude=stasis_scope_amp((int32_t)recorded);
+                if(!(write_slot&2047u)) st_scope_peak[bin]=0u;
+                if(amplitude>st_scope_peak[bin])
+                    st_scope_peak[bin]=(uint8_t)amplitude;
+#else
+                /* A2: retain the exact original write expression whenever
+                 * Scope V6 is disabled, including STASIS2 flag OFF. */
                 dly_buf[st.w++ & ST_RING_MASK] =
                     (int16_t)clamp(st.record_acc/(int32_t)factor,-32768,32767);
+#endif
                 st.record_acc=0;st.record_n=0;
                 if(st.valid<ST_RING_LEN)st.valid++;
             }
@@ -943,7 +1162,13 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
             }
         }
 #if CARAVEL_STASIS_EXPAND
-        if (st.valid >= min_valid && !st.gr_ready) {
+        if (st.valid >= min_valid && !st.gr_ready
+#if CARAVEL_STASIS2
+            && st.region_status >= STREG_FIT
+            && !st.new_source
+            && region_frozen==(uint32_t)(st.auto_hold||st.releasing)
+#endif
+            ) {
 #else
         if (st.valid >= ST_MIN_VALID && !st.gr_ready) {
 #endif
@@ -957,9 +1182,15 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
             st.grain_xfade_r=st.smooth_r;
             st.grain_xfade=512u;
             st.phase = p = 0; q = grain_half; weight = 0;
+#if CARAVEL_STASIS2
+            st_grain_start(0, tap_l, tap_r, &region);
+            st_grain_start(1, tap_l + (743u>>st.active_quality),
+                           tap_r + (421u>>st.active_quality), &region);
+#else
             st_grain_start(0, tap_l, tap_r);
             st_grain_start(1, tap_l + (743u>>st.active_quality),
                            tap_r + (421u>>st.active_quality));
+#endif
 #else
             st.phase = p = 0; q = ST_HALF; weight = 0;
             st_grain_start(0, tap_l, tap_r);
@@ -970,11 +1201,25 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
         if (st.gr_ready) {
             /* Two heads 180 degrees apart. Reposition only where gain is 0. */
 #if CARAVEL_STASIS_EXPAND
+#if CARAVEL_STASIS2
+            if(p==0)st_grain_start(0,tap_l,tap_r,&region);
+            if(p==grain_half)st_grain_start(1,tap_l+(743u>>st.active_quality),
+                                             tap_r+(421u>>st.active_quality),&region);
+#else
             if(p==0)st_grain_start(0,tap_l,tap_r);
             if(p==grain_half)st_grain_start(1,tap_l+(743u>>st.active_quality),
                                              tap_r+(421u>>st.active_quality));
+#endif
             uint32_t p0=st.reverse_mask&1u?grain_len-1u-p:p;
             uint32_t p1=st.reverse_mask&2u?grain_len-1u-q:q;
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_PCM_TRACE)
+            /* Positions used by the actual interpolation reads, not merely
+             * the grain-start base. Essential for a reverse source seam. */
+            st_pcm_trace[i].read_l[0]=(st.gr_l[0]+(p0>>st.active_quality))&ST_RING_MASK;
+            st_pcm_trace[i].read_l[1]=(st.gr_l[1]+(p1>>st.active_quality))&ST_RING_MASK;
+            st_pcm_trace[i].read_r[0]=(st.gr_r[0]+(p0>>st.active_quality))&ST_RING_MASK;
+            st_pcm_trace[i].read_r[1]=(st.gr_r[1]+(p1>>st.active_quality))&ST_RING_MASK;
+#endif
             int32_t la,lb,ra,rb;
             {
                 la=stasis_grain_read(st.gr_l[0],p0);
@@ -1004,6 +1249,10 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
         } else {
             st.smooth_l -= st.smooth_l >> 4u;
             st.smooth_r -= st.smooth_r >> 4u;
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_PCM_TRACE)
+            st_pcm_trace[i].read_l[0]=st_pcm_trace[i].read_l[1]=0u;
+            st_pcm_trace[i].read_r[0]=st_pcm_trace[i].read_r[1]=0u;
+#endif
         }
         int32_t gain = 32768;
         if (st.stopping) {
@@ -1015,15 +1264,39 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
                 st.release_gain -= (st.release_gain + 8191) >> 13u;
                 if (st.release_gain < 96) {
                     st.release_gain = 0;
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+                    if(!st.new_source && st.valid && !st.active_quality) {
+                        st.join_anchor=dly_buf[(st.w-1u)&ST_RING_MASK];
+                        st.join_left=STASIS_SOURCE_JOIN_FRAMES;
+                    } else st.join_left=0u;
+#endif
                     st.releasing = st.auto_hold = 0;
                     st.gr_ready = 0;
-                    st.valid = 0;      /* new live capture, no frozen taps */
+#if CARAVEL_STASIS2
+                    /* FREEZE OFF keeps the recorded history and write index,
+                     * but invalidates old taps before the writer resumes.
+                     * Only an explicit NEW SOURCE clears capture history. */
+                    if(st.new_source) {
+                        st.w=st.valid=st.phase=0u;
+                        st.new_source=0u;
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+                        memset((void *)st_scope_peak, 0, sizeof st_scope_peak);
+#endif
+                    }
+                    st.region_status=STREG_FILL;
+                    st.region_length=0u;
+                    st.region_young=0u;
+#else
+                    st.valid = 0;      /* legacy FREEZE OFF re-takes capture */
+#endif
 #if CARAVEL_STASIS_EXPAND
                     st.record_acc=0;st.record_n=0;
                     memset(st.record_lp,0,sizeof st.record_lp);
 #endif
                     st.smooth_l = st.smooth_r = 0;
+                    #if !CARAVEL_STASIS2
                     stasis_layer_reset();
+                    #endif
                 }
             } else if (st.release_gain < 32768) {
                 st.release_gain += 32; /* soft return if HOLD is re-engaged */
@@ -1046,10 +1319,43 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
         side[i] = (((st.smooth_l - st.smooth_r) >> 1u) * gain) >> 15u;
 #endif
         hall_in[i] = clamp(rev_in[i] + ((mid[i] * hall_gain) >> 8u), -262143, 262143);
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_PCM_TRACE)
+        /* Preserve sample-exact state. A post-fx_buses test inspection of st
+         * sees only the end of this 32-sample block and can misidentify a
+         * mid-block HOLD->LIVE transition. */
+        st_pcm_trace[i].w = st.w; st_pcm_trace[i].valid = st.valid;
+        st_pcm_trace[i].phase = st.phase;
+        st_pcm_trace[i].gr_l[0] = st.gr_l[0]; st_pcm_trace[i].gr_l[1] = st.gr_l[1];
+        st_pcm_trace[i].gr_r[0] = st.gr_r[0]; st_pcm_trace[i].gr_r[1] = st.gr_r[1];
+        st_pcm_trace[i].region_young = st.region_young;
+        st_pcm_trace[i].region_length = st.region_length;
+        st_pcm_trace[i].gain = gain;
+        st_pcm_trace[i].smooth_l = st.smooth_l;
+        st_pcm_trace[i].smooth_r = st.smooth_r;
+        st_pcm_trace[i].release_gain = st.release_gain;
+        st_pcm_trace[i].xfade = st.grain_xfade;
+        st_pcm_trace[i].auto_hold = st.auto_hold;
+        st_pcm_trace[i].releasing = st.releasing;
+        st_pcm_trace[i].gr_ready = st.gr_ready;
+        st_pcm_trace[i].region_status = st.region_status;
+#endif
         st.phase++;
     }
     st.drift_ph += (motion * 190u) * n;  /* slow linked filter/tap motion */
+#if CARAVEL_STASIS2
+    {   /* rev_hall adds into wet (CHORUS and DELAY are already there): only the hall's own share is scaled */
+        int32_t before[CTL];
+        for (i = 0; i < n; i++) before[i] = wet[i];
+        rev_hall(hall_in, wet, n);
+        int32_t hr = (int32_t)(ST_GAIN_Q12(st_hall_ret) * ST_MAKEUP);   /* HALL x make-up, Q12: 64 -> 4096 (x1) */
+        for (i = 0; i < n; i++) {
+            wet[i] = before[i] + (((wet[i] - before[i]) >> 3) * hr >> 9);
+            rev_side[i] = ((rev_side[i] >> 3) * hr) >> 9;
+        }
+    }
+#else
     rev_hall(hall_in, wet, n);
+#endif
     for (i = 0; i < n; i++) {
         wet[i] += (mid[i] * layer_gain) >> 8u;
         rev_side[i] += (side[i] * layer_gain) >> 8u;
@@ -1110,14 +1416,24 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         rt = 2; /* old ROOM / SPRING projects play HALL, but remain stored unchanged */
 #endif
     if (rt == 3u && fx.rtype != 3u) {
+        #if !CARAVEL_STASIS2
         stasis_layer_reset();
+        #endif
         st.w = st.valid = st.phase = st.drift_ph = 0u;
+#if CARAVEL_STASIS2
+        st.new_source=st_new_source_request=0u;
+        st.region_status=STREG_FILL;
+        st.region_length=0u;
+#endif
 #if CARAVEL_STASIS_EXPAND
         st.active_quality=(uint8_t)clamp(st_expand.quality,0,2);
-        st.active_grain=(uint8_t)clamp(st_expand.grain,0,2);
+        st.active_grain=(uint8_t)clamp(st_expand.grain,0,ST_GRAIN_MAX);
         st.record_acc=0;st.record_n=0;st.reverse_mask=0;
         memset(st.record_lp,0,sizeof st.record_lp);
         st.grain_xfade=0;
+#if CARAVEL_STASIS2 && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
+        st.join_left=0u;
+#endif
 #endif
 #if CARAVEL_REVERB_MINIMAL
         st.evolve_q8 = (uint32_t)clamp(mod_stasis.motion, 0, 127) << 8u;
@@ -1642,6 +1958,13 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
         pair_apply_gain(t, d, n);
     }
 #endif
+#if CARAVEL_STASIS2
+    {   /* DRY (core.h P_DRY): the track's own sound beside the sends; the sends take x, not the gains below. 127 = 4096 = bit for bit as before */
+        uint32_t dry = ST_Q12_OF(t->p[P_DRY]);
+        glm = (int32_t)(((uint32_t)glm * dry) >> 12u); grm = (int32_t)(((uint32_t)grm * dry) >> 12u);
+        gld = (gld * (int32_t)dry) >> 12; grd = (grd * (int32_t)dry) >> 12;
+    }
+#endif
     for (i = 0; i < n; i++) {
         int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x, y = ((d[i] >> 2) * lvl) >> 10;
         int32_t xs = clamp(x, -xmax, xmax);
@@ -1741,6 +2064,12 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
 #endif
 
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
+#if CARAVEL_STASIS2
+        {   /* DRY: see mix_spread */
+            uint32_t dry = ST_Q12_OF(t->p[P_DRY]);
+            gl = (int32_t)(((uint32_t)gl * dry) >> 12u); gr = (int32_t)(((uint32_t)gr * dry) >> 12u);
+        }
+#endif
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */

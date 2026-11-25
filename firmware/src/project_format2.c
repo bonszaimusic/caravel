@@ -20,6 +20,14 @@
  * exactly as before. Old firmware rejects *new* nondefault data (marker, or DURATION > 3); the project size, object addresses
  * and checksum are unchanged. */
 #define PROJ_FX_EXT_MARK 0xA5u
+#if CARAVEL_STASIS2
+/* New opt-in FORMAT-2 extension, same byte length and checksum; marker A6
+ * also carries all five STASIS2 region/recording controls. Old A5 is read
+ * exactly as before, old zero-marker projects remain byte-identical. */
+#include "stasis_region_wire.h"
+_Static_assert(ST_GRAIN_DEFAULT == 3u, "streg_wire_default() grain must equal ST_GRAIN_DEFAULT");
+#define PROJ_STREG_MARK 0xA6u
+#endif
 #define PROJ_HARM_DUR_OFF 4u
 static void proj_fx_hi_pack(uint8_t *hb, const uint8_t fx[5])
 {
@@ -49,6 +57,10 @@ typedef struct {
     lfo2_config_t lfo2[NTRK];
     uint8_t mch[NTRK];                         /* 1.5.5: MIDI IN TRACK's channels, as song.mch (PROJ_MIDI_OFF) */
     uint8_t af_on, af_time, af_amt, af_damp, st_tone; /* optional project FX extension; never stored as session prefs */
+#if CARAVEL_STASIS2
+    stasis_region_saved_t st_region; /* project sound state, not device preferences */
+    uint8_t st_region_present;        /* zero-initialized older host structs use defaults */
+#endif
     char name[PROJ_NAME_LEN];                  /* the project's name: upper-case ASCII 32..126, 0-padded; "" = none */
     uint32_t sum;
 } project_t;
@@ -182,6 +194,11 @@ static int proj_pack(project_store_t *out, const project_t *q)
 {
     uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC_WIRE, size = PROJ_STORE_SIZE, sum;
     uint8_t fx[5];
+#if CARAVEL_STASIS2
+    stasis_region_saved_t region = q->st_region_present ? q->st_region : streg_wire_default();
+    if (!streg_wire_valid(region)) return 0;
+    uint32_t region_changed = (uint32_t)streg_wire_nondefault(region);
+#endif
     proj_fx_values(q, fx);
     if (!proj_fx_valid(fx)) return 0;
     if (!proj_engines_ok(q) || !motion_valid(&q->motion) || !f2_harmony_valid(&proj_harmony) || P_COUNT > 127u) return 0;
@@ -213,11 +230,26 @@ static int proj_pack(project_store_t *out, const project_t *q)
     }
     if (pos + PROJ_HARMONY_SIZE + sizeof q->motion > PROJ_LFO2_OFF) return 0;
     f2_harmony_pack(b + pos, &proj_harmony);
-    if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u) proj_fx_hi_pack(b + pos, fx);
+    if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u
+#if CARAVEL_STASIS2
+        || region_changed
+#endif
+        ) proj_fx_hi_pack(b + pos, fx);
+#if CARAVEL_STASIS2
+    if (region_changed) streg_wire_pack(b + pos, region);
+#endif
     pos += PROJ_HARMONY_SIZE;
     memcpy(b + pos, &q->motion, sizeof q->motion);
-    if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u) {
+    if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u
+#if CARAVEL_STASIS2
+        || region_changed
+#endif
+        ) {
+#if CARAVEL_STASIS2
+        b[65] = region_changed ? PROJ_STREG_MARK : PROJ_FX_EXT_MARK;
+#else
         b[65] = PROJ_FX_EXT_MARK;
+#endif
         b[67] = (uint8_t)(fx[1] | (fx[0] << 7)); /* ON + TIME 10..60 */
     }
     proj_midi_pack(b, q);
@@ -234,12 +266,21 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     uint32_t pos = 68u, t, i, magic, size, sum, np;
     uint8_t fx[5] = {0,30,32,70,64}, hb[PROJ_HARMONY_SIZE];
     int ext;
+#if CARAVEL_STASIS2
+    int region_ext;
+    stasis_region_saved_t region = streg_wire_default();
+#endif
     harmony_saved_t h;
     if(st != PROJ_STORE_SIZE) return 0;
     np = b[66];
     uint32_t name_off = PROJ_NAME_OFF;
     memcpy(&magic,b,4);memcpy(&size,b+4,4);memcpy(&sum,b+st-4u,4);
+#if CARAVEL_STASIS2
+    region_ext = b[65] == PROJ_STREG_MARK;
+    ext = b[65] == PROJ_FX_EXT_MARK || region_ext;
+#else
     ext = b[65] == PROJ_FX_EXT_MARK;
+#endif
     if(magic!=PROJ_MAGIC_WIRE||size!=st||np!=P_COUNT||
        (b[65] && !ext) || (!ext && b[67]) ||
        b[62]>=NTRK||b[63]!=NPART||b[64]!=PROJ_PHYS||sum!=proj_hash(b,st-4u)||
@@ -247,6 +288,12 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     memcpy(hb,b+68u+NTRK*(np+2u+NSTEP*PROJ_STEP_SIZE),PROJ_HARMONY_SIZE);
     if (ext) {
         fx[0] = b[67] >> 7; fx[1] = b[67] & 127u;
+#if CARAVEL_STASIS2
+        if (region_ext) {
+            region = streg_wire_unpack(hb); /* restore HARMONY low nibbles first */
+            if (!streg_wire_valid(region) || !streg_wire_nondefault(region)) return 0;
+        }
+#endif
         proj_fx_hi_unpack(hb, fx);
         if (!proj_fx_valid(fx)) return 0;
     }
@@ -254,6 +301,10 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     proj_fx_defaults(q);
     q->af_on = fx[0]; q->af_time = fx[1]; q->af_amt = fx[2];
     q->af_damp = fx[3]; q->st_tone = fx[4];
+#if CARAVEL_STASIS2
+    q->st_region = region;
+    q->st_region_present = 1u;
+#endif
     memcpy(q->g, b + 8, sizeof q->g); q->sel = b[62]; q->parts = b[63]; q->phys = b[64];
     for (t = 0; t < NTRK; t++) {
         int16_t values[P_COUNT], def[P_COUNT];
@@ -297,6 +348,11 @@ static int proj_import(project_t *q,const void *b,int n) {
     return b && n==(int)PROJ_STORE_SIZE && proj_unpack(q,b,PROJ_STORE_SIZE);
 }
 _Static_assert(PROJ_STORE_SIZE <= 3840u,"FORMAT 2 native project fits storage");
+#if CARAVEL_STASIS2
+/* The HPM2 capsule's native compressed-budget gate remains 3328 bytes;
+ * A6 adds only high bits inside the existing fixed-size native wire. */
+_Static_assert(PROJ_STORE_SIZE <= 3328u,"STASIS2 native project must fit the HPM2 capsule budget");
+#endif
 _Static_assert(sizeof(project_store_t)==PROJ_STORE_SIZE,"FORMAT 2 wire size includes alignment");
 _Static_assert(PROJ_LFO2_OFF >= 68u + NTRK * (P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) +
                PROJ_HARMONY_SIZE + sizeof(motion_store_t),

@@ -8,9 +8,21 @@
  * HOME held 1 s toggles BUILD and PLAY (nothing else may be held); GLO tapped twice opens the menu, from BUILD only.
  * Included by ui_draw.c after home_ui.c (it reads and sets parameters through the HOME performance model, hp_get/hp_set);
  * the input hooks are called from ui_input.c and ui_layer.c. Prototype for the browser emulator (FELUCCA_WEB). */
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+#if !CARAVEL_STASIS2 || !CARAVEL_STASIS_EXPAND || !CARAVEL_UX_LAYERS || !CARAVEL_UX_CAPTURE
+#error "STASIS Scope V6 needs STASIS2, STASIS_EXPAND, UX_LAYERS and UX_CAPTURE"
+#endif
+#endif
 #if CARAVEL_UX_LAYERS
+/* Private BUILD-FX visual experiment. Disabled for every existing profile. */
+#ifndef CARAVEL_UX_BUILD_FX_PLAY_STYLE
+#define CARAVEL_UX_BUILD_FX_PLAY_STYLE 0
+#endif
 #ifndef CARAVEL_UX_EVOLVE
 #define CARAVEL_UX_EVOLVE 0
+#endif
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && !CARAVEL_UX_EVOLVE
+#error "BUILD FX PLAY STYLE requires CARAVEL_UX_EVOLVE=1"
 #endif
 #if CARAVEL_UX_EVOLVE && !(FELUCCA_RANDOM_MORPH && CARAVEL_ACTION_BANKS && FELUCCA_HOME_PERF)
 #error "CARAVEL_UX_EVOLVE needs the HOME performance model, ACTION banks and RANDOM MORPH"
@@ -19,7 +31,88 @@
 #define UXL_KTONE 0xF1u                 /* separate global STASIS TONE */
 #define UXL_KCHORD 0xF2u                /* PLAY HARM: the chord selector (jumps at the next bar line, keeps the progress) */
 #define UXL_KLEFT 0xF3u                 /* PLAY HARM: the bars left in the chord (turn: longer / shorter; past 16: HOLD) */
+#if CARAVEL_STASIS2
+#include "stasis_ui_new.h"
+#define UXL_KSTASIS 0xF4u               /* source REGION controls, outside persisted HOME hp_ref IDs */
+enum { UXL_ST_GRAIN, UXL_ST_POS, UXL_ST_LENGTH, UXL_ST_REVERSE, UXL_ST_STATE, UXL_ST_FEED, UXL_ST_HALL };
+static const param_desc_t UXL_ST_STATE_DESC = {"SOURCE", F_INT, 0, 3, 0, 0, ""};
+/* the STASIS hall's two runtime controls (fx.c st_hall_feed / st_hall_ret): 64 = 100 %, 127 = x3 */
+static const param_desc_t UXL_ST_FEED_DESC = PD("FEED", F_PCT, 0, 127, 64), UXL_ST_HALL_DESC = PD("HALL", F_PCT, 0, 127, 64);
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+/* Display the gain law, not the encoder's normalized position. */
+static void uxl_stasis_gain_fmt(char *b,uint32_t cap,int32_t value)
+{
+    uint32_t q=ST_GAIN_Q12(clamp(value,0,127));
+    fmt_int(b,(int32_t)((q*100u+2048u)>>12u));
+    str_cpy(b+str_len(b),"%",cap-str_len(b));
+}
+static uint8_t uxl_stasis_build_page(const page_t *pg)
+{
+    return (uint8_t)(pg && song.g[G_RTYPE]==3u &&
+                      (pg->graph==GR_STGRAIN || pg->id[0]==G_RTYPE));
+}
+/* Recording state takes precedence over the region geometry. */
+enum { UXL_ST_LIVE, UXL_ST_NEW, UXL_ST_STOP, UXL_ST_RELEASE, UXL_ST_ARM,
+       UXL_ST_FROZEN, UXL_ST_WAIT, UXL_ST_FILL, UXL_ST_LIMIT };
+static uint8_t uxl_stasis_source_state(void)
+{
+    return st.new_source?UXL_ST_NEW:st.stopping?UXL_ST_STOP:
+           st.releasing?UXL_ST_RELEASE:st.cap_pending?UXL_ST_ARM:
+           st.auto_hold?UXL_ST_FROZEN:st.region_status==STREG_WAIT?UXL_ST_WAIT:
+           st.region_status==STREG_FILL?UXL_ST_FILL:
+           st.region_status==STREG_LIMIT?UXL_ST_LIMIT:UXL_ST_LIVE;
+}
+static const char *uxl_stasis_state_name(uint32_t state)
+{
+    static const char *const NAMES[]={"LIVE","NEW","STOP","RELEASE","ARM","FROZEN","WAIT","FILL","LIMIT"};
+    return NAMES[state<=UXL_ST_LIMIT?state:UXL_ST_LIVE];
+}
+static const char *uxl_stasis_source_label(void)
+{
+    return uxl_stasis_state_name(uxl_stasis_source_state());
+}
+static uint8_t uxl_stasis_history_locked(void)
+{
+    /* Same conditions as stasis_exp_turn(2), no alternative edit path. */
+    return (uint8_t)(song.g[G_DRLVL] || mod_stasis.capt || st.auto_hold ||
+                     st.cap_pending || st.releasing);
+}
+#endif
+static const param_desc_t *uxl_stasis_desc(uint32_t id)
+{
+    return id==UXL_ST_GRAIN ? &ST_GRAIN_DESC[0] :
+           id==UXL_ST_POS ? &ST_REGION_DESC[0] :
+           id==UXL_ST_LENGTH ? &ST_REGION_DESC[1] :
+           id==UXL_ST_REVERSE ? &ST_REGION_DESC[2] :
+           id==UXL_ST_FEED ? &UXL_ST_FEED_DESC :
+           id==UXL_ST_HALL ? &UXL_ST_HALL_DESC :
+           &UXL_ST_STATE_DESC;
+}
+static int16_t uxl_stasis_get(uint32_t id)
+{
+    return id==UXL_ST_GRAIN ? st_expand.grain :
+           id==UXL_ST_POS ? st_expand.scan :
+           id==UXL_ST_LENGTH ? st_expand.length :
+           id==UXL_ST_REVERSE ? st_expand.reverse :
+           id==UXL_ST_FEED ? (int16_t)st_hall_feed :
+           id==UXL_ST_HALL ? (int16_t)st_hall_ret :
+           (int16_t)st.region_status;
+}
+static void uxl_stasis_set(uint32_t id,int16_t value)
+{
+    if(id==UXL_ST_GRAIN)st_expand.grain=value;
+    else if(id==UXL_ST_POS)st_expand.scan=value;
+    else if(id==UXL_ST_LENGTH)st_expand.length=value;
+    else if(id==UXL_ST_REVERSE)st_expand.reverse=value;
+    else if(id==UXL_ST_FEED)st_hall_feed=(uint8_t)clamp(value,0,127);
+    else if(id==UXL_ST_HALL)st_hall_ret=(uint8_t)clamp(value,0,127);
+}
+#endif
+#if CARAVEL_STASIS2
+#define UXL_KSPECIAL(x) ((x) >= UXL_KFILT && (x) <= UXL_KSTASIS)
+#else
 #define UXL_KSPECIAL(x) ((x) >= UXL_KFILT && (x) <= UXL_KLEFT)
+#endif
 static const param_desc_t UXL_FILT_DESC = {"FILTER", F_INT, -100, 100, 0, 0, ""};
 #if CARAVEL_STASIS_EXPAND
 static const param_desc_t UXL_STTONE_DESC = {"TONE", F_INT, 0, 127, 64, 0, ""};
@@ -65,19 +158,37 @@ typedef struct { const char *name; uint8_t btn, ng; uxl_gr_t g[5]; } uxl_area_t;
 #endif
 #define UXL_T(k, i) {HP_TRACK, (i), 255, 0}
 #define UXL_G(i) {HP_GLOBAL, (i), 255, 0}
+#if CARAVEL_STASIS2
+#define UXL_ST(i) {UXL_KSTASIS, (i), 255, 0}
+#endif
 static const uxl_area_t UXL_AREA[UXL_N] = {
     /* (E61: the delay and room settings are the FX pages in BUILD; two groups at most, E40) */
     /* (E74, E77: SPACE has SENDS (all four), FILTER (the FX layer's four macros FILTER CRUSH THROW DEPTH as arcs: they stay when FX is let
      * go) and STASIS (its three and the FILTER on K4, which would be empty); the delay's own settings are BUILD's) */
-    {"SPACE", B_FX, 3, {{"SENDS", 4, {UXL_T(0, P_DIST), UXL_T(0, P_CHOR), UXL_T(0, P_DLY), UXL_T(0, P_REV)}},
-                        {"FILTER", 4, {{UXL_KFILT, 0, 255, 0}, {UXL_KFILT, 1, 255, 0}, {UXL_KFILT, 2, 255, 0}, {UXL_KFILT, 3, 255, 0}}},
-                        {"STASIS", 4, {UXL_G(G_DRREV), UXL_G(G_STAMT), UXL_G(G_STTIME),
-#if CARAVEL_STASIS_EXPAND
-                            {UXL_KTONE, 0, 255, 0}
+    {"SPACE", B_FX,
+#if CARAVEL_STASIS2
+     5,
 #else
-                            {UXL_KFILT, 0, 255, 0}
+     3,
 #endif
-                        }}}},
+     {{"SENDS", 4, {UXL_T(0, P_DIST), UXL_T(0, P_CHOR), UXL_T(0, P_DLY), UXL_T(0, P_REV)}},
+      {"FILTER", 4, {{UXL_KFILT, 0, 255, 0}, {UXL_KFILT, 1, 255, 0}, {UXL_KFILT, 2, 255, 0}, {UXL_KFILT, 3, 255, 0}}},
+#if CARAVEL_STASIS2
+      /* Stage 3: only implemented targets. Source controls use the same
+       * st_expand fields as BUILD GRAIN/REGION and the FORMAT-2 A6 codec. */
+      {"TEXTURE", 4, {UXL_ST(UXL_ST_GRAIN), {HP_GLOBAL,G_RSIZE,255,"STR"}, {HP_GLOBAL,G_DRREV,255,"MOTN"}, {UXL_KTONE, 0, 255, 0}}},
+      {"REGION", 4, {UXL_ST(UXL_ST_POS), UXL_ST(UXL_ST_LENGTH), UXL_ST(UXL_ST_REVERSE), UXL_ST(UXL_ST_STATE)}},
+      {"TANK", 4, {UXL_G(G_RTYPE), UXL_ST(UXL_ST_FEED), UXL_T(0, P_DRY), UXL_ST(UXL_ST_HALL)}}
+#else
+      {"STASIS", 4, {UXL_G(G_DRREV), UXL_G(G_STAMT), UXL_G(G_STTIME),
+#if CARAVEL_STASIS_EXPAND
+                      {UXL_KTONE, 0, 255, 0}
+#else
+                      {UXL_KFILT, 0, 255, 0}
+#endif
+      }}
+#endif
+     }},
     {"HARM", B_SCL, 1, {{"CHORDS", 4, {UXL_T(0, P_ROOT), {UXL_KCHORD, 0, 255, 0}, {UXL_KLEFT, 0, 255, 0}, UXL_T(0, P_LATCH)}}}},
     {"SHAPE", B_ENV, 2, {{"ENV", 4, {UXL_T(0, P_ATK), UXL_T(0, P_DEC), UXL_T(0, P_SUS), UXL_T(0, P_REL)}},
                          {"MACRO", 4, {{HP_MACRO, 0, 255, 0}, {HP_MACRO, 1, 255, 0}, {HP_MACRO, 2, 255, 0}, {HP_MACRO, 3, 255, 0}}}}},
@@ -144,7 +255,7 @@ static uint32_t uxl_cap_get(uint32_t i, uint32_t what)    /* the snapshot of a t
     return what == 0u ? v.st : what == 1u ? v.full : what == 2u ? v.ln : v.rn;
 }
 #endif
-static void action_stasis(uint32_t action);   /* action_control.c: HOLD ADD BLEND RELEASE */
+static void action_stasis(uint32_t action);   /* action_control.c: legacy or V5 gestures */
 static int page_tap(uint32_t b);        /* ui_input.c */
 
 static const uint8_t UXL_SIN[91] = {0,4,9,13,18,22,27,31,36,40,44,49,53,58,62,66,71,75,79,83,88,92,96,100,104,108,112,116,120,124,128,132,136,139,143,147,150,154,158,161,165,168,171,175,178,181,184,187,190,193,196,199,202,204,207,210,212,215,217,219,222,224,226,228,230,232,234,236,237,239,241,242,243,245,246,247,248,249,250,251,252,253,254,254,255,255,255,255,255,255,255};
@@ -193,6 +304,14 @@ static uint32_t uxl_group(uint32_t area, uint32_t g, uxl_tg_t out[4])
 {
     const uxl_gr_t *gr = &UXL_AREA[area].g[g];
     uint32_t k;
+#if CARAVEL_STASIS2
+    /* Do not repurpose HALL SIZE/DAMP as STASIS STR/MOTN when HALL is
+     * selected; TANK still offers TYPE so the user can enable STASIS. */
+    if(area==UXL_SPACE && (g==2u||g==3u) && song.g[G_RTYPE]!=3u) {
+        for(k=0;k<4u;k++)out[k]=(uxl_tg_t){0};
+        return 0u;
+    }
+#endif
     if (area == UXL_SOUND) {
         const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
         uint8_t r[8];
@@ -993,6 +1112,10 @@ static void uxl_mom_poll(void)
 #if CARAVEL_STASIS_EXPAND
             else if (uxl.mom_r[k].kind == UXL_KTONE) stasis_tone = uxl.mom_v[k];
 #endif
+#if CARAVEL_STASIS2
+            else if (uxl.mom_r[k].kind == UXL_KSTASIS)
+                uxl_stasis_set(uxl.mom_r[k].id,uxl.mom_v[k]);
+#endif
             else if (hp_desc(uxl.mom_r[k]))
                 hp_set(uxl.mom_r[k], uxl.mom_v[k], 0);
         }
@@ -1001,17 +1124,71 @@ static void uxl_mom_poll(void)
         ui_message("BACK");
     }
 }
+#if CARAVEL_STASIS2
+/* V5: B4 FREEZE, C5 NEW long, D5 RELEASE. F5/G5 are disabled
+ * instead of silently restoring the retired FLANGER/PHASER shortcuts. */
+static const uint8_t UXL_SV_KEY[3] = {18, 19, 21};
+static const uint8_t UXL_SV_POS[5] = {10, 11, 12, 14, 15};
+static uint32_t uxl_new_at;
+static uint8_t uxl_new_held, uxl_new_fired, uxl_new_step;
+static void fx_map_sync(void);             /* defined by ui_layer.c */
+static uint8_t uxl_fx_last_type = 255u; /* detect active TYPE changes */
+static uint32_t uxl_stasis_cell_state(uint32_t p)
+{
+    if(!uxl.play || song.g[G_RTYPE] != 3u) return 0u;
+    if(p==10u) return st.auto_hold || song.g[G_DRLVL] ? 2u : 1u;
+    if(p==11u) return uxl_new_fired ? 2u : uxl_new_held ? 3u : 1u;
+    return p==12u ? 1u : 0u;
+}
+#else
 static const uint8_t UXL_SV_KEY[4] = {18, 19, 24, 26};     /* B4 C5 F5 G5 */
 static const uint8_t UXL_SV_POS[4] = {10, 11, 14, 15};     /* .. as white keys F3 .. G5 */
-static void uxl_stasis_poll(void)                   /* FX held in PLAY: B4 C5 F5 G5 pressed are HOLD ADD BLEND RELEASE */
+#endif
+static void uxl_stasis_poll(void)
 {
     static uint32_t prev;
-    uint32_t edge = fm1_in.notes & ~prev, i;
+    uint32_t edge = fm1_in.notes & ~prev;
     prev = fm1_in.notes;
+#if CARAVEL_STASIS2
+    uint32_t active = uxl.play && ui.ly == LAYER_FX &&
+        (fm1_in.buttons & (1u << panel.btn[B_FX])) && song.g[G_RTYPE]==3u;
+    if(!active || !(fm1_in.notes & (1u << UXL_SV_KEY[1]))) {
+        if(uxl_new_held || uxl_new_fired)ui.force=1;
+        uxl_new_at=0u;uxl_new_held=uxl_new_fired=uxl_new_step=0u;
+    }
+    if(uxl.play && uxl_fx_last_type!=(uint8_t)song.g[G_RTYPE]){
+        uxl_fx_last_type=(uint8_t)song.g[G_RTYPE];
+        fx_map_sync(); /* restores ordinary FX map when TYPE leaves STASIS */
+    }
+    if(!active)return;
+    if(edge & (1u << UXL_SV_KEY[0]))action_stasis(0u);
+    if(edge & (1u << UXL_SV_KEY[2]))action_stasis(3u);
+    if(edge & (1u << UXL_SV_KEY[1])){
+        uxl_new_at=fm1_ms;
+        uxl_new_held=1u;
+        uxl_new_fired=uxl_new_step=0u;
+        ui_message("C5: HOLD FOR NEW SOURCE");
+        ui.force=1;
+    }
+    if(uxl_new_held && !uxl_new_fired){
+        uint8_t step=stasis_new_progress_step(uxl_new_at,fm1_ms,uxl_new_held);
+        if(step!=uxl_new_step){
+            uxl_new_step=step;
+            ui.force=1; /* four discrete updates, never a per-frame animation */
+        }
+        if(step==4u){
+            uxl_new_fired=1u;
+            action_stasis(1u); /* exactly once after 800 ms of continuous hold */
+            ui.force=1;
+        }
+    }
+#else
+    uint32_t i;
     if (uxl.play && ui.ly == LAYER_FX && (fm1_in.buttons & (1u << panel.btn[B_FX])))
-        for (i = 0; i < 4u; i++)
+        for (i = 0; i < sizeof UXL_SV_KEY / sizeof UXL_SV_KEY[0]; i++)
             if (edge & (1u << UXL_SV_KEY[i]))
                 action_stasis(i);
+#endif
 }
 static void uxl_hold_no_tap_poll(void)               /* BUILD: ENV or LFO held (0.4 s) or used with a key is no page tap when it is let go (the page used to
                                                       * go round to the next one, with its own picture, each time the owner held LFO to try the verbs) */
@@ -1104,7 +1281,10 @@ static void uxl_fx_map_filter(void)
     uint32_t i;
     if (!uxl.play)
         return;
-    for (i = 0; i < 4u; i++)
+#if CARAVEL_STASIS2
+    if(song.g[G_RTYPE]!=3u)return;
+#endif
+    for (i = 0; i < sizeof UXL_SV_POS / sizeof UXL_SV_POS[0]; i++)
         if (perf_map[UXL_SV_POS[i]] != PF_N) {
             perf_map[UXL_SV_POS[i]] = PF_N;
             perf_remap = 1;
@@ -1112,11 +1292,23 @@ static void uxl_fx_map_filter(void)
 }
 static const char *uxl_fx_label(uint32_t p)
 {
+#if CARAVEL_STASIS2
+    static const char *const L[3] = {"FRZ", "NEW", "REL"};
+#else
     static const char *const L[4] = {"HOLD", "ADD", "BLND", "REL"};
+#endif
     uint32_t i;
-    if (uxl.play)
-        for (i = 0; i < 4u; i++)
+    if (uxl.play
+#if CARAVEL_STASIS2
+        && song.g[G_RTYPE] == 3u
+#endif
+        )
+        for (i = 0; i < sizeof UXL_SV_KEY / sizeof UXL_SV_KEY[0]; i++)
+#if CARAVEL_STASIS2
             if (UXL_SV_POS[i] == p)
+#else
+            if (UXL_SV_POS[i] == p)
+#endif
                 return L[i];
     return 0;
 }
@@ -1223,6 +1415,13 @@ static void uxl_knob(uint32_t k, int32_t s)
     }
 #endif
     uxl_group(uxl.area, uxl_group_now(), tg);
+#if CARAVEL_STASIS2
+    if(uxl.area==UXL_SPACE && (uxl_group_now()==2u||uxl_group_now()==3u) &&
+       song.g[G_RTYPE]!=3u) {
+        ui_message("TANK: SET TYPE STASIS");
+        return;
+    }
+#endif
     if (!tg[k].kind)
         return;
 #if CARAVEL_STASIS_EXPAND
@@ -1238,6 +1437,33 @@ static void uxl_knob(uint32_t k, int32_t s)
         uxl.hot_k = (uint8_t)k;
         uxl.hot_t = 40;
         ui.force = 1;
+        return;
+    }
+#endif
+#if CARAVEL_STASIS2
+    if (tg[k].kind == UXL_KSTASIS) {
+        if (song.g[G_RTYPE]!=3u) { ui_message("SET TYPE STASIS"); return; }
+        if (tg[k].id == UXL_ST_STATE) { ui_message("SOURCE STATUS: READ ONLY"); return; }
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+        /* PLAY and BUILD must reject the same impossible held grain size. */
+        if(tg[k].id==UXL_ST_GRAIN) {
+            int32_t wanted=param_turn(uxl_stasis_desc(tg[k].id),uxl_stasis_get(tg[k].id),s);
+            uint32_t required=((ST_GRAIN_BASE<<(uint32_t)wanted)+4096u+ST_OFFSET+421u+4096u+
+                              256u+stasis_record_factor()-1u)>>st.active_quality;
+            if(st.auto_hold && st.valid<required) {
+                ui_message("GRAIN TOO LONG FOR CAPTURE");return;
+            }
+        }
+#endif
+        if ((fm1_in.buttons & (1u << panel.btn[B_LFO])) && !(uxl.mom & (1u << k))) {
+            uxl.mom |= (uint8_t)(1u << k);
+            uxl.mom_v[k] = uxl_stasis_get(tg[k].id);
+            uxl.mom_r[k].kind = UXL_KSTASIS;
+            uxl.mom_r[k].id = tg[k].id;
+        }
+        uxl_stasis_set(tg[k].id,(int16_t)param_turn(uxl_stasis_desc(tg[k].id),
+                                      uxl_stasis_get(tg[k].id),s));
+        uxl.hot_k=(uint8_t)k;uxl.hot_t=40u;ui.force=1;
         return;
     }
 #endif
@@ -1737,6 +1963,9 @@ static void uxl_ring_pt(int32_t a, int32_t r, int32_t *x, int32_t *y)
     *y = 116 - (r * uxl_sin(a + 90) + 128) / 256;
 }
 /* a filled disc that touches only its own pixels (cv_rrect paints its corners: wrong on a ring) */
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+#include "stasis_scope_v6.c"
+#endif
 static void uxl_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c)
 {
     int32_t dx, dy;
@@ -1782,6 +2011,15 @@ static void uxl_orbit_arc_f(uint32_t k, int32_t f, int32_t z, int flags)   /* f,
     }
     uxl_ring_thumb(START[k] + f, c, (flags & UXL_ARC_HOT) ? T_TEXT : ux_mix(T_TEXT, T_BG, 12));
 }
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+static void uxl_orbit_disabled(uint32_t k)
+{
+    static const int16_t START[4]={277,7,187,97};
+    uxl_ring(120,116,58,71,START[k],START[k]+76,START[k],START[k]-1,T_LINE,T_LINE);
+    uxl_ring_cap(START[k],T_LINE,T_BG);
+    uxl_ring_cap(START[k]+76,T_LINE,T_BG);
+}
+#endif
 /* a spring on an arc (E63): a coil from the value it returns to (the anchor) to the weight, which is where the parameter is now.
  * Stretched, the coil is longer; at rest it is a short coil beside the anchor, so an armed arc still reads as a spring. */
 /* ELASTIC on an arc as a rubber band: the anchor is a hollow ring, the weight the thumb, between them a taut 3 px band along the rail
@@ -1889,7 +2127,19 @@ static int uxl_layer_head_draw(void)
  * enters at the right and moves left. The band is the LIVE window (what REC would take), also while a loop runs. */
 static void uxl_paint_widget(void)
 {
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    const int32_t CX = 120, CY = 116, RM = 44;
+    /* Keep MIDI notes visible BELOW the central audio scope. The four
+     * corner orbit controls and track footer remain in their old slots. */
+    const uint8_t midi_below_scope=stviz_enabled();
+    /* V7 layout: the arcs of the two lower knobs end at y182, the legend starts at y201.
+     * The band (tag "CAP nB" + notes) takes y186..196 between them. The notes use x120..173. */
+    const int32_t BX=midi_below_scope?120:88, BY=midi_below_scope?186:96;
+    const int32_t BW=midi_below_scope?54:64, BH=midi_below_scope?11:40;
+#else
+    /* A2: literal original constant declaration retained verbatim. */
     const int32_t CX = 120, CY = 116, BX = 88, BY = 96, BW = 64, BH = 40, RM = 44;
+#endif
     uint32_t i = cap_selected(), now = perf_bars_q16, k, g0 = cap_gen[i];
     cap_view_t v;
     uint32_t len, nb, span, st;                           /* len, span: 1/4096 bar (the events' unit) */
@@ -1900,7 +2150,13 @@ static void uxl_paint_widget(void)
     len = (uint32_t)v.bars << 12;
     nb = v.ln && len ? (uint32_t)v.bars : CAP_BARS[cap_li[i]];
     span = nb << 12;
-    uxl_ring(CX, CY, 40, 48, 0, 359, 0, 359, T_LINE, T_LINE);
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if(!midi_below_scope)
+#endif
+        uxl_ring(CX, CY, 40, 48, 0, 359, 0, 359, T_LINE, T_LINE);
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if (midi_below_scope) cv_rect(66, BY, BX - 66, BH, T_SURF);   /* the tag zone of the band */
+#endif
     cv_rect(BX, BY, BW, BH, T_SURF);
     for (k = 0; k < v.rn; k++) {                         /* the pitch range of what is in view */
         const cap_ev_t *e = cap_view_ring(&v, i, k);
@@ -1972,7 +2228,11 @@ static void uxl_paint_widget(void)
             }
         }
     }
-    if (st && len) {                                     /* the loop: its notes on the ring, the pointer at its phase */
+    if (st && len
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+        && !midi_below_scope
+#endif
+       ) { /* Keep original MIDI ring only outside STASIS audio scope. */
         uint32_t ph = CAP_U(st == 1u ? (now - v.o) % (len << 4) : v.o);
         for (k = 0; k < v.ln; k++) {
             const cap_ev_t *e = &cap_loop[i][k];
@@ -1998,12 +2258,29 @@ static void uxl_paint_widget(void)
         b[0] = (char)('0' + nb);
         str_cpy(b + 1, nb == 1u ? " BAR" : " BARS", sizeof b - 1u);
     }
-    uxl_text_c(120, 77, &AF_S, b, uxl.cap_view ? T_ACCENT : T_MID);
-    if (v.full) {
-        cv_frame(102, 146, 36, 14, T_TEXT);
-        cv_text_on(106, 146, &AF_S, "FULL", T_TEXT, T_BG);
-    } else if (st == 2u)                                 /* (LIVE and LOOP need no word: the pointer and the header chip say it) */
-        uxl_text_c(120, 139, &AF_S, "PAUSE", T_MID);
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if(midi_below_scope){
+        /* This is MIDI CAPTURE's own note band, not audio samples. */
+        /* The Scope's last LCD strip ends at y=172, the band is y186..196
+         * (below the lower knob arcs, above the legend at y201); the track
+         * footer begins at y=216. Never overwrite MIDI notes or the tag when
+         * a source PCM peak changes. */
+        char tag[10];
+        str_cpy(tag,"CAP ",sizeof tag);
+        fmt_int(tag+4,(int32_t)nb);
+        str_cpy(tag+str_len(tag),"B",sizeof tag-str_len(tag));
+        cv_text(69,BY-1,&AF_S,tag,T_MID);
+    } else {
+#endif
+        uxl_text_c(120, 77, &AF_S, b, uxl.cap_view ? T_ACCENT : T_MID);
+        if (v.full) {
+            cv_frame(102, 146, 36, 14, T_TEXT);
+            cv_text_on(106, 146, &AF_S, "FULL", T_TEXT, T_BG);
+        } else if (st == 2u) /* original MIDI CAPTURE pause */
+            uxl_text_c(120, 139, &AF_S, "PAUSE", T_MID);
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    }
+#endif
     if (cap_gen[i] != g0)                                /* a write fell inside the frame: draw it again */
         ui.force = 1;
 }
@@ -2409,6 +2686,10 @@ static void uxl_paint(void)
         return;
     }
     uxl_paint_head();
+#if CARAVEL_STASIS2
+    if(uxl.area==UXL_SPACE && (g==2u||g==3u) && song.g[G_RTYPE]!=3u)
+        uxl_text_c(120,116,&AF_S,"TANK: SET TYPE STASIS",T_MID);
+#endif
 #if CARAVEL_UX_EVOLVE
     if (ev >= 0
 #if CARAVEL_UX_CAPTURE
@@ -2438,6 +2719,36 @@ static void uxl_paint(void)
             else str_cpy(b, "N/A", sizeof b);
             u = "";
             r = (hp_ref_t){0};
+        } else
+#endif
+#if CARAVEL_STASIS2
+        if (tg[k].kind == UXL_KSTASIS) {
+            v = uxl_stasis_get(tg[k].id);
+            d = uxl_stasis_desc(tg[k].id);
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+            /* SOURCE is a read-only status, never a pseudo-editable arc. */
+            if(tg[k].id!=UXL_ST_STATE)
+#endif
+            uxl_orbit_arc(k,d,v,(hot ? UXL_ARC_HOT : 0)|UXL_ARC_G);
+            if(song.g[G_RTYPE]!=3u)
+                str_cpy(b,"N/A",sizeof b);
+            else if(tg[k].id==UXL_ST_STATE)
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+                str_cpy(b,uxl_stasis_source_label(),sizeof b);
+            else if(tg[k].id==UXL_ST_FEED || tg[k].id==UXL_ST_HALL)
+                uxl_stasis_gain_fmt(b,sizeof b,v);
+#else
+                str_cpy(b,st.region_status==STREG_FILL?"FILL":
+                         st.region_status==STREG_WAIT?"WAIT":
+                         st.region_status==STREG_LIMIT?"LIMIT":"FIT",sizeof b);
+#endif
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+            else if(tg[k].id==UXL_ST_POS || tg[k].id==UXL_ST_LENGTH)
+                stviz_fmt_region_sec(b,sizeof b,tg[k].id==UXL_ST_LENGTH);
+#endif
+            else param_format(d,v,b,&u);
+            u="";
+            r=(hp_ref_t){0};
         } else
 #endif
         if (tg[k].kind == UXL_KCHORD || tg[k].kind == UXL_KLEFT) {   /* PLAY HARM: the chord selector and the countdown */
@@ -2496,7 +2807,11 @@ static void uxl_paint(void)
         if (uxl_hm_key_global(&tg[k])) lab = tg[k].id == P_ROOT ? "H ROOT" : "H SCL";
         {
             /* PLAY intentionally mixes TRACK and GLOBAL targets in one area. */
-            int global = tg[k].kind == HP_GLOBAL || tg[k].kind == UXL_KTONE || tg[k].kind == UXL_KCHORD || tg[k].kind == UXL_KLEFT || uxl_hm_key_global(&tg[k]);
+            int global = tg[k].kind == HP_GLOBAL || tg[k].kind == UXL_KTONE ||
+#if CARAVEL_STASIS2
+                         tg[k].kind == UXL_KSTASIS ||
+#endif
+                         tg[k].kind == UXL_KCHORD || tg[k].kind == UXL_KLEFT || uxl_hm_key_global(&tg[k]);
             int gl = uxl.area == UXL_SHAPE && g == 0u ? (int)k : uxl.area == UXL_MOVE && g == 0u && k == 0u ? 4 : -1;
             int32_t vy = gl >= 0 ? cy + 32 : cy + 21;
             if (cx < 120) {
@@ -2521,6 +2836,9 @@ static void uxl_paint(void)
 #endif
 #if CARAVEL_UX_CAPTURE
     uxl_paint_widget();
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if(stviz_enabled()) stviz_paint(&stviz_frame,0,0);
+#endif
     if (uxl.area == UXL_HARM && !uxl.cap_view)
         uxl_hc_paint_play();
 #else
@@ -2728,12 +3046,33 @@ static uint32_t uxl_cap_sig(void)
 {
 #if CARAVEL_UX_CAPTURE
     cap_view_t v;
+#if CARAVEL_STASIS2
+    /* Keep the entire S0 tick change out of feature-off code generation.
+     * A2 compares the complete legacy .bin byte-for-byte, not only size. */
+    uint32_t phase_tick = perf_bars_q16 >> 11u;
+    /* The STASIS SPACE pages do not need the MIDI capture ring repainted
+     * every 1/32 bar: a 1/8-bar tick is <=8 Hz at the maximum 240 BPM.
+     * Other PLAY pages and an open CAPTURE editor retain full resolution. */
+    if (uxl.area == UXL_SPACE &&
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+        uxl_group_now() < 5u &&
+#else
+        uxl_group_now() >= 2u &&
+#endif
+        song.g[G_RTYPE] == 3u && !uxl.cap_view)
+        phase_tick = perf_bars_q16 >> 13u;
+#define UXL_CAP_PHASE_TICK phase_tick
+#else
+    /* Retain the exact legacy expression for A2 binary parity. */
+#define UXL_CAP_PHASE_TICK (perf_bars_q16 >> 11)
+#endif
     cap_view(cap_selected(), &v);
-    return 7919u + (song.playing ? (perf_bars_q16 >> 11) * 31u : 0u) +
+    return 7919u + (song.playing ? UXL_CAP_PHASE_TICK * 31u : 0u) +
            v.st * 17u + v.rn * 3u + v.ln * 13u + v.quant * 43u +
            v.requested * 79u + v.quant_pending * 97u +
            cap_li[cap_selected()] * 5u + (uint32_t)song.playing +
            (uint32_t)uxl.cap_view * 977u;
+#undef UXL_CAP_PHASE_TICK
 #else
     return 0;
 #endif
@@ -2771,6 +3110,18 @@ static uint32_t uxl_play_sig(void)
     for (k = 0; k < 4u; k++)
         if (tg[k].kind == UXL_KTONE) {
             s = s * 16777619u + (uint32_t)stasis_tone + 7u;
+#if CARAVEL_STASIS2
+        } else if (tg[k].kind == UXL_KSTASIS) {
+            /* Effective source length changes nearly every CTL while filling
+             * and is not drawn on this PLAY page. Only the displayed REGION
+             * state (FILL/WAIT/FIT/LIMIT) needs to invalidate a full frame.
+             * V6 audio meters must have a separate bounded-update signature. */
+            s = s * 16777619u + (uint32_t)uxl_stasis_get(tg[k].id)
+                    + 17u * (uint32_t)tg[k].id + (uint32_t)st.region_status * 3u;
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+            if(tg[k].id==UXL_ST_STATE) s=s*33u+str_hash(7u,uxl_stasis_source_label());
+#endif
+#endif
         } else if (tg[k].kind == UXL_KFILT) {
             s = s * 16777619u + (uint32_t)(tg[k].id ? (int32_t)perf_k[tg[k].id & 3u] : tf_eff(TSEL));
         } else if (tg[k].kind == UXL_KCHORD || tg[k].kind == UXL_KLEFT) {
@@ -2790,6 +3141,12 @@ static void uxl_draw_play(void)
     uint32_t s = uxl_play_sig();
     if (ui.force || s != uxl.sig) {
         uxl.sig = s;
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+        if(stviz_enabled() && stviz_snapshot(&stviz_frame)){
+            stviz_last=stviz_frame;
+            stviz_has_last=1u;
+        } else stviz_has_last=0u;
+#endif
         cv_begin(240, 120, T_BG);
         cv_bg = T_BG;
         cv_oy = 0;
@@ -2803,7 +3160,13 @@ static void uxl_draw_play(void)
         uxl_paint_any();
         cv_oy = 0;
         cv_blit(0, 120);
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+        stviz_last_ms=fm1_ms;stviz_has_time=stviz_has_last;
+#endif
     }
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    else stviz_tick();
+#endif
     if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
         str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
         ui.msg2[0] = 0;
@@ -3163,6 +3526,12 @@ static int uxl_ring_page(void)
     const dual_t *dd;
     if (uxl.play || ui.home || ui.menu || ui.confirm || name_on() || ui.uboot || ui.layer)
         return 0;
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND
+    /* GRAIN and REGION already have four native page_desc() targets.
+     * Reuse BUILD's existing PLAY-style renderer, never a second drawing path. */
+    if (cur_page()->graph == GR_STGRAIN)
+        return 1;
+#endif
     if (uxl_c_page())                                   /* every page of plain cards (EDIT, FX, SCL, ARP, VOICE, CLOCK ...): the ring too */
         return 1;
     if (!dual_page(cur_page()))
@@ -3432,6 +3801,22 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
     const char *unit;
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     cv_rect(0, 0, 240, 240, T_BG);
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND
+    if (uxl_stasis_build_page(rps[act])) {
+        /* REVERB (TYPE/CAPT/STR/MOTN) and the source pages share the scope. */
+#if defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+        if (stviz_enabled())
+            stviz_paint(&stviz_frame, 0, 0);
+        else
+#endif
+        {
+            const char *reg = uxl_stasis_source_label();
+            uxl_ring(120, 116, 40, 48, 0, 359, 0, 359, T_LINE, T_LINE);
+            uxl_text_c(120, 101, &AF_S, rps[act]->title, T_TEXT);
+            uxl_text_c(120, 122, &AF_S, reg, T_MID);
+        }
+    } else
+#endif
     if (pic) {
         if (dd->kind != DK_INS && dd->kind != DK_GRAPH)
             cv_rect(88, 96, 64, 40, T_SURF);                          /* the middle: PLAY's capture band here, the page's picture in BUILD */
@@ -3471,6 +3856,11 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         uxl_hm_paint(dd, act, uxl_hm_view(dd, act));
 #endif
     }
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+    if (rps[act] && str_eq(rps[act]->title, "DLY") &&
+        fx_delay_suspended(rps[act], 0u))
+        uxl_text_c(120, 110, &AF_S, "OFF: STASIS", T_DIM);
+#endif
     for (k = 0; k < 4u; k++) {
         int32_t v, cx = (k & 1u) == 0u ? 4 : 236, cy = k < 2u ? 46 : 150;
         const param_desc_t *d = uxl_c_card(dd, rps[act], act, k, &v);
@@ -3478,7 +3868,7 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         hp_ref_t r;
         int off = 0, chx;
         chext_view_t cv;
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
         if (rps[act] && rps[act]->graph == GR_STLAYER) {
             if (k == 3u) {                                             /* LAYER's fourth card: the action (ADD, BLEND, CANCEL), the state, what OCT+ does */
                 const char *an = stasis_layer_can_cancel() ? "CANCEL" : song.g[G_STMODE] == 1 ? "BLEND" : "ADD";
@@ -3507,6 +3897,22 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         if (!ok)
             continue;
         if (rps[act] && fx_delay_suspended(rps[act], k)) {
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+            /* Delay cannot operate with STASIS's shared source ring. Keep
+             * the rail in place but show disabled controls, no false value. */
+            if (str_eq(rps[act]->title, "DLY")) {
+                /* Disabled rail only: no thumb implying an editable value. */
+                uxl_orbit_disabled(k);
+                if (cx < 120) {
+                    cv_text(cx, cy, &AF_M, d->label, T_DIM);
+                    cv_text(cx, cy + 21, &AF_S, "--", T_DIM);
+                } else {
+                    uxl_text_r(cx, cy, &AF_M, d->label, T_DIM);
+                    uxl_text_r(cx, cy + 21, &AF_S, "--", T_DIM);
+                }
+                continue;
+            }
+#endif
             if (cx < 120) {
                 cv_text(cx, cy, &AF_M, d->label, T_DIM);
                 cv_text(cx, cy + 21, &AF_S, "OFF: STASIS", T_DIM);
@@ -3516,6 +3922,13 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
             }
             continue;
         }
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2
+        if(uxl_stasis_build_page(rps[act]) && d->names==N_STWINDOW && uxl_stasis_history_locked()) {
+            /* The selected history is visible, but not editable during HOLD. */
+            uxl_orbit_disabled(k);
+            off=1;
+        }
+#endif
         if (!off && !(chx && k == 3u))                                  /* (NOTES is a display: no arc) */
             uxl_orbit_arc(k, d, v, (hot ? UXL_ARC_HOT : 0) | (rps[act] && rps[act]->scope == SC_GLOBAL ? UXL_ARC_G : 0));
         {
@@ -3528,6 +3941,10 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         if (dd && dd->kind == DK_CHEXT && act)                          /* CHORD EXT: its own text (K4: the notes the follower takes) */
             str_cpy(val, cv.value, sizeof val), unit = "";
         str_cpy(line, val, sizeof line);
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2
+        if(off && uxl_stasis_build_page(rps[act]) && d->names==N_STWINDOW)
+            str_cpy(line+str_len(line)," LOCK",sizeof line-str_len(line));
+#endif
         if (unit && unit[0]) {
             str_cpy(line + str_len(line), " ", sizeof line - str_len(line));
             str_cpy(line + str_len(line), unit, sizeof line - str_len(line));
@@ -3574,7 +3991,7 @@ static void uxl_ring_build_paint(const dual_t *dd, uint32_t act, const page_t *c
         uxl_page_pos(pos, sizeof pos);
         uxl_text_r(232, 198, &AF_S, pos, T_MID);
     }
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (dd && rps[act] && rps[act]->graph == GR_STLAYER) {              /* LAYER: what OCT+ and OCT- do */
         const char *aw = song.g[G_STMODE] == 1 ? "BLEND" : "ADD";                /* (in the free middle of the ring) */
         cv_key_hint(120 - kh_w(KC_OCTUP, aw) / 2, 96, KC_OCTUP, aw, 1, T_BG);
@@ -3626,7 +4043,12 @@ static void uxl_ring_build(void)
     }
 #endif
     sig = sig * 33u + (uint32_t)(uintptr_t)cur_page();
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2
+    if (uxl_stasis_build_page(rps[bottom]))
+        sig = sig * 33u + str_hash(7u,uxl_stasis_source_label()) +
+              (uint32_t)uxl_stasis_history_locked()*97u;
+#endif
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
     if (rps[bottom] && rps[bottom]->graph == GR_STLAYER) {                       /* the action and its state move by themselves */
         const char *ss = stasis_layer_status();
         sig = sig * 33u + (uint32_t)stasis_layer_can_cancel() + (uint32_t)song.g[G_STMODE] * 5u;
@@ -3643,9 +4065,22 @@ static void uxl_ring_build(void)
     }
     if (dd && dd->kind == DK_GRAPH)                                                   /* the SLICER's playing step and pattern */
         sig = sig * 33u + sl[TSEL - trk].idx * 7u + sl_pattern(TSEL) * 131u;
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if (!ui.force && ui.graph_sig == sig) {
+        if (stviz_enabled()) stviz_tick();
+        return;
+    }
+#else
     if (!ui.force && ui.graph_sig == sig)
         return;
+#endif
     ui.graph_sig = sig;
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if (stviz_enabled() && stviz_snapshot(&stviz_frame)) {
+        stviz_last=stviz_frame;
+        stviz_has_last=1u;
+    } else stviz_has_last=0u;
+#endif
     cv_begin(240, 120, T_BG);
     cv_bg = T_BG;
     cv_oy = -28;
@@ -3660,6 +4095,12 @@ static void uxl_ring_build(void)
     uxl_ring_build_paint(dd, bottom, rps);
     cv_oy = 0;
     cv_blit(0, 148);
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+    if (stviz_enabled()) {
+        stviz_last_ms=fm1_ms;
+        stviz_has_time=stviz_has_last;
+    }
+#endif
 }
 /* ---- BUILD in PLAY's manner: the SAVE family (USER, PRESETS, PHRASES, PROJECT, TOOLS) ----
  * The ring is the chooser: for a list (PRESETS, USER, PHRASES) its pointer is the place in the list, for PROJECT the four arcs are the
@@ -4310,7 +4751,15 @@ static void uxl_build_mark(void)
                 }
         } else
 #endif
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE
+        /* A first-use FX quick-layer tip is only meaningful on the FX
+         * entry page. Every other message and the timer stay untouched. */
+        if (ui.msg_t && !(cur_page()->fam == FAM_FX &&
+                          str_eq(ui.msg, "HOLD [FX] QUICK") &&
+                          !str_eq(cur_page()->title, "FX"))) {
+#else
         if (ui.msg_t) {
+#endif
             cv_free_text(x0, 4, &AF_M, ui.msg, T_TEXT, band, 238 - x0);
         } else {
             int32_t tw = text_w(&AF_M, tt), bw = text_w(&AF_M, blk);

@@ -65,6 +65,15 @@ static void fm1_lcd_wait(void)
     FM1_LCD_SPI_CON |= 0x4000u;
 }
 
+#if CARAVEL_STASIS2 && defined(CARAVEL_STASIS_SCOPE_V6) && CARAVEL_STASIS_SCOPE_V6
+/* Nonblocking bus completion check for optional V6 scope updates.
+ * Register access stays in HAL, never in the UI or DSP. */
+FM1_INLINE uint8_t fm1_lcd_transfer_done(void)
+{
+    return (uint8_t)((FM1_LCD_SPI_CON & 0x8000u) != 0u);
+}
+#endif
+
 FM1_INLINE void fm1_lcd_deselect(void) { FM1_LCD_PC_OUT |= FM1_LCD_CS; }
 
 FM1_INLINE void fm1_lcd_send_cmd(uint8_t c)

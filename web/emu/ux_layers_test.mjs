@@ -36,6 +36,10 @@ async function device() {
 const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const px = (fb, x, y) => fb[y * 240 + x];
 // the circle in the middle of PLAY shows the notes as they flow (with the clock running it changes all the time): compare the rest
+// Scope V6 (opt-in) draws a live audio-driven disc (r <= 56 around 120,116) on PLAY > SPACE: two screens taken at different
+// moments legitimately differ inside it. Compare outside that disc when the build has it, whole-screen otherwise.
+const sameV = (dev, a, b) => (dev.ex.web_stasis_scope_v6 && dev.ex.web_stasis_scope_v6()) ?
+  a.every((v, i) => { const x = i % 240, y = (i / 240) | 0; return ((x - 120) * (x - 120) + (y - 116) * (y - 116) <= 57 * 57) || v === b[i]; }) : same(a, b);
 const sameOutside = (a, b) => a.every((v, i) => { const x = i % 240, y = (i / 240) | 0; return (x > 70 && x < 170 && y > 66 && y < 166) || v === b[i]; });
 
 const d = await device();
@@ -70,9 +74,9 @@ d.tap("FX"); d.settle(); const fxA = d.screen();
 d.tap("FX"); d.settle(); const fxB = d.screen();
 check("FX twice: the second group (ROOM) differs from SENDS", !same(fxA, fxB));
 d.tap("EDIT"); d.tap("FX"); d.settle();
-check("FX again after another area: the group last used (B)", same(d.screen(), fxB));
+check("FX again after another area: the group last used (B)", sameV(d, d.screen(), fxB));
 d.turn("SELECT", -1); d.settle();
-check("SELECT: the group of the area (A)", same(d.screen(), fxA));
+check("SELECT: the group of the area (A)", sameV(d, d.screen(), fxA));
 d.tap("EDIT"); d.settle();
 d.turn("K1", 6); d.render(200);
 check("K1 in SOUND: the arc and its value change", !same(d.screen(), sound));
@@ -285,13 +289,13 @@ if (d.ex.web_test_cap_events) {
   h.render(2500);const expired=h.screen();
   check("entry help: disappears after five seconds",!same(second,expired));
   h.hold("HOME",600);const held=h.screen();
-  check("HOME: no peek help during a sub-second press",same(held,expired));
+  check("HOME: no peek help during a sub-second press",sameV(h,held,expired));
   h.release();h.settle(); // short HOME still goes to SOUND, as before
   h.hold("HOME");h.release();h.hold("HOME");h.release();
   const again=h.screen();h.ex.web_keys(1<<7);h.render(40);h.ex.web_keys(0);h.render(80);
   const after=h.screen();
   check("entry help: first note dismisses it",!same(again,after));
-  h.render(1000);check("entry help: dismissed hint stays gone",same(after,h.screen()));
+  h.render(1000);check("entry help: dismissed hint stays gone",sameV(h,after,h.screen()));
 }
 // PAIR (E53): the pair's owner carries the loop - REC, SEQ and the shown notes follow it also with the follower track selected
 if (d.ex.web_test_cap_events && d.ex.web_pair_prepare && d.ex.web_test_select) {

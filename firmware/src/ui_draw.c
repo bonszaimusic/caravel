@@ -1414,7 +1414,7 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
         if (cur_page()->graph == GR_STLAYER && c == 3u) {
             const char *status = stasis_layer_status();
             if (st_layer.phase || st_layer.request)
@@ -1448,7 +1448,7 @@ static void draw_columns(void)
             continue;
         }
         param_format(d, *vp, val, &unit);
-#if CARAVEL_REVERB_MINIMAL
+#if CARAVEL_REVERB_MINIMAL && !CARAVEL_STASIS2
         if (cur_page()->graph == GR_STLAYER &&
             ((c == 1u && song.g[G_STMODE] == 1) || (c == 2u && song.g[G_STMODE] != 1))) {
             draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), ICON_AUTO);
@@ -1836,6 +1836,11 @@ static void ui_draw_page(uint32_t counting)
     if (ui.home || (!dual_page(cur_page())
 #if CARAVEL_UX_EVOLVE
                     && !uxl_c_page() && !uxl_save_page()
+#endif
+#if CARAVEL_UX_BUILD_FX_PLAY_STYLE && CARAVEL_STASIS2 && CARAVEL_UX_EVOLVE && CARAVEL_UX_LAYERS
+                    /* GRAIN/REGION now own the whole BUILD orbit screen;
+                     * the old middle panel must not be painted over it. */
+                    && !(cur_page()->graph == GR_STGRAIN && uxl_ring_page())
 #endif
                    ))
         draw_graph();

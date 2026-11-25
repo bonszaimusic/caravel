@@ -28,6 +28,15 @@ int main(void) {
     assert(proj_pack(&wire,&p));assert(proj_import(&q,wire.raw,sizeof wire));
     assert(!memcmp(p.t,q.t,sizeof p.t));assert(!memcmp(p.lfo2,q.lfo2,sizeof p.lfo2));
     assert(!memcmp(&h,&proj_harmony,sizeof h));
+#if CARAVEL_STASIS2
+    /* STASIS 2.0 DRY (retired id 80) is a plain track byte: the default is the old byte, 60 survives pack and import. */
+    assert(p.t[2].p[P_DRY]==127);
+    p.t[2].p[P_DRY]=60;p.t[3].p[P_DRY]=0;
+    assert(proj_pack(&wire,&p));
+    assert(proj_import(&q,wire.raw,sizeof wire));assert(q.t[2].p[P_DRY]==60&&q.t[3].p[P_DRY]==0&&q.t[0].p[P_DRY]==127);
+    p.t[2].p[P_DRY]=127;p.t[3].p[P_DRY]=127;
+    assert(proj_pack(&wire,&p));
+#endif
     /* Legacy FUNW has zero marker/padding and restores safe FX defaults. */
     assert(wire.raw[65u] == 0u && wire.raw[67u] == 0u);
     for (uint32_t t2 = 0; t2 < NTRK; t2++) assert(wire.raw[68u + NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE) + PROJ_HARM_DUR_OFF + t2] == t2);   /* default FX: bytes exactly as 1.0 wrote them */
@@ -64,6 +73,39 @@ int main(void) {
     /* A valid new project must re-encode through rename without losing
      * the saved FX state; defaults still use the legacy zero-wire layout. */
     assert(proj_pack(&wire,&q) && wire.raw[65u] == PROJ_FX_EXT_MARK);
+#if CARAVEL_STASIS2
+    /* New A6 marker owns only unused root/duration high bits. The old
+     * G_SYNC/INFO/ENGGO global bytes remain opaque and exactly preserved. */
+    {
+        project_store_t again;
+        p.st_region_present=1u;
+        p.st_region=(stasis_region_saved_t){127u,1u,2u,2u,1u};
+        p.g[G_SYNC]=1;p.g[G_INFO]=117;p.g[G_ENGGO]=29;
+        assert(proj_pack(&wire,&p));
+        assert(wire.raw[65u]==PROJ_STREG_MARK);
+        assert(wire.raw[67u]==(0x80u|47u));
+        assert(proj_import(&q,wire.raw,sizeof wire));
+        assert(q.st_region_present &&
+               streg_wire_bits(q.st_region)==streg_wire_bits(p.st_region));
+        assert(q.g[G_SYNC]==1 && q.g[G_INFO]==117 && q.g[G_ENGGO]==29);
+        assert(!memcmp(&h,&proj_harmony,sizeof h));
+        assert(proj_pack(&again,&q));
+        assert(again.raw[65u]==PROJ_STREG_MARK);
+        assert(proj_import(&q,again.raw,sizeof again));
+        assert(streg_wire_bits(q.st_region)==streg_wire_bits(p.st_region));
+        bad=wire;bad.raw[65]=0xA7;rehash(&bad);
+        assert(!proj_import(&q,bad.raw,sizeof bad));
+        /* GRAIN now uses all four values of its two bits (23/46/93/186 ms). The
+         * two-bit QUALITY field (bits 16..17, hb[7] bits 5..6) has one invalid
+         * value, 3, which must be rejected. */
+        bad=wire;
+        uint32_t ho=68u+NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE);
+        bad.raw[ho+7u]|=0x60u;rehash(&bad);
+        assert(!proj_import(&q,bad.raw,sizeof bad));
+        p.st_region_present=0u;
+        p.g[G_SYNC]=p.g[G_INFO]=p.g[G_ENGGO]=0;
+    }
+#endif
     p.af_on = p.af_time = p.af_amt = p.af_damp = p.st_tone = 0u;
     assert(proj_pack(&wire,&p) && wire.raw[65u] == 0u);
     /* Legacy zero marker preserves T1-linked mode, but new projects can

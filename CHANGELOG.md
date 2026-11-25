@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.0] - unreleased (release candidate)
+
+- **STASIS 2.0** is part of the standard build. The source is one full 65,536-frame PCM16 ring (HISTORY 1.5 / 3.0 / 5.9 s, chosen by the capture rate). ADD and BLEND are gone; FREEZE, NEW SOURCE (hold) and RELEASE act on the one source. REGION (POS, LENGTH, REVERSE) says where in the history the grains read; SOURCE shows LIVE / FROZEN / NEW and the REGION state (FIT / LIMIT / FILL).
+- **PLAY SPACE** has five groups: SENDS, FILTER, **TEXTURE** (GRAIN, STR, MOTN, TONE), **REGION** (POS, LENGTH, REVERSE, SOURCE) and **TANK** (TYPE, FEED, DRY, HALL). The V7 scope shows the recorded PCM peaks, the real grain heads, the region and the settings you are turning.
+- **DRY** (per track, TANK K3) is how much of the track is heard beside STASIS; DRY 0 leaves only STASIS. **FEED** (grains into the hall) and **HALL** (what the hall returns) are shown as 0 / 100 / 300 % and are not saved with the project.
+- **Grains** are 23 / 46 / 93 / 186 ms (the 372 ms step is gone). **MOTN scatters the grains across the REGION window** (before, both heads started 0.3 to 0.4 s behind the writer); the direct grains are louder (x3), so STASIS with HALL 0 is usable.
+- **BUILD FX pages in the PLAY look:** GRAIN and REGION are orbit pages with the scope, DLY shows its rails with "OFF: STASIS", the page title replaces the first-use hint. BUILD stays recognisable by its header (BUILD tab, warning stripe, page number, family tabs).
+- **Project format:** the REGION settings (POS, LENGTH, GRAIN, HISTORY, REVERSE) are saved in the FORMAT 2 FX extension, marker A6, only when they differ from the defaults. Projects of 1.1.1 and earlier load unchanged and projects with default REGION settings stay in the old layout. A project with non-default REGION settings is not readable by 1.1.1 or earlier. FEED, HALL and the SOURCE state are not saved; DRY is saved with the track (its parameter slot was unused).
+- **Known limit:** the A4 audio test (HQ HOLD to LIVE) fails at the source seam when FREEZE is released in HQ; it was not audible in the owner's tests. A crossfade join exists as the build flag `CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT`, off by default.
+- Tested: host tests, the browser emulator and a test build on one FM-1 (no flicker, no problems, sounds good). Not measured: CPU load of this build on the FM-1 against 1.1.1, the hosted CI.
+
 ## [1.1.1] - 2026-11-23
 
 - **Switching to another firmware through the Firmware Hub needs Caravel 1.1.1 or later.** Caravel 1.0.0 and 1.1.0 ignore the Classic update command (the Hub, the frozen Classic installer), so the Hub's Install stops with "the device stopped after 0 requests"; installing Caravel itself through the Hub stops in the loader ("the loader stopped after 0 requests", the FM-1 sits in its update loader with a black screen: finish with the installer and a backup). See the [FAQ](docs/faq.md#switching-to-another-firmware-firmware-hub). On 1.0.0 or 1.1.0 update once with Caravel's own installer.

@@ -38,7 +38,11 @@ static const char *const action_bank_names[ACT_BANKS] = {
 };
 static const char *const action_labels[ACT_BANKS][4] = {
  {"RANDOM","FREEZE","RETURN","SNAP"},
+#if CARAVEL_STASIS2
+ {"FREEZE","C5 LONG","--","RELEASE"},
+#else
  {"HOLD","ADD","BLEND","RELEASE"},
+#endif
  {"A 0%","MID 50%","B 100%","MOTION"},
  {"MUTE T1","MUTE T2","MUTE T3","MUTE T4"},
  {"PLAY","DIR","NEXT","WAIT"},

@@ -484,7 +484,7 @@ def readme_text(data):
             + "\n".join(rows) +
             "\n\n### Earlier tutorials\n\n[Current performance and STASIS guide](home-and-stasis.md) · "
             "[Random Morph and Morph Journey](random-morph-journey.md) · [HARMONY and CHORD EXT](harmony-live.md) · "
-            "[0.5.0 PDF quickstart](Caravel-0.5.0-Quickstart.pdf) · [0.6.0 STASIS PDF guide](Caravel-0.6.0-STASIS-Guide.pdf)\n\n"
+            "[0.5.0 PDF quickstart](Caravel-0.5.0-Quickstart.pdf)\n\n"
             "Back to the [README](../../README.md).\n")
 
 

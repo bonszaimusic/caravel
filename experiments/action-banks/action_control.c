@@ -166,7 +166,12 @@ static int32_t action_setup_value(uint32_t slot)
    return slot==0u?st_expand.grain:slot==1u?st_expand.scan:
           slot==2u?st_expand.quality:st_expand.reverse;
 #endif
+#if CARAVEL_STASIS2
+  if(slot>=2u)return -1;
+  static const uint8_t ids[2]={G_RSIZE,G_DRREV};
+#else
   static const uint8_t ids[4]={G_RSIZE,G_DRREV,G_STAMT,G_STTIME};
+#endif
   return song.g[ids[slot]];
 #else
   return -1;
@@ -185,7 +190,11 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
 {
  static const char*const labels[5][4]={
   {"BARS","DEPTH","SCOPE","SHAPE"},
+#if CARAVEL_STASIS2
+  {"STR","MOTN","--","--"},
+#else
   {"STR","MOTN","AMT","TIME"},
+#endif
   {"MORPH","LFO1>PAIR","LFO2>PAIR","--"},
   {"LVL T1","LVL T2","LVL T3","LVL T4"},
   {"SCOPE","TRANSP","--","--"}         /* JOURNEY SETUP: which tracks the keys act on, and the clock its time follows */
@@ -197,7 +206,18 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
  str_cpy(name,labels[action_bank][slot&3u],16);
 #if CARAVEL_STASIS_EXPAND
  if(action_bank==1u && action_stasis_grain_page){
-  static const char *const grain_labels[4]={"GRAIN","SCAN","WINDOW","REVERSE"};
+  static const char *const grain_labels[4]={"GRAIN",
+#if CARAVEL_STASIS2
+"POS",
+#else
+"SCAN",
+#endif
+#if CARAVEL_STASIS2
+"HISTORY",
+#else
+"WINDOW",
+#endif
+"REVERSE"};
   str_cpy(name,grain_labels[slot&3u],16);
  }
 #endif
@@ -211,7 +231,12 @@ static void action_setup_caption(uint32_t slot,char *name,char *value)
    perf_format(value,24,"%u%%",(uint32_t)v*100u/127u);return;
   }
   if(slot==2u){
-   str_cpy(value,v==0?"HQ 0.74s":v==1?"LONG 1.49s":"DRONE 2.97s",24);return;
+   #if CARAVEL_STASIS2
+    str_cpy(value,v==0?"HQ 1.49s":v==1?"LONG 2.97s":"DRONE 5.94s",24);
+#else
+    str_cpy(value,v==0?"HQ 0.74s":v==1?"LONG 1.49s":"DRONE 2.97s",24);
+#endif
+    return;
   }
   str_cpy(value,v?"ON":"OFF",24);return;
  }
@@ -316,7 +341,12 @@ static void action_setup_turn(uint32_t slot,int32_t steps)
 #if CARAVEL_STASIS_EXPAND
   if(action_stasis_grain_page){const char *msg=stasis_exp_turn(slot,steps);if(msg)ui_message(msg);ui.force=1;return;}
 #endif
+#if CARAVEL_STASIS2
+  if(slot>=2u){ui_message("STASIS: USE GRAIN PAGE");return;}
+  static const uint8_t ids[2]={G_RSIZE,G_DRREV};
+#else
   static const uint8_t ids[4]={G_RSIZE,G_DRREV,G_STAMT,G_STTIME};
+#endif
   uint32_t id=ids[slot];
   song.g[id]=(int16_t)param_turn(&GP[id],song.g[id],steps);
 #else
@@ -360,12 +390,21 @@ static void action_stasis(uint32_t action)
   stasis_transport_stop();
   ui_message("STASIS RELEASE");
  }else{
+#if CARAVEL_STASIS2
+  if(action==1u){
+   if(st.stopping){ui_message("START BEFORE NEW SOURCE");return;}
+   song.g[G_DRLVL]=0; /* actual DSP ring changes only after audio fade */
+   stasis_new_source_request();
+   ui_message("STASIS NEW SOURCE");
+  }
+#else
   song.g[G_STMODE]=(action==2u)?1:0;
   uint32_t cancel=stasis_layer_can_cancel();
   fm1_irq_off();
   int ok=stasis_layer_command(cancel);
   fm1_irq_on();
   ui_message(!ok?"STASIS: CAPT HOLD FIRST":cancel?"STASIS CANCEL":action==1u?"STASIS ADD":"STASIS BLEND");
+#endif
  }
  ui.force=1;
 #else
@@ -446,7 +485,18 @@ static void action_key(uint32_t key)
 #endif
  }
 
- else if(action_bank==1u)action_stasis(act);
+ else if(action_bank==1u) {
+#if CARAVEL_STASIS2
+   /* HOME ACTION bank note-ons are instant: never let the old A2/ADD event
+    * bypass the deliberate FX+C5 800ms NEW SOURCE hold. */
+   if(act==1u || act==2u) {
+    ui_message("FX + C5 LONG: NEW SOURCE");
+    ui.force=1;
+   } else action_stasis(act);
+#else
+   action_stasis(act);
+#endif
+ }
  else if(action_bank==2u)action_pair(act);
  else{
   trk[act].p[P_MUTE]=!trk[act].p[P_MUTE];
