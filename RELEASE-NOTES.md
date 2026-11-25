@@ -1,4 +1,4 @@
-# Caravel 1.2.0 (release candidate)
+# Caravel 1.2.0 — 2026-11-25
 
 Caravel 1.2.0 builds on 1.1.1 and brings **STASIS 2.0** into the standard build, with the PLAY and BUILD screens that go with it. The full list is in [docs/release-120.md](docs/release-120.md).
 

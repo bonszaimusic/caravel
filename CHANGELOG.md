@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.2.0] - unreleased (release candidate)
+## [1.2.0] - 2026-11-25
 
 - **STASIS 2.0** is part of the standard build. The source is one full 65,536-frame PCM16 ring (HISTORY 1.5 / 3.0 / 5.9 s, chosen by the capture rate). ADD and BLEND are gone; FREEZE, NEW SOURCE (hold) and RELEASE act on the one source. REGION (POS, LENGTH, REVERSE) says where in the history the grains read; SOURCE shows LIVE / FROZEN / NEW and the REGION state (FIT / LIMIT / FILL).
 - **PLAY SPACE** has five groups: SENDS, FILTER, **TEXTURE** (GRAIN, STR, MOTN, TONE), **REGION** (POS, LENGTH, REVERSE, SOURCE) and **TANK** (TYPE, FEED, DRY, HALL). The V7 scope shows the recorded PCM peaks, the real grain heads, the region and the settings you are turning.

@@ -2,7 +2,7 @@
 <!-- Copyright (C) 2026 bonszaimusic -->
 # Caravel 1.2.0
 
-**Status: release candidate, not published.** Built from a clean tree in release mode; host tests and the browser emulator pass locally (see *Validation*). A test build of the same STASIS 2.0 code was installed on one FM-1 and the owner reported no flicker, no problems and a good sound. The CPU load of this build against 1.1.1 was not measured, and the hosted CI was not available.
+**Status: released 2026-11-25 (tag `v1.2.0`).** Host tests (all eight FORMAT 2 shards, including the sanitizers and the CHORD EXT fuzzers) and the browser emulator pass. A build of this source, differing from the release package only in the build date string, was installed on one FM-1 and the owner reported that it looks good; an earlier test build of the same STASIS 2.0 code ran there without flicker or problems and sounded good. The CPU load of this build against 1.1.1 was not measured, and the hosted CI was not available.
 
 ## What is new
 
@@ -26,4 +26,4 @@ The A4 audio test (HQ, FREEZE released) fails: when FREEZE is released in HQ, a 
 
 ## Validation
 
-See the release record in the metadata repository for the commit, the commands and the results. Not covered: CPU load on the FM-1 against 1.1.1 (the owner's baseline is about 68 %), the hosted CI, listening on other hardware, projects saved with A6 loaded on other firmware.
+All eight FORMAT 2 host shards pass (`tools/docker_validate.sh host all`); the release was built from a clean tree in release mode, and with STASIS 2.0, the V7 scope and the BUILD FX pages built out the three layouts are byte for byte the 1.1.1 firmware of the same day. Not covered: CPU load on the FM-1 against 1.1.1 (the owner's baseline is about 68 %), the hosted CI, listening on other hardware, projects saved with A6 loaded on other firmware.
