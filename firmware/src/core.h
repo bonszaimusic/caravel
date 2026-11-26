@@ -270,6 +270,10 @@ _Static_assert(P_FM4_ATK == 76 && P_FM4_DEC == 77 && P_FM4_SUS == 78 && P_FM4_RE
 #define P_DRY P_FM4_LEVEL
 _Static_assert(P_FM4_LEVEL == 80, "DRY is the retired id 80");
 #define DRY_ID(i) ((i) == P_DRY)
+/* Independent STASIS ring send (0..127 = 0..100%), stored in retired DIGITAL operator-4 SUS id 78.
+ * Legacy FOLLOW values are migrated only by the project wire reader. */
+#define P_SSEND P_FM4_SUS
+_Static_assert(P_FM4_SUS == 78, "the STASIS send is the retired id 78");
 #endif
 /* EXT's stored order (0 = 7+9, 1 = 7, 2 = 7+9+13) <-> the order the UI shows (0 = 7, 1 = 7+9, 2 = 7+9+13): the swap of
  * 0 and 1. A stored value outside 0..2 reads as the default 7+9 (shown 1); a shown index outside 0..2 stores 7+9 (0) */

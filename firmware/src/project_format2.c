@@ -2,6 +2,7 @@
  * Copyright (C) 2026 bonszaimusic */
 /* FORMAT 2 native codec. Stored engine IDs are 0..5. No legacy conversion.
  * Wire layout and validation: tests/format2_project_test.c. */
+#include <stddef.h>
 #define PROJ_MAGIC_WIRE 0x46554E57u
 #define PROJ_MAGIC_V11 PROJ_MAGIC_WIRE
 #define PROJ_MAGIC PROJ_MAGIC_WIRE
@@ -190,6 +191,21 @@ static void proj_fx_defaults(project_t *q)
     q->af_on = 0; q->af_time = 30; q->af_amt = 32;
     q->af_damp = 70; q->st_tone = 64;
 }
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+/* Native parameter byte 191 previously meant FOLLOW for ID78. Reserve the
+ * otherwise invalid byte 192 for the new, absolute 127. No size change.
+ * Older readers reject 192 instead of silently relinking a full send. */
+static inline uint8_t proj_ssend_encode(int16_t value)
+{
+    return value == 127 ? 192u : (uint8_t)(value + 64);
+}
+static inline int16_t proj_ssend_decode(uint8_t value, int16_t rev)
+{
+    if (value == 192u) return 127;
+    if (value == 191u) return rev < 0 ? 0 : rev > 127 ? 127 : rev;
+    return (int16_t)value - 64;
+}
+#endif
 static int proj_pack(project_store_t *out, const project_t *q)
 {
     uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC_WIRE, size = PROJ_STORE_SIZE, sum;
@@ -211,6 +227,9 @@ static int proj_pack(project_store_t *out, const project_t *q)
     for (t = 0; t < NTRK; t++) {
         for (i = 0; i < P_COUNT; i++) {
             if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+            if (i == P_SSEND) { b[pos++] = proj_ssend_encode(q->t[t].p[i]); continue; }
+#endif
             b[pos++] = (uint8_t)(q->t[t].p[i] + 64);
         }
         b[pos++] = (uint8_t)eng_store(q->t[t].engine); b[pos++] = q->t[t].preset;
@@ -240,6 +259,15 @@ static int proj_pack(project_store_t *out, const project_t *q)
 #endif
     pos += PROJ_HARMONY_SIZE;
     memcpy(b + pos, &q->motion, sizeof q->motion);
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+    /* Motion has raw signed bytes, not the track byte's +64 bias. Its
+     * previously invalid -128 distinguishes absolute max from old FOLLOW. */
+    for (i = 0; i < q->motion.count; i++) {
+        const motion_event_t *e = &q->motion.event[i];
+        if (MOTION_ID(e) == P_SSEND && e->value == 127)
+            b[pos + offsetof(motion_store_t,event) + i*sizeof *e + offsetof(motion_event_t,value)] = 128u;
+    }
+#endif
     if (fx[0] || fx[1] != 30u || fx[2] != 32u || fx[3] != 70u || fx[4] != 64u
 #if CARAVEL_STASIS2
         || region_changed
@@ -308,7 +336,19 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     memcpy(q->g, b + 8, sizeof q->g); q->sel = b[62]; q->parts = b[63]; q->phys = b[64];
     for (t = 0; t < NTRK; t++) {
         int16_t values[P_COUNT], def[P_COUNT];
-        for (i = 0; i < np; i++) { if (b[pos] > 191u) return 0; values[i] = (int16_t)b[pos++] - 64; }
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+        uint8_t ssend_wire = b[pos + P_SSEND];
+#endif
+        for (i = 0; i < np; i++) {
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+            if (i == P_SSEND && b[pos] == 192u) { values[i] = 127; pos++; continue; }
+#endif
+            if (b[pos] > 191u) return 0;
+            values[i] = (int16_t)b[pos++] - 64;
+        }
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+        values[P_SSEND] = proj_ssend_decode(ssend_wire, values[P_REV]);
+#endif
         q->t[t].engine = (uint8_t)eng_unstore(b[pos++]); q->t[t].preset = b[pos++];
         if (q->t[t].engine >= NENGINES) return 0;     /* (FORMAT 2: eng_unstore gives 0xFF for a number past the six) */
         for (i = 0; i < P_COUNT; i++) def[i] = param_desc_of(q->t[t].engine, i)->def;
@@ -331,6 +371,14 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     if(!f2_harmony_unpack(&h,hb))return 0;
     pos+=PROJ_HARMONY_SIZE;
     memcpy(&q->motion,b+pos,sizeof q->motion);
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+    for (i = 0; i < q->motion.count && i < MOTION_MAX; i++) {
+        motion_event_t *e = &q->motion.event[i];
+        if (MOTION_ID(e) == P_SSEND)
+            e->value = e->value == -128 ? 127 : e->value == 127 ?
+                (int8_t)clamp(q->t[e->place >> 6].p[P_REV],0,127) : e->value;
+    }
+#endif
     if(!motion_valid(&q->motion)||!proj_engines_ok(q))return 0;
     motion_drop_chordset(&q->motion);
     for(i=pos+sizeof q->motion;i<PROJ_LFO2_OFF;i++)if(b[i])return 0;

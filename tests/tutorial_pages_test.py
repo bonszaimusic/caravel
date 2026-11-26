@@ -176,7 +176,7 @@ class TutorialPagesTest(unittest.TestCase):
         # The 1.x release links its own source guide index and runtime;
         # the frozen Classic banner is not its tutorial entry point.
         self.assertIn("[Tutorials](docs/tutorials/README.md)", top)
-        self.assertIn("releases/tag/v1.2.0", top)
+        self.assertIn("releases/tag/v1.2.1", top)
         self.assertIn("/caravel/v1/emulator/", top)
         self.assertIn("/caravel/classic/", top)
         self.assertIn("docs/tutorials/start-here.md", readme)

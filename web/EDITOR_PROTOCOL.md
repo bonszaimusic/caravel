@@ -1348,3 +1348,26 @@ complete HPM2/IFP2 projects retain them without changing their size or version.
 Fresh 1.0 initialization is the supported starting point; no old-backup
 migration is added. The historical editor mock retains its legacy conversion
 cases solely as tests; those engines are not restored to FORMAT 2 firmware.
+
+### STASIS 1.2.1 independent track send
+
+With STASIS2 enabled and DIGITAL/FM4 disabled, track parameter 78 is STASIS,
+an independent 0..127 send (displayed 0..100%, default 0). Live MIDI/editor
+value 127 is the actual maximum. PLAY SENDS / BUILD FX use K3 for this send
+while TYPE is STASIS; HALL uses the stored DLY control instead. Ordinary sound
+preset loads preserve STASIS; project, SOUND INIT and CLEAN INIT reset it to 0.
+REV and either REV THROW do not add to the STASIS recording bus.
+
+The existing FUNW/HPM2 sizes and IDs stay fixed. Older persisted ID78=127
+meant FOLLOW REV. Import copies the track's saved REV base once, including
+native Motion events/locks and HOME snapshot values. Other numeric send values
+are preserved. New saves distinguish an absolute maximum using previously
+invalid values restricted to track ID78: native biased byte 192, raw Motion
+byte 128 (signed -128), HOME snapshot int16 value 128. Runtime values always
+remain 0..127. No other parameter may use these encodings; normal checksums
+and reference/range checks still apply. Reading does not rewrite the original.
+
+Older firmware rejects projects containing these new maximum encodings;
+retain an original backup for downgrade. This migration preserves the static
+base setting, not the former dynamic REV automation or THROW relationship.
+STASIS2-disabled and FM4 layouts keep their existing semantics and codecs.

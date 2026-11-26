@@ -84,8 +84,83 @@ static void boot_backup(void) {
  web_flash_fail_after=-1;web_nor_erase();web_boot();
  for(uint32_t i=0;i<1200;i++)web_render(44);
 }
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+static void independent_send_storage(void) {
+ const uint8_t revs[]={0,1,40,126,127},manual[]={0,63,126,127};
+ uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
+ project_init_runtime();
+ for(uint32_t t=0;t<NTRK;t++)assert(trk[t].p[P_SSEND]==0);
+ for(uint32_t e=0;e<NENGINES;e++) {
+  set_engine(e);TSEL->p[P_SSEND]=127;apply_preset(0);assert(TSEL->p[P_SSEND]==127);
+  sound_init();assert(TSEL->p[P_SSEND]==0);
+  TSEL->p[P_SSEND]=127;clean_engine_of(TSEL);assert(TSEL->p[P_SSEND]==0);
+ }
+ for(uint32_t k=0;k<NELEM(revs);k++) {
+  hp_rm_snapshot_clear();
+  for(uint32_t t=0;t<NTRK;t++) {
+   trk[t].p[P_REV]=revs[(k+t)%NELEM(revs)];trk[t].p[P_SSEND]=manual[t];
+   for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++) {
+    hp_rm_snap_t *s=&hp_rm_snap[t][slot];s->scope=HP_RM_TRACK;s->count=1;
+    hp_rm_snapshot_write_ref(s,0,hp_track_ref(t,P_SSEND,0xFFFFu));s->values[0]=manual[t];
+   }
+  }
+  assert(hp_capture(&candidate));seal(&candidate);
+  assert(hp_restore(&candidate));
+  for(uint32_t t=0;t<NTRK;t++)for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++)
+   assert(trk[t].p[P_SSEND]==manual[t]&&hp_rm_snap[t][slot].values[0]==manual[t]);
+  assert(hp_v2_decode(&candidate,raw));
+  /* Old snapshots used a plain int16 127; their native project used 191.
+   * Preserve the complete original capsule and flash while importing. */
+  for(uint32_t t=0;t<NTRK;t++) {
+   candidate.native.raw[68u+t*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE)+P_SSEND]=191u;
+   for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++) {
+    hp_rm_snap_t *s=(void*)(raw+HP_HW_META+(t*HP_RM_SNAP_SLOTS+slot)*sizeof(hp_rm_snap_t));
+    s->values[0]=127;
+   }
+  }
+  uint32_t hash=proj_hash(candidate.native.raw,sizeof candidate.native-4u);
+  memcpy(candidate.native.raw+sizeof candidate.native-4u,&hash,4);
+  candidate.reserved[1]=hp_zip((uint8_t*)&candidate.model,HP_V2_META,raw,sizeof raw);
+  assert(candidate.reserved[1]);seal(&candidate);original=candidate;
+  uint32_t writes=web_flash_writes;
+  assert(hp_restore(&candidate));
+  assert(writes==web_flash_writes&&!memcmp(&candidate,&original,HP_V2_SIZE));
+  for(uint32_t t=0;t<NTRK;t++) {
+   assert(trk[t].p[P_SSEND]==revs[(k+t)%NELEM(revs)]);
+   for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++)
+    assert(hp_rm_snap[t][slot].values[0]==revs[(k+t)%NELEM(revs)]);
+   trk[t].p[P_REV]=0;
+  }
+  assert(hp_capture(&candidate));seal(&candidate);
+  assert(!put_all(0,&candidate,HP_V2_SIZE,st_crc32(&candidate,HP_V2_SIZE)));
+  assert(!put_all(3,&candidate,HP_V2_SIZE,st_crc32(&candidate,HP_V2_SIZE)));
+  assert(hp_project_load(1));
+  for(uint32_t t=0;t<NTRK;t++)for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++)
+   assert(trk[t].p[P_SSEND]==revs[(k+t)%NELEM(revs)]&&hp_rm_snap[t][slot].values[0]==revs[(k+t)%NELEM(revs)]);
+ }
+ /* Actual autosave writer and power-on restore, with independent maxima in
+  * both native parameters and every per-track snapshot. */
+ for(uint32_t t=0;t<NTRK;t++) {
+  trk[t].p[P_SSEND]=127;trk[t].p[P_REV]=0;
+  for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++)hp_rm_snap[t][slot].values[0]=127;
+ }
+ assert(autosave_quiet());ui_prefs&=~PREF_RESTORE_OFF;
+ fm1_ms+=20000;hp_as_poll=hp_as_time=as.t=0;
+ hp_as_seen=hp_signature();hp_as_saved=~hp_as_seen;
+ hp_autosave_poll();assert(hp_slot_disk(4));
+ for(uint32_t t=0;t<NTRK;t++)trk[t].p[P_SSEND]=0;
+ assert(hp_autosave_boot(1));
+ for(uint32_t t=0;t<NTRK;t++)for(uint32_t slot=0;slot<HP_RM_SNAP_SLOTS;slot++)
+  assert(trk[t].p[P_SSEND]==127&&trk[t].p[P_REV]==0&&hp_rm_snap[t][slot].values[0]==127);
+ boot_backup();
+ puts("independent STASIS: defaults, native/snapshot migration, original protection, explicit save, USB and slot repeated restore passed");
+}
+#endif
 int main(void) {
  boot_backup();uint32_t n=0,crc=0;
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+ independent_send_storage();
+#endif
  assert(!list(0,&n,&crc)&&rep[0]==2&&rep[2]==8&&n==6144);
  memcpy(&original,&ed_bk_performance,n);assert(crc==st_crc32(&original,n));
  assert(!get(0,0,256));

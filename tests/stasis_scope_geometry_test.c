@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Standalone geometric verification of the Scope V6/V7 LCD strips (stasis_scope_strips.h):
  * every pixel of the disc r<=48 is covered exactly once, no strip reaches beyond r52 and none
- * reaches the MIDI band (y186..196, below the lower knob arcs at y<=182 and above the legend
- * text at y201).
+ * reaches the MIDI band (y190..200, below the orbit thumbs at y<=186 and above the message
+ * text at y203).
  */
 #include <assert.h>
 #include <stdint.h>
@@ -34,11 +34,11 @@ int main(void)
                 assert(seen[y][x]);           /* the whole inner disc is covered */
                 ++points;
             }
-    assert(116+66*0.9925<=186);               /* lower knob arcs (r58..66, ends at 173/187 deg) stay above the band */
-    assert(186+11<=201-3);                    /* band y186..196 keeps >=3 rows to the legend text from y201 */
-    assert(201+10<=216);                      /* the legend cannot touch the track status row */
+    assert(116+61*0.9925+10<=187);               /* outer thumb envelope at 173/187 deg stays above the band */
+    assert(190+11<=203-2);                    /* band y190..200 keeps >=2 rows to the message y203 */
+    assert(203+12<=219-2);                      /* the legend cannot touch the track status row */
     assert(pixels<=8000u && points==7213u);
-    printf("STASIS V6 strips: %u strips, %u pixels, %u inside r48 all covered, max r2 %d (<=52^2), MIDI band y186..196, legend y201 PASS\n",
+    printf("STASIS V6 strips: %u strips, %u pixels, %u inside r48 all covered, max r2 %d (<=52^2), MIDI band y190..200, message y203 PASS\n",
            (unsigned)STVIZ_STRIPS,pixels,points,(int)maxr2);
     return 0;
 }

@@ -93,6 +93,9 @@ build/stasis-v5/format2-project-a6
 cc $CFLAGS -DCARAVEL_STASIS2=1 tests/stasis_mix_dry_test.c -o build/stasis-v5/mix-dry -lm
 build/stasis-v5/mix-dry
 # shellcheck disable=SC2086
+cc $CFLAGS -DCARAVEL_STASIS2=1 tests/stasis_send_test.c -o build/stasis-v5/send -lm
+build/stasis-v5/send
+# shellcheck disable=SC2086
 cc $CFLAGS -DCARAVEL_STASIS2=1 tests/stasis_hall_feed_test.c -o build/stasis-v5/hall-feed -lm
 build/stasis-v5/hall-feed
 # shellcheck disable=SC2086

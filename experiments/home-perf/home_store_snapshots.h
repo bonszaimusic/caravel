@@ -216,7 +216,12 @@ static int hp_snap_refs_ok(const uint8_t(*refs)[3],const int16_t*vals,uint32_t n
   if(r.kind==HP_TRACK){if(r.aux>1)return 0;d=param_desc_of(r.engine==255u?0:r.engine,hp_tid(r));}
   else if(r.kind==HP_LFO2)d=lfo2_desc(r.id);
   else if(r.kind==HP_PAIR&&r.id==2)d=&HP_PDESC[2];
-  if(!d||vals[i]<d->min||vals[i]>d->max)return 0;
+  int32_t value=vals[i];
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+  /* Only persisted ID78 may use the previously invalid raw value 128. */
+  if(r.kind==HP_TRACK&&hp_tid(r)==P_SSEND&&value==128)value=127;
+#endif
+  if(!d||value<d->min||value>d->max)return 0;
   for(uint32_t j=0;j<i;j++)if(hp_rm_same(r,hp_rm_snapshot_ref_raw(refs[j])))return 0;
  }
  return 1;
@@ -327,6 +332,13 @@ static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_
   if(q->count>HP_RM_SNAP_MAX){perf_irq_restore(irq);return 0;}
   for(uint32_t i=0;i<q->count;i++) {
    if(!hp_ref_valid(hp_rm_snapshot_ref(q,i))){perf_irq_restore(irq);return 0;}
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+   hp_ref_t ref=hp_rm_snapshot_ref(q,i);
+   if(ref.kind==HP_TRACK&&hp_tid(ref)==P_SSEND) {
+    if(q->values[i]<0||q->values[i]>127){perf_irq_restore(irq);return 0;}
+    if(q->values[i]==127)q->values[i]=128;
+   }
+#endif
    uint32_t v=hp_take(q->refs[i],3),e=(v>>14)&31u;
    e=e==31u?31u:eng_store(e);if(e>31u){perf_irq_restore(irq);return 0;}
    hp_put(q->refs[i],(v&~(31u<<14))|(e<<14),3);

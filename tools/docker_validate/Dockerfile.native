@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 bonszaimusic
+# Host tools only. Target inputs are produced by the unchanged amd64 image.
+FROM ubuntu:22.04
+ARG TARGETARCH
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq python3 python3-pip curl xz-utils git clang build-essential ca-certificates rsync \
+        libraqm0 libfribidi0 libharfbuzz0b >/dev/null \
+    && pip3 install -q Pillow fonttools pyyaml \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eu; case "$TARGETARCH" in arm64) arch=arm64;; amd64) arch=x64;; *) exit 1;; esac; \
+    curl -fsSL "https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-$arch.tar.xz" | tar -xJ -C /usr/local --strip-components=1 \
+    && node --version
+RUN git clone --depth 1 https://github.com/emscripten-core/emsdk.git /opt/emsdk \
+    && /opt/emsdk/emsdk install 3.1.64 >/dev/null \
+    && /opt/emsdk/emsdk activate 3.1.64 >/dev/null
+RUN git init /opt/DaisySP >/dev/null && git -C /opt/DaisySP remote add origin https://github.com/daisyaudio/DaisySP.git \
+    && git -C /opt/DaisySP fetch --depth 1 origin 2c72eaf9eac5fc0dca1919d65d606da907832618 >/dev/null 2>&1 \
+    && git -C /opt/DaisySP checkout --detach FETCH_HEAD >/dev/null 2>&1
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
+ENV DAISYSP=/opt/DaisySP CC="cc -include stdint.h"
+WORKDIR /work

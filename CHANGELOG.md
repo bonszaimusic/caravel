@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.1] - 2026-11-26
+
+- **STASIS send per track.** While the reverb TYPE is STASIS, the DLY slot (PLAY SPACE > SENDS K3, BUILD FX page, third knob) is the track's own **STASIS** send, 0 to 100 %: how much of the track goes into the STASIS ring. REV stays the send into the hall, and the two are independent: REV, REV THROW and the global THROW add nothing to the ring. **New projects and INIT start at 0: turn STASIS up to hear it.** Sound-preset changes keep the send. The DLY value is kept for HALL.
+- **Old projects** import once: a track whose ring followed REV (as in 1.2.0) gets its saved REV value as STASIS send, in the project, its motion data and its HOME snapshots. Dynamic REV automation and THROW no longer drive the ring, so such a project can sound different. A STASIS send at 100 % is stored in a way 1.2.0 and earlier refuse; keep a backup if you may go back.
+- **BUILD pages stand where PLAY's areas do** (STASIS only): **TEXTURE** (GRAIN, STR, MOTN, TONE), **REGION** (POS, LENGTH, REVERSE, SOURCE as a status), **REVERB** as PLAY's TANK (TYPE, FEED, DRY, HALL) and a new **SETUP** page (TYPE, CAPT, HISTORY). With TYPE = HALL the REVERB page is the old one.
+- **Signal paths beside the ring** (PLAY SENDS and TANK, BUILD FX and REVERB): DRY, CHO, STS and REV on the track side, STR, FEED and HALL towards the output. A bright path can carry sound; a path one of the page's knobs sets has that knob's colour and line pattern (K2 solid, K3 dashed, K4 dotted, others dash-dot). The line width shows three setting steps, a second arrowhead marks the knob you turn. The lines are settings and transport state, not level meters.
+- **Track mode symbols:** a small symbol shows the selected track's mode (NOTES, FOLLOW, CHORD, EXT, CUSTOM) in PLAY and on BUILD pages that belong to a track; the HARM MODE value is written in full.
+- **SOURCE** names the FX keys that change it (HOLD FX: B4 freeze, C5 new, D5 release). After D5 RELEASE, B4 and C5 start the ring again.
+- The CAPTURE band, messages and track footer have their own rows on the STASIS scope pages.
+- **Known limit (unchanged from 1.2.0):** in HQ, releasing FREEZE can expose a seam where a grain meets the resumed writer.
+
 ## [1.2.0] - 2026-11-25
 
 - **STASIS 2.0** is part of the standard build. The source is one full 65,536-frame PCM16 ring (HISTORY 1.5 / 3.0 / 5.9 s, chosen by the capture rate). ADD and BLEND are gone; FREEZE, NEW SOURCE (hold) and RELEASE act on the one source. REGION (POS, LENGTH, REVERSE) says where in the history the grains read; SOURCE shows LIVE / FROZEN / NEW and the REGION state (FIT / LIMIT / FILL).

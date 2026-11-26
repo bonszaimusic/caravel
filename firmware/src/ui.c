@@ -597,7 +597,11 @@ static int fx_delay_suspended(const page_t *pg, uint32_t slot)
 {
 #if CARAVEL_REVERB_MINIMAL
     return pg && song.g[G_RTYPE] == 3u &&
-        (str_eq(pg->title, "DLY") || (pg->graph == GR_FX && slot == 2u));
+        (str_eq(pg->title, "DLY")
+#if !(CARAVEL_STASIS2 && !FELUCCA_FM4)
+         || (pg->graph == GR_FX && slot == 2u)   /* (with the STASIS send that slot is live: params.c page_desc) */
+#endif
+        );
 #else
     (void)pg; (void)slot;
     return 0;
@@ -651,9 +655,12 @@ static uint32_t stasis_fx_pages(uint8_t *pages)
      * AFTER remains the downstream optional ambience stage. Page IDs stay
      * append-only/unchanged for project and HOME compatibility. */
     static const char *const names[]={"FX","DLY","CHORUS","REVERB",
-        "GRAIN",
 #if CARAVEL_STASIS2
+        "TEXTURE",
         "REGION",
+        "SETUP",
+#else
+        "GRAIN",
 #endif
 #if !CARAVEL_STASIS2
         "LAYER",
@@ -1657,7 +1664,7 @@ static void pat_load_ui(track_t *t, uint32_t n)
 static int param_kept(uint32_t i)
 {
 #if CARAVEL_STASIS2
-    if (DRY_ID(i)) return 1;                  /* the track's DRY is part of its channel strip: a sound load leaves it */
+    if (DRY_ID(i) || i == P_SSEND) return 1;                  /* the track's DRY is part of its channel strip: a sound load leaves it */
 #endif
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
            (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || i == P_LATCH || i == P_SQNT ||
@@ -1678,6 +1685,9 @@ static int param_insert(uint32_t i) { return (i >= P_ITYPE && i <= P_IMIX) || i 
 static int fx_hold(void) { return (ui_prefs3 & (PREF_FX_HOLD >> 24)) != 0u && !fx_fresh; }
 static int load_kept(uint32_t i)
 {
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+    if (i == P_SSEND && fx_fresh) return 0;         /* INIT resets the ring send; ordinary sound loads preserve it */
+#endif
     return param_kept(i) || (fx_hold() && (param_send(i) || param_insert(i)));
 }
 
@@ -1815,7 +1825,11 @@ static void clean_engine_of(track_t *t)
     set_engine_of(t, ei);                             /* (nested in this load: one undo copy, from before) */
     fm1_irq_off();
     for (i = 0; i < P_E0; i++)
-        if (!param_kept(i))
+        if (!param_kept(i)
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+            || i == P_SSEND
+#endif
+        )
             t->p[i] = TP[i].def;
     for (i = 0; i < 8u; i++)
         t->p[P_E0 + i] = e->edit[i].def;

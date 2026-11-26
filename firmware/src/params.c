@@ -184,7 +184,7 @@ static const param_desc_t TP[P_COUNT] = {
                    [P_FM##k##_LEVEL] = PD("LVL", F_PCT, 0, 127, 127)
 #if CARAVEL_STASIS2 && !FELUCCA_FM4
 /* operator 4's LEVEL id is the track's DRY (core.h P_DRY): 100 % by default as the operator value was */
-#define FMOP_SL4 [P_FM4_SUS] = PD("SUS", F_PCT, 0, 127, 127), [P_DRY] = PD("DRY", F_PCT, 0, 127, 127)
+#define FMOP_SL4 [P_SSEND] = PD("STASIS", F_PCT, 0, 127, 0), [P_DRY] = PD("DRY", F_PCT, 0, 127, 127)
 #else
 #define FMOP_SL4 FMOP_SL(4)
 #endif
@@ -455,6 +455,9 @@ static int32_t param_turn(const param_desc_t *d, int32_t v, int32_t steps)
 
 static uint8_t fmt_named;        /* the last param_format was a name (F_ENUM, even "4"): ui_draw.c's digits do not roll it */
 
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+static const param_desc_t ST_FEED_DESC, ST_HALL_DESC;   /* (defined with BUILD's STASIS pages below; param_format shows them as gains) */
+#endif
 /* value string (<= 5 chars) and unit for a parameter value */
 static void param_format(const param_desc_t *d, int32_t v, char *val, const char **unit)
 {
@@ -462,6 +465,15 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
     fmt_named = d->fmt == F_ENUM;
     switch (d->fmt) {
     case F_PCT:                                     /* a 0..100 range (SWG) is its value, others a share of 127 */
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+        if (d == &ST_FEED_DESC || d == &ST_HALL_DESC) {  /* the hall's gains as the law gives them (fx.c ST_GAIN_Q12): 0 / 100 / 300 % */
+            uint32_t g = (uint32_t)v;
+            g = g <= 64u ? g * 64u : 4096u + (g - 64u) * 8192u / 63u;
+            fmt_int(val, (int32_t)((g * 100u + 2048u) >> 12u));
+            *unit = "%";
+            break;
+        }
+#endif
         fmt_int(val, d->max == 100 ? v : (v * 100 + 63) / 127);
         *unit = "%";
         break;
@@ -632,15 +644,20 @@ static const page_t PAGES[] = {
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
 #if CARAVEL_REVERB_MINIMAL
 #if CARAVEL_STASIS2
-    /* Keep the historical page index stable for saved HOME references;
-     * the page is not visible and contains no live edit/action controls. */
+    /* Keep the historical page index stable for saved HOME references; it held no live edit/action controls and was never visible. With the
+     * source pages it is BUILD's SETUP: what PLAY keeps on the FX keys or does not show (TYPE, CAPT, HISTORY). The page count is limited by the
+     * packed page field of the HOME store (home_store_hw.c), so no new page is appended for it */
+#if CARAVEL_STASIS_EXPAND
+    {"SETUP", FAM_FX, SC_GLOBAL, GR_STGRAIN, {0xFF, 0xFF, 0xFF, 0xFF}},
+#else
     {"", FAM_FX, SC_GLOBAL, GR_STLAYER, {0xFF, 0xFF, 0xFF, 0xFF}},
+#endif
 #else
     {"LAYER", FAM_FX, SC_GLOBAL, GR_STLAYER, {G_STMODE, G_STAMT, G_STTIME, 0xFF}},
 #endif
 #if CARAVEL_STASIS_EXPAND
     /* Native FX page exposes the very SAME int16_t fields as ACTION SETUP. */
-    {"GRAIN", FAM_FX, SC_GLOBAL, GR_STGRAIN, {0xFF,0xFF,0xFF,0xFF}},
+    {CARAVEL_STASIS2 ? "TEXTURE" : "GRAIN", FAM_FX, SC_GLOBAL, GR_STGRAIN, {0xFF,0xFF,0xFF,0xFF}},
 #endif
 #endif
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IMIX, 0xFF, 0xFF}},   /* 1.5: the track's INSERT (fx.c): TYPE and dry / wet; 0.3.0: FX HOLD is KNOB 3 (no parameter), the type's curve the fourth card */
@@ -794,12 +811,83 @@ static const param_desc_t AFTER_DESC[4] = {
     PD("DAMP", F_PCT, 0, 127, 70)
 };
 #endif
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+/* BUILD's STASIS pages stand where PLAY's areas do (ui_uxl.c UXL_AREA: SENDS K1..K4 = DIST CHOR STASIS REV; TEXTURE = GRAIN STR MOTN TONE;
+ * REGION = POS LENGTH REVERSE SOURCE; TANK = TYPE FEED DRY HALL), the same targets, so a parameter has one knob in both. TANK is the REVERB page while the
+ * TYPE is STASIS; SETUP holds what PLAY does not show (TYPE again, CAPT, HISTORY). FEED, HALL and SOURCE are not variables of int16_t: the page reads a
+ * copy (sb_*) made when it asks, and its turns go to stasis_build_turn (ui_input.c) */
+enum { SB_NONE, SB_TEXTURE, SB_REGION, SB_TANK, SB_SETUP };
+static const char *const N_STSRC[] = {"LIVE", "NEW", "STOP", "REL", "ARM", "FRZ", "WAIT", "FILL", "LIMIT"};   /* (<= 5 chars: ui_uxl.c UXL_ST_*) */
+static const param_desc_t ST_FEED_DESC = PD("FEED", F_PCT, 0, 127, 64), ST_HALL_DESC = PD("HALL", F_PCT, 0, 127, 64);
+static const param_desc_t ST_TONE_DESC = {"TONE", F_INT, 0, 127, 64, 0, ""};
+static const param_desc_t ST_SOURCE_DESC = PE("SOURCE", N_STSRC, 0);
+static int16_t sb_feed, sb_hall, sb_state;
+static uint8_t stasis_build_state(void);            /* ui_uxl.c: LIVE .. LIMIT */
+static uint32_t stasis_build_kind(const page_t *pg)
+{
+    if (!pg || pg->scope != SC_GLOBAL) return SB_NONE;
+    if (pg->graph == GR_STGRAIN)
+        return str_eq(pg->title, "TEXTURE") ? SB_TEXTURE : str_eq(pg->title, "REGION") ? SB_REGION : str_eq(pg->title, "SETUP") ? SB_SETUP : SB_NONE;
+    return pg->id[0] == G_RTYPE && song.g[G_RTYPE] == 3 ? SB_TANK : SB_NONE;
+}
+/* HOME/INTERACT can only represent real, existing stable HP IDs. A BUILD
+ * page's scope is not the storage owner of every slot (TANK's DRY is per
+ * track; FEED/HALL/SOURCE are read copies). Never subtract their pointers
+ * from song.g or the track array to manufacture a persisted reference. */
+static inline int stasis_build_hp_target(uint32_t kind,uint32_t slot,uint32_t *track,uint32_t *id)
+{
+    *track=0u;
+    if(song.g[G_RTYPE]!=3u) return 0;
+    if(kind==SB_TANK && slot==2u){*track=1u;*id=P_DRY;return 1;}
+    if((kind==SB_TANK || kind==SB_SETUP) && slot==0u){*id=G_RTYPE;return 1;}
+    if(kind==SB_TEXTURE && slot==1u){*id=G_RSIZE;return 1;}
+    /* Runtime-only and source controls have no existing eligible HP ID. */
+    return 0;
+}
+static const param_desc_t *stasis_build_desc(uint32_t kind, uint32_t slot, int16_t **valp)
+{
+    *valp = 0;
+    slot &= 3u;
+    if (kind == SB_TEXTURE) {
+        if (slot == 0u) { *valp = &st_expand.grain; return &ST_GRAIN_DESC[0]; }
+        if (slot == 1u) { *valp = &song.g[G_RSIZE]; return &ST_STR_DESC; }
+        if (slot == 2u) { *valp = &song.g[G_DRREV]; return &ST_MOTION_DESC; }
+        *valp = &stasis_tone; return &ST_TONE_DESC;
+    }
+    if (kind == SB_REGION) {
+        if (slot == 0u) { *valp = &st_expand.scan; return &ST_REGION_DESC[0]; }
+        if (slot == 1u) { *valp = &st_expand.length; return &ST_REGION_DESC[1]; }
+        if (slot == 2u) { *valp = &st_expand.reverse; return &ST_REGION_DESC[2]; }
+        sb_state = stasis_build_state(); *valp = &sb_state; return &ST_SOURCE_DESC;
+    }
+    if (kind == SB_TANK) {
+        if (slot == 0u) { *valp = &song.g[G_RTYPE]; return &GP[G_RTYPE]; }
+        if (slot == 1u) { sb_feed = st_hall_feed; *valp = &sb_feed; return &ST_FEED_DESC; }
+        if (slot == 2u) { *valp = &TSEL->p[P_DRY]; return &TP[P_DRY]; }
+        sb_hall = st_hall_ret; *valp = &sb_hall; return &ST_HALL_DESC;
+    }
+    if (slot == 0u) { *valp = &song.g[G_RTYPE]; return &GP[G_RTYPE]; }                       /* SETUP */
+    if (slot == 1u) { *valp = &song.g[G_DRLVL]; return &GP[G_DRLVL]; }
+    if (slot == 2u) { *valp = &st_expand.quality; return &ST_REGION_DESC[3]; }
+    return 0;
+}
+#endif
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     /* A descriptor-only query need not request the writable value pointer. */
     int16_t *unused;
     if (!valp) valp = &unused;
     uint32_t id = pg->id[slot];
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+    {
+        uint32_t kind = stasis_build_kind(pg);
+        if (kind) return stasis_build_desc(kind, slot, valp);
+    }
+#endif
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+    if (pg->graph == GR_FX && slot == 2u && song.g[G_RTYPE] == 3)
+        id = P_SSEND;                  /* BUILD's SENDS page: the delay has no ring under STASIS, the slot is the STASIS send */
+#endif
 #if CARAVEL_AFTERBURNER
     if (str_eq(pg->title, "AFTER")) {
         static int16_t *const fields[4] = {

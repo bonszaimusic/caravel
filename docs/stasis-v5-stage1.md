@@ -28,6 +28,20 @@ PLAY FX/SPACE in the opt-in preview uses five groups, ordered **SENDS → FILTER
 The controls use the existing BUILD variables and stored A6 fields, no shadow copy. While TYPE=HALL, TEXTURE/REGION are inactive and TANK remains available to select STASIS. BUILD retains GRAIN and the appended REGION page with independent navigation.
 PLAY FX-held and TYPE=STASIS: **B4 FREEZE toggle, C5 NEW SOURCE only after ≥800 ms continuous hold, D5 RELEASE**. C5's old PHASER shortcut and D5's old VERB shortcut are masked under STASIS, as are the former F5/G5 STASIS slots. The HOME-ACTION STASIS bank cannot trigger destructive NEW instantly. LCD FX legends have distinct highlighted/filled-inverted cells in both render paths; real hardware key LEDs remain monochrome.
 
+## 1.2.1: independent track send and route display
+
+While REVERB TYPE is STASIS, K3 of PLAY SENDS and BUILD FX is the track's STASIS send (0..100 %) instead of DLY. It is independent of REV, default 0; REV and both THROW paths add nothing to the ring. The stored DLY value is kept for other reverb types. The legacy "follow REV" value is imported once as the saved REV value. The release summary, the signal diagram and the compatibility notes are in [release-121.md](release-121.md).
+
+| BUILD (TYPE = STASIS) | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| FX | DIST | CHOR | STASIS | REV |
+| TEXTURE | GRAIN | STR | MOTN | TONE |
+| REGION | POS | LENGTH | REVERSE | SOURCE (read-only) |
+| REVERB / TANK | TYPE | FEED | DRY | HALL |
+| SETUP | TYPE | CAPT | HISTORY | none |
+
+With FX held, B4 toggles FREEZE (or starts a fresh source from STOP), C5 held requests NEW SOURCE, and D5 RELEASE stops the source with a grain fade. A restart from a still-fading STOP was not checked for clicks. The route lines show settings and transport state, not signal levels.
+
 ## Reproducible tests and limits
 
 On a complete private checkout after generating `build/gen` with the supported toolchain:

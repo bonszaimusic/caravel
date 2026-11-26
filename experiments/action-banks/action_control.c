@@ -384,17 +384,22 @@ static void action_stasis(uint32_t action)
  if(song.g[G_RTYPE]!=3u){ui_message("SET REVERB TO STASIS");return;}
  if(action==0u){
   /* CAPT LIVE / HOLD, same persistent parameter as FX > REVERB. */
-  song.g[G_DRLVL]=song.g[G_DRLVL]?0:1;
-  ui_message(song.g[G_DRLVL]?"STASIS HOLD":"STASIS LIVE");
+  if(st.stopping){   /* after RELEASE (STOP): B4 starts the ring again, LIVE, as PLAY does; before this only PLAY got STASIS out of STOP */
+   stasis_transport_start();
+   ui_message("STASIS LIVE");
+  }else{
+   song.g[G_DRLVL]=song.g[G_DRLVL]?0:1;
+   ui_message(song.g[G_DRLVL]?"STASIS HOLD":"STASIS LIVE");
+  }
  }else if(action==3u){
   stasis_transport_stop();
   ui_message("STASIS RELEASE");
  }else{
 #if CARAVEL_STASIS2
   if(action==1u){
-   if(st.stopping){ui_message("START BEFORE NEW SOURCE");return;}
    song.g[G_DRLVL]=0; /* actual DSP ring changes only after audio fade */
-   stasis_new_source_request();
+   if(st.stopping)stasis_transport_start();   /* STOP: the start is a fresh source already (valid 0, FILL) */
+   else stasis_new_source_request();
    ui_message("STASIS NEW SOURCE");
   }
 #else

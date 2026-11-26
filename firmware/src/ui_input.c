@@ -983,8 +983,50 @@ static void step_edit(uint32_t slot, int32_t steps)
     }
 }
 
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+/* the turns of BUILD's STASIS pages (params.c stasis_build_desc: TEXTURE, REGION, TANK = the REVERB page under STASIS, SETUP); 1 when handled.
+ * The rules of the source (hold, grain length, history lock) stay in stasis_exp_turn, as in PLAY */
+static int stasis_build_turn(const page_t *pg, uint32_t slot, int32_t steps)
+{
+    uint32_t kind = stasis_build_kind(pg);
+    int16_t *vp = 0;
+    const param_desc_t *d;
+    const char *msg = 0;
+    if (!kind) return 0;
+    slot &= 3u;
+    d = stasis_build_desc(kind, slot, &vp);
+    if (song.g[G_RTYPE] != 3u) { ui_message("SET TYPE STASIS"); return 1; }
+    if (kind == SB_TEXTURE && slot == 0u) msg = stasis_exp_turn(0u, steps);
+    else if (kind == SB_REGION && slot == 0u) msg = stasis_exp_turn(1u, steps);
+    else if (kind == SB_REGION && slot == 2u) msg = stasis_exp_turn(3u, steps);
+    else if (kind == SB_SETUP && slot == 2u) msg = stasis_exp_turn(2u, steps);
+    else if (kind == SB_REGION && slot == 1u) st_expand.length = (int16_t)clamp((int32_t)st_expand.length + steps, 0, 127);
+    else if (kind == SB_REGION && slot == 3u) msg = "HOLD FX: B4 C5 D5";             /* SOURCE is a status */
+    else if (kind == SB_TANK && slot == 1u) st_hall_feed = (uint8_t)clamp((int32_t)st_hall_feed + accel(EN_K1 + slot, steps, 127), 0, 127);
+    else if (kind == SB_TANK && slot == 3u) st_hall_ret = (uint8_t)clamp((int32_t)st_hall_ret + accel(EN_K1 + slot, steps, 127), 0, 127);
+    else if (d && vp && d->max != d->min) {                                                /* a plain variable: the generic turn */
+        int32_t v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
+        *vp = (int16_t)v;
+        if (kind == SB_TANK && slot == 2u) {
+            motion_capture(TSEL,P_DRY,*vp);
+            ml_knob(TSEL,P_DRY);
+        }
+    }
+    if (msg) ui_message(msg);
+    ui.force = 1;
+    return 1;
+}
+#endif
 static void edit_param(uint32_t slot, int32_t steps)
 {
+#if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+    if (stasis_build_kind(cur_page())) {
+#if FELUCCA_HOME_PERF
+        hp_touch(slot);
+#endif
+        if (stasis_build_turn(cur_page(), slot, steps)) return;
+    }
+#endif
     if (fx_delay_suspended(cur_page(), slot)) {
         ui_message("DELAY OFF: STASIS");
         return; /* keep the preset's DELAY values for HALL */

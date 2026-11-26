@@ -7,6 +7,7 @@ M8 removes stale-toggle clearing; T30 supplies a destination with a stale mark.
 """
 import concurrent.futures,json,os,re,shlex,shutil,subprocess,tempfile
 from pathlib import Path
+from validate_format2 import positive_env
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'build/validation/chordext-mutants'
 def patch(root,m):
@@ -46,10 +47,12 @@ def main():
    control=m.startswith('control-');detected=p.returncode!=0 and not control
    return {'mutation':m,'compile_exit':0,'test_exit':p.returncode,'detected':detected,'control_pass':p.returncode==0 if control else None}
 
- controls=[one('control-engine'),one('control-settings'),one('control-source')]
- assert all(r['control_pass'] for r in controls),controls
- with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:rows=list(pool.map(one,['M'+str(i) for i in range(1,12)]))
+ workers=positive_env('CHORDEXT_MUT_WORKERS',max(1,min(8,os.cpu_count() or 1)))   # (was: the three controls one by one, then 4 mutants at a time)
+ with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+  every=list(pool.map(one,['control-engine','control-settings','control-source']+['M'+str(i) for i in range(1,12)]))
+ controls,rows=every[:3],every[3:]
  (OUT/'results.json').write_text(json.dumps({'controls':controls,'mutants':rows},indent=2)+'\n')
+ assert all(r.get('control_pass') for r in controls),controls
  for r in rows:print(json.dumps(r),flush=True)
  assert all(r['detected'] for r in rows),'Surviving or uncompilable mutation'
  print('CHORD EXT mutations: M1-M11 detected after successful compilation; positive controls passed',flush=True)

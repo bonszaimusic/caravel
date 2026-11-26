@@ -7,7 +7,7 @@ the image. `${{ runner.temp }}`, `${{ github.workspace }}` and `${{ matrix.KEY }
 
   run_steps.py WORKFLOW.yml JOB [--matrix KEY=VALUE] [--only SUBSTRING] [--list]
 """
-import argparse, os, re, subprocess, sys, time
+import argparse, json, os, re, subprocess, sys, time
 import yaml
 
 ap = argparse.ArgumentParser()
@@ -53,6 +53,7 @@ if a.list:
 base_env = dict(os.environ)
 base_env.update({str(k): fill(str(v), "env") for k, v in {**(wf.get("env") or {}), **(job.get("env") or {})}.items()})
 failed = []
+timings = []
 t_all = time.time()
 for i, s in enumerate(steps, 1):
     name = s.get("name", f"step {i}")
@@ -63,6 +64,10 @@ for i, s in enumerate(steps, 1):
     print(f"\n##### [{i}/{len(steps)}] {name}", flush=True)
     t0 = time.time()
     r = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", fill(s["run"], name)], env=env)
+    timings.append({"step": name, "exit_code": r.returncode, "seconds": round(time.time() - t0, 2)})
+    if os.environ.get("WORKFLOW_REPORT"):
+        with open(os.environ["WORKFLOW_REPORT"], "w") as out:
+            json.dump({"job": a.job, "steps": timings, "wall_seconds": round(time.time() - t_all, 2)}, out, indent=2)
     print(f"##### {'ok' if r.returncode == 0 else 'FAILED (exit %d)' % r.returncode}  {time.time() - t0:.0f} s", flush=True)
     if r.returncode:
         failed.append(name)

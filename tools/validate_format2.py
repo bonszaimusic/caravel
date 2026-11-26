@@ -5,7 +5,7 @@ Historical tests tied to removed engines/import formats are listed explicitly,
 with their replacement coverage, in tests/format2_legacy_tests.json. Baseline
 files are never rewritten. A failed command or missing tool fails its shard.
 """
-import argparse, gzip, hashlib, json, os, re, shlex, subprocess, sys, time
+import argparse, concurrent.futures, gzip, hashlib, json, os, re, shlex, subprocess, sys, time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'build/validation'
@@ -13,8 +13,8 @@ SHARDS=['storage_usb','synthesis_midi','ui_storage','effects','cpu_dual','engine
 GROUPS={
  'storage_usb':'storage input midi_uart timer5_midi usb_update',
  'synthesis_midi':'scale track_mute chord chordext chordext_diff chordext_capture chordsource ux_capture ux_play_midi latch midi_control midi_resync midi_drift midi_clock_cc voice_reserve ratchet step15 seq155 detail step_play click swing',
- 'ui_storage':'ux_elastic_arc harmony_build_display harmony_roles_ui chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
- 'effects':'afterburner_host afterburner_ui speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity stasis_region_math stasis_region_wire stasis_v5_stage1 stasis_region_release stasis_ui_new stasis_scope_rate stasis_scope_policy stasis_scope_geometry stasis_join stasis_join_lut stasis_join_ring stasis_mix_dry stasis_hall_feed stasis_level stasis_grain_wander stasis_join_lut_fx',
+ 'ui_storage':'stasis_project_menu_ui ux_elastic_arc harmony_build_display harmony_roles_ui track_role_ui chordset chordext_ui release_boot format2_project format2_settings format2_performance format2_editor format2_backup format2_presets persistence live_pattern live_full duplicate motion ui155 v156 v16 enum_order theme text_ref',
+ 'effects':'afterburner_host afterburner_ui speaker audio mod sound14 sound15 insert trackfilter slicer perform delay_ext fx_motion fx_edit fx_feedback lfo2 lfo2_editor stasis stasis_layer stasis_continuity stasis_region_math stasis_region_wire stasis_v5_stage1 stasis_region_release stasis_ui_new stasis_scope_rate stasis_scope_policy stasis_scope_geometry stasis_join stasis_join_lut stasis_join_ring stasis_mix_dry stasis_send stasis_hall_feed stasis_level stasis_grain_wander stasis_join_lut_fx',
  'cpu_dual':'dualcore',
  'engines_samples':'format2_engine_memory phys sem hades hades_dsp drone drone_cells drone_motion',
  'sanitizers':'', 'web_target':''}
@@ -25,8 +25,7 @@ SANITIZED=['afterburner_host','format2_project','format2_settings','format2_perf
 BASELINES=['tests/golden.txt','tests/cpu_baseline.txt','tests/cpu_format2_idle.txt','tests/target_budget.txt','tests/union_golden.txt','tests/chordext_baseline.txt','tests/chordext_format2_off.txt','tests/chordext_format2_scale.txt','tests/chordext_format2_harm.txt']
 EXTERNAL={'ux_render':'tests/ux_render.sh (visual session)',
  'stasis_join_audition':'tools/stasis2_join_audition.sh (a WAV generator with arguments, with tools/stasis2_join_audio_compare.py)',
- 'capture_post_quant':'tests/capture_post_quant.sh: OPEN, does not link yet (hp_project_* from experiments/home-perf/home_store*.c are not in the host fixture)',
- 'stasis_project_menu_ui':'OPEN, does not build with the host flags yet (pair_state.h needs CARAVEL_DUALCORE_D1, upreset.c f2_old)'}
+ 'capture_post_quant':'tests/capture_post_quant.sh: OPEN, does not link yet (hp_project_* from experiments/home-perf/home_store*.c are not in the host fixture)'}
 
 def inventory():
  legacy=json.loads((ROOT/'tests/format2_legacy_tests.json').read_text())
@@ -43,37 +42,67 @@ def inventory():
  OUT.mkdir(parents=True,exist_ok=True);(OUT/'host-inventory.json').write_text(json.dumps(data,indent=2)+'\n')
  return data
 
+def positive_env(name, default):
+ value=int(os.environ.get(name, default))
+ if value < 1:raise ValueError(name+' must be a positive integer')
+ return value
+
 class Runner:
  def __init__(self,shard):
   self.shard=shard;self.rows=[];self.skips=[];self.cc=shlex.split(os.environ.get('CC','cc'));self.bin=OUT/shard;self.bin.mkdir(parents=True,exist_ok=True)
- def command(self,name,args,env=None,output=None,timeout=600):
-  log=self.bin/(re.sub('[^A-Za-z0-9_-]','_',name)+'.log');start=time.monotonic()
+  self.plan=False;self.jobs=[];self.compiled=None;self.idx=0;self.started=time.monotonic()
+ def execute(self,name,args,env=None,output=None,timeout=600,log_id=None):
+  log=self.bin/(str(log_id if log_id is not None else len(self.rows))+'-'+re.sub('[^A-Za-z0-9_-]','_',name)+'.log');start=time.monotonic()
   with log.open('w') as f:
-   print('== '+name,flush=True)
-   if output:
-    with Path(output).open('w') as data:p=subprocess.run(list(map(str,args)),cwd=ROOT,env={**os.environ,**(env or {})},stdout=data,stderr=f,timeout=timeout)
-   else:p=subprocess.run(list(map(str,args)),cwd=ROOT,env={**os.environ,**(env or {})},stdout=f,stderr=subprocess.STDOUT,timeout=timeout)
-  row={'case':name,'exit_code':p.returncode,'seconds':round(time.monotonic()-start,2),'log':str(log.relative_to(ROOT))};self.rows.append(row)
-  if p.returncode:
-   print(log.read_text(errors='replace')[-12000:],flush=True)
-   raise RuntimeError(f'{name}: exit {p.returncode}')
-  contents=log.read_text(errors='replace')
-  if 'no instruction counter on this host' in contents:self.skips.append(name+': CPU instruction budget unmeasured on this host')
+   try:
+    if output:
+     with Path(output).open('w') as data:p=subprocess.run(list(map(str,args)),cwd=ROOT,env={**os.environ,**(env or {})},stdout=data,stderr=f,timeout=timeout)
+    else:p=subprocess.run(list(map(str,args)),cwd=ROOT,env={**os.environ,**(env or {})},stdout=f,stderr=subprocess.STDOUT,timeout=timeout)
+    rc=p.returncode
+   except subprocess.TimeoutExpired:
+    f.write('\nTIMEOUT after '+str(timeout)+' seconds\n');rc=124
+   except OSError as e:
+    f.write(str(e)+'\n');rc=127
+  return {'case':name,'exit_code':rc,'seconds':round(time.monotonic()-start,2),'log':str(log.relative_to(ROOT))}
+ def record(self,row):
+  print('== '+row['case'],flush=True);self.rows.append(row)
+  log=ROOT/row['log'];contents=log.read_text(errors='replace')
+  if row['exit_code']:
+   print(contents[-12000:],flush=True);raise RuntimeError(f"{row['case']}: exit {row['exit_code']}")
+  if 'no instruction counter on this host' in contents:self.skips.append(row['case']+': CPU instruction budget unmeasured on this host')
   tail=contents.splitlines()[-2:]
   if tail:print('\n'.join(tail),flush=True)
+ def command(self,name,args,env=None,output=None,timeout=600):
+  if not self.plan:self.record(self.execute(name,args,env,output,timeout))
+ def compile_all(self,jobs):
+  def one(item):
+   idx,(name,cmd)=item
+   return cmd,self.execute(name,cmd,log_id='compile-'+str(idx))
+  with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+   self.compiled=list(pool.map(one,enumerate(self.jobs)))
  def c(self,n,flags=(),args=(),env=None,source=None):
-  exe=self.bin/(n+'-'+str(len(self.rows)));source=source or f'tests/{n}_test.c'
-  self.command(n+'-compile',[*self.cc,'-std=gnu11','-O2','-w','-ffp-contract=off','-Ibuild/gen','-Ifirmware/src','-Itests',*flags,source,'-lm','-o',exe])
+  idx=self.idx;self.idx+=1
+  exe=self.bin/(n+'-'+str(idx));source=source or f'tests/{n}_test.c'
+  cmd=[*self.cc,'-std=gnu11','-O2','-w','-ffp-contract=off','-Ibuild/gen','-Ifirmware/src','-Itests',*flags,source,'-lm','-o',exe]
+  if self.plan:self.jobs.append((n+'-compile',cmd));return exe
+  if self.compiled is None:self.command(n+'-compile',cmd)
+  else:
+   planned,row=self.compiled[idx]
+   if cmd!=planned:raise RuntimeError('Compile plan changed at '+n)
+   self.record(row)
   self.command(n,[exe,*args],env)
   return exe
  def results(self,rc):
-  result={'shard':self.shard,'exit_code':rc,'profile':'FORMAT 2','checks':self.rows,'skips':self.skips}
+  slow=sorted(self.rows,key=lambda x:-x['seconds'])[:8]
+  elapsed=round(time.monotonic()-self.started,2)
+  print('slowest steps: '+', '.join(f"{x['case']} {x['seconds']:.0f}s" for x in slow)+f'; shard wall time {elapsed:.1f}s',flush=True)
+  result={'shard':self.shard,'exit_code':rc,'profile':'FORMAT 2','checks':self.rows,'skips':self.skips,'wall_seconds':elapsed}
   (OUT/(self.shard+'.json')).write_text(json.dumps(result,indent=2)+'\n')
 
 
 def run(r):
  s=r.shard
- if s=='effects':
+ if s=='effects' and not r.plan:
   raw=gzip.decompress((ROOT/'tests/fixtures/speaker-kicks.f32.gz').read_bytes())
   assert hashlib.sha256(raw).hexdigest()=="9f063cf8d56c0dd378be351b813f478c18bfe877e3c535143b69c65c1fdff31d"
   folder=ROOT/'build/fixtures';folder.mkdir(exist_ok=True);(folder/'speaker-kicks.f32').write_bytes(raw)
@@ -83,10 +112,11 @@ def run(r):
   if n in ['dualcore']:flags+=['-pthread']
   if n in ['stasis','stasis_continuity','stasis_v5_stage1']:flags+=['-DCARAVEL_REVERB_MINIMAL=1','-DCARAVEL_STASIS_EXPAND=1']
   if n=='stasis_v5_stage1':flags+=['-DCARAVEL_STASIS2=1']
-  if n in ['stasis_mix_dry','stasis_hall_feed','stasis_level','stasis_grain_wander','stasis_join_lut_fx']:
+  if n in ['stasis_mix_dry','stasis_send','stasis_hall_feed','stasis_level','stasis_grain_wander','stasis_join_lut_fx']:
    # STASIS 2.0 host DSP tests: the real fx.c with minimal reverb and the expanded capture
    flags+=['-DCARAVEL_REVERB_MINIMAL=1','-DCARAVEL_STASIS_EXPAND=1','-DFELUCCA_SLICE=0','-DCARAVEL_STASIS2=1']
   if n=='stasis_join_lut_fx':flags+=['-DCARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT=1','-DCARAVEL_STASIS_SOURCE_JOIN_LUT_EXPERIMENT=1']
+  if n=='stasis_project_menu_ui':flags += [*PROFILE,'-DCARAVEL_STASIS2=1','-DCARAVEL_AFTERBURNER=1','-DCARAVEL_UX_CAPTURE=1','-DCARAVEL_STASIS_SCOPE_V6=1','-DCARAVEL_UX_BUILD_FX_PLAY_STYLE=1']
   if n=='stasis_layer':flags+=PROFILE
   if n=='phys':args=[str(r.bin/'phys-demo')];Path(args[0]).mkdir(exist_ok=True)
   else:args=[]
@@ -102,6 +132,7 @@ def run(r):
       ['-DCARAVEL_FORMAT2=1','-DCARAVEL_REVERB_MINIMAL=1',
        '-DCARAVEL_STASIS_EXPAND=1','-DCARAVEL_STASIS2=1'],
       source='tests/format2_project_test.c')
+  r.c('format2_backup_stasis2',['-DCARAVEL_STASIS2=1'],source='tests/format2_backup_test.c')
  if s=='storage_usb':
   r.c('snapshot_persistence',source='experiments/home-perf/snapshot_persistence_test.c')
   for t in ELASTIC:r.c('home_elastic_'+t,['-O1','-Wall','-Wextra','-Werror','-Wno-unused-function'])
@@ -114,7 +145,9 @@ def run(r):
    r.c('usb_desc',['-DT_ASF=0',*[f'-DT_{k}={v}' for k,v in zip(['CDC','UAC','LAYOUT','ON','48K'],mode.split('.'))]])
   r.c('timer5_midi',['-DFELUCCA_UART=0'])
   r.c('ota',['-DOWN_PKG=1'],['build/caravel.fwsc'])
-  old=r.bin/'old_app.bin';old.write_bytes((ROOT/'build/felucca.bin').read_bytes()[:200000]);pkg=r.bin/'old.fwsc'
+  old=r.bin/'old_app.bin';
+  if not r.plan:old.write_bytes((ROOT/'build/felucca.bin').read_bytes()[:200000])
+  pkg=r.bin/'old.fwsc'
   r.command('loader-old-package',[sys.executable,'tools/fm1pkg_make.py',old,'build/loader/ota.bin',pkg])
   r.c('ldr',args=[pkg,'build/caravel.fwsc'])
   r.command('package-artifact-fixtures',[sys.executable,'-B','tests/release_artifacts_test.py'])
@@ -180,7 +213,11 @@ def main():
  before={f:hashlib.sha256((ROOT/f).read_bytes()).hexdigest() for f in BASELINES}
  r=Runner(a.shard);rc=1
  try:
+  jobs=positive_env('VALIDATE_JOBS',max(1,min(8,os.cpu_count() or 1)))
+  if jobs>1:
+   r.plan=True;run(r);r.plan=False;r.skips.clear();r.compile_all(jobs);r.idx=0
   run(r)
+  if r.compiled is not None:assert r.idx==len(r.compiled),'Compile plan was not consumed'
   assert before=={f:hashlib.sha256((ROOT/f).read_bytes()).hexdigest() for f in BASELINES},'Baseline files changed during validation'
   rc=0
  finally:r.results(rc)

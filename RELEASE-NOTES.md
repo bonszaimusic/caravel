@@ -1,4 +1,21 @@
-# Caravel 1.2.0 — 2026-11-25
+# Caravel 1.2.1 — 2026-11-26
+
+Caravel 1.2.1 builds on 1.2.0: STASIS gets its **own send per track**, and PLAY and BUILD show the STASIS signal paths. The full list is in [docs/release-121.md](docs/release-121.md).
+
+- **STASIS send** (SENDS K3 / BUILD FX K3 while the reverb TYPE is STASIS), independent of REV. **New projects start at 0: turn it up to hear STASIS.**
+- **Signal paths** beside the ring, BUILD pages in the same positions as PLAY, and a track-mode symbol.
+
+## Project format: read this before saving
+
+Old projects whose ring followed REV take their saved REV value once as the STASIS send; REV automation and THROW no longer drive the ring, so they can sound different. A STASIS send at 100 % cannot be read by 1.2.0 or earlier. **Back up before you update.**
+
+## What was and was not checked
+
+Host tests (all eight shards) and the browser emulator pass locally. **This release was not run on an FM-1:** display, sound, CPU load and the update itself were not checked on hardware. The hosted CI was not available. The A4 test for HQ HOLD to LIVE still fails, as in 1.2.0.
+
+---
+
+# Caravel 1.2.0 (older) — 2026-11-25
 
 Caravel 1.2.0 builds on 1.1.1 and brings **STASIS 2.0** into the standard build, with the PLAY and BUILD screens that go with it. The full list is in [docs/release-120.md](docs/release-120.md).
 

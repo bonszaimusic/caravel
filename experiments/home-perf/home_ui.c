@@ -141,6 +141,14 @@ static void hp_touch(uint32_t slot)
  /* Virtual session controls are not offsets into the stored song globals. */
  if(str_eq(pg->title,"AFTER"))return;
 #endif
+ #if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && !FELUCCA_FM4
+ if(stasis_build_kind(pg)){
+  uint32_t track,id;
+  if(!stasis_build_hp_target(stasis_build_kind(pg),slot,&track,&id))return;
+  if(track)r=hp_track_ref(song.sel,id,ui.page);
+  else {r.kind=HP_GLOBAL;r.id=id;}
+ } else
+ #endif
  if(pg->graph==GR_PAIR){r.kind=HP_PAIR;r.id=slot;}
  else if(pg->graph==GR_MACRO){r.kind=HP_MACRO;r.id=slot;}
  else if(lfo2_page(pg->graph)){r.kind=HP_LFO2;r.id=lfo2_page_target(pg->graph,slot);}

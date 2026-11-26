@@ -544,13 +544,18 @@ static void rev_clear(void)
 #if FELUCCA_CPU2
 /* the dry mix and the sends, as each core adds its parts into them (after Jangada: mx[1] is the second core's,
  * mix_block), and a part's own block (b; mx[0].b also the fade of a reverb model change, after the parts) */
-typedef struct { int32_t l[CTL], r[CTL], c[CTL], d[CTL], v[CTL], b[CTL]; } mixsum_t;
+typedef struct { int32_t l[CTL], r[CTL], c[CTL], d[CTL], v[CTL], b[CTL];
+#if CARAVEL_STASIS2
+    int32_t s[CTL];                                     /* the STASIS sends (P_SSEND): the ring's input, beside the REV bus's */
+#endif
+} mixsum_t;
 static mixsum_t mx[2];
 #define mix_l (mx[0].l)
 #define mix_r (mx[0].r)
 #define send_c (mx[0].c)
 #define send_d (mx[0].d)
 #define send_r (mx[0].v)
+#define send_s (mx[0].s)
 #define part_buf (mx[0].b)
 #define SM_DECL , mixsum_t *sm                          /* mix_part / mix_spread: the sums they add into */
 #define SM_ARG(x) , (x)
@@ -566,6 +571,7 @@ static int32_t part_buf[CTL];                            /* a part's block (mix_
 #define SM1_c send_c
 #define SM1_d send_d
 #define SM1_v send_r
+#define SM1_s send_s
 #define SM1_b part_buf
 #endif
 
@@ -917,9 +923,17 @@ static inline void stasis_transport_start(void)
 /* Independent STASIS texture: the raw short grains never substitute for the
  * long decay; they slowly excite HALL. No new audio delay buffers required.
  * Wet stereo adds a quiet textured layer over the already diffused tail. */
+#if CARAVEL_STASIS2
+static const int32_t *st_ring_src;                       /* the STASIS sends' bus (mix_block); NULL: the ring takes the REV bus */
+#endif
 static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32_t *rev_in, int32_t *wet, uint32_t n)
 {
     int32_t hall_in[CTL], mid[CTL], side[CTL];
+#if CARAVEL_STASIS2
+    const int32_t *ring_src = st_ring_src ? st_ring_src : rev_in;   /* what the ring records: the STASIS sends (the hall below keeps the REV bus) */
+#else
+#define ring_src rev_in
+#endif
 #if CARAVEL_REVERB_MINIMAL
     uint32_t i, strength = (uint32_t)clamp(mod_stasis.strength, 0, 127);
     uint32_t target = (uint32_t)clamp(mod_stasis.motion, 0, 127) << 8u;
@@ -1108,7 +1122,7 @@ static CARAVEL_AUDIO_HOT __attribute__((noinline)) void stasis_block(const int32
         uint32_t weight = p < ST_HALF ? p : ST_GRAIN_LEN - p;
 #endif
         if (!st.auto_hold && !st.stopping) {
-            int32_t v = clamp(rev_in[i] >> 2, -32768, 32767);
+            int32_t v = clamp(ring_src[i] >> 2, -32768, 32767);
 #if CARAVEL_STASIS2 && CARAVEL_STASIS_EXPAND && (defined(CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT) && CARAVEL_STASIS_SOURCE_JOIN_EXPERIMENT)
             /* Experimental A4 only: smoothly connect the last pre-FREEZE
              * sample to the resumed LIVE input across 512 HQ source frames.
@@ -1905,6 +1919,9 @@ static void events_block(uint32_t n);                    /* seq.c */
 static int32_t wet[CTL];                                 /* (the dry mix and the sends: mx[0], above) */
 #else
 static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_r[CTL];
+#if CARAVEL_STASIS2
+static int32_t send_s[CTL];
+#endif
 #endif
 
 /* SPREAD (#148): a POLY or UNISON part whose SPRD is above 0. Its voices start left and right of PAN in turn (voice.c
@@ -1921,6 +1938,14 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * and writes d = left - right into spread_buf (every voice goes to out as without SPREAD). Nothing is converted here, and PAN's law stays as without SPREAD, so the mono sum is b at every
  * SPRD: L = gl (b + d SPRD / 256), R = gr (b - d SPRD / 256), SPRD 127 the full image. d takes the SLICER, the FILTER and the mute as the voice SPREAD's d does and passes DIST and the INSERT by.
  * A Pair's ENSEMBLE member (pair_mix_member) takes the Pair's level and pan and the morph weights on b and d alike, as mix_part_inner does for a member without a side. */
+#if CARAVEL_STASIS2
+/* Independent ring send on the same Q15 scale as REV; silent in HALL. */
+static inline int32_t ssend_gain(const track_t *t)
+{
+    if (song.g[G_RTYPE] != 3) return 0;
+    return clamp(t->p[P_SSEND], 0, 127) * 258;
+}
+#endif
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
     int32_t *d = SPREAD_BUF(t);
@@ -1937,6 +1962,10 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t glm = (gla + glb) >> 1, grm = (gra + grb) >> 1, gld = (gla - glb) >> 1, grd = (gra - grb) >> 1;
     int32_t c = t->p[P_CHOR] * 258, dl = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
     int32_t xmax = c > dl ? c : dl;
+#if CARAVEL_STASIS2
+    int32_t ss = ssend_gain(t);
+    int32_t xms = ss ? 0x7FFFFFFF / ss : 0x7FFFFFFF;    /* its own limit: the legacy clamp above (c, d, r) is not changed */
+#endif
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
     if (T_SPREAD(t) == 2u) {                            /* ENSEMBLE stereo: d is left - right already; PAN's law as without SPREAD, d scaled by SPRD / 256 */
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0), sp = t->p[P_SPRD];
@@ -1974,8 +2003,15 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
             SM(c)[i] += mulq15(xs, c);
         if (dl)
             SM(d)[i] += mulq15(xs, dl);
+#if CARAVEL_STASIS2
         if (r)
             SM(v)[i] += mulq15(xs, r);
+        if (ss)
+            SM(s)[i] += mulq15(clamp(x, -xms, xms), ss);
+#else
+        if (r)
+            SM(v)[i] += mulq15(xs, r);
+#endif
         SM(l)[i] += ((x * glm) >> 12) + ((y * gld) >> 12);
         SM(r)[i] += ((x * grm) >> 12) + ((y * grd) >> 12);
     }
@@ -2072,6 +2108,10 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
 #endif
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax = c > d ? c : d;
+#if CARAVEL_STASIS2
+        int32_t ss = ssend_gain(t);
+        int32_t xms = ss ? 0x7FFFFFFF / ss : 0x7FFFFFFF;   /* the STASIS send's own limit (the legacy clamp is not changed) */
+#endif
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
         for (i = 0; i < n; i++) {
             int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;   /* pre-shift: 8 loud voices */
@@ -2082,8 +2122,15 @@ static void mix_part_inner(track_t *t, uint32_t n SM_DECL)
                 SM(c)[i] += mulq15(xs, c);
             if (d)
                 SM(d)[i] += mulq15(xs, d);
+#if CARAVEL_STASIS2
             if (r)
                 SM(v)[i] += mulq15(xs, r);
+            if (ss)
+                SM(s)[i] += mulq15(clamp(x, -xms, xms), ss);
+#else
+            if (r)
+                SM(v)[i] += mulq15(xs, r);
+#endif
             SM(l)[i] += (x * gl) >> 12;
             SM(r)[i] += (x * gr) >> 12;
         }
@@ -2166,6 +2213,10 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
     mixsum_t *sm = &mx[1];
     for (i = 0; i < n; i++)
         sm->l[i] = sm->r[i] = sm->c[i] = sm->d[i] = sm->v[i] = 0;
+#if CARAVEL_STASIS2
+    for (i = 0; i < n; i++)
+        sm->s[i] = 0;                                   /* the STASIS bus too: core 0 adds it into send_s */
+#endif
     for (i = 0; i < NPART; i++)
         if (arg >> i & 1u)
             mix_part(&trk[i], n, sm);
@@ -2224,6 +2275,10 @@ static void mix_block(int32_t *out, uint32_t n)
     int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB LEVEL FIXED: MASTER after) */
     for (i = 0; i < n; i++)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
+#if CARAVEL_STASIS2
+    for (i = 0; i < n; i++)
+        send_s[i] = 0;
+#endif
     events_block(n);
 #if FELUCCA_PAIR_MORPH
     pair_mix_begin(n);
@@ -2262,6 +2317,9 @@ static void mix_block(int32_t *out, uint32_t n)
             send_c[i] += sm->c[i];
             send_d[i] += sm->d[i];
             send_r[i] += sm->v[i];
+#if CARAVEL_STASIS2
+            send_s[i] += sm->s[i];
+#endif
         }
     }
 #if FELUCCA_PERF_HW
@@ -2282,7 +2340,13 @@ static void mix_block(int32_t *out, uint32_t n)
 #endif
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
+#if CARAVEL_STASIS2
+    st_ring_src = send_s;                               /* the ring's input; fx_buses alone (tests) leaves it NULL: the REV bus, as before */
+#endif
     fx_buses(send_c, send_d, send_r, wet, n);
+#if CARAVEL_STASIS2
+    st_ring_src = 0;                                 /* only for this call: a later fx_buses on its own takes the REV bus */
+#endif
     if (hl.side)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
     if (perf) {

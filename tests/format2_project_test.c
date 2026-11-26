@@ -36,6 +36,66 @@ int main(void) {
     assert(proj_import(&q,wire.raw,sizeof wire));assert(q.t[2].p[P_DRY]==60&&q.t[3].p[P_DRY]==0&&q.t[0].p[P_DRY]==127);
     p.t[2].p[P_DRY]=127;p.t[3].p[P_DRY]=127;
     assert(proj_pack(&wire,&p));
+#if !FELUCCA_FM4
+    /* Old FOLLOW migrates once; new absolute maximum is unambiguous. */
+    {
+        project_t saved=p;
+        const uint8_t revs[]={0,1,40,126,127};
+        for(uint32_t k=0;k<NELEM(revs);k++) {
+            for(uint32_t t=0;t<NTRK;t++) {
+                assert(p.t[t].p[P_SSEND]==0);
+                p.t[t].p[P_REV]=revs[(k+t)%NELEM(revs)];
+            }
+            assert(proj_pack(&wire,&p));
+            for(uint32_t t=0;t<NTRK;t++) {
+                uint32_t off=68u+t*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE)+P_SSEND;
+                wire.raw[off]=191u;
+            }
+            rehash(&wire);
+            assert(proj_import(&q,wire.raw,sizeof wire));
+            for(uint32_t t=0;t<NTRK;t++) {
+                assert(q.t[t].p[P_SSEND]==p.t[t].p[P_REV]);
+                q.t[t].p[P_REV]=127-p.t[t].p[P_REV];
+            }
+            assert(proj_pack(&bad,&q));
+            assert(proj_import(&q,bad.raw,sizeof bad));
+            for(uint32_t t=0;t<NTRK;t++) assert(q.t[t].p[P_SSEND]==p.t[t].p[P_REV]);
+        }
+        p=saved;
+        p.t[0].p[P_SSEND]=127;p.t[0].p[P_REV]=0;
+        p.t[1].p[P_SSEND]=126;p.t[2].p[P_SSEND]=40;p.t[3].p[P_SSEND]=0;
+        assert(proj_pack(&wire,&p));assert(wire.raw[68u+P_SSEND]==192u);
+        assert(proj_import(&q,wire.raw,sizeof wire));
+        assert(!memcmp(p.t,q.t,sizeof p.t));
+        bad=wire;bad.raw[68u+P_SSEND]=193u;rehash(&bad);
+        assert(!proj_import(&q,bad.raw,sizeof bad));
+        bad=wire;bad.raw[68u+P_REV]=192u;rehash(&bad);
+        assert(!proj_import(&q,bad.raw,sizeof bad));
+        p=saved;
+        assert(proj_pack(&wire,&p)&&proj_import(&q,wire.raw,sizeof wire));
+        /* Motion carries raw signed bytes, separately from track parameters.
+         * An old FOLLOW event/lock takes the saved REV base once. */
+        for(uint32_t value=0;value<=127;value++) {
+            p=saved;p.t[0].p[P_REV]=40;
+            p.motion.count=1;p.motion.on=1;
+            p.motion.event[0]=(motion_event_t){.place=0,.param=P_SSEND|MOTION_LOCK,.value=(int8_t)value};
+            assert(proj_pack(&wire,&p));
+            assert(proj_import(&q,wire.raw,sizeof wire));
+            assert(q.motion.event[0].value==(int)value);
+            /* Simulate the public 1.2.0 raw motion layout, not today's writer. */
+            uint32_t mo=68u+NTRK*(P_COUNT+2u+NSTEP*PROJ_STEP_SIZE)+PROJ_HARMONY_SIZE;
+            motion_store_t old=p.motion;
+            memcpy(wire.raw+mo,&old,sizeof old);rehash(&wire);bad=wire;
+            assert(proj_import(&q,wire.raw,sizeof wire));
+            assert(q.motion.event[0].value==(int)(value==127?40:value));
+            assert(!memcmp(&bad,&wire,sizeof wire));
+            q.t[0].p[P_REV]=0;
+            assert(proj_pack(&wire,&q)&&proj_import(&q,wire.raw,sizeof wire));
+            assert(q.motion.event[0].value==(int)(value==127?40:value));
+        }
+        p=saved;assert(proj_pack(&wire,&p)&&proj_import(&q,wire.raw,sizeof wire));
+    }
+#endif
 #endif
     /* Legacy FUNW has zero marker/padding and restores safe FX defaults. */
     assert(wire.raw[65u] == 0u && wire.raw[67u] == 0u);

@@ -126,6 +126,17 @@ static int hp_restore(const hp_store_t*p)
    if(e!=31u)hp_put(q->refs[i],(v&~(31u<<14))|(eng_unstore(e)<<14),3);
   }
  }
+#if CARAVEL_STASIS2 && !FELUCCA_FM4
+ for(uint32_t t=0;t<NTRK;t++)for(uint32_t k=0;k<HP_RM_SNAP_SLOTS;k++) {
+  hp_rm_snap_t *q=&hp_rm_snap[t][k];
+  for(uint32_t i=0;i<q->count;i++) {
+   hp_ref_t r=hp_rm_snapshot_ref(q,i);
+   if(r.kind==HP_TRACK&&hp_tid(r)==P_SSEND)
+    q->values[i]=q->values[i]==128?127:q->values[i]==127?
+        (int16_t)clamp(proj_scratch.t[r.track].p[P_REV],0,127):q->values[i];
+  }
+ }
+#endif
  uxl.uset=raw[HP_RAW_META-HP_F2_SET_BYTES+5u];
 #endif
  hp_ps_apply(v2?hp_rm_snap:0);                  /* stored settings, or the defaults of a project made before them; a journey starts stopped */
