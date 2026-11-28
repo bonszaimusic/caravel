@@ -55,6 +55,9 @@ static int hp_capsule_ok(const hp_store_t*p)
 }
 static int hp_capture(hp_store_t*p)
 {
+#if HP_SNAPSHOT_STORE
+ hp_encode_too_big=0;
+#endif
  memset(p,0,HP_CAPTURE_BYTES);p->magic=HP_MAGIC;p->version=1;p->size=sizeof*p;
  project_capture(&proj_scratch);
 #if CARAVEL_FORMAT2

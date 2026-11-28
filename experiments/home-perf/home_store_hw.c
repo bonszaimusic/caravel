@@ -162,10 +162,17 @@ static int hp_save_native(uint32_t slot,const project_store_t*p){
 #endif
 }
 static uint32_t hp_pref_value(void){uint32_t v=(ui_prefs3>>3)&3;return v==1?0:v==2?2:1;}
+static const char*hp_save_why(void){
+#if HP_SNAPSHOT_STORE
+ return hp_encode_too_big?"PROJECT TOO LARGE / NOT SAVED":"BAD DATA / NOT SAVED";
+#else
+ return "PROJECT TOO LARGE / NOT SAVED";
+#endif
+}
 static int hp_project_save(uint32_t slot,const char*name){
  if(project_compat_save_blocked(slot))return 1;
  if(slot>=4||0){ui_message("STOP SONG FIRST");return 1;}if(!flash_ok){ui_message("FLASH UNAVAILABLE");return 2;}
- proj_wire_gen++;if(!hp_capture(&hp_io)){ui_message("PROJECT TOO LARGE / NOT SAVED");return 2;}
+ proj_wire_gen++;if(!hp_capture(&hp_io)){ui_message(hp_save_why());return 2;}
  if(name){memset(proj_scratch.name,0,sizeof proj_scratch.name);str_cpy(proj_scratch.name,name,sizeof proj_scratch.name);proj_scratch.sum=proj_sum(&proj_scratch);if(!proj_pack(&hp_io.native,&proj_scratch))return 2;}
  if(!hp_pending_pack(hp_pending[slot],&hp_io)){ui_message("PROJECT TOO LARGE / NOT SAVED");return 2;}memcpy(&proj_slot[slot],&hp_io.native,sizeof hp_io.native);hp_pending_mask|=1u<<slot;project_ram_set(project_ram_mask()|(1u<<slot));proj_cur=slot;pat_from_set(slot+1);proj_name_get(proj_name,(uint8_t*)proj_scratch.name);
  if(transport_busy()){ui_message("SAVED RAM / STOP TO COMMIT");project_compat_saved();return 0;}

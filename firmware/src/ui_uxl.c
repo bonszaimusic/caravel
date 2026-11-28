@@ -433,6 +433,16 @@ static void uxl_hp_sync(void)
                         x.id = tg[k].id;
                         x.track = tg[k].trk;
                         x.engine = 255;
+                        /* The set is saved with the project: only what the codec takes may stand in it (one other entry and the
+                         * whole project cannot be saved). An engine control is stored as slot + engine (as hp_track_ref does);
+                         * a global the format cannot hold (STASIS MOTN) is no target. */
+                        if (x.kind == HP_TRACK && x.id >= P_E0) {
+                            x.aux = 1;
+                            x.id = (uint16_t)(x.id - P_E0);
+                            x.engine = trk[x.track == 255 ? t : x.track].eng_req;
+                        }
+                        else if (x.kind == HP_GLOBAL && x.id > G_CDEPTH && x.id != G_RTYPE)    /* (uxl_inter_ref's rule) */
+                            x = (hp_ref_t){0};
                     }
                     h->cell[r][k] = x;
                 }
@@ -922,6 +932,8 @@ static int uxl_morph_has(hp_ref_t r)
     const param_desc_t *d = hp_desc(r);
     uxl_tg_t tg[4];
     if (!d || !hp_rm_safe(r, d) || hp_rm_fm6_patch(r))
+        return 0;
+    if (r.kind == HP_GLOBAL && r.id > G_CDEPTH && r.id != G_RTYPE)      /* no target (uxl_hp_sync): no mark either */
         return 0;
     if (uxl.uset & (1u << t))
         return uxl_set_find(t, r, &row, 0) && (hp_rm.scope != HP_RM_ROW || row == hp.track[t].active);

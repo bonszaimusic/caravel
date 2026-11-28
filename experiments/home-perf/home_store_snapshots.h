@@ -312,8 +312,10 @@ static int hp_v2_decode(const hp_store_t*p,uint8_t*raw)
  hp_unzip(raw,p->reserved[2],(const uint8_t*)&p->model,p->reserved[1])&&
  hp_meta_valid(raw,p->version);
 }
+static uint8_t hp_encode_too_big;   /* the last hp_v2_encode failed because the data does not fit, not because it is invalid */
 static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_t*pair,hp_snaps_t snaps)
 {
+ hp_encode_too_big=0;
  uint8_t raw[HP_RAW_META] __attribute__((aligned(4)));
  hp_pair_store_t captured;int live=pair==0;
  if(!hp_model_valid(m))return 0;
@@ -352,6 +354,6 @@ static uint32_t hp_v2_encode(uint8_t*out,const hp_model_t*m,const hp_pair_store_
  /* Validate the version we WRITE, including the P1.3 extension.
   * Validating as v3 would allow an invalid v4 capsule that cannot LOAD. */
  if(!hp_meta_valid(raw,CARAVEL_FORMAT2 ? 6u : HP_EL_PROJECT ? 5u : 3u))return 0;
- return hp_zip(out,HP_V2_META,raw,sizeof raw);
+ uint32_t n=hp_zip(out,HP_V2_META,raw,sizeof raw);hp_encode_too_big=!n;return n;
 }
 #endif

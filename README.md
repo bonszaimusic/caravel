@@ -1,12 +1,12 @@
 # Caravel
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.2.1** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.2.1). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
+Multi-engine synthesizer firmware for the M-VAVE FM-1. **Caravel 1.2.2** — [release and downloads](https://github.com/bonszaimusic/caravel/releases/tag/v1.2.2). [Classic 0.13.0](https://bonszaimusic.github.io/caravel/classic/) remains available as a frozen generation.
 
 > **New: Caravel Academy.** Interactive tutorials with the real firmware in your browser. **[Stage 1 · Strings before anything else](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-1)** ([video](https://youtube.com/shorts/4a8ya1iPiTQ)) and **[Stage 2 · Lay CELL AIR underneath](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-2)** ([video](https://www.youtube.com/shorts/QukahShkb2M)) are open, and so are **[Stage 3 · Give the sound a slow envelope](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-3)** and **[Stage 4 · Add a little slow motion](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-4)** ([one video for both](https://youtube.com/shorts/H4Z5J3FivAs)), and **[Stage 5 · Build a sparse motif](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-5)** ([video](https://youtube.com/shorts/ysNY5vNIwR0)) — more stages follow together with the YouTube series.
 
 [Browser emulator](https://bonszaimusic.github.io/caravel/v1/emulator/) · [Academy](https://bonszaimusic.github.io/caravel/v1/emulator/#stage-1) · [Web installer](https://bonszaimusic.github.io/caravel/v1/webapp/installer/) · [Web editor](https://bonszaimusic.github.io/caravel/v1/webapp/editor/) · [Tutorials](docs/tutorials/README.md) · [FAQ](docs/faq.md)
 
-The website keeps Classic and 1.x separate. These instructions describe 1.2.1 (the controls are those of 1.1.0 except STASIS: 1.2.0 brought STASIS 2.0 with the TEXTURE, REGION and TANK groups in PLAY SPACE, and 1.2.1 gives each track its own STASIS send, see [docs/release-121.md](docs/release-121.md) and the CHANGELOG).
+The website keeps Classic and 1.x separate. These instructions describe 1.2.2 (the controls are those of 1.1.0 except STASIS: 1.2.0 brought STASIS 2.0 with the TEXTURE, REGION and TANK groups in PLAY SPACE, and 1.2.1 gives each track its own STASIS send, see [docs/release-121.md](docs/release-121.md) and the CHANGELOG).
 
 > **Switching to another firmware, for example through the Firmware Hub, needs Caravel 1.1.1 or later.** Caravel 1.0.0 and 1.1.0 ignore the Hub's update command: its Install button stops with "the device stopped after 0 requests" and nothing is written. From 1.1.1 on the FM-1 asks "UPDATE VIA USB?" on its screen: OCT+ installs, OCT- cancels. Installing Caravel itself through the Hub also needs the 1.1.1 package. On 1.0.0 or 1.1.0 update once with Caravel's own installer, or use its **Return to official V15** flow, then install the other firmware. **Back up first:** other firmware does not open Caravel projects. [Details in the FAQ](docs/faq.md#switching-to-another-firmware-firmware-hub).
 
@@ -41,7 +41,7 @@ Four tracks share the note/voice budget and provide envelopes, filters, ARP, mod
 
 **Back up before updating.** Keep old backups with their matching firmware and tools. 1.0 uses FORMAT 2 projects, presets and backups; it does not import pre-1.0 data. Old data is identified rather than silently migrated. The backup handshake distinguishes LIST 1 from LIST 2. SAMPLE, GRAIN, LOFI, FM6, PHASE, VOICE, TRIO, NOISE, WHEEL and DRUM are absent, as are Song/Chain and Scope. See the [compatibility notes](docs/release-100.md).
 
-The existing compressed performance-data limit is 3,328 bytes. A too-large project is refused with PROJECT TOO LARGE / NOT SAVED; the previous saved copy remains. Finish any pending RAM save before powering off.
+The existing compressed performance-data limit is 3,328 bytes. A too-large project is refused with PROJECT TOO LARGE / NOT SAVED; the previous saved copy remains. BAD DATA / NOT SAVED indicates invalid project data rather than a size limit. Finish any pending RAM save before powering off.
 
 ## Install, build and verify
 

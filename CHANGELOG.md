@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.2] - 2026-11-28
+
+- **A project can be saved again after RANDOM, JOURNEY or ELASTIC** (all 1.x releases up to 1.2.1 were affected). Their default target sets, written from the PLAY pages, held entries the project format does not take (the engine's EDIT controls and STASIS MOTN); from then on SAVE answered PROJECT TOO LARGE, and autosave and USB backup failed too. Engine controls are now written with their engine; STASIS MOTN is no longer a default target. The message BAD DATA / NOT SAVED now tells invalid data apart from a project that does not fit.
+
 ## [1.2.1] - 2026-11-26
 
 - **STASIS send per track.** While the reverb TYPE is STASIS, the DLY slot (PLAY SPACE > SENDS K3, BUILD FX page, third knob) is the track's own **STASIS** send, 0 to 100 %: how much of the track goes into the STASIS ring. REV stays the send into the hall, and the two are independent: REV, REV THROW and the global THROW add nothing to the ring. **New projects and INIT start at 0: turn STASIS up to hear it.** Sound-preset changes keep the send. The DLY value is kept for HALL.
